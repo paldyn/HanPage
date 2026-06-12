@@ -66,11 +66,11 @@ pub struct FootnoteShape {
     pub start_number: u16,
     /// 구분선 길이
     pub separator_length: HwpUnit16,
-    /// 구분선 위 여백
+    /// HWPX 원본 슬롯: 구분선 위 여백.
     pub separator_margin_top: HwpUnit16,
-    /// 구분선 아래 여백
+    /// HWP5 원본 슬롯: 구분선 위 여백. HWPX 경로의 과거 매핑값 보존에도 사용될 수 있다.
     pub separator_margin_bottom: HwpUnit16,
-    /// 주석 사이 여백
+    /// HWP5/HWPX 원본 슬롯: 한컴 UI의 "구분선 아래" 값.
     pub note_spacing: HwpUnit16,
     /// 구분선 종류
     pub separator_line_type: u8,
@@ -82,8 +82,30 @@ pub struct FootnoteShape {
     pub numbering: FootnoteNumbering,
     /// 배치 방법 (각주: 단 배치, 미주: 문서/구역 끝)
     pub placement: FootnotePlacement,
-    /// 미문서화 2바이트 (라운드트립 보존용)
+    /// HWP5 미문서화 2바이트. 한컴 UI의 "주석 사이" 값으로 사용된다.
     pub raw_unknown: u16,
+}
+
+impl FootnoteShape {
+    /// 한컴 UI "구분선 위": 본문과 주석 구분선 사이의 간격.
+    pub fn separator_above_margin_hu(&self) -> HwpUnit16 {
+        let hwpx_above = self.separator_margin_top.max(0);
+        if hwpx_above != 0 {
+            hwpx_above
+        } else {
+            self.separator_margin_bottom.max(0)
+        }
+    }
+
+    /// 한컴 UI "구분선 아래": 주석 구분선과 첫 주석 내용 사이의 간격.
+    pub fn separator_below_margin_hu(&self) -> HwpUnit16 {
+        self.note_spacing.max(0)
+    }
+
+    /// 한컴 UI "각주/미주 사이": 앞 번호 주석 내용과 다음 번호 주석 내용 사이의 간격.
+    pub fn between_notes_margin_hu(&self) -> u16 {
+        self.raw_unknown
+    }
 }
 
 /// 번호 형식

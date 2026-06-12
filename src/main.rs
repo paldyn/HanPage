@@ -1891,28 +1891,11 @@ fn note_shape_json(shape: &rhwp::model::footnote::FootnoteShape) -> serde_json::
             "rawUnknown": hu_json(shape.raw_unknown as i32),
         },
         "ui": {
-            "separatorAbove": hu_json(note_shape_separator_above_margin_hu(shape) as i32),
-            "separatorBelow": hu_json(note_shape_separator_below_margin_hu(shape) as i32),
-            "betweenNotes": hu_json(note_shape_between_notes_margin_hu(shape) as i32),
+            "separatorAbove": hu_json(shape.separator_above_margin_hu() as i32),
+            "separatorBelow": hu_json(shape.separator_below_margin_hu() as i32),
+            "betweenNotes": hu_json(shape.between_notes_margin_hu() as i32),
         },
     })
-}
-
-fn note_shape_separator_above_margin_hu(shape: &rhwp::model::footnote::FootnoteShape) -> i16 {
-    let hwpx_above = shape.separator_margin_top.max(0);
-    if hwpx_above != 0 {
-        hwpx_above
-    } else {
-        shape.separator_margin_bottom.max(0)
-    }
-}
-
-fn note_shape_separator_below_margin_hu(shape: &rhwp::model::footnote::FootnoteShape) -> i16 {
-    shape.note_spacing.max(0)
-}
-
-fn note_shape_between_notes_margin_hu(shape: &rhwp::model::footnote::FootnoteShape) -> u16 {
-    shape.raw_unknown
 }
 
 fn hu_json(hu: i32) -> serde_json::Value {

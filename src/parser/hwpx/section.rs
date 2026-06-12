@@ -830,6 +830,7 @@ fn parse_note_pr_children(
     end_tag: &[u8],
 ) -> Result<(), HwpxError> {
     let is_end_note = end_tag == b"endNotePr";
+    let mut saw_above_line = false;
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
@@ -925,10 +926,10 @@ fn parse_note_pr_children(
                     b"noteSpacing" => {
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
-                                // [Task #1050] HWP5 spec 의 정답지 매핑:
-                                // betweenNotes → raw_unknown (실제는 between-notes spacing)
-                                // belowLine → note_spacing
-                                // aboveLine → separator_margin_bottom
+                                // 공식 미주/각주 모양 의미:
+                                // betweenNotes → 앞 번호 주석 내용과 다음 번호 주석 내용 사이
+                                // belowLine → 구분선과 주석 내용 사이
+                                // aboveLine → 본문과 구분선 사이
                                 b"betweenNotes" => {
                                     if let Ok(s) = std::str::from_utf8(&attr.value) {
                                         if let Ok(v) = s.parse::<u16>() {
@@ -946,16 +947,20 @@ fn parse_note_pr_children(
                                 b"aboveLine" => {
                                     if let Ok(s) = std::str::from_utf8(&attr.value) {
                                         if let Ok(v) = s.parse::<i16>() {
-                                            shape.separator_margin_bottom = v;
+                                            shape.separator_margin_top = v;
+                                            saw_above_line = true;
                                         }
                                     }
                                 }
                                 _ => {}
                             }
                         }
-                        // [Task #1050] separator_margin_top: HWPX 미보유 → 한컴 default -1 (sentinel).
-                        // 단, 미주 noteLine type="NONE" 에서는 한컴 저장본이 0을 유지한다.
-                        if shape.separator_margin_top == 0 && shape.separator_line_type != 0 {
+                        // 일부 오래된 HWPX에는 aboveLine 이 생략될 수 있으므로 기존 sentinel
+                        // fallback 만 유지한다. aboveLine 이 있으면 공식 "구분선 위" 값으로 쓴다.
+                        if !saw_above_line
+                            && shape.separator_margin_top == 0
+                            && shape.separator_line_type != 0
+                        {
                             shape.separator_margin_top =
                                 if is_end_note && shape.separator_length > 0 {
                                     224
@@ -5799,12 +5804,22 @@ mod tests {
         let section = parse_hwpx_section(xml).unwrap();
 
         assert_eq!(section.section_def.endnote_shape.separator_length, 0x2ff8);
-        assert_eq!(section.section_def.endnote_shape.separator_margin_top, 224);
         assert_eq!(
-            section.section_def.endnote_shape.separator_margin_bottom,
-            850
+            section
+                .section_def
+                .endnote_shape
+                .separator_above_margin_hu(),
+            850,
+            "aboveLine은 공식 '구분선 위' 값"
         );
-        assert_eq!(section.section_def.endnote_shape.note_spacing, 567);
+        assert_eq!(
+            section
+                .section_def
+                .endnote_shape
+                .separator_below_margin_hu(),
+            567,
+            "belowLine은 공식 '구분선 아래' 값"
+        );
         assert_eq!(
             section.section_def.endnote_shape.separator_line_width, 1,
             "HWPX noteLine width도 공통 선 굵기 코드표를 사용해야 함"

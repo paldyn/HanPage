@@ -6772,13 +6772,9 @@ impl DocumentCore {
             shape.start_number,
             if separator_enabled { "true" } else { "false" },
             shape.separator_length,
-            shape.separator_margin_top,
-            if shape.note_spacing != 0 {
-                shape.note_spacing
-            } else {
-                shape.separator_margin_bottom
-            },
-            shape.raw_unknown,
+            shape.separator_above_margin_hu(),
+            shape.separator_below_margin_hu(),
+            shape.between_notes_margin_hu(),
             shape.separator_line_type,
             shape.separator_line_width,
             separator_color,
@@ -6818,7 +6814,10 @@ impl DocumentCore {
             shape.separator_length = v.max(0);
         }
         if let Some(v) = Self::hwpunit16_from_json(props_json, "separatorMarginTop") {
-            shape.separator_margin_top = v.max(0);
+            let above = v.max(0);
+            // HWP5 저장본은 구분선 위 값을 fallback 슬롯에 보관하는 경우가 있어 함께 갱신한다.
+            shape.separator_margin_top = above;
+            shape.separator_margin_bottom = above;
         }
         if let Some(v) = Self::hwpunit16_from_json(props_json, "separatorMarginBottom") {
             shape.note_spacing = v.max(0);

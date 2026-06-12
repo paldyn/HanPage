@@ -844,6 +844,8 @@ fn parse_footnote_shape_record(data: &[u8]) -> FootnoteShape {
     fs.start_number = r.read_u16().unwrap_or(1);
     fs.separator_length = r.read_i16().unwrap_or(0);
     fs.separator_margin_top = r.read_i16().unwrap_or(0);
+    // HWP5 실파일에서는 이 슬롯이 한컴 UI "구분선 위" 값으로 쓰이는 사례가 있다.
+    // HWPX aboveLine 은 separator_margin_top 에 들어오므로 정규화 접근자에서 합친다.
     fs.separator_margin_bottom = r.read_i16().unwrap_or(0);
     fs.note_spacing = r.read_i16().unwrap_or(0);
 
