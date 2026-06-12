@@ -2796,6 +2796,95 @@ impl LayoutEngine {
 
     /// 단일 단의 콘텐츠를 레이아웃한다.
     #[allow(clippy::too_many_arguments)]
+    /// [Task #1363 v3 옵션 3] 미주 단의 전 items 를 scratch 로 **1회 순차 레이아웃**해 정확한
+    /// 렌더 단 bottom(px, col_area 상대)을 반환한다. per-para 고립 측정 + HeightCursor 시뮬의
+    /// 컨텍스트 의존·순차 상호작용(vpos forward-jump ↔ trailing) 발산을 회피한다 — 렌더
+    /// 코드(`build_single_column`) 자체로 측정하므로 sim==render 가 구조적으로 보장된다.
+    ///
+    /// `items`/`paragraphs`/`composed` 는 호출부에서 단 items 만 추출해 **로컬 0-기반 재색인**해
+    /// 전달한다. `col_area` 는 상대 프레임(`y=0`)으로 둔다. 표/그림 개체는 measured_tables/
+    /// bin_data 없이 측정(미주 단은 텍스트/수식 지배 — 표 미주는 근사). numbering/overflow 등
+    /// 상태는 매 호출 새 scratch 엔진이라 격리된다([[tech_endnote_overflow_nonmonotonic_gate]]).
+    pub(crate) fn measure_endnote_column_bottom(
+        &self,
+        items: Vec<PageItem>,
+        paragraphs: &[Paragraph],
+        composed: &[ComposedParagraph],
+        styles: &ResolvedStyleSet,
+        col_area: &LayoutRect,
+        start_height: f64,
+        section_index: usize,
+        between_notes_hu: i32,
+    ) -> f64 {
+        self.endnote_between_notes_hu.set(between_notes_hu);
+        // 로컬 paras 는 전부 미주 para(0-기반 재색인). `endnote_para_base=0` 으로 미주 vpos
+        // 정규화 경로(`endnote_line_vpos_base`: para_index >= base)를 활성화한다 — 미설정 시
+        // usize::MAX 라 정규화가 꺼져 para 의 절대 파일-vpos 가 그대로 새어 단독 측정이
+        // 폭발한다(수식 para 35px→13721px).
+        self.endnote_para_base.set(0);
+        let layout_info = PageLayoutInfo {
+            page_width: col_area.width,
+            page_height: col_area.y + col_area.height,
+            header_area: *col_area,
+            body_area: *col_area,
+            column_areas: vec![*col_area],
+            footnote_area: *col_area,
+            footer_area: *col_area,
+            dpi: self.dpi,
+            separator_type: 0,
+            separator_width: 0,
+            separator_color: 0,
+            pagination_tolerance_px: 0.0,
+        };
+        let col_content = ColumnContent {
+            column_index: 0,
+            start_height,
+            endnote_flow: true,
+            items,
+            zone_layout: None,
+            zone_y_offset: 0.0,
+            wrap_around_paras: Vec::new(),
+            used_height: 0.0,
+            wrap_anchors: std::collections::HashMap::new(),
+        };
+        let page_content = PageContent {
+            page_index: 0,
+            page_number: 0,
+            section_index,
+            layout: layout_info.clone(),
+            column_contents: Vec::new(),
+            active_header: None,
+            active_footer: None,
+            page_number_pos: None,
+            page_hide: None,
+            footnotes: Vec::new(),
+            active_master_page: None,
+            extra_master_pages: Vec::new(),
+        };
+        let mut tree = PageRenderTree::new(0, col_area.width, col_area.y + col_area.height);
+        let mut paper_images: Vec<RenderNode> = Vec::new();
+        let (_node, y_offset) = self.build_single_column(
+            &mut tree,
+            &mut paper_images,
+            &col_content,
+            &page_content,
+            paragraphs,
+            composed,
+            styles,
+            &[],
+            &[],
+            &layout_info,
+            &layout_info,
+            col_area,
+            0,
+            &[],
+            &[],
+        );
+        // y_offset 은 col_area 절대 프레임의 단 콘텐츠 bottom. 호출부가 `current_height`
+        // (=col_area.y 가 단 시작) 프레임과 정합하도록 그대로 반환한다.
+        y_offset
+    }
+
     fn build_single_column(
         &self,
         tree: &mut PageRenderTree,
@@ -3392,6 +3481,16 @@ impl LayoutEngine {
                     new_y,
                     new_y - _y_in,
                     was_tac,
+                );
+            }
+            if col_content.endnote_flow && std::env::var("RHWP_EN_SSOT_DEBUG").is_ok() {
+                eprintln!(
+                    "EN_RENDER pi={} y_in_rel={:.1} y_out_rel={:.1} dy={:.1} col_h={:.1}",
+                    item_para,
+                    _y_in - col_area.y,
+                    new_y - col_area.y,
+                    new_y - _y_in,
+                    col_area.height,
                 );
             }
             y_offset = new_y;
