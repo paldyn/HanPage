@@ -726,14 +726,10 @@ fn parse_paragraph(
         }
     }
 
-    // 기본 line_seg (빈 문단이라도 최소 1개)
-    if para.line_segs.is_empty() {
-        para.line_segs.push(LineSeg {
-            text_start: 0,
-            tag: LineSeg::TAG_SINGLE_SEGMENT_LINE,
-            ..Default::default()
-        });
-    }
+    // [#1380] 원본에 `<hp:linesegarray>` 가 없는 문단은 line_segs 를 빈 채로 유지한다.
+    // 종전에는 zero-default LineSeg 1개를 합성 주입했으나, serializer 가 이 주입분을
+    // `vertsize="0" ...` lineseg 로 방출하여 원본 무 → RT 유 비대칭을 만들었다.
+    // 한컴은 lineseg 가 없으면 열 때 재계산하므로 빈 채 보존이 안전하다.
 
     // [Task #1058 후속] HWPX `<hp:p id>` → HWP PARA_HEADER instance_id 매핑.
     // raw_header_extra 구조 (serializer 정합 — body_text.rs:241):
@@ -2693,6 +2689,15 @@ fn parse_object_element_attrs(
             b"instid" => ids.instid = parse_u32(&attr),
             b"groupLevel" => shape_attr.group_level = attr_str(&attr).parse().unwrap_or(0),
             b"ratio" => ids.round_rate = parse_u8(&attr).min(100),
+            // [Task #1379] numberingType (캡션 번호 범주) 보존 — exam_kor 등 광범위 사용.
+            b"numberingType" => {
+                common.numbering_type = match attr_str(&attr).to_ascii_uppercase().as_str() {
+                    "PICTURE" => crate::model::shape::ObjectNumberingType::Picture,
+                    "TABLE" => crate::model::shape::ObjectNumberingType::Table,
+                    "EQUATION" => crate::model::shape::ObjectNumberingType::Equation,
+                    _ => crate::model::shape::ObjectNumberingType::None,
+                };
+            }
             _ => {}
         }
     }
@@ -3373,12 +3378,16 @@ fn parse_draw_text(reader: &mut Reader<&[u8]>, text_box: &mut TextBox) -> Result
                                 // 가 세로쓰기 (`layout_vertical_textbox_text_with_paras`)
                                 // 활성화. "VERTICAL"/"VERTICALALL" 모두 code 1.
                                 b"textDirection" => {
-                                    let direction_code: u32 = match attr_str(&attr).as_str() {
+                                    let dir = attr_str(&attr);
+                                    let direction_code: u32 = match dir.as_str() {
                                         "VERTICAL" | "VERTICALALL" => 1,
                                         _ => 0,
                                     };
                                     text_box.list_attr =
                                         (text_box.list_attr & !0b111) | direction_code;
+                                    // [Task #1379] VERTICAL/VERTICALALL 구분 보존
+                                    // — serializer 역방출용 (list_attr 만으로는 구분 불가).
+                                    text_box.vertical_all = dir == "VERTICALALL";
                                 }
                                 _ => {}
                             }
@@ -5547,6 +5556,52 @@ mod tests {
         assert_eq!(section.paragraphs.len(), 1);
         assert_eq!(section.paragraphs[0].text, "Hello World");
         assert_eq!(section.paragraphs[0].para_shape_id, 0);
+    }
+
+    #[test]
+    fn task1380_no_linesegarray_keeps_line_segs_empty() {
+        // 원본에 <hp:linesegarray> 가 없는 문단은 zero-default 를 주입하지 않고
+        // line_segs 를 빈 채 유지한다 (#1380 — 원본 무 → RT 무 대칭의 전제).
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<hs:sec xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph"
+        xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section">
+  <hp:p paraPrIDRef="0" styleIDRef="0">
+    <hp:run charPrIDRef="0">
+      <hp:t>텍스트 있음</hp:t>
+    </hp:run>
+  </hp:p>
+</hs:sec>"#;
+
+        let section = parse_hwpx_section(xml).unwrap();
+        assert!(
+            section.paragraphs[0].line_segs.is_empty(),
+            "linesegarray 부재 문단에 zero-default 가 주입되면 안 됨: {:?}",
+            section.paragraphs[0].line_segs
+        );
+    }
+
+    #[test]
+    fn task1380_linesegarray_values_loaded_as_is() {
+        // <hp:linesegarray> 가 있으면 9개 필드를 그대로 적재한다.
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<hs:sec xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph"
+        xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section">
+  <hp:p paraPrIDRef="0" styleIDRef="0">
+    <hp:run charPrIDRef="0">
+      <hp:t>한 줄</hp:t>
+    </hp:run>
+    <hp:linesegarray>
+      <hp:lineseg textpos="0" vertpos="15360" vertsize="2197" textheight="2197" baseline="1867" spacing="1098" horzpos="0" horzsize="42520" flags="393216"/>
+    </hp:linesegarray>
+  </hp:p>
+</hs:sec>"#;
+
+        let section = parse_hwpx_section(xml).unwrap();
+        let segs = &section.paragraphs[0].line_segs;
+        assert_eq!(segs.len(), 1);
+        assert_eq!(segs[0].vertical_pos, 15360);
+        assert_eq!(segs[0].line_height, 2197);
+        assert_eq!(segs[0].tag, 393216);
     }
 
     #[test]
