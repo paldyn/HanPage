@@ -465,6 +465,38 @@ fn render_runs(para: &Paragraph, ctx: &mut SerializeContext) -> String {
             }
         }
 
+        // AutoNumber 슬롯 (#1382): placeholder 공백이 슬롯 8유닛의 첫 유닛을 점유
+        // (HWP5/HWPX 파서 공통 규약 — placeholder at P, 다음 문자 P+8). 슬롯 위치
+        // (char_pos == expected)의 placeholder 에서 ctrl 을 방출하고, placeholder 는
+        // 파서가 IR 에 합성한 문자이므로 텍스트로 내보내지 않는다 (한컴 원본 XML 동형:
+        // `<hp:ctrl><hp:autoNum/></hp:ctrl>` 뒤에 실제 텍스트만 이어진다).
+        // placeholder 판별: 일반 공백과 구분하기 위해 직후 offset 의 +8 jump 를 본다
+        // (마지막 문자면 jump 가 char_offsets 에 없으므로 placeholder 로 간주).
+        let is_autonum_placeholder = c == ' '
+            && char_pos == expected_utf16_pos
+            && para
+                .char_offsets
+                .get(idx + 1)
+                .copied()
+                .unwrap_or_else(|| char_pos.saturating_add(8))
+                >= char_pos.saturating_add(8);
+        if slot_idx < slots.len()
+            && matches!(slots[slot_idx], Control::AutoNumber(_))
+            && is_autonum_placeholder
+        {
+            flush_text_fragment(
+                &mut splitter.content,
+                &mut text_buf,
+                &para.tab_extended,
+                &mut tab_idx,
+            );
+            splitter.cut_before(expected_utf16_pos);
+            render_control_slot(&mut splitter.content, slots[slot_idx], ctx);
+            slot_idx += 1;
+            expected_utf16_pos = expected_utf16_pos.saturating_add(8);
+            continue;
+        }
+
         // 문자 위치의 경계 — 문자는 새 run 소속 (규칙 1)
         if splitter.needs_cut(char_pos) {
             flush_text_fragment(
@@ -532,18 +564,35 @@ fn render_runs(para: &Paragraph, ctx: &mut SerializeContext) -> String {
 }
 
 fn inferred_control_slot_count(para: &Paragraph) -> usize {
-    let text_units: u32 = para.text.chars().map(char_utf16_width).sum();
-    let from_char_count = para.char_count.saturating_sub(1).saturating_sub(text_units) / 8;
+    // [#1382] AutoNumber 는 placeholder 공백이 슬롯 8유닛의 첫 유닛을 점유한다
+    // (HWP5 body_text / HWPX offsets 조립 공통 규약). placeholder 가 텍스트 폭에
+    // 이미 1유닛으로 집계되므로 두 축 모두에서 autoNum 1개당 잉여가 8이 아닌 7로
+    // 측정된다 → autoNum 수만큼 더해 보정한 뒤 8로 나눈다. placeholder 없는
+    // 합성 IR(편집기 생성)은 잉여 0이라 보정해도 0 — 기존 mismatch 경로 유지.
+    let autonum_count = para
+        .controls
+        .iter()
+        .filter(|c| matches!(c, Control::AutoNumber(_)))
+        .count() as u32;
 
-    let mut from_offsets = 0u32;
+    let text_units: u32 = para.text.chars().map(char_utf16_width).sum();
+    let from_char_count = para
+        .char_count
+        .saturating_sub(1)
+        .saturating_sub(text_units)
+        .saturating_add(autonum_count)
+        / 8;
+
+    let mut offsets_gap = 0u32;
     let mut expected = 0u32;
     for (idx, c) in para.text.chars().enumerate() {
         let pos = para.char_offsets.get(idx).copied().unwrap_or(expected);
         if pos > expected {
-            from_offsets += (pos - expected) / 8;
+            offsets_gap += pos - expected;
         }
         expected = pos.max(expected).saturating_add(char_utf16_width(c));
     }
+    let from_offsets = offsets_gap.saturating_add(autonum_count) / 8;
 
     // fieldEnd는 8 code unit 슬롯이지만 para.controls[]에 대응 컨트롤이 없다.
     // field_ranges.len()이 fieldEnd 수와 정확히 일치하므로 빼서 보정한다.
@@ -967,7 +1016,7 @@ fn render_shape(shape: &ShapeObject, ctx: &mut SerializeContext) -> String {
     }
     // Line: Writer-based serializer
     if let ShapeObject::Line(l) = shape {
-        return match writer_to_string(|w| super::shape::write_line(w, l)) {
+        return match writer_to_string(|w| super::shape::write_line(w, l, ctx)) {
             Ok(xml) => xml,
             Err(e) => {
                 eprintln!("[hwpx] Shape::Line 직렬화 실패: {e}");
@@ -986,18 +1035,20 @@ fn render_shape(shape: &ShapeObject, ctx: &mut SerializeContext) -> String {
         for child in &g.children {
             xml.push_str(&render_shape(child, ctx));
         }
-        match writer_to_string(super::shape::write_container_close) {
+        // 캡션 (#1403) 은 자식 도형 뒤에 방출 — 한컴 실물(aift.hwpx) 순서
+        match writer_to_string(|w| super::shape::write_container_close(w, g.caption.as_ref(), ctx))
+        {
             Ok(close) => xml.push_str(&close),
             Err(e) => eprintln!("[hwpx] Shape::Group 닫기 실패: {e}"),
         }
         return xml;
     }
-    let (tag, c) = match shape {
+    let (tag, c, caption) = match shape {
         ShapeObject::Rectangle(_) | ShapeObject::Line(_) => unreachable!(),
-        ShapeObject::Ellipse(e) => ("ellipse", &e.common),
-        ShapeObject::Arc(a) => ("arc", &a.common),
-        ShapeObject::Polygon(p) => ("polygon", &p.common),
-        ShapeObject::Curve(cv) => ("curve", &cv.common),
+        ShapeObject::Ellipse(e) => ("ellipse", &e.common, &e.drawing.caption),
+        ShapeObject::Arc(a) => ("arc", &a.common, &a.drawing.caption),
+        ShapeObject::Polygon(p) => ("polygon", &p.common, &p.drawing.caption),
+        ShapeObject::Curve(cv) => ("curve", &cv.common, &cv.drawing.caption),
         ShapeObject::Group(_) => unreachable!(),
         ShapeObject::Picture(pic) => {
             return match writer_to_string(|w| picture::write_picture(w, pic, ctx)) {
@@ -1008,20 +1059,24 @@ fn render_shape(shape: &ShapeObject, ctx: &mut SerializeContext) -> String {
                 }
             };
         }
-        ShapeObject::Chart(ch) => ("chart", &ch.common),
-        ShapeObject::Ole(o) => ("ole", &o.common),
+        ShapeObject::Chart(ch) => ("chart", &ch.common, &ch.caption),
+        ShapeObject::Ole(o) => ("ole", &o.common, &o.caption),
     };
-    render_common_shape_xml(tag, c)
+    render_common_shape_xml(tag, c, caption, ctx)
 }
 
-fn render_common_shape_xml(tag: &str, c: &CommonObjAttr) -> String {
-    format!(
+fn render_common_shape_xml(
+    tag: &str,
+    c: &CommonObjAttr,
+    caption: &Option<crate::model::shape::Caption>,
+    ctx: &mut SerializeContext,
+) -> String {
+    let mut out = format!(
         concat!(
             r#"<hp:{tag} id="{id}" zOrder="{zo}" textWrap="{tw}" textFlow="BOTH_SIDES" lock="0">"#,
             r#"<hp:sz width="{w}" height="{h}" widthRelTo="ABSOLUTE" heightRelTo="ABSOLUTE"/>"#,
             r#"<hp:pos treatAsChar="{tac}" vertRelTo="{vr}" vertAlign="{va}" horzRelTo="{hr}" horzAlign="{ha}" vertOffset="{vo}" horzOffset="{ho}"/>"#,
             r#"<hp:outMargin left="{ml}" right="{mr}" top="{mt}" bottom="{mb}"/>"#,
-            r#"</hp:{tag}>"#,
         ),
         tag = tag,
         id = c.instance_id,
@@ -1040,7 +1095,17 @@ fn render_common_shape_xml(tag: &str, c: &CommonObjAttr) -> String {
         mr = c.margin.right,
         mt = c.margin.top,
         mb = c.margin.bottom,
-    )
+    );
+    // 캡션 (#1403) — HWP5 파서는 모든 도형의 캡션을 적재하므로(parser/control/shape.rs)
+    // legacy 경로(ellipse/arc/polygon/curve/chart/ole)도 방출해야 소실되지 않는다.
+    if let Some(cap) = caption {
+        match writer_to_string(|w| super::table::write_caption(w, cap, ctx)) {
+            Ok(xml) => out.push_str(&xml),
+            Err(e) => eprintln!("[hwpx] Shape({tag}) 캡션 직렬화 실패: {e}"),
+        }
+    }
+    out.push_str(&format!("</hp:{tag}>"));
+    out
 }
 
 fn render_note_sublist(
@@ -1352,6 +1417,79 @@ mod tests {
             "first run must use char_shape_id 42, xml excerpt around <hp:t>: {:?}",
             xml.find("<hp:t>")
                 .map(|i| &xml[i.saturating_sub(50)..(i + 50).min(xml.len())])
+        );
+    }
+
+    // ---------- #1382: autoNum placeholder 슬롯 ----------
+
+    /// autoNum IR 규약 문단: 텍스트 "가·placeholder·나", offsets [0,1,9].
+    fn autonum_para() -> Paragraph {
+        let mut para = Paragraph::default();
+        para.text = "가 나".to_string(); // 가(0) + placeholder 공백(1) + 나(9)
+        para.char_offsets = vec![0, 1, 9];
+        para.char_count = 11; // offsets 축 총 10 + 끝 마커 1
+        para.controls
+            .push(crate::model::control::Control::AutoNumber(
+                crate::model::control::AutoNumber {
+                    number_type: crate::model::control::AutoNumberType::Footnote,
+                    ..Default::default()
+                },
+            ));
+        para
+    }
+
+    #[test]
+    fn task1382_inference_counts_autonum_placeholder_slot() {
+        // placeholder 가 8유닛 중 1유닛을 점유해 잉여가 7로 측정되는 패턴 —
+        // autoNum 보정으로 슬롯 1개로 집계되어야 한다 (종전 0 → mismatch 경로).
+        assert_eq!(inferred_control_slot_count(&autonum_para()), 1);
+    }
+
+    #[test]
+    fn task1382_autonum_slot_emitted_at_placeholder() {
+        // ctrl 이 placeholder 원위치(mid-text)에 방출되고 placeholder 는 텍스트로
+        // 내보내지 않는다 (한컴 원본 XML 동형).
+        let (doc, section) = make_doc_with_paragraph(autonum_para());
+        let mut ctx = SerializeContext::collect_from_document(&doc);
+        let bytes = write_section(&section, &doc, 0, &mut ctx).unwrap();
+        let xml = std::str::from_utf8(&bytes).unwrap();
+        assert!(
+            xml.contains("<hp:t>가</hp:t><hp:ctrl><hp:autoNum"),
+            "ctrl 은 placeholder 위치(가 직후)에 방출: {}",
+            xml
+        );
+        assert!(
+            xml.contains("</hp:ctrl><hp:t>나</hp:t>"),
+            "placeholder 공백은 텍스트로 미방출, 후속 텍스트만 이어짐: {}",
+            xml
+        );
+        assert!(
+            !xml.contains("<hp:t>가 나</hp:t>"),
+            "종전 결함(슬롯 끝 방출 + placeholder 텍스트 이중 방출) 재발 금지"
+        );
+    }
+
+    #[test]
+    fn task1382_synthetic_autonum_without_placeholder_keeps_legacy_path() {
+        // 합성 IR(placeholder/offset 없는 편집기 생성 문단)은 보정 후에도 추론 0 —
+        // 기존 mismatch 경로(끝 방출) 유지로 회귀 없음.
+        let mut para = Paragraph::default();
+        para.text = "가나".to_string();
+        para.char_offsets = vec![0, 1];
+        para.char_count = 3;
+        para.controls
+            .push(crate::model::control::Control::AutoNumber(
+                crate::model::control::AutoNumber::default(),
+            ));
+        assert_eq!(inferred_control_slot_count(&para), 0);
+        let (doc, section) = make_doc_with_paragraph(para);
+        let mut ctx = SerializeContext::collect_from_document(&doc);
+        let bytes = write_section(&section, &doc, 0, &mut ctx).unwrap();
+        let xml = std::str::from_utf8(&bytes).unwrap();
+        assert!(
+            xml.contains("<hp:t>가나</hp:t><hp:ctrl><hp:autoNum"),
+            "합성 IR 은 텍스트 후 끝 방출(기존 동작): {}",
+            xml
         );
     }
 

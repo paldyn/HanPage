@@ -27,6 +27,7 @@ use crate::model::ColorRef;
 
 use super::context::SerializeContext;
 use super::section::{render_hp_p_open, render_paragraph_parts};
+use super::table::write_caption;
 use super::utils::{empty_tag, end_tag, start_tag, start_tag_attrs, text};
 use super::SerializeError;
 
@@ -101,6 +102,10 @@ pub fn write_rect<W: Write>(
     write_sz(w, c)?;
     write_pos(w, c)?;
     write_out_margin(w, c)?;
+    // 캡션 (#1403) — OWPML AbstractShapeObjectType 순서: outMargin 과 shapeComment 사이
+    if let Some(cap) = &rect.drawing.caption {
+        write_caption(w, cap, ctx)?;
+    }
     write_shape_comment(w, c)?;
 
     end_tag(w, "hp:rect")?;
@@ -112,7 +117,11 @@ pub fn write_rect<W: Write>(
 // =====================================================================
 
 /// `<hp:line>` 직렬화 진입점. LineShape IR → XML.
-pub fn write_line<W: Write>(w: &mut Writer<W>, line: &LineShape) -> Result<(), SerializeError> {
+pub fn write_line<W: Write>(
+    w: &mut Writer<W>,
+    line: &LineShape,
+    ctx: &mut SerializeContext,
+) -> Result<(), SerializeError> {
     let c = &line.common;
     let id_str = c.instance_id.to_string();
     let z_order = c.z_order.to_string();
@@ -149,6 +158,10 @@ pub fn write_line<W: Write>(w: &mut Writer<W>, line: &LineShape) -> Result<(), S
     write_sz(w, c)?;
     write_pos(w, c)?;
     write_out_margin(w, c)?;
+    // 캡션 (#1403) — OWPML AbstractShapeObjectType 순서: outMargin 뒤
+    if let Some(cap) = &line.drawing.caption {
+        write_caption(w, cap, ctx)?;
+    }
 
     end_tag(w, "hp:line")?;
     Ok(())
@@ -192,7 +205,16 @@ pub fn write_container_open<W: Write>(
     Ok(())
 }
 
-pub fn write_container_close<W: Write>(w: &mut Writer<W>) -> Result<(), SerializeError> {
+/// `<hp:container>` 닫기 — 캡션(#1403)은 자식 도형 뒤에 방출한다.
+/// 한컴 실물(aift.hwpx) 자식 순서: [자식 도형들] → sz → pos → outMargin → caption.
+pub fn write_container_close<W: Write>(
+    w: &mut Writer<W>,
+    caption: Option<&crate::model::shape::Caption>,
+    ctx: &mut SerializeContext,
+) -> Result<(), SerializeError> {
+    if let Some(cap) = caption {
+        write_caption(w, cap, ctx)?;
+    }
     end_tag(w, "hp:container")
 }
 
@@ -842,7 +864,8 @@ mod tests {
 
     fn serialize_line(line: &LineShape) -> String {
         let mut w: Writer<Vec<u8>> = Writer::new(Vec::new());
-        write_line(&mut w, line).expect("write_line");
+        let mut ctx = SerializeContext::collect_from_document(&Default::default());
+        write_line(&mut w, line, &mut ctx).expect("write_line");
         String::from_utf8(w.into_inner()).unwrap()
     }
 
@@ -1150,5 +1173,62 @@ mod tests {
         let mut xml = String::new();
         std::io::Read::read_to_string(&mut sec0, &mut xml).expect("read section0");
         assert!(xml.contains("1.579917"), "scaMatrix 비정수 값 보존");
+    }
+
+    // ---------- #1403: 도형 캡션 직렬화 ----------
+
+    fn caption_with_text(text: &str) -> crate::model::shape::Caption {
+        let mut para = Paragraph::default();
+        para.text = text.to_string();
+        let mut caption = crate::model::shape::Caption::default();
+        caption.width = 8504;
+        caption.spacing = 850;
+        caption.max_width = 47624;
+        caption.paragraphs.push(para);
+        caption
+    }
+
+    #[test]
+    fn task1403_rect_caption_is_serialized() {
+        // OWPML AbstractShapeObjectType 순서: outMargin → caption → shapeComment.
+        let mut rect = RectangleShape::default();
+        rect.common.description = "설명".to_string();
+        rect.drawing.caption = Some(caption_with_text("사각형 캡션"));
+        let xml = serialize_rect(&rect);
+        assert!(
+            xml.contains("<hp:t>사각형 캡션</hp:t>"),
+            "캡션 subList 문단 텍스트가 방출되어야 함: {}",
+            xml
+        );
+        let om = xml.find("<hp:outMargin").unwrap();
+        let cp = xml.find("<hp:caption").unwrap();
+        let sc = xml.find("<hp:shapeComment").unwrap();
+        assert!(
+            om < cp && cp < sc,
+            "caption 은 outMargin 과 shapeComment 사이"
+        );
+    }
+
+    #[test]
+    fn task1403_line_caption_is_serialized() {
+        let mut line = LineShape::default();
+        line.drawing.caption = Some(caption_with_text("선 캡션"));
+        let xml = serialize_line(&line);
+        assert!(
+            xml.contains("<hp:t>선 캡션</hp:t>"),
+            "캡션 subList 문단 텍스트가 방출되어야 함: {}",
+            xml
+        );
+        let om = xml.find("<hp:outMargin").unwrap();
+        let cp = xml.find("<hp:caption").unwrap();
+        assert!(om < cp, "caption 은 outMargin 뒤");
+    }
+
+    #[test]
+    fn task1403_shape_without_caption_emits_none() {
+        let xml = serialize_rect(&RectangleShape::default());
+        assert!(!xml.contains("<hp:caption"), "캡션 부재 시 미방출: {}", xml);
+        let xml = serialize_line(&LineShape::default());
+        assert!(!xml.contains("<hp:caption"), "캡션 부재 시 미방출: {}", xml);
     }
 }

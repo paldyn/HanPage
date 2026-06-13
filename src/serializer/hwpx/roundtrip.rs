@@ -37,6 +37,11 @@
 //! - 표 캡션 비교 (`diff_table_caption`) 를 `TableCaption` 으로 게이트 동승 —
 //!   존재 비대칭/속성 5종/문단 수. 캡션 내부 문단은 char_shapes·controls·linesegs
 //!   재귀에 `tbl.caption.p[k]` 경로로 동승한다.
+//!
+//! #1403 확장:
+//! - 그림/도형/묶음 캡션을 `ObjectCaption` 으로 게이트 동승 — Picture 컨트롤은
+//!   `pic.caption`, ShapeObject 는 `shape_caption` 접근자(그리기 도형 `drawing.caption`
+//!   + Group/Chart/Ole/Picture 전용 필드) 경유. 비교·재귀는 #1387 경로 공유.
 
 #![allow(dead_code)]
 
@@ -162,6 +167,16 @@ pub enum IrDifference {
         path: String,
         detail: String,
     },
+    /// 그림/도형/묶음 캡션 불일치 — 캡션 보존 게이트 (#1403).
+    ///
+    /// `path` 는 `…pic.caption` / `…shape.caption` 등 중첩 경로. `detail` 형식은
+    /// `TableCaption` 과 동일 (`diff_table_caption` 공유).
+    ObjectCaption {
+        section: usize,
+        paragraph: usize,
+        path: String,
+        detail: String,
+    },
 }
 
 impl std::fmt::Display for IrDifference {
@@ -247,6 +262,16 @@ impl std::fmt::Display for IrDifference {
                 write!(f, "section[{}] page_def: {}", section, detail)
             }
             TableCaption {
+                section,
+                paragraph,
+                path,
+                detail,
+            } => write!(
+                f,
+                "section[{}] paragraph[{}]{} caption: {}",
+                section, paragraph, path, detail
+            ),
+            ObjectCaption {
                 section,
                 paragraph,
                 path,
@@ -383,6 +408,7 @@ pub fn diff_documents(a: &Document, b: &Document) -> IrDiff {
 
 /// 표 캡션 비교 (#1387). 존재 비대칭/속성/문단 수 불일치를 "field: expected=..
 /// actual=.." 세미콜론 연결로 돌려준다. 일치하면 `None`.
+/// 그림/도형/묶음 캡션(#1403)도 동일 비교를 공유한다 (`ObjectCaption` 으로 보고).
 ///
 /// `vert_align` 은 비교 제외 — HWPX `hp:caption` 에 대응 속성이 없는 HWP5 유래
 /// 필드라(#1387 1단계 전수 측정) serializer 가 방출하지 않으며, HWP5 출발 플로우
@@ -640,6 +666,16 @@ fn diff_paragraph_linesegs(
                     }
                 }
             }
+            // 그림 캡션 내부 문단 lineseg 재귀 (#1403 후속 — char_shapes 쪽과 대칭 복원).
+            (Control::Picture(pia), Control::Picture(pib)) => {
+                if let (Some(ca), Some(cb)) = (&pia.caption, &pib.caption) {
+                    for (k, (qa, qb)) in ca.paragraphs.iter().zip(cb.paragraphs.iter()).enumerate()
+                    {
+                        let p = format!("{path}/ctrl[{ci}]pic.caption.p[{k}]");
+                        diff_paragraph_linesegs(out, section, paragraph, &p, qa, qb);
+                    }
+                }
+            }
             (Control::Shape(sa), Control::Shape(sb)) => {
                 let p = format!("{path}/ctrl[{ci}]shape");
                 diff_shape_linesegs(out, section, paragraph, &p, sa, sb);
@@ -674,6 +710,13 @@ fn diff_shape_linesegs(
     if let (Some(ta), Some(tb)) = (shape_text_box(sa), shape_text_box(sb)) {
         for (k, (qa, qb)) in ta.paragraphs.iter().zip(tb.paragraphs.iter()).enumerate() {
             let p = format!("{path}.tb.p[{k}]");
+            diff_paragraph_linesegs(out, section, paragraph, &p, qa, qb);
+        }
+    }
+    // 도형/묶음 캡션 내부 문단 lineseg 재귀 (#1403 후속 — char_shapes 쪽과 대칭 복원).
+    if let (Some(ca), Some(cb)) = (shape_caption(sa), shape_caption(sb)) {
+        for (k, (qa, qb)) in ca.paragraphs.iter().zip(cb.paragraphs.iter()).enumerate() {
+            let p = format!("{path}.caption.p[{k}]");
             diff_paragraph_linesegs(out, section, paragraph, &p, qa, qb);
         }
     }
@@ -772,6 +815,24 @@ fn diff_paragraph_char_shapes(
                     }
                 }
             }
+            // 그림 캡션 비교 (#1403) — 존재/속성/문단 수 + 내부 문단 재귀.
+            (Control::Picture(pia), Control::Picture(pib)) => {
+                if let Some(detail) = diff_table_caption(&pia.caption, &pib.caption) {
+                    diff.push(IrDifference::ObjectCaption {
+                        section,
+                        paragraph,
+                        path: format!("{path}/ctrl[{ci}]pic.caption"),
+                        detail,
+                    });
+                }
+                if let (Some(ca), Some(cb)) = (&pia.caption, &pib.caption) {
+                    for (k, (qa, qb)) in ca.paragraphs.iter().zip(cb.paragraphs.iter()).enumerate()
+                    {
+                        let p = format!("{path}/ctrl[{ci}]pic.caption.p[{k}]");
+                        diff_paragraph_char_shapes(diff, section, paragraph, &p, qa, qb);
+                    }
+                }
+            }
             (Control::Shape(sa), Control::Shape(sb)) => {
                 let p = format!("{path}/ctrl[{ci}]shape");
                 diff_shape_char_shapes(diff, section, paragraph, &p, sa, sb);
@@ -809,6 +870,22 @@ fn diff_shape_char_shapes(
             diff_paragraph_char_shapes(diff, section, paragraph, &p, qa, qb);
         }
     }
+    // 도형/묶음 캡션 비교 (#1403) — 존재/속성/문단 수 + 내부 문단 재귀.
+    let (capa, capb) = (shape_caption(sa), shape_caption(sb));
+    if let Some(detail) = diff_table_caption(capa, capb) {
+        diff.push(IrDifference::ObjectCaption {
+            section,
+            paragraph,
+            path: format!("{path}.caption"),
+            detail,
+        });
+    }
+    if let (Some(ca), Some(cb)) = (capa, capb) {
+        for (k, (qa, qb)) in ca.paragraphs.iter().zip(cb.paragraphs.iter()).enumerate() {
+            let p = format!("{path}.caption.p[{k}]");
+            diff_paragraph_char_shapes(diff, section, paragraph, &p, qa, qb);
+        }
+    }
     if let (ShapeObject::Group(ga), ShapeObject::Group(gb)) = (sa, sb) {
         for (k, (c1, c2)) in ga.children.iter().zip(gb.children.iter()).enumerate() {
             let p = format!("{path}.child[{k}]");
@@ -830,6 +907,24 @@ fn shape_text_box(s: &crate::model::shape::ShapeObject) -> Option<&crate::model:
         Chart(x) => x.drawing.text_box.as_ref(),
         Ole(x) => x.drawing.text_box.as_ref(),
         Group(_) | Picture(_) => None,
+    }
+}
+
+/// ShapeObject 에서 캡션 필드 참조를 꺼낸다 (#1403).
+/// 그리기 도형은 `drawing.caption`, 묶음/그림/차트/OLE 는 각자의 caption 필드.
+fn shape_caption(s: &crate::model::shape::ShapeObject) -> &Option<crate::model::shape::Caption> {
+    use crate::model::shape::ShapeObject::*;
+    match s {
+        Line(x) => &x.drawing.caption,
+        Rectangle(x) => &x.drawing.caption,
+        Ellipse(x) => &x.drawing.caption,
+        Arc(x) => &x.drawing.caption,
+        Polygon(x) => &x.drawing.caption,
+        Curve(x) => &x.drawing.caption,
+        Chart(x) => &x.caption,
+        Ole(x) => &x.caption,
+        Group(x) => &x.caption,
+        Picture(x) => &x.caption,
     }
 }
 
@@ -1602,5 +1697,152 @@ mod tests {
         let doc2 = parse_hwpx(&out).expect("reparse");
         let diff = diff_documents(&doc1, &doc2);
         assert!(diff.is_empty(), "{:?}", diff.differences);
+    }
+
+    // ---------- #1403: 그림/도형/묶음 캡션 (게이트 동승) ----------
+
+    #[test]
+    fn task1403_pic_caption_lineseg_recursed_in_gate() {
+        // #1403 후속 — 객체 캡션 내부 문단의 lineseg 차이가 char_shapes 와 대칭으로
+        // `pic.caption.p[k]` 경로에서 검출되는지 고정 (merge 시 보완 1건).
+        let mut ca = caption_with_paras(1);
+        ca.paragraphs[0].line_segs = vec![seg(0, 1000)];
+        let mut cb = caption_with_paras(1);
+        cb.paragraphs[0].line_segs = vec![seg(0, 2000)];
+        let mut pa = crate::model::image::Picture::default();
+        pa.caption = Some(ca);
+        let mut pb = crate::model::image::Picture::default();
+        pb.caption = Some(cb);
+        let a = doc_with_control(crate::model::control::Control::Picture(Box::new(pa)));
+        let b = doc_with_control(crate::model::control::Control::Picture(Box::new(pb)));
+        let diff = diff_documents(&a, &b);
+        assert_eq!(diff.differences.len(), 1, "{:?}", diff.differences);
+        match &diff.differences[0] {
+            IrDifference::ParagraphLinesegs { path, detail, .. } => {
+                assert_eq!(path, "/ctrl[0]pic.caption.p[0]");
+                assert_eq!(detail, "[0].vertsize: expected=1000 actual=2000");
+            }
+            other => panic!("ParagraphLinesegs 여야 함: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn task1403_shape_caption_lineseg_recursed_in_gate() {
+        // 도형(drawing.caption) 경로의 lineseg 재귀 — `shape.caption.p[k]`.
+        let mk = |vs: i32| {
+            let mut cap = caption_with_paras(1);
+            cap.paragraphs[0].line_segs = vec![seg(0, vs)];
+            let mut el = crate::model::shape::EllipseShape::default();
+            el.drawing.caption = Some(cap);
+            doc_with_control(crate::model::control::Control::Shape(Box::new(
+                crate::model::shape::ShapeObject::Ellipse(el),
+            )))
+        };
+        let diff = diff_documents(&mk(1000), &mk(2000));
+        assert_eq!(diff.differences.len(), 1, "{:?}", diff.differences);
+        match &diff.differences[0] {
+            IrDifference::ParagraphLinesegs { path, .. } => {
+                assert_eq!(path, "/ctrl[0]shape.caption.p[0]");
+            }
+            other => panic!("ParagraphLinesegs 여야 함: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn task1403_pic_caption_loss_in_gate() {
+        // #1403 결함 본체였던 그림 캡션 소실(원본 유 → RT 무)을 게이트가 검출하는지 고정.
+        let mut pa = crate::model::image::Picture::default();
+        pa.caption = Some(caption_with_paras(1));
+        let pb = crate::model::image::Picture::default();
+        let a = doc_with_control(crate::model::control::Control::Picture(Box::new(pa)));
+        let b = doc_with_control(crate::model::control::Control::Picture(Box::new(pb)));
+        let diff = diff_documents(&a, &b);
+        assert_eq!(diff.differences.len(), 1, "{:?}", diff.differences);
+        match &diff.differences[0] {
+            IrDifference::ObjectCaption { path, detail, .. } => {
+                assert_eq!(path, "/ctrl[0]pic.caption");
+                assert_eq!(detail, "missing: expected=Some actual=None");
+            }
+            other => panic!("ObjectCaption 여야 함: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn task1403_line_caption_loss_in_gate() {
+        // 그리기 도형(drawing.caption) 경로 — line 캡션 소실 검출.
+        let mut la = crate::model::shape::LineShape::default();
+        la.drawing.caption = Some(caption_with_paras(1));
+        let lb = crate::model::shape::LineShape::default();
+        let a = doc_with_control(crate::model::control::Control::Shape(Box::new(
+            crate::model::shape::ShapeObject::Line(la),
+        )));
+        let b = doc_with_control(crate::model::control::Control::Shape(Box::new(
+            crate::model::shape::ShapeObject::Line(lb),
+        )));
+        let diff = diff_documents(&a, &b);
+        assert_eq!(diff.differences.len(), 1, "{:?}", diff.differences);
+        match &diff.differences[0] {
+            IrDifference::ObjectCaption { path, detail, .. } => {
+                assert_eq!(path, "/ctrl[0]shape.caption");
+                assert_eq!(detail, "missing: expected=Some actual=None");
+            }
+            other => panic!("ObjectCaption 여야 함: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn task1403_legacy_shape_caption_roundtrips() {
+        // legacy 문자열 경로(ellipse/arc/polygon/curve/chart/ole)의 캡션 방출 검증 —
+        // HWP5 파서는 모든 도형 캡션을 적재하므로(parser/control/shape.rs) 미방출 시
+        // HWP5→HWPX 변환에서 소실된다. serialize→reparse 후 게이트 차이 0 이어야 한다.
+        let mut cap = caption_with_paras(1);
+        cap.width = 8504;
+        cap.paragraphs[0].text = "타원 캡션".to_string();
+        // 빈 char_shapes 는 reparse 시 [(0,0)] 으로 돌아오므로(픽스처 노이즈) 명시한다.
+        cap.paragraphs[0].char_shapes = to_refs(&[(0, 0)]);
+        let mut el = crate::model::shape::EllipseShape::default();
+        el.drawing.caption = Some(cap);
+        let mut a = roundtrip_doc_with_control(crate::model::control::Control::Shape(Box::new(
+            crate::model::shape::ShapeObject::Ellipse(el),
+        )));
+        a.sections[0].paragraphs[0].char_shapes = to_refs(&[(0, 0)]);
+        let out = serialize_hwpx(&a).expect("serialize");
+        let b = parse_hwpx(&out).expect("reparse");
+        let diff = diff_documents(&a, &b);
+        assert!(diff.is_empty(), "{:?}", diff.differences);
+        // 텍스트 보존 직접 확인
+        match &b.sections[0].paragraphs[1].controls[0] {
+            crate::model::control::Control::Shape(s) => match s.as_ref() {
+                crate::model::shape::ShapeObject::Ellipse(e2) => {
+                    let c2 = e2.drawing.caption.as_ref().expect("캡션 보존");
+                    assert_eq!(c2.paragraphs[0].text, "타원 캡션");
+                }
+                other => panic!("Ellipse 여야 함: {other:?}"),
+            },
+            other => panic!("Shape 여야 함: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn task1403_group_caption_loss_in_gate() {
+        // 묶음 개체(GroupShape.caption) 경로 — container 캡션 소실 검출.
+        let mut ga = crate::model::shape::GroupShape::default();
+        ga.caption = Some(caption_with_paras(1));
+        let gb = crate::model::shape::GroupShape::default();
+        let a = doc_with_control(crate::model::control::Control::Shape(Box::new(
+            crate::model::shape::ShapeObject::Group(ga),
+        )));
+        let b = doc_with_control(crate::model::control::Control::Shape(Box::new(
+            crate::model::shape::ShapeObject::Group(gb),
+        )));
+        let diff = diff_documents(&a, &b);
+        assert_eq!(diff.differences.len(), 1, "{:?}", diff.differences);
+        match &diff.differences[0] {
+            IrDifference::ObjectCaption { path, detail, .. } => {
+                assert_eq!(path, "/ctrl[0]shape.caption");
+                assert_eq!(detail, "missing: expected=Some actual=None");
+            }
+            other => panic!("ObjectCaption 여야 함: {other:?}"),
+        }
     }
 }

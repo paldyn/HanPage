@@ -290,7 +290,8 @@ fn write_sub_list_paragraphs<W: Write>(
 /// 속성 순서는 한컴 실물(ta-pic-001-r) 기준: side, fullSz, width, gap, lastWidth.
 /// 캡션 subList 속성은 파서가 적재하지 않으며 samples/hwpx 전수 17건 동일
 /// (vertAlign=TOP lineWrap=BREAK textDirection=HORIZONTAL — 1단계 측정) — 실물 고정값 방출.
-fn write_caption<W: Write>(
+/// 그림/도형/묶음 캡션(#1403)도 동일 경로를 공유한다 (pub(super)).
+pub(super) fn write_caption<W: Write>(
     w: &mut Writer<W>,
     caption: &crate::model::shape::Caption,
     ctx: &mut SerializeContext,
@@ -1070,20 +1071,49 @@ mod tests {
         assert_eq!(cap1.max_width, cap2.max_width);
         assert_eq!(cap1.direction, cap2.direction);
         assert_eq!(cap1.include_margin, cap2.include_margin);
-        // 캡션 내 autoNum 슬롯은 #1382(파서 축 비일관 — placeholder 1유닛 적재로
-        // inferred_control_slot_count=0 → mismatch 경로 끝 방출) 영향으로 재파싱 시
-        // 문단 끝 placeholder 공백 1자가 추가된다. 텍스트 본문은 보존 (#1382 귀속,
-        // 본 타스크 범위 밖 — 143E 본문 xfail 과 동일 계열).
+        // #1382 해소(autoNum 폭 축 일관화) 후 텍스트 완전 일치로 승격 —
+        // 종전에는 placeholder 변위로 trim_end 비교만 가능했다.
         assert_eq!(
-            cap2.paragraphs[0].text.trim_end(),
-            cap1.paragraphs[0].text.trim_end(),
-            "캡션 텍스트 본문 보존 (#1382 placeholder 변위 제외)"
+            cap2.paragraphs[0].text, cap1.paragraphs[0].text,
+            "캡션 텍스트 완전 일치 (#1382 해소 승격)"
+        );
+        assert_eq!(
+            cap2.paragraphs[0].char_offsets, cap1.paragraphs[0].char_offsets,
+            "캡션 char_offsets 보존 — autoNum 8-jump 포함 (#1382)"
         );
         assert_eq!(
             cap1.paragraphs[0].controls.len(),
             cap2.paragraphs[0].controls.len(),
             "캡션 내 컨트롤(autoNum) 수 보존"
         );
+    }
+
+    #[test]
+    fn task1382_ta_pic_caption_autonum_slot_at_midtext() {
+        // 캡션 autoNum 슬롯 위치 회귀 테스트 — RT XML 에서 ctrl 이 한컴 원본 동형의
+        // mid-text 위치(`<hp:t>…그림 </hp:t><hp:ctrl>` 패턴)에 방출되는지 고정.
+        // (#1387 1차 한컴 판정의 "번호 문장 끝 밀림" 재발 방지)
+        let bytes = std::fs::read("samples/hwpx/ta-pic-001-r.hwpx").expect("샘플 읽기");
+        let doc = crate::parser::hwpx::parse_hwpx(&bytes).expect("파싱");
+        let out = crate::serializer::hwpx::serialize_hwpx(&doc).expect("직렬화");
+        // section0.xml 추출 없이 zip 바이트에서 직접 패턴 탐색은 불가 — 재파싱 IR 로
+        // 위치를 검증하고, XML 패턴은 단위 테스트(task1382_autonum_slot_emitted_at_placeholder)가 고정.
+        let doc2 = crate::parser::hwpx::parse_hwpx(&out).expect("재파싱");
+        let cap = doc2
+            .sections
+            .iter()
+            .flat_map(|s| &s.paragraphs)
+            .flat_map(|p| &p.controls)
+            .find_map(|c| match c {
+                crate::model::control::Control::Table(t) => t.caption.clone(),
+                _ => None,
+            })
+            .expect("RT 캡션");
+        let p = &cap.paragraphs[0];
+        // placeholder(공백)가 mid-text 위치(인덱스 4)에 있고 직후 offset 이 +8 jump —
+        // ctrl 이 끝으로 밀렸다면 jump 가 끝에 가 있거나 소실된다.
+        assert_eq!(p.char_offsets.get(4), Some(&4), "placeholder 위치 4");
+        assert_eq!(p.char_offsets.get(5), Some(&12), "autoNum 8-jump 직후 12");
     }
 
     #[test]
