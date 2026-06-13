@@ -256,9 +256,10 @@ fallback behavior conservative.
   public backend.
 - CanvasKit selection also rejects non-default TTC/OTC face indexes with
   `faceIndexUnsupported`; default face index `0` remains the positive control.
-- Native Skia proof now distinguishes missing font blob bytes from digest
-  mismatch between the interned bytes and the font metadata. Digest mismatch is
-  treated as a failed portable contract, not as a best-effort construction case.
+- Native Skia proof now distinguishes missing font blob bytes, exported
+  `dataRef` mismatch, and digest mismatch between the interned bytes and the
+  font metadata. Metadata mismatch is treated as a failed portable contract,
+  not as a best-effort construction case.
 - Native Skia still reports variation axes, non-zero collection face indexes,
   and the intentionally unimplemented exact typeface constructor as separate
   proof reasons. This keeps later exact-construction work from silently changing

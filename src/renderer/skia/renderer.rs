@@ -46,6 +46,7 @@ pub enum NativeGlyphRunReplayProofReason {
     FontBlobMissing,
     FontBlobNotPortable,
     FontBlobBytesMissing,
+    FontBlobDataRefMismatch,
     FontBlobDigestMismatch,
     FaceIndexUnsupported,
     FontVariationUnsupported,
@@ -74,6 +75,7 @@ impl NativeGlyphRunReplayProofReason {
             Self::FontBlobMissing => "fontBlobMissing",
             Self::FontBlobNotPortable => "fontBlobNotPortable",
             Self::FontBlobBytesMissing => "fontBlobBytesMissing",
+            Self::FontBlobDataRefMismatch => "fontBlobDataRefMismatch",
             Self::FontBlobDigestMismatch => "fontBlobDigestMismatch",
             Self::FaceIndexUnsupported => "faceIndexUnsupported",
             Self::FontVariationUnsupported => "fontVariationUnsupported",
@@ -182,6 +184,10 @@ pub fn native_skia_glyph_run_replay_proof(
             } else if let crate::paint::FontPortability::PortableBlob { data_ref, .. } =
                 &blob.portability
             {
+                if blob.data_ref.as_ref() != Some(data_ref) {
+                    contract_reasons
+                        .insert(NativeGlyphRunReplayProofReason::FontBlobDataRefMismatch);
+                }
                 match resources.font_blob_bytes_for_ref(data_ref) {
                     Some(bytes) if font_blob_digest_matches(bytes, blob) => {}
                     Some(_) => {
@@ -1699,6 +1705,39 @@ mod tests {
                 .reasons
                 .contains(&NativeGlyphRunReplayProofReason::FontBlobDigestMismatch));
         }
+    }
+
+    #[test]
+    fn native_skia_glyph_run_proof_reports_missing_blob_data_ref_metadata() {
+        let mut resources = portable_font_resources();
+        resources.font_resources_mut().blobs[0].data_ref = None;
+        let run = portable_glyph_run(GlyphRunOrientation::Horizontal);
+        let proof = native_skia_glyph_run_replay_proof(&run, &resources);
+
+        assert!(!proof.contract_replayable);
+        assert!(proof
+            .reasons
+            .contains(&NativeGlyphRunReplayProofReason::FontBlobDataRefMismatch));
+        assert_eq!(
+            NativeGlyphRunReplayProofReason::FontBlobDataRefMismatch.as_str(),
+            "fontBlobDataRefMismatch"
+        );
+    }
+
+    #[test]
+    fn native_skia_glyph_run_proof_reports_mismatched_blob_data_ref_metadata() {
+        let mut resources = portable_font_resources();
+        resources.font_resources_mut().blobs[0].data_ref = Some(BinaryResourceRef {
+            kind: BinaryResourceKind::FontBlob,
+            id: "font:blake3:4:wrong".to_string(),
+        });
+        let run = portable_glyph_run(GlyphRunOrientation::Horizontal);
+        let proof = native_skia_glyph_run_replay_proof(&run, &resources);
+
+        assert!(!proof.contract_replayable);
+        assert!(proof
+            .reasons
+            .contains(&NativeGlyphRunReplayProofReason::FontBlobDataRefMismatch));
     }
 
     #[test]
