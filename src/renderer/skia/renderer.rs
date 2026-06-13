@@ -46,6 +46,7 @@ pub enum NativeGlyphRunReplayProofReason {
     FontBlobMissing,
     FontBlobNotPortable,
     FontBlobBytesMissing,
+    FontBlobDigestMismatch,
     FaceIndexUnsupported,
     FontVariationUnsupported,
     TypefaceConstructionNotImplemented,
@@ -73,6 +74,7 @@ impl NativeGlyphRunReplayProofReason {
             Self::FontBlobMissing => "fontBlobMissing",
             Self::FontBlobNotPortable => "fontBlobNotPortable",
             Self::FontBlobBytesMissing => "fontBlobBytesMissing",
+            Self::FontBlobDigestMismatch => "fontBlobDigestMismatch",
             Self::FaceIndexUnsupported => "faceIndexUnsupported",
             Self::FontVariationUnsupported => "fontVariationUnsupported",
             Self::TypefaceConstructionNotImplemented => "typefaceConstructionNotImplemented",
@@ -180,8 +182,16 @@ pub fn native_skia_glyph_run_replay_proof(
             } else if let crate::paint::FontPortability::PortableBlob { data_ref, .. } =
                 &blob.portability
             {
-                if resources.font_blob_bytes_for_ref(data_ref).is_none() {
-                    contract_reasons.insert(NativeGlyphRunReplayProofReason::FontBlobBytesMissing);
+                match resources.font_blob_bytes_for_ref(data_ref) {
+                    Some(bytes) if font_blob_digest_matches(bytes, blob) => {}
+                    Some(_) => {
+                        contract_reasons
+                            .insert(NativeGlyphRunReplayProofReason::FontBlobDigestMismatch);
+                    }
+                    None => {
+                        contract_reasons
+                            .insert(NativeGlyphRunReplayProofReason::FontBlobBytesMissing);
+                    }
                 }
             }
         } else {
@@ -233,6 +243,19 @@ pub fn native_skia_glyph_run_replay_proof(
         typeface_constructible,
         reasons,
     }
+}
+
+fn font_blob_digest_matches(bytes: &[u8], blob: &crate::paint::FontBlobResource) -> bool {
+    let actual = crate::paint::resource_digest_hex(bytes);
+    let portability_digest_matches = match &blob.portability {
+        crate::paint::FontPortability::PortableBlob { digest, .. } => digest.value == actual,
+        _ => false,
+    };
+    let blob_digest_matches = blob
+        .digest
+        .as_ref()
+        .is_none_or(|digest| digest.value == actual);
+    portability_digest_matches && blob_digest_matches
 }
 
 pub struct SkiaLayerRenderer {
@@ -1599,6 +1622,32 @@ mod tests {
     }
 
     #[test]
+    fn native_skia_glyph_run_proof_reports_font_blob_digest_mismatch() {
+        let mut resources = portable_font_resources();
+        let wrong_digest = FontDigest {
+            algorithm: "blake3".to_string(),
+            value: resource_digest_hex([9_u8, 9, 9, 9]),
+        };
+        if let FontPortability::PortableBlob { digest, .. } =
+            &mut resources.font_resources_mut().blobs[0].portability
+        {
+            *digest = wrong_digest.clone();
+        }
+        resources.font_resources_mut().blobs[0].digest = Some(wrong_digest);
+        let run = portable_glyph_run(GlyphRunOrientation::Horizontal);
+        let proof = native_skia_glyph_run_replay_proof(&run, &resources);
+
+        assert!(!proof.contract_replayable);
+        assert!(proof
+            .reasons
+            .contains(&NativeGlyphRunReplayProofReason::FontBlobDigestMismatch));
+        assert_eq!(
+            NativeGlyphRunReplayProofReason::FontBlobDigestMismatch.as_str(),
+            "fontBlobDigestMismatch"
+        );
+    }
+
+    #[test]
     fn native_skia_glyph_run_proof_separates_replay_eligibility_from_blob_portability() {
         let resources = portable_font_resources();
         let mut run = portable_glyph_run(GlyphRunOrientation::Horizontal);
@@ -1633,6 +1682,19 @@ mod tests {
         assert!(proof
             .reasons
             .contains(&NativeGlyphRunReplayProofReason::FontVariationUnsupported));
+    }
+
+    #[test]
+    fn native_skia_glyph_run_proof_keeps_glyph_id_range_guard() {
+        let resources = portable_font_resources();
+        let mut run = portable_glyph_run(GlyphRunOrientation::Horizontal);
+        run.glyph_ids[0] = u16::MAX as u32 + 1;
+        let proof = native_skia_glyph_run_replay_proof(&run, &resources);
+
+        assert!(!proof.contract_replayable);
+        assert!(proof
+            .reasons
+            .contains(&NativeGlyphRunReplayProofReason::GlyphIdOutOfRange));
     }
 
     #[test]
