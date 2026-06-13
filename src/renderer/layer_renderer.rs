@@ -1102,6 +1102,13 @@ mod tests {
             .unwrap()
     }
 
+    fn native_skia_options() -> TextVariantSelectionOptions {
+        TextVariantSelectionOptions {
+            backend: VariantSelectionBackend::NativeSkia,
+            ..TextVariantSelectionOptions::canvaskit()
+        }
+    }
+
     #[test]
     fn canvaskit_selects_strict_glyph_run() {
         let report = first_report(
@@ -1210,6 +1217,76 @@ mod tests {
             VariantRejectReason::FaceIndexUnsupported.as_str(),
             "faceIndexUnsupported"
         );
+    }
+
+    #[test]
+    fn native_skia_keeps_default_face_without_variation_as_font_proof_control() {
+        let report = first_report_with_resource_setup(
+            vec![text_op(), glyph_run(diagnostics(), 42)],
+            native_skia_options(),
+            |resources| {
+                resources.font_resources_mut().faces.push(FontFaceResource {
+                    id: FontFaceKey("face-0".to_string()),
+                    blob_key: FontBlobKey("blob-0".to_string()),
+                    face_index: 0,
+                    postscript_name: None,
+                    family_names: Vec::new(),
+                    style_names: Vec::new(),
+                    weight_class: None,
+                    width_class: None,
+                    italic: None,
+                });
+            },
+        );
+
+        assert_eq!(report.selected_variant_id.as_deref(), Some("glyphRun"));
+        assert!(!report.fallback_required);
+        assert!(report.rejected_variants.is_empty());
+    }
+
+    #[test]
+    fn native_skia_rejects_variation_instances_until_exact_construction_is_proven() {
+        let mut op = glyph_run(diagnostics(), 42);
+        if let PaintOp::GlyphRun { run, .. } = &mut op {
+            run.shape_key.font_instance.variations = vec![VariationAxisValue {
+                tag: "wght".to_string(),
+                value: 700.0,
+            }];
+        }
+        let report = first_report(vec![text_op(), op], native_skia_options());
+
+        assert_eq!(report.selected_variant_kind, Some(TextVariantKind::TextRun));
+        assert!(report.fallback_required);
+        assert!(report.rejected_variants[0]
+            .reasons
+            .contains(&VariantRejectReason::VariationUnsupported));
+    }
+
+    #[test]
+    fn native_skia_rejects_non_default_collection_face_until_exact_construction_is_proven() {
+        let report = first_report_with_resource_setup(
+            vec![text_op(), glyph_run(diagnostics(), 42)],
+            native_skia_options(),
+            |resources| {
+                resources.font_resources_mut().faces.push(FontFaceResource {
+                    id: FontFaceKey("face-0".to_string()),
+                    blob_key: FontBlobKey("blob-0".to_string()),
+                    face_index: 1,
+                    postscript_name: None,
+                    family_names: Vec::new(),
+                    style_names: Vec::new(),
+                    weight_class: None,
+                    width_class: None,
+                    italic: None,
+                });
+            },
+        );
+
+        assert_eq!(report.selected_variant_kind, Some(TextVariantKind::TextRun));
+        assert!(report.fallback_required);
+        assert!(report.rejected_variants[0]
+            .reasons
+            .contains(&VariantRejectReason::FaceIndexUnsupported));
     }
 
     #[test]
