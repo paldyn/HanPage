@@ -1868,7 +1868,7 @@ fn pack_hwpx_common_obj_attr(common: &CommonObjAttr) -> u32 {
     attr
 }
 
-/// 표 캡션 파싱
+/// `<hp:caption>` 파싱 — 표(#1387)·그림/도형/묶음(#1403) 공유.
 fn parse_table_caption(
     e: &quick_xml::events::BytesStart,
     reader: &mut Reader<&[u8]>,
@@ -2172,6 +2172,7 @@ fn parse_picture(
 
     // 이미지 속성 읽기
     let mut has_pos = false; // <pos> 파싱 여부 — <offset>이 덮어쓰지 않도록 방지
+    let mut caption: Option<crate::model::shape::Caption> = None;
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
@@ -2183,6 +2184,10 @@ fn parse_picture(
             }
             Ok(Event::Start(ref ce)) if local_name(ce.name().as_ref()) == b"effects" => {
                 effects = parse_picture_effects(reader)?;
+            }
+            // 그림 캡션 (#1403) — 미적재 시 roundtrip 에서 캡션 subList 소실
+            Ok(Event::Start(ref ce)) if local_name(ce.name().as_ref()) == b"caption" => {
+                caption = Some(parse_table_caption(ce, reader)?);
             }
             Ok(Event::Start(ref ce)) | Ok(Event::Empty(ref ce)) => {
                 let cname = ce.name();
@@ -2435,6 +2440,7 @@ fn parse_picture(
     pic.border_y = border_y;
     pic.instance_id = picture_instance_id;
     pic.effects = effects;
+    pic.caption = caption;
 
     Ok(Control::Picture(Box::new(pic)))
 }
@@ -3451,11 +3457,16 @@ fn parse_shape_object(
     let object_ids = parse_object_element_attrs(e, &mut common, &mut shape_attr);
 
     let tag_name = String::from_utf8_lossy(shape_type).to_string();
+    let mut caption: Option<crate::model::shape::Caption> = None;
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref ce)) if local_name(ce.name().as_ref()) == b"shapeComment" => {
                 common.description = read_dutmal_text(reader, b"shapeComment")?;
+            }
+            // 도형 캡션 (#1403) — 미적재 시 roundtrip 에서 캡션 subList 소실
+            Ok(Event::Start(ref ce)) if local_name(ce.name().as_ref()) == b"caption" => {
+                caption = Some(parse_table_caption(ce, reader)?);
             }
             Ok(Event::Start(ref ce)) | Ok(Event::Empty(ref ce)) => {
                 let cname = ce.name();
@@ -3617,7 +3628,7 @@ fn parse_shape_object(
         shadow_alpha,
         inst_id: object_ids.instid,
         text_box,
-        ..Default::default()
+        caption,
     };
 
     let shape = match shape_type {
@@ -3692,9 +3703,14 @@ fn parse_container(
 
     parse_object_element_attrs(e, &mut common, &mut shape_attr);
 
+    let mut caption: Option<crate::model::shape::Caption> = None;
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
+            // 묶음 개체 캡션 (#1403) — 미적재 시 roundtrip 에서 캡션 subList 소실
+            Ok(Event::Start(ref ce)) if local_name(ce.name().as_ref()) == b"caption" => {
+                caption = Some(parse_table_caption(ce, reader)?);
+            }
             Ok(Event::Start(ref ce)) | Ok(Event::Empty(ref ce)) => {
                 let cname = ce.name();
                 let local = local_name(cname.as_ref());
@@ -3755,7 +3771,7 @@ fn parse_container(
         common,
         shape_attr,
         children,
-        caption: None,
+        caption,
     };
 
     Ok(Control::Shape(Box::new(ShapeObject::Group(group))))
@@ -4919,7 +4935,10 @@ fn calc_utf16_len_from_parts(parts: &[String]) -> u32 {
     parts
         .iter()
         .map(|s| match s.as_str() {
-            "\u{0002}" | "\u{0003}" | "\u{0004}" => 8,
+            // [#1382] \u{0012}(AUTO_NUMBER) 포함 — placeholder 공백을 포함해 8유닛
+            // (offsets 조립 루프와 동일 축). 종전 `_` 분기(1유닛)로 빠져 char_shapes
+            // 경계가 offsets 축과 어긋났다 (143E 각주 run 경계 2 → 정답 9).
+            "\u{0002}" | "\u{0003}" | "\u{0004}" | "\u{0012}" => 8,
             _ => s
                 .chars()
                 .map(|c| {
@@ -5556,6 +5575,41 @@ mod tests {
         assert_eq!(section.paragraphs.len(), 1);
         assert_eq!(section.paragraphs[0].text, "Hello World");
         assert_eq!(section.paragraphs[0].para_shape_id, 0);
+    }
+
+    // ---------- #1382: autoNum 폭 축 일관화 ----------
+
+    #[test]
+    fn task1382_calc_counts_autonum_as_8_units() {
+        // \u{0012}(AUTO_NUMBER) 는 placeholder 포함 8유닛 — offsets 축과 동일.
+        let parts = vec!["\u{0012}".to_string(), " ".to_string()];
+        assert_eq!(calc_utf16_len_from_parts(&parts), 9);
+    }
+
+    #[test]
+    fn task1382_autonum_run_boundary_on_offsets_axis() {
+        // 143E 각주 패턴: run1(ctrl autoNum + 공백) + run2(텍스트) →
+        // run2 경계는 offsets 축 9 (autoNum 8 + 공백 1). 종전 1유닛 축에서는 2.
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<hs:sec xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph"
+        xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section">
+  <hp:p paraPrIDRef="0" styleIDRef="0">
+    <hp:run charPrIDRef="10"><hp:ctrl><hp:autoNum num="1" numType="FOOTNOTE"/></hp:ctrl><hp:t> </hp:t></hp:run>
+    <hp:run charPrIDRef="11"><hp:t>본문</hp:t></hp:run>
+  </hp:p>
+</hs:sec>"#;
+        let section = parse_hwpx_section(xml).unwrap();
+        let p = &section.paragraphs[0];
+        assert_eq!(p.text, "  본문", "placeholder 공백 + 실제 공백 + 텍스트");
+        assert_eq!(p.char_offsets, vec![0, 8, 9, 10]);
+        assert_eq!(
+            p.char_shapes
+                .iter()
+                .map(|c| (c.start_pos, c.char_shape_id))
+                .collect::<Vec<_>>(),
+            vec![(0, 10), (9, 11)],
+            "run2 경계는 offsets 축 9"
+        );
     }
 
     #[test]

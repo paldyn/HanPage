@@ -36,14 +36,18 @@ use crate::model::shape::{
 };
 
 use super::context::SerializeContext;
+use super::table::write_caption;
 use super::utils::{empty_tag, end_tag, start_tag, start_tag_attrs};
 use super::SerializeError;
 
 /// `<hp:pic>` 직렬화 진입점.
+///
+/// ctx 가 `&mut` 인 이유: 캡션 subList 문단 직렬화(#1403)가 para id 발급과
+/// para_shape/style 참조 수집을 수행한다 (표 캡션 #1387 과 동일 경로).
 pub fn write_picture<W: Write>(
     w: &mut Writer<W>,
     pic: &Picture,
-    ctx: &SerializeContext,
+    ctx: &mut SerializeContext,
 ) -> Result<(), SerializeError> {
     // --- <hp:pic> 속성 ---
     // 속성 순서 (PictureType + 부모 AbstractShapeObjectType):
@@ -92,6 +96,10 @@ pub fn write_picture<W: Write>(
     write_sz(w, &pic.common)?;
     write_pos(w, &pic.common)?;
     write_out_margin(w, &pic.common)?;
+    // 캡션 (#1403) — 한컴 실물(aift.hwpx) 자식 순서: outMargin 뒤, 마지막 자식
+    if let Some(cap) = &pic.caption {
+        write_caption(w, cap, ctx)?;
+    }
 
     end_tag(w, "hp:pic")?;
     Ok(())
@@ -502,7 +510,7 @@ mod tests {
         doc
     }
 
-    fn serialize(pic: &Picture, ctx: &SerializeContext) -> String {
+    fn serialize(pic: &Picture, ctx: &mut SerializeContext) -> String {
         let mut w: Writer<Vec<u8>> = Writer::new(Vec::new());
         write_picture(&mut w, pic, ctx).expect("write_picture");
         String::from_utf8(w.into_inner()).unwrap()
@@ -511,9 +519,9 @@ mod tests {
     #[test]
     fn pic_root_attrs_in_canonical_order() {
         let doc = make_doc_with_bin(1, "png");
-        let ctx = SerializeContext::collect_from_document(&doc);
+        let mut ctx = SerializeContext::collect_from_document(&doc);
         let pic = make_picture(1);
-        let xml = serialize(&pic, &ctx);
+        let xml = serialize(&pic, &mut ctx);
         assert!(xml.contains("<hp:pic "));
         let ip = xml.find("id=").unwrap();
         let zp = xml.find("zOrder=").unwrap();
@@ -527,9 +535,9 @@ mod tests {
     #[test]
     fn img_uses_manifest_id() {
         let doc = make_doc_with_bin(5, "jpg");
-        let ctx = SerializeContext::collect_from_document(&doc);
+        let mut ctx = SerializeContext::collect_from_document(&doc);
         let pic = make_picture(5);
-        let xml = serialize(&pic, &ctx);
+        let xml = serialize(&pic, &mut ctx);
         assert!(
             xml.contains(r#"binaryItemIDRef="image1""#),
             "binaryItemIDRef must resolve to manifest id image1: {}",
@@ -540,7 +548,7 @@ mod tests {
     #[test]
     fn shape_component_attrs_are_serialized() {
         let doc = make_doc_with_bin(1, "png");
-        let ctx = SerializeContext::collect_from_document(&doc);
+        let mut ctx = SerializeContext::collect_from_document(&doc);
         let mut pic = make_picture(1);
         pic.shape_attr.original_width = 23456;
         pic.shape_attr.original_height = 12345;
@@ -551,7 +559,7 @@ mod tests {
         pic.shape_attr.rotation_center.y = 14794;
         pic.shape_attr.rotate_image = true;
 
-        let xml = serialize(&pic, &ctx);
+        let xml = serialize(&pic, &mut ctx);
         assert!(
             xml.contains(r#"<hp:orgSz width="23456" height="12345"/>"#),
             "orgSz must use ShapeComponentAttr values: {}",
@@ -574,10 +582,10 @@ mod tests {
     #[test]
     fn unresolved_bin_data_id_errors() {
         let doc = Document::default(); // bin_data 없음
-        let ctx = SerializeContext::collect_from_document(&doc);
+        let mut ctx = SerializeContext::collect_from_document(&doc);
         let pic = make_picture(99); // 미등록 id
         let mut w: Writer<Vec<u8>> = Writer::new(Vec::new());
-        let err = write_picture(&mut w, &pic, &ctx).unwrap_err();
+        let err = write_picture(&mut w, &pic, &mut ctx).unwrap_err();
         let msg = format!("{}", err);
         assert!(msg.contains("binaryItemIDRef"), "error msg: {}", msg);
         assert!(
@@ -590,9 +598,9 @@ mod tests {
     #[test]
     fn rendering_info_has_three_matrices() {
         let doc = make_doc_with_bin(1, "png");
-        let ctx = SerializeContext::collect_from_document(&doc);
+        let mut ctx = SerializeContext::collect_from_document(&doc);
         let pic = make_picture(1);
-        let xml = serialize(&pic, &ctx);
+        let xml = serialize(&pic, &mut ctx);
         assert!(xml.contains("<hc:transMatrix "));
         assert!(xml.contains("<hc:scaMatrix "));
         assert!(xml.contains("<hc:rotMatrix "));
@@ -601,9 +609,9 @@ mod tests {
     #[test]
     fn img_rect_has_four_points() {
         let doc = make_doc_with_bin(1, "png");
-        let ctx = SerializeContext::collect_from_document(&doc);
+        let mut ctx = SerializeContext::collect_from_document(&doc);
         let pic = make_picture(1);
-        let xml = serialize(&pic, &ctx);
+        let xml = serialize(&pic, &mut ctx);
         assert!(xml.contains("<hc:pt0 "));
         assert!(xml.contains("<hc:pt1 "));
         assert!(xml.contains("<hc:pt2 "));
@@ -620,7 +628,7 @@ mod tests {
     #[test]
     fn picture_effects_shadow_are_serialized() {
         let doc = make_doc_with_bin(1, "png");
-        let ctx = SerializeContext::collect_from_document(&doc);
+        let mut ctx = SerializeContext::collect_from_document(&doc);
         let mut pic = make_picture(1);
         pic.effects = PictureEffects {
             shadow: Some(PictureShadow {
@@ -650,12 +658,56 @@ mod tests {
             }),
         };
 
-        let xml = serialize(&pic, &ctx);
+        let xml = serialize(&pic, &mut ctx);
         assert!(xml.contains(r#"<hp:shadow style="OUTSIDE" alpha="0.8" radius="400" direction="45" distance="1000" alignStyle="TOP_LEFT" rotationStyle="0">"#));
         assert!(xml.contains(r#"<hp:scale x="1" y="1"/>"#));
         assert!(xml.contains(
             r#"<hp:effectsColor type="RGB" schemeIdx="-1" systemIdx="-1" presetIdx="-1">"#
         ));
         assert!(xml.contains(r#"<hp:rgb r="0" g="0" b="0"/>"#));
+    }
+
+    // ---------- #1403: 그림 캡션 직렬화 ----------
+
+    #[test]
+    fn task1403_pic_caption_is_serialized() {
+        // 캡션 유실(#1403) 회귀 고정 — 한컴 실물(aift.hwpx) 순서: outMargin 뒤 마지막 자식.
+        let doc = make_doc_with_bin(1, "png");
+        let mut ctx = SerializeContext::collect_from_document(&doc);
+        let mut pic = make_picture(1);
+        let mut para = crate::model::paragraph::Paragraph::default();
+        para.text = "그림 캡션".to_string();
+        let mut cap = crate::model::shape::Caption::default();
+        cap.width = 8504;
+        cap.spacing = 850;
+        cap.max_width = 48081;
+        cap.paragraphs.push(para);
+        pic.caption = Some(cap);
+
+        let xml = serialize(&pic, &mut ctx);
+        assert!(
+            xml.contains(
+                r#"<hp:caption side="BOTTOM" fullSz="0" width="8504" gap="850" lastWidth="48081">"#
+            ),
+            "caption 속성이 IR 값으로 방출되어야 함: {}",
+            xml
+        );
+        assert!(
+            xml.contains("<hp:t>그림 캡션</hp:t>"),
+            "캡션 subList 문단 텍스트가 방출되어야 함: {}",
+            xml
+        );
+        let om = xml.find("<hp:outMargin").unwrap();
+        let cp = xml.find("<hp:caption").unwrap();
+        assert!(om < cp, "caption 은 outMargin 뒤 (한컴 실물 순서)");
+    }
+
+    #[test]
+    fn task1403_pic_without_caption_emits_none() {
+        let doc = make_doc_with_bin(1, "png");
+        let mut ctx = SerializeContext::collect_from_document(&doc);
+        let pic = make_picture(1);
+        let xml = serialize(&pic, &mut ctx);
+        assert!(!xml.contains("<hp:caption"), "캡션 부재 시 미방출: {}", xml);
     }
 }

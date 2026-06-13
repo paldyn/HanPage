@@ -23,12 +23,9 @@ const SAMPLES_ROOT: &str = "samples/hwpx";
 /// B등급 (xfail) — (상대 경로, 사유). 사유 없는 등록 금지.
 ///
 /// #1379 2~3단계에서 subList(셀·글상자) 컨트롤 보존이 해소되어 25건이 baseline 으로
-/// 승격됨 (task_m100_1379_stage3.md 측정). 잔존 4건은 전부 #1379 범위 밖 별도 이슈 귀속.
+/// 승격됨 (task_m100_1379_stage3.md 측정). #1382 해소로 143E433F503322BD33 승격
+/// (autoNum 폭 축 일관화 — task_m100_1382_stage2.md). 잔존 4건은 #1384 귀속.
 const XFAIL: &[(&str, &str)] = &[
-    (
-        "143E433F503322BD33.hwpx",
-        "파서 autoNum 폭 비일관(char_shapes 축 1 유닛 vs char_offsets 축 8 유닛) — #1382",
-    ),
     (
         "exam_kor.hwpx",
         "serializer: 미등록 borderFillIDRef 31 — parser→serializer ID 매핑 경계 문제, #1384",
