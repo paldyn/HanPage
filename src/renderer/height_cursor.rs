@@ -693,6 +693,16 @@ impl HeightCursor {
             && end_y > y_offset + 32.0
             && end_y < y_offset + 120.0
             && y_offset <= self.col_area_y + self.col_area_height * 0.25;
+        let compact_endnote_page_title_mid_stale_gap = self.suppress_large_forward_jump
+            && is_page_path
+            && !vpos_rewind
+            && stale_forward
+            && current_is_endnote_title
+            && self.endnote_between_notes_hu > 0
+            && self.endnote_between_notes_hu <= 2500
+            && seg.line_spacing >= self.endnote_between_notes_hu
+            && y_offset > self.col_area_y + self.col_area_height * 0.55
+            && y_offset <= self.col_area_y + self.col_area_height * 0.85;
         let compact_endnote_large_empty_spacer_collapse = self.suppress_large_forward_jump
             && !is_page_path
             && stale_forward
@@ -730,6 +740,7 @@ impl HeightCursor {
             || compact_endnote_title_body_stale_forward
             || compact_endnote_large_gap_body_stale_forward
             || compact_endnote_page_title_body_stale_forward
+            || compact_endnote_page_title_mid_stale_gap
             || compact_no_separator_large_title_tail_gap
             || (applied && (compact_endnote_new_note_jump || compact_endnote_tac_picture_gap))
         {
@@ -744,6 +755,12 @@ impl HeightCursor {
                 // 있다. 제목 자체는 한컴 위치와 맞으므로 본문부터 순차 gap에
                 // 붙이고 후속 vpos 기준도 함께 당긴다.
                 y_offset + prev_line_spacing_px.max(10.0).min(18.0)
+            } else if compact_endnote_page_title_mid_stale_gap {
+                // 보이는 구분선 + compact 미주의 page-path 중하단 제목은 저장
+                // vpos가 이전 미주 사이를 한 번 더 포함한 채 stale-forward로
+                // 남을 수 있다. 제목을 현재 단 순차 위치에서 note gap 한 번만
+                // 접고, 뒤따르는 같은 미주 본문도 같은 base를 쓰게 한다.
+                y_offset - prev_line_spacing_px
             } else if compact_endnote_large_gap_body_stale_forward {
                 y_offset
             } else if compact_no_separator_large_title_tail_gap {
@@ -798,8 +815,10 @@ impl HeightCursor {
             // 하단부 큰 수식/inline 뒤 새 문항 제목은 저장 vpos 전체를 따르면
             // 앞 문항과 겹친다. 한컴처럼 제한적으로만 당겨 뒤 풀이 줄이
             // frame 안에 들어갈 공간을 확보한다.
-            let strong_tall_tail_backtrack =
-                prev_line_carries_note_gap && seg.line_height >= 2000 && y_offset - end_y > 80.0;
+            let strong_tall_tail_backtrack = measured_prev_content_bottom_y.is_some()
+                && prev_line_carries_note_gap
+                && seg.line_height >= 2000
+                && y_offset - end_y > 80.0;
             let backtrack_limit = if strong_tall_tail_backtrack {
                 56.0
             } else {
@@ -872,6 +891,13 @@ impl HeightCursor {
             // 뒤 본문만 stale-forward vpos로 내려간 경우다. 본문은 제목 뒤
             // 순차 gap으로 붙이고 base를 옮겨 다음 풀이도 같은 기준을 따른다.
             y_offset + prev_line_spacing_px.max(10.0).min(18.0)
+        } else if compact_endnote_page_title_mid_stale_gap {
+            // 보이는 구분선 + compact 미주의 중하단 제목은 저장 vpos의
+            // stale-forward 간격을 한컴처럼 한 note gap만 접어 배치한다.
+            (y_offset - prev_line_spacing_px)
+                .max(prev_content_floor_y)
+                .max(self.col_area_y)
+                .min(y_offset)
         } else if compact_endnote_page_tail_backtrack {
             // page-path 하단 tail은 frame 안에 남기기 위해 저장 vpos를 따르되,
             // 이전 텍스트 line의 실제 하단을 깊게 침범하면 문20처럼 본문/수식이
@@ -925,7 +951,9 @@ impl HeightCursor {
             // 저장 vpos backtrack은 존중하되, 직전 제목의 실제 하단 아래에서만
             // 시작하도록 제한한다.
             let capped = y_offset - (y_offset - end_y).min(16.0);
-            let floor = measured_prev_content_bottom_y.unwrap_or(prev_content_bottom_y) + 2.0;
+            let floor = measured_prev_content_bottom_y
+                .map(|y| y + 2.0)
+                .unwrap_or(self.col_area_y);
             capped.max(floor).min(y_offset)
         } else if let Some(y) = title_body_gap_y {
             y

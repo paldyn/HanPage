@@ -2357,6 +2357,50 @@ fn issue_1293_2024_visible_separator_large_tac_picture_tail_starts_next_page() {
 }
 
 #[test]
+fn issue_1293_2024_visible_separator_shape987_page17_rewind_para_stays_whole() {
+    let bytes = std::fs::read("samples/3-11월_실전_통합_2024-구분선위9미주사이8구분선아래7.hwp")
+        .expect("sample");
+    let doc = HwpDocument::from_bytes(&bytes).expect("parse");
+
+    assert_eq!(doc.page_count(), 21, "한컴/PDF 기준 페이지 수");
+
+    let page17 = doc.dump_page_items(Some(16));
+    let right_column = page17.find("  단 1").expect("page 17 right column");
+    let q26_body = page17
+        .find("FullParagraph[미주]  pi=786")
+        .expect("page 17 문26 본문");
+    let q27_title = page17
+        .find("FullParagraph[미주]  pi=787")
+        .expect("page 17 문27 제목");
+    let q28_title = page17
+        .find("FullParagraph[미주]  pi=801")
+        .expect("page 17 문28 제목");
+
+    assert!(
+        !page17.contains("PartialParagraph  pi=786"),
+        "새 쪽 왼쪽 단 상단에 들어온 문26 rewind 문단(pi=786)을 다시 2/3줄로 쪼개면 page 수가 22쪽으로 밀림\n{page17}"
+    );
+    assert!(
+        q26_body < q27_title && q27_title < right_column && right_column < q28_title,
+        "PDF 기준 page17은 왼쪽 단에 문26 본문과 문27이 이어지고, 오른쪽 단에서 문28이 시작해야 함\n{page17}"
+    );
+
+    let page18 = doc.dump_page_items(Some(17));
+    let right_column = page18.find("  단 1").expect("page 18 right column");
+    let q30_title = page18
+        .find("FullParagraph[미주]  pi=849")
+        .expect("page 18 문30 제목");
+    let q30_intro = page18
+        .find("FullParagraph[미주]  pi=850")
+        .expect("page 18 문30 첫 줄");
+
+    assert!(
+        q30_title < right_column && q30_intro < right_column,
+        "PDF 기준 page18은 문30 제목과 첫 줄이 왼쪽 단 하단에 남아야 함\n{page18}"
+    );
+}
+
+#[test]
 fn issue_1293_2024_no_separator_20mm_page10_question4_starts_right_column_with_body() {
     let bytes = std::fs::read(
         "samples/3-11월_실전_통합_2024-구분선없음구분선위20미주사이20구분선아래20.hwp",
