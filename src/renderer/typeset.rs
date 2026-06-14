@@ -5704,6 +5704,16 @@ impl TypesetEngine {
                                             + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX
                                             + 2.0
                                     && para_has_visible_text_or_equation(en_para);
+                            let allow_default_first_column_large_below_title_tail =
+                                allow_default_column_bottom_question_title_tail
+                                    && endnote_has_vpos_rewind
+                                    && st.current_column + 1 < st.col_count
+                                    && endnote_shape
+                                        .map(|shape| {
+                                            endnote_separator_below_margin(shape) as i32
+                                                > ENDNOTE_BETWEEN_NOTES_BASE_FLOW_HU
+                                        })
+                                        .unwrap_or(false);
                             let new_endnote_advance_threshold = if default_between_notes_gap {
                                 if st.current_column + 1 < st.col_count {
                                     0.88
@@ -7362,7 +7372,8 @@ impl TypesetEngine {
                                 && !no_separator_last_column_new_note_head_without_gap_fits
                                 && !allow_default_late_question_tail
                                 && (!allow_default_column_bottom_question_title_tail
-                                    || large_between_notes_vpos_head_outside)
+                                    || (large_between_notes_vpos_head_outside
+                                        && !allow_default_first_column_large_below_title_tail))
                                 && !allow_default_question_title_tail
                                 && !allow_large_between_question_title_tail
                                 && !large_between_last_column_question_title_tail_fits
