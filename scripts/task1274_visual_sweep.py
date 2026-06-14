@@ -1985,6 +1985,10 @@ def suppress_tolerated_frame_tail_candidates(
             and pdf_outside_frame_bleed_px <= FRAME_BOTTOM_GLYPH_BLEED_TOLERANCE_PX
             and rhwp_out_pixels <= 300
         )
+        actual_bottom_extent_is_tolerated = (
+            0 < rhwp_outside_frame_bleed_px <= FRAME_BOTTOM_GLYPH_BLEED_TOLERANCE_PX
+            and pdf_outside_frame_bleed_px <= FRAME_BOTTOM_GLYPH_BLEED_TOLERANCE_PX
+        )
         equation_logical_box_bleed = (
             "[EQ]" in text
             and line_height > 0.0
@@ -1992,10 +1996,17 @@ def suppress_tolerated_frame_tail_candidates(
             and actual_bottom_bleed_is_tolerated
             and (content_bottom_delta is None or abs(content_bottom_delta) < CONTENT_BOTTOM_DELTA_LIMIT_PX)
         )
+        text_logical_box_bleed = (
+            line_height > 0.0
+            and overflow <= line_height
+            and actual_bottom_extent_is_tolerated
+            and (content_bottom_delta is None or abs(content_bottom_delta) < CONTENT_BOTTOM_DELTA_LIMIT_PX)
+        )
 
         if marker_is_stable and (
             (bottom_is_close and (small_bottom_bleed or equation_line_height_bleed))
             or equation_logical_box_bleed
+            or text_logical_box_bleed
         ):
             suppressed.append({**item, "suppressed_reason": "small_visual_tail_bleed"})
         else:
