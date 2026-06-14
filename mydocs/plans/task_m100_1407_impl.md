@@ -4,6 +4,11 @@
 - 작성일: 2026-06-14
 - 수행계획서: `mydocs/plans/task_m100_1407.md`
 
+> **1단계 구현 정정(2026-06-14)**: 단위 추적 결과 실제 가로채기는 한 idx 앞에서
+> 일어났다. fieldEnd 는 post-char(line 525~)에서 이미 방출되나 `expected` 를 +8
+> 진행하지 않아 다음 idx 에서 newNum 이 그 갭을 차지했다. 따라서 아래 pre-char 가드
+> 대신 **post-char fieldEnd 방출에 `expected += 8`** 1줄로 정정. 상세: stage1 보고서.
+
 ## 1. 수정 본체 — `render_runs` 슬롯 루프에 fieldEnd-자리 가드
 
 ### 1.1 현재 동작 (`section.rs:431~449`)

@@ -434,6 +434,9 @@ fn render_runs(para: &Paragraph, ctx: &mut SerializeContext) -> String {
             .get(idx)
             .copied()
             .unwrap_or(expected_utf16_pos);
+        // [#1407] 이 idx 위치에서 닫혀야 할(미방출) fieldEnd 가 있으면, 그 8유닛 갭은
+        // 슬롯이 아니라 fieldEnd 소유다. 슬롯 방출을 양보해 텍스트-끝 슬롯(newNum 등)이
+        // fieldEnd 자리를 가로채지 못하게 한다 (0-length 필드는 아래 pre-char 경로가 처리).
         while slot_idx < slots.len() && char_pos >= expected_utf16_pos.saturating_add(8) {
             flush_text_fragment(
                 &mut splitter.content,
@@ -535,6 +538,10 @@ fn render_runs(para: &Paragraph, ctx: &mut SerializeContext) -> String {
                 );
                 splitter.cut_before(expected_utf16_pos);
                 emit_field_end(&mut splitter.content, para, fr.control_idx);
+                // [#1407] fieldEnd 는 8유닛 슬롯을 소비한다. expected 를 +8 진행하지
+                // 않으면 다음 idx 에서 텍스트-끝 슬롯(newNum 등)이 이 8유닛 갭을
+                // 가로채 텍스트가 +8 밀린다 (143E 문단 0.14: char_offsets[3] 27→35).
+                expected_utf16_pos = expected_utf16_pos.saturating_add(8);
                 field_end_emitted[i] = true;
             }
         }
@@ -2136,6 +2143,55 @@ mod tests {
             begin_pos < end_pos,
             "빈 문단에서도 fieldBegin이 fieldEnd보다 앞에 와야 한다: {}",
             &xml[..400.min(xml.len())]
+        );
+    }
+
+    // ---------- #1407: newNum(텍스트 끝 슬롯)이 fieldEnd 갭을 가로채지 않음 ----------
+
+    #[test]
+    fn task1407_field_end_not_stolen_by_newnum_slot() {
+        // 143E 문단 0.14 모델: 하이퍼링크 필드가 "ABC"를 래핑하고 그 뒤 " DEF" 텍스트,
+        // newNum 은 텍스트 끝. char_offsets 는 head(secPr) 16유닛 뒤로 시작:
+        // fieldBegin(8) "ABC"(3) fieldEnd(8) " DEF"(4) newNum(8) end(1).
+        // 핵심: fieldEnd(텍스트 중간 갭)가 후속 슬롯(newNum)에 가로채이면 " DEF"가
+        // +8 밀린다. render_runs 방출 XML 의 컨트롤·텍스트 순서로 봉인.
+        let mut f = Field::default();
+        f.field_type = FieldType::Hyperlink;
+        f.field_id = 42;
+
+        let mut nn = NewNumber::default();
+        nn.number = 2;
+        nn.number_type = AutoNumberType::Page;
+
+        let mut para = Paragraph::default();
+        para.text = "ABC DEF".to_string();
+        para.char_count = 8 + 3 + 8 + 4 + 8 + 1;
+        para.char_offsets = vec![8, 9, 10, 19, 20, 21, 22];
+        para.controls.push(Control::Field(f));
+        para.controls.push(Control::NewNumber(nn));
+        para.field_ranges.push(FieldRange {
+            start_char_idx: 0,
+            end_char_idx: 3, // "ABC" 래핑
+            control_idx: 0,
+        });
+
+        let xml = runs_of(&para);
+
+        let begin_pos = xml.find("fieldBegin").expect("fieldBegin");
+        let end_pos = xml.find("fieldEnd").expect("fieldEnd");
+        let newnum_pos = xml.find("newNum").expect("newNum");
+        // " DEF" 텍스트(<hp:t> DEF</hp:t>) 위치 — fieldEnd 닫힘 뒤의 'DEF'.
+        let after_end = end_pos + xml[end_pos..].find('>').unwrap();
+        let def_pos = xml[after_end..].find("DEF").map(|p| p + after_end).expect("DEF");
+
+        assert!(begin_pos < end_pos, "fieldBegin이 fieldEnd보다 앞: {xml}");
+        assert!(
+            end_pos < def_pos,
+            "fieldEnd 가 ' DEF' 텍스트보다 앞 (갭이 가로채이지 않음): {xml}"
+        );
+        assert!(
+            def_pos < newnum_pos,
+            "newNum 은 텍스트 끝 — ' DEF' 뒤에 와야 한다 (#1407 회귀 가드): {xml}"
         );
     }
 
