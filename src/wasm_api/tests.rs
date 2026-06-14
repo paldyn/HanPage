@@ -13718,6 +13718,7 @@ fn test_save_picture() {
         raw_picture_extra: ref_pic.raw_picture_extra.clone(),
         effects: ref_pic.effects.clone(),
         caption: None,
+        img_dim: (0, 0),
     };
 
     // 5. 문단 구성 (참조 파일: 단일 문단에 SectionDef + ColumnDef + Picture)
@@ -14905,6 +14906,7 @@ fn test_save_pic_in_table() {
         raw_picture_extra: ref_pic.raw_picture_extra.clone(),
         effects: ref_pic.effects.clone(),
         caption: None,
+        img_dim: (0, 0),
     };
 
     // 6. 셀 내부 문단 구성 (cc=9: gso(8)+CR(1), mask=0x00000800)
