@@ -4,9 +4,7 @@ use rhwp::model::control::{Control, FieldType};
 use rhwp::parser::hwpx::parse_hwpx;
 use rhwp::serializer::hwpx::serialize_hwpx;
 
-fn collect_fields(
-    doc: &rhwp::model::document::Document,
-) -> Vec<(bool, usize, String)> {
+fn collect_fields(doc: &rhwp::model::document::Document) -> Vec<(bool, usize, String)> {
     // (parameters 보유, memo 문단 수, 첫 memo 텍스트)
     let mut out = Vec::new();
     for s in &doc.sections {
@@ -47,7 +45,9 @@ fn aift_memo_parameters_and_body_roundtrips() {
         .count();
     assert_eq!(memo_count, 2, "aift MEMO 2건");
     assert!(
-        fields.iter().any(|(_, n, t)| *n > 0 && t.contains("기업 소개")),
+        fields
+            .iter()
+            .any(|(_, n, t)| *n > 0 && t.contains("기업 소개")),
         "원본 MEMO 본문 적재 확인: {fields:?}"
     );
 
@@ -57,18 +57,13 @@ fn aift_memo_parameters_and_body_roundtrips() {
 
     let out2 = serialize_hwpx(&doc2).expect("serialize r2");
     let doc3 = parse_hwpx(&out2).expect("reparse r2");
-    assert_eq!(
-        collect_fields(&doc2),
-        collect_fields(&doc3),
-        "2-round 안정"
-    );
+    assert_eq!(collect_fields(&doc2), collect_fields(&doc3), "2-round 안정");
 }
 
 #[test]
 fn hyperlink_field_parameters_roundtrips() {
     // 비-MEMO(HYPERLINK 등)도 parameters verbatim 보존 — 143E
-    let bytes =
-        std::fs::read("samples/hwpx/143E433F503322BD33.hwpx").expect("샘플 읽기");
+    let bytes = std::fs::read("samples/hwpx/143E433F503322BD33.hwpx").expect("샘플 읽기");
     let doc1 = parse_hwpx(&bytes).expect("parse 원본");
     let with_params = collect_fields(&doc1)
         .iter()

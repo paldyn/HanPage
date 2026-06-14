@@ -2107,8 +2107,10 @@ mod tests {
             .iter()
             .flat_map(|s| &s.paragraphs)
             .flat_map(|p| &p.controls)
-            .filter(|c| matches!(c, crate::model::control::Control::Field(f)
-                if f.field_type == crate::model::control::FieldType::Memo))
+            .filter(|c| {
+                matches!(c, crate::model::control::Control::Field(f)
+                if f.field_type == crate::model::control::FieldType::Memo)
+            })
             .count();
         assert_eq!(memo_count, 2, "aift MEMO 2건");
         let out = serialize_hwpx(&doc1).expect("serialize");
