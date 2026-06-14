@@ -24,6 +24,7 @@
   - visible/no-separator, default/large `미주 사이`, 큰/기본 `구분선 아래`, rewind/title-tail, equation/TAC tail의 공통 흐름 보정.
 - `scripts/task1274_visual_sweep.py`
   - note shape와 separator gap, question marker flow, line/large ink drift 분석 보강.
+  - 같은 HWP/PDF를 두 번 검사하던 `2024-09-below20above20` 중복 target 제거.
 - `tests/issue_1139_inline_picture_duplicate.rs`, `tests/issue_1050_footnote_serialize.rs`, `src/renderer/layout/tests.rs`
   - 미주 모양/간격/overflow 회귀 검증 보강.
 
@@ -38,10 +39,10 @@
     - stage115: 4개 target 모두 0
     - stage117: `2022-09` 0 전환, 회귀 target 0 유지
 - 최종 전체 visual sweep:
-  - 명령: `python3 scripts/task1274_visual_sweep.py --target all --out output/task1293_stage118_full_sweep`
-  - 결과: `flagged=10/346`
+  - 명령: `python3 scripts/task1274_visual_sweep.py --target all --out output/task1293_stage121_full_sweep`
+  - 결과: `flagged=7/323`
   - 0 target: 12개
-  - 잔여 target: 4개 key, 중복 제외 3개 성격
+  - 잔여 target: 3개 key
 
 ## 4. 최종 잔여 판단
 
@@ -49,7 +50,6 @@
 |--------|----------:|------|
 | `2022-10` | `1/18` p14 | question/tail 없음. 9px 수식/쉼표 bbox overlap 및 large ink coarse drift 후보로 분류. |
 | `2024-09-below20-above20` | `3/23` p19/p20/p22 | stage113에서 문28 본문/그림/수식 continuation 높이 차이의 tail/cascade로 분류. |
-| `2024-09-below20above20` | `3/23` p19/p20/p22 | 위와 같은 HWP/PDF 중복 key. |
 | `2024-11-practice-above0-between20-below2` | `3/22` p17/p20/p21 | stage111에서 문26/문28 본문 높이와 그림/수식 tail 잔여로 분류. |
 
 공식 `구분선 위`, `구분선 아래`, `미주 사이` 계산식 자체의 남은 직접 불일치로 판단한 후보는 없다.
@@ -58,8 +58,8 @@
 
 - 수행 계획서: `mydocs/plans/task_m100_1293.md`
 - 구현 계획서: `mydocs/plans/task_m100_1293_impl.md`
-- 단계 문서: `mydocs/working/task_m100_1293_stage1.md`부터 `stage120.md`
-- 최종 sweep: `output/task1293_stage118_full_sweep/summary.json`
+- 단계 문서: `mydocs/working/task_m100_1293_stage1.md`부터 `stage121.md`
+- 최종 sweep: `output/task1293_stage121_full_sweep/summary.json`
 
 ## 6. 미수행 항목
 
