@@ -7008,6 +7008,51 @@ impl TypesetEngine {
                                             )
                                         })
                                         .unwrap_or(false);
+                            let default_between_large_below_head_group_outside =
+                                compact_endnote_separator_profile
+                                    && default_between_notes_gap
+                                    && has_visible_endnote_separator
+                                    && ep_idx == 0
+                                    && emitted_endnote_count > 0
+                                    && st.current_column + 1 < st.col_count
+                                    && st.current_height > available * 0.90
+                                    && endnote_shape
+                                        .map(|shape| {
+                                            endnote_separator_below_margin(shape) as i32
+                                                > ENDNOTE_BETWEEN_NOTES_BASE_FLOW_HU
+                                        })
+                                        .unwrap_or(false)
+                                    && en_ctrl
+                                        .paragraphs
+                                        .first()
+                                        .is_some_and(|title_para| title_para.line_segs.len() == 1)
+                                    && en_ctrl.paragraphs.get(1).is_some_and(para_has_visible_text)
+                                    && en_ctrl.paragraphs.get(2).is_some_and(|tail_para| {
+                                        !para_has_visible_text(tail_para)
+                                            && para_has_visible_text_or_equation(tail_para)
+                                    })
+                                    && {
+                                        let head_group_h: f64 = en_ctrl
+                                            .paragraphs
+                                            .iter()
+                                            .take(3)
+                                            .map(|head_para| {
+                                                let head_comp =
+                                                    crate::renderer::composer::compose_paragraph(
+                                                        head_para,
+                                                    );
+                                                self.format_paragraph(
+                                                    head_para,
+                                                    Some(&head_comp),
+                                                    &styles,
+                                                    Some(en_col_w),
+                                                )
+                                                .total_height
+                                            })
+                                            .sum();
+                                        st.current_height + head_group_h
+                                            > available - ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX
+                                    };
                             let large_between_last_column_vpos_head_group_outside =
                                 !default_between_notes_gap
                                     && compact_endnote_separator_profile
@@ -7059,6 +7104,7 @@ impl TypesetEngine {
                                     || large_between_question_title_render_head_outside
                                     || large_between_question_lead_group_render_outside
                                     || visible_separator_vpos_head_group_outside
+                                    || default_between_large_below_head_group_outside
                                     || large_between_last_column_vpos_head_group_outside
                                     || (!default_between_notes_gap
                                         && !compact_between_notes_gap
