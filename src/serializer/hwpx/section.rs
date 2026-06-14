@@ -55,6 +55,10 @@ const TEMPLATE_TEXT_RUN: &str = r#"<hp:run charPrIDRef="0"><hp:t/></hp:run>"#;
 // 템플릿 첫 run(secPr/colPr 전용)의 여는 태그 + secPr 시작 — run id 정비용 anchor (#1378).
 const TEMPLATE_SECPR_RUN_OPEN: &str = r#"<hp:run charPrIDRef="0"><hp:secPr "#;
 
+// [#1407] 템플릿의 하드코딩 본문 colPr(단 정의) — 단일 단 기본값. 첫 문단 IR 에
+// ColumnDef 가 있으면 이 anchor 를 IR 값으로 치환한다 (#1388 secPr 동형).
+const TEMPLATE_BODY_COL_PR: &str = r#"<hp:ctrl><hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/></hp:ctrl>"#;
+
 /// 레퍼런스 기준 줄 레이아웃 파라미터.
 const VERT_STEP: u32 = 1600; // vertsize(1000) + spacing(600)
 /// 탭 기본 폭 (한컴이 열면서 재계산하지만 초기값으로 필요).
@@ -82,6 +86,20 @@ pub fn write_section(
     // 중첩 linesegarray(각주·머리말 등)가 anchor 탐색을 오염시키지 않도록 한다.
     let mut out = replace_first_linesegs(EMPTY_SECTION_XML, &first_linesegs);
     out = replace_page_pr(&out, &section.section_def.page_def);
+
+    // [#1407] 본문 단 정의(colPr) — 첫 문단 IR 의 ColumnDef 를 템플릿 하드코딩
+    // colPr(colCount=1)에 치환한다. 본문(depth 0) ColumnDef 는 render_runs 인라인
+    // 슬롯에서 제외되므로(#1379) 여기서 받지 않으면 단 정의가 손실된다(2단→1단 →
+    // 페이지 넘침). #1388 secPr 여백 치환과 동형.
+    if let Some(p) = first_para {
+        if let Some(Control::ColumnDef(cd)) = p
+            .controls
+            .iter()
+            .find(|c| matches!(c, Control::ColumnDef(_)))
+        {
+            out = out.replacen(TEMPLATE_BODY_COL_PR, &render_col_pr_ctrl(cd), 1);
+        }
+    }
 
     if let Some(p) = first_para {
         // 첫 문단 `<hp:p>` 태그를 IR 기반 속성으로 교체
@@ -1480,6 +1498,52 @@ mod tests {
         assert!(
             xml.contains(r#"xmlns:hwpunitchar="http://www.hancom.co.kr/hwpml/2016/HwpUnitChar""#),
             "hs:sec 에 xmlns:hwpunitchar 선언이 있어야 함"
+        );
+    }
+
+    #[test]
+    fn task1407_body_col_pr_reflects_ir_column_def() {
+        // [#1407] 본문 첫 문단 IR 에 2단 ColumnDef 가 있으면 템플릿 하드코딩
+        // colPr(colCount=1)이 IR 값(colCount=2)으로 치환돼야 한다. 미치환 시
+        // 2단→1단 손실로 페이지 넘침(143E RT 1→2).
+        use crate::model::page::{ColumnDef, ColumnType};
+        let mut cd = ColumnDef::default();
+        cd.column_type = ColumnType::Normal;
+        cd.column_count = 2;
+        cd.same_width = true;
+        cd.spacing = 2268;
+
+        let mut para = Paragraph::default();
+        para.text = "x".to_string();
+        para.controls.push(Control::ColumnDef(cd));
+
+        let (doc, section) = make_doc_with_paragraph(para);
+        let mut ctx = SerializeContext::collect_from_document(&doc);
+        let xml = String::from_utf8(write_section(&section, &doc, 0, &mut ctx).unwrap()).unwrap();
+
+        assert!(
+            xml.contains(r#"colCount="2""#) && xml.contains(r#"sameGap="2268""#),
+            "본문 colPr 이 IR 2단 정의로 치환돼야 함: {}",
+            &xml[..900.min(xml.len())]
+        );
+        assert!(
+            !xml.contains(r#"colCount="1""#),
+            "하드코딩 colCount=1 이 남으면 안 됨 (회귀 가드): {}",
+            &xml[..900.min(xml.len())]
+        );
+    }
+
+    #[test]
+    fn task1407_single_column_doc_unaffected() {
+        // ColumnDef IR 이 없는 문단(단일 단)은 템플릿 colCount=1 유지 — 회귀 없음.
+        let mut para = Paragraph::default();
+        para.text = "x".to_string();
+        let (doc, section) = make_doc_with_paragraph(para);
+        let mut ctx = SerializeContext::collect_from_document(&doc);
+        let xml = String::from_utf8(write_section(&section, &doc, 0, &mut ctx).unwrap()).unwrap();
+        assert!(
+            xml.contains(r#"colCount="1""#),
+            "ColumnDef 없으면 템플릿 colCount=1 유지"
         );
     }
 
