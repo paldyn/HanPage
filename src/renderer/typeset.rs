@@ -4427,16 +4427,16 @@ impl TypesetEngine {
                                 && st.current_column + 1 < st.col_count
                                 && st.current_height > available * 0.90
                             {
-                                split_endnote_to_fit.and_then(|split| {
+                                split_endnote_to_fit.map(|split| {
                                     // 보이는 구분선 + 비기본/대형 "미주 사이" 샘플의 하단
                                     // internal-rewind 문단은 renderer가 저장 vpos/gap을
                                     // 적용해 마지막 포함 줄을 pagination보다 낮게 그린다.
                                     // split 후보의 마지막 줄을 다음 단으로 보내 overflow를
                                     // 사전에 차단한다.
                                     if split > 1 && split < fmt.line_heights.len() {
-                                        Some(split - 1)
+                                        split - 1
                                     } else {
-                                        Some(split)
+                                        split
                                     }
                                 })
                             } else {
@@ -11606,12 +11606,10 @@ impl EndnoteFlowProfile {
 }
 
 fn endnote_between_notes_pagination_margin(shape: &FootnoteShape) -> i32 {
-    let extra =
-        (endnote_between_notes_margin(shape) as i32 - ENDNOTE_BETWEEN_NOTES_BASE_FLOW_HU).max(0);
     // 7mm 기본값은 저장 LINE_SEG 흐름에 이미 녹아 있지만, 20mm처럼 커진
     // "미주 사이" 초과분은 번호 경계마다 pagination vpos에도 온전히
     // 반영해야 한컴의 단 분기와 맞는다.
-    extra
+    (endnote_between_notes_margin(shape) as i32 - ENDNOTE_BETWEEN_NOTES_BASE_FLOW_HU).max(0)
 }
 
 fn compact_endnote_between_notes_flow(shape: &FootnoteShape) -> bool {

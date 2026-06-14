@@ -3971,7 +3971,6 @@ impl LayoutEngine {
                             col_content.items.get(item_ordinal + 1),
                             Some(PageItem::PartialParagraph { .. })
                         ))
-                    || (item_ordinal + 2 == col_content.items.len() && same_endnote_successor)
                     || same_endnote_successor);
             let is_zero_spacing_endnote_item =
                 col_content.endnote_flow && self.current_endnote_zero_spacing_profile();

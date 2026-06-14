@@ -5,7 +5,8 @@
 - 작성일: 2026-06-14
 - 작성자: `jangster77`
 - base: `devel`
-- head: `jangster77:task_m100_1293` (`6cf69c87fabe5b85ee798b2edbcb6dae04dea46d`)
+- head: `jangster77:task_m100_1293`
+- 최초 검토 head: `6cf69c87fabe5b85ee798b2edbcb6dae04dea46d`
 - 검토 브랜치: `review/pr-1410`
 
 ## 1. 요약 판단
@@ -47,6 +48,12 @@ GitHub checks, 최초 검토 시점:
 
 이 pre-review 문서와 오늘할일 갱신, EOF blank line 정리를 PR head에 push한 뒤 GitHub Actions를
 다시 확인한다. CI 통과 사실만 문서에 반영하기 위한 추가 push는 하지 않는다.
+
+문서/오늘할일 push 후 GitHub Actions 1차 재확인에서 `Build & Test`가 실패했다. 원인은
+`cargo clippy -- -D warnings`의 3개 lint 실패로, `layout.rs`의 중복 boolean 조건,
+`typeset.rs`의 `bind_instead_of_map`, `let_and_return` 경고였다. 이번 보정 커밋에서
+동작 의도를 유지한 채 해당 clippy 경고만 정리하고, 로컬 `cargo clippy -- -D warnings`로
+재검증한다.
 
 ## 3. 변경 검토
 
@@ -109,6 +116,8 @@ PR head 문서 기록 기준:
 
 검토 중 발견한 EOF blank line 3건은 이 pre-review 커밋에 함께 정리한다.
 
+문서 push 후 CI에서 발견된 clippy 3건은 후속 보정 커밋에서 함께 정리한다.
+
 ## 5. 리스크
 
 | 리스크 | 평가 | 비고 |
@@ -123,6 +132,7 @@ PR head 문서 기록 기준:
 다음 조건을 만족하면 merge 가능하다.
 
 - 이 pre-review 문서와 오늘할일 갱신, EOF blank line 정리 커밋을 PR head에 push
+- 문서 push 후 발견된 `cargo clippy -- -D warnings` 3건을 보정하고 로컬 clippy 재검증 통과
 - PR diff에 `mydocs/pr/archives/pr_1410_review.md`, `mydocs/orders/20260614.md`가 포함됐는지 확인
 - push 후 GitHub Actions의 `Build & Test`, CodeQL, `Canvas visual diff`가 모두 통과
 - merge 후 #1293 자동 close 여부 확인. `closingIssuesReferences`가 비어 있어 수동 close가 필요할 수 있음
