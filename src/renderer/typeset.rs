@@ -7283,6 +7283,51 @@ impl TypesetEngine {
                                 prev_en_bottom_vpos = None;
                                 prev_en_content_bottom_vpos = None;
                             }
+                            // 구분선 아래가 큰 기본 미주에서 제목 tail만 현재 단 하단에
+                            // 남는 경우, 저장 vpos가 한 기본 미주 gap만큼 위로 당겨질 수
+                            // 있다. 렌더 좌표만 보정하고 pagination 흐름은 유지한다.
+                            let default_large_below_rewind_title_tail_gap_hu =
+                                if !advance_for_new_endnote
+                                    && !advance_for_internal_rewind
+                                    && compact_endnote_separator_profile
+                                    && default_between_notes_gap
+                                    && has_visible_endnote_separator
+                                    && endnote_has_vpos_rewind
+                                    && ep_idx == 0
+                                    && emitted_endnote_count > 0
+                                    && en_ref.number > 0
+                                    && st.current_column + 1 < st.col_count
+                                    && st.current_height > available * 0.85
+                                    && fmt.line_heights.len() == 1
+                                    && endnote_shape
+                                        .map(|shape| {
+                                            endnote_separator_below_margin(shape) as i32
+                                                > ENDNOTE_BETWEEN_NOTES_BASE_FLOW_HU
+                                        })
+                                        .unwrap_or(false)
+                                {
+                                    endnote_shape
+                                        .map(|shape| endnote_between_notes_margin(shape) as i32)
+                                        .filter(|gap_hu| {
+                                            st.current_height
+                                                + hwpunit_to_px(*gap_hu, self.dpi)
+                                                + en_fit
+                                                <= available
+                                                    + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX
+                                                    + 2.0
+                                        })
+                                } else {
+                                    None
+                                };
+                            if let Some(gap_hu) = default_large_below_rewind_title_tail_gap_hu {
+                                if let Some(render_para) =
+                                    st.endnote_paragraphs.get_mut(en_para_local_idx)
+                                {
+                                    for ls in &mut render_para.line_segs {
+                                        ls.vertical_pos += gap_hu;
+                                    }
+                                }
+                            }
                             let tac_picture_rewinds_before_column_base = st.col_count > 1
                                 && compact_between_notes_gap
                                 && local_vpos_rewind
