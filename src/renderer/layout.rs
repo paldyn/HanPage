@@ -245,6 +245,28 @@ fn inline_equation_count(para: &Paragraph) -> usize {
         .count()
 }
 
+fn same_endnote_control(a: &EndnoteParaSource, b: &EndnoteParaSource) -> bool {
+    a.section_index == b.section_index
+        && a.para_index == b.para_index
+        && a.control_index == b.control_index
+}
+
+fn para_large_tac_picture_or_shape_height_px(para: &Paragraph, dpi: f64) -> Option<f64> {
+    para.controls
+        .iter()
+        .filter_map(|ctrl| match ctrl {
+            Control::Picture(pic) if pic.common.treat_as_char => Some(
+                hwpunit_to_px(pic.common.height as i32, dpi)
+                    .max(hwpunit_to_px(pic.shape_attr.current_height as i32, dpi)),
+            ),
+            Control::Shape(shape) if shape.common().treat_as_char => {
+                Some(hwpunit_to_px(shape.common().height as i32, dpi))
+            }
+            _ => None,
+        })
+        .reduce(f64::max)
+}
+
 fn endnote_question_number(para: &Paragraph) -> Option<u16> {
     let text = para.text.trim_start().strip_prefix('문')?;
     let digits: String = text.chars().take_while(|ch| ch.is_ascii_digit()).collect();
@@ -3464,7 +3486,7 @@ impl LayoutEngine {
                         _ => None,
                     });
                 if let (Some(prev_pi), Some(prev_content_bottom_y)) = (
-                    hcursor.prev_layout_para.or(previous_item_para_index),
+                    previous_item_para_index.or(hcursor.prev_layout_para),
                     prev_item_content_bottom_y,
                 ) {
                     if let Some(prev_para) = paragraphs.get(prev_pi) {
@@ -3472,11 +3494,88 @@ impl LayoutEngine {
                             && !para_has_visible_text(prev_para);
                         if prev_has_textless_equation_tail && effective_endnote_title_gap_px >= 50.0
                         {
-                            let target_y = prev_content_bottom_y + effective_endnote_title_gap_px;
+                            let saved_head_gap_px = paragraphs
+                                .get(item_para)
+                                .and_then(|current_para| {
+                                    let current_source = self.endnote_para_source_for(item_para)?;
+                                    let prev_source = self.endnote_para_source_for(prev_pi)?;
+                                    if current_source.note_para_index != 0
+                                        || same_endnote_control(&current_source, &prev_source)
+                                    {
+                                        return None;
+                                    }
+                                    let is_last_column = (col_content.column_index as usize + 1)
+                                        >= zone_layout.column_areas.len().max(1);
+                                    let visible_separator_large_between_profile =
+                                        self.endnote_between_notes_hu.get() > 3000
+                                            && self.endnote_separator_above_hu.get()
+                                                <= ENDNOTE_BETWEEN_NOTES_BASE_FLOW_HU
+                                            && self.endnote_separator_below_hu.get()
+                                                <= ENDNOTE_BETWEEN_NOTES_BASE_FLOW_HU;
+                                    if !is_last_column || !visible_separator_large_between_profile {
+                                        return None;
+                                    }
+                                    let mut saw_visible_body_before_large_tac = false;
+                                    let mut current_head_has_large_tac = false;
+                                    for (next_pi, next_para) in
+                                        paragraphs.iter().enumerate().skip(item_para + 1).take(24)
+                                    {
+                                        let Some(next_source) =
+                                            self.endnote_para_source_for(next_pi)
+                                        else {
+                                            continue;
+                                        };
+                                        if !(same_endnote_control(&current_source, &next_source)
+                                            && next_source.note_para_index
+                                                > current_source.note_para_index
+                                            && next_source.note_para_index
+                                                <= current_source.note_para_index + 8)
+                                        {
+                                            continue;
+                                        }
+                                        if !para_has_visible_text(next_para)
+                                            && para_large_tac_picture_or_shape_height_px(
+                                                next_para, self.dpi,
+                                            )
+                                            .is_some_and(|height| height >= 80.0)
+                                            && saw_visible_body_before_large_tac
+                                        {
+                                            current_head_has_large_tac = true;
+                                            break;
+                                        }
+                                        if para_has_visible_text(next_para) {
+                                            saw_visible_body_before_large_tac = true;
+                                        }
+                                    }
+                                    if !current_head_has_large_tac {
+                                        return None;
+                                    }
+                                    let prev_seg = prev_para.line_segs.last()?;
+                                    let current_first =
+                                        current_para.line_segs.first()?.vertical_pos;
+                                    let prev_content_bottom =
+                                        prev_seg.vertical_pos + prev_seg.line_height;
+                                    let saved_gap_hu = (current_first - prev_content_bottom).max(0);
+                                    if saved_gap_hu <= 0 {
+                                        return None;
+                                    }
+                                    let saved_gap_px = hwpunit_to_px(saved_gap_hu, self.dpi);
+                                    (saved_gap_px >= 24.0)
+                                        .then_some(saved_gap_px.min(effective_endnote_title_gap_px))
+                                })
+                                .unwrap_or(0.0);
+                            let target_y = if saved_head_gap_px > 0.0 {
+                                y_offset + saved_head_gap_px
+                            } else {
+                                prev_content_bottom_y + effective_endnote_title_gap_px
+                            };
                             if y_offset + 1.0 < target_y {
                                 let delta = target_y - y_offset;
                                 y_offset = target_y;
                                 hcursor.shift_vpos_base_for_rendered_delta(delta);
+                                if saved_head_gap_px > 0.0 {
+                                    compacted_equation_tail_title_gap = true;
+                                }
                             }
                         }
                     }
