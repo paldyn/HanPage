@@ -3148,6 +3148,7 @@ impl TypesetEngine {
                                                     EndnoteFlowProfile::visible_nonzero_default_between_notes,
                                                 )
                                                 .unwrap_or(false)
+                                                && boundary_prev_endnote_had_vpos_rewind
                                                 && continued_endnote_tail_before_new_note
                                                 && st.current_column + 1 >= st.col_count
                                                 && st.current_height > st.available_height() * 0.25
@@ -3719,6 +3720,7 @@ impl TypesetEngine {
                                     let default_visible_tail_absorbed_gap =
                                         default_between_notes_gap
                                             && has_visible_endnote_separator
+                                            && boundary_prev_endnote_had_vpos_rewind
                                             && st.current_column + 1 >= st.col_count
                                             && st.current_height > available * 0.25
                                             && st.current_height < available * 0.50;
