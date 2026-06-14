@@ -16,6 +16,8 @@ fn main() {
         Some("export-markdown") => export_markdown(&args[2..]),
         Some("info") => show_info(&args[2..]),
         Some("dump") => dump_controls(&args[2..]),
+        Some("dump-note-shape") => dump_note_shape(&args[2..]),
+        Some("dump-endnote-lines") => dump_endnote_lines(&args[2..]),
         Some("dump-pages") => dump_pages(&args[2..]),
         Some("diag") => diag_document(&args[2..]),
         Some("convert") => convert_hwp(&args[2..]),
@@ -46,6 +48,7 @@ fn main() {
         Some("gen-pua") => gen_pua_test(&args[2..]),
         Some("test-field") => test_field_roundtrip(&args[2..]),
         Some("ir-diff") => ir_diff(&args[2..]),
+        Some("hwpx-roundtrip") => rhwp::diagnostics::hwpx_roundtrip_batch::run(&args[2..]),
         Some("thumbnail") => extract_thumbnail(&args[2..]),
         _ => {
             println!("rhwp v{}", rhwp::version());
@@ -131,6 +134,12 @@ fn print_help() {
     println!("  dump <파일.hwp> [--section <번호>] [--para <번호>]");
     println!("      문서 조판부호 구조 덤프 (디버깅용)");
     println!();
+    println!("  dump-note-shape <파일.hwp|파일.hwpx>");
+    println!("      구역별 각주/미주 모양 raw 값과 한컴 UI 의미값을 JSON으로 덤프");
+    println!();
+    println!("  dump-endnote-lines <파일.hwp> <section> <para> <control> [note-para]");
+    println!("      특정 미주 원본 문단의 line_seg, TextRun, TAC 수식 위치를 함께 덤프");
+    println!();
     println!("  dump-pages <파일.hwp> [-p <번호>] [--respect-vpos-reset]");
     println!("      페이지네이션 결과 덤프 (페이지별 문단/표 배치 목록)");
     println!();
@@ -185,6 +194,11 @@ fn print_help() {
     println!("                 controls(타입+속성), tab_extended, ParaShape, TabDef");
     println!("      표: page_break, outer_margin, treat_as_char, wrap, size, v_offset/h_offset");
     println!("      그림/도형: treat_as_char, wrap, size, v_offset/h_offset, vert_rel/horz_rel");
+    println!();
+    println!("  hwpx-roundtrip <파일.hwpx | --batch 폴더> [-o <출력폴더>] [--lineseg-report]");
+    println!("      HWPX → IR → HWPX roundtrip 검증 (Task #1315 baseline)");
+    println!("      재조립 .hwpx와 inventory.tsv를 출력 폴더(기본 output/poc/task1315)에 생성");
+    println!("      --lineseg-report: 문단별 lineseg diff를 lineseg_diff.tsv로 산출 (#1380 측정)");
     println!();
     println!("  thumbnail <파일.hwp> [옵션]");
     println!("      HWP 파일에서 썸네일(PrvImage) 추출");
@@ -987,123 +1001,123 @@ fn export_pdf(args: &[String]) {
         return;
     }
 
-    let file_path = &args[0];
-    let mut output_file = String::new();
-    let mut target_page: Option<u32> = None;
-
-    let mut i = 1;
-    while i < args.len() {
-        match args[i].as_str() {
-            "--output" | "-o" => {
-                if i + 1 < args.len() {
-                    output_file = args[i + 1].clone();
-                    i += 2;
-                } else {
-                    eprintln!("오류: --output 뒤에 파일 경로가 필요합니다.");
-                    return;
-                }
-            }
-            "--page" | "-p" => {
-                if i + 1 < args.len() {
-                    match args[i + 1].parse::<u32>() {
-                        Ok(n) => target_page = Some(n),
-                        Err(_) => {
-                            eprintln!("오류: 페이지 번호가 올바르지 않습니다.");
-                            return;
-                        }
-                    }
-                    i += 2;
-                } else {
-                    eprintln!("오류: --page 뒤에 페이지 번호가 필요합니다.");
-                    return;
-                }
-            }
-            _ => {
-                i += 1;
-            }
-        }
-    }
-
-    // 기본 출력 파일명
-    if output_file.is_empty() {
-        let stem = Path::new(file_path)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("output");
-        output_file = format!("output/{}.pdf", stem);
-    }
-
-    let data = match fs::read(file_path) {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!("오류: 파일을 읽을 수 없습니다 - {}: {}", file_path, e);
-            return;
-        }
-    };
-
-    let mut doc = match rhwp::wasm_api::HwpDocument::from_bytes(&data) {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!("오류: HWP 파싱 실패 - {}", e);
-            return;
-        }
-    };
-
-    let page_count = doc.page_count();
-    println!("문서 로드 완료: {} ({}페이지)", file_path, page_count);
-
-    // 출력 디렉토리 생성
-    if let Some(parent) = Path::new(&output_file).parent() {
-        if !parent.exists() {
-            let _ = fs::create_dir_all(parent);
-        }
-    }
-
-    // 페이지 범위 결정
-    let pages: Vec<u32> = match target_page {
-        Some(p) => {
-            if p >= page_count {
-                eprintln!(
-                    "오류: 페이지 번호가 범위를 벗어났습니다 (0~{})",
-                    page_count - 1
-                );
-                return;
-            }
-            vec![p]
-        }
-        None => (0..page_count).collect(),
-    };
-
-    // SVG 렌더링 → PDF 변환
-    let mut svg_pages: Vec<String> = Vec::new();
-    for page_num in &pages {
-        match doc.render_page_svg(*page_num) {
-            Ok(svg) => svg_pages.push(svg),
-            Err(e) => {
-                eprintln!("오류: 페이지 {} 렌더링 실패 - {:?}", page_num, e);
-                return;
-            }
-        }
+    #[cfg(target_arch = "wasm32")]
+    {
+        eprintln!("오류: PDF 내보내기는 native 빌드에서만 지원됩니다.");
+        return;
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     {
-        use rhwp::renderer::pdf;
-        match pdf::svgs_to_pdf(&svg_pages) {
-            Ok(pdf_bytes) => match fs::write(&output_file, &pdf_bytes) {
-                Ok(_) => println!(
-                    "  → {} ({}KB, {}페이지)",
-                    output_file,
-                    pdf_bytes.len() / 1024,
-                    svg_pages.len()
-                ),
-                Err(e) => eprintln!("오류: PDF 저장 실패 - {}", e),
-            },
-            Err(e) => eprintln!("오류: PDF 변환 실패 - {}", e),
-        }
-    }
+        let file_path = &args[0];
+        let mut output_file = String::new();
+        let mut target_page: Option<u32> = None;
 
-    println!("PDF 내보내기 완료");
+        let mut i = 1;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--output" | "-o" => {
+                    if i + 1 < args.len() {
+                        output_file = args[i + 1].clone();
+                        i += 2;
+                    } else {
+                        eprintln!("오류: --output 뒤에 파일 경로가 필요합니다.");
+                        return;
+                    }
+                }
+                "--page" | "-p" => {
+                    if i + 1 < args.len() {
+                        match args[i + 1].parse::<u32>() {
+                            Ok(n) => target_page = Some(n),
+                            Err(_) => {
+                                eprintln!("오류: 페이지 번호가 올바르지 않습니다.");
+                                return;
+                            }
+                        }
+                        i += 2;
+                    } else {
+                        eprintln!("오류: --page 뒤에 페이지 번호가 필요합니다.");
+                        return;
+                    }
+                }
+                _ => {
+                    i += 1;
+                }
+            }
+        }
+
+        // 기본 출력 파일명
+        if output_file.is_empty() {
+            let stem = Path::new(file_path)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("output");
+            output_file = format!("output/{}.pdf", stem);
+        }
+
+        let data = match fs::read(file_path) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("오류: 파일을 읽을 수 없습니다 - {}: {}", file_path, e);
+                return;
+            }
+        };
+
+        let doc = match rhwp::wasm_api::HwpDocument::from_bytes(&data) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("오류: HWP 파싱 실패 - {}", e);
+                return;
+            }
+        };
+
+        let page_count = doc.page_count();
+        println!("문서 로드 완료: {} ({}페이지)", file_path, page_count);
+
+        // 출력 디렉토리 생성
+        if let Some(parent) = Path::new(&output_file).parent() {
+            if !parent.exists() {
+                if let Err(e) = fs::create_dir_all(parent) {
+                    eprintln!("오류: 출력 디렉토리를 만들 수 없습니다 - {}", e);
+                    return;
+                }
+            }
+        }
+
+        // 페이지 범위 결정
+        let pages: Vec<u32> = match target_page {
+            Some(p) => {
+                if p >= page_count {
+                    eprintln!(
+                        "오류: 페이지 번호가 범위를 벗어났습니다 (0~{})",
+                        page_count - 1
+                    );
+                    return;
+                }
+                vec![p]
+            }
+            None => (0..page_count).collect(),
+        };
+
+        let pdf_bytes = match doc.render_pages_pdf_native(&pages) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                eprintln!("오류: PDF 변환 실패 - {}", e);
+                return;
+            }
+        };
+        if let Err(e) = fs::write(&output_file, &pdf_bytes) {
+            eprintln!("오류: PDF 저장 실패 - {}", e);
+            return;
+        }
+        println!(
+            "  → {} ({}KB, {}페이지)",
+            output_file,
+            pdf_bytes.len() / 1024,
+            pages.len()
+        );
+        println!("PDF 내보내기 완료");
+    }
 }
 
 fn export_text(args: &[String]) {
@@ -1809,6 +1823,94 @@ fn hu_to_mm_i(hu: i32) -> f64 {
     hu as f64 * 25.4 / 7200.0
 }
 
+fn dump_note_shape(args: &[String]) {
+    if args.is_empty() {
+        eprintln!("사용법: rhwp dump-note-shape <파일.hwp|파일.hwpx>");
+        return;
+    }
+
+    let file_path = &args[0];
+    let data = match fs::read(file_path) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("오류: 파일을 읽을 수 없습니다 - {}: {}", file_path, e);
+            return;
+        }
+    };
+
+    let doc = match rhwp::wasm_api::HwpDocument::from_bytes(&data) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("오류: HWP 파싱 실패 - {}", e);
+            return;
+        }
+    };
+
+    let sections: Vec<serde_json::Value> = doc
+        .document()
+        .sections
+        .iter()
+        .enumerate()
+        .map(|(idx, section)| {
+            serde_json::json!({
+                "section": idx,
+                "footnoteShape": note_shape_json(&section.section_def.footnote_shape),
+                "endnoteShape": note_shape_json(&section.section_def.endnote_shape),
+            })
+        })
+        .collect();
+
+    let value = serde_json::json!({
+        "file": file_path,
+        "sections": sections,
+    });
+    match serde_json::to_string_pretty(&value) {
+        Ok(text) => println!("{}", text),
+        Err(e) => eprintln!("오류: JSON 생성 실패 - {}", e),
+    }
+}
+
+fn note_shape_json(shape: &rhwp::model::footnote::FootnoteShape) -> serde_json::Value {
+    serde_json::json!({
+        "raw": {
+            "attr": shape.attr,
+            "numberFormat": format!("{:?}", shape.number_format),
+            "userChar": shape.user_char.to_string(),
+            "prefixChar": shape.prefix_char.to_string(),
+            "suffixChar": shape.suffix_char.to_string(),
+            "startNumber": shape.start_number,
+            "separatorLength": hu_json(shape.separator_length as i32),
+            "separatorMarginTop": hu_json(shape.separator_margin_top as i32),
+            "separatorMarginBottom": hu_json(shape.separator_margin_bottom as i32),
+            "noteSpacing": hu_json(shape.note_spacing as i32),
+            "separatorLineType": shape.separator_line_type,
+            "separatorLineWidth": shape.separator_line_width,
+            "separatorColor": format!("0x{:08x}", shape.separator_color),
+            "numbering": format!("{:?}", shape.numbering),
+            "placement": format!("{:?}", shape.placement),
+            "numberCodeSuperscript": shape.number_code_superscript,
+            "printInlineAfterText": shape.print_inline_after_text,
+            "rawUnknown": hu_json(shape.raw_unknown as i32),
+        },
+        "ui": {
+            "separatorAbove": hu_json(shape.separator_above_margin_hu() as i32),
+            "separatorBelow": hu_json(shape.separator_below_margin_hu() as i32),
+            "betweenNotes": hu_json(shape.between_notes_margin_hu() as i32),
+        },
+    })
+}
+
+fn hu_json(hu: i32) -> serde_json::Value {
+    serde_json::json!({
+        "hu": hu,
+        "mm": rounded_mm(hu),
+    })
+}
+
+fn rounded_mm(hu: i32) -> f64 {
+    (hu_to_mm_i(hu) * 1000.0).round() / 1000.0
+}
+
 fn dump_pages(args: &[String]) {
     if args.is_empty() {
         eprintln!("사용법: rhwp dump-pages <파일.hwp> [-p <페이지번호>]");
@@ -1862,6 +1964,426 @@ fn dump_pages(args: &[String]) {
 
     println!("문서 로드: {} ({}페이지)", file_path, doc.page_count());
     print!("{}", doc.dump_page_items(target_page));
+}
+
+fn dump_endnote_lines(args: &[String]) {
+    if args.len() < 4 {
+        eprintln!(
+            "사용법: rhwp dump-endnote-lines <파일.hwp> <section> <para> <control> [note-para]"
+        );
+        return;
+    }
+
+    let file_path = &args[0];
+    let section_idx = match args[1].parse::<usize>() {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("오류: section 인덱스 파싱 실패 - {}", e);
+            return;
+        }
+    };
+    let para_idx = match args[2].parse::<usize>() {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("오류: para 인덱스 파싱 실패 - {}", e);
+            return;
+        }
+    };
+    let control_idx = match args[3].parse::<usize>() {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("오류: control 인덱스 파싱 실패 - {}", e);
+            return;
+        }
+    };
+    let target_note_para = if args.len() >= 5 {
+        match args[4].parse::<usize>() {
+            Ok(v) => Some(v),
+            Err(e) => {
+                eprintln!("오류: note-para 인덱스 파싱 실패 - {}", e);
+                return;
+            }
+        }
+    } else {
+        None
+    };
+
+    let data = match fs::read(file_path) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("오류: 파일을 읽을 수 없습니다 - {}: {}", file_path, e);
+            return;
+        }
+    };
+
+    let doc = match rhwp::wasm_api::HwpDocument::from_bytes(&data) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("오류: HWP 파싱 실패 - {}", e);
+            return;
+        }
+    };
+
+    let document = doc.document();
+    let Some(section) = document.sections.get(section_idx) else {
+        eprintln!("오류: section {} 범위 초과", section_idx);
+        return;
+    };
+    let Some(source_para) = section.paragraphs.get(para_idx) else {
+        eprintln!("오류: para {} 범위 초과", para_idx);
+        return;
+    };
+    let Some(ctrl) = source_para.controls.get(control_idx) else {
+        eprintln!("오류: control {} 범위 초과", control_idx);
+        return;
+    };
+
+    let rhwp::model::control::Control::Endnote(endnote) = ctrl else {
+        eprintln!(
+            "오류: s{}:p{}:ci{} 는 미주가 아닙니다 ({})",
+            section_idx,
+            para_idx,
+            control_idx,
+            control_kind(ctrl)
+        );
+        return;
+    };
+
+    println!(
+        "문서: {} source=s{}:p{}:ci{} endnote_no={} note_paras={}",
+        file_path,
+        section_idx,
+        para_idx,
+        control_idx,
+        endnote.number,
+        endnote.paragraphs.len()
+    );
+    println!("source_text={}", brief_text(&source_para.text, 120));
+    println!(
+        "source_control_positions={}",
+        format_control_positions(source_para)
+    );
+
+    for (note_para_idx, para) in endnote.paragraphs.iter().enumerate() {
+        if target_note_para.is_some_and(|target| target != note_para_idx) {
+            continue;
+        }
+        println!(
+            "\n-- note_para={} source=s{}:p{}:ci{}:note{} --",
+            note_para_idx, section_idx, para_idx, control_idx, note_para_idx
+        );
+        dump_paragraph_line_trace(para);
+    }
+}
+
+fn dump_paragraph_line_trace(para: &rhwp::model::paragraph::Paragraph) {
+    use rhwp::model::control::Control;
+
+    let composed = rhwp::renderer::composer::compose_paragraph(para);
+    let control_positions = para.control_text_positions();
+
+    println!(
+        "para text_len={} char_count={} controls={} line_segs={} char_offsets={} text={}",
+        para.text.chars().count(),
+        para.char_count,
+        para.controls.len(),
+        para.line_segs.len(),
+        format_u32_list(&para.char_offsets),
+        brief_text(&para.text, 160)
+    );
+    for (i, seg) in para.line_segs.iter().enumerate() {
+        println!(
+            "  line_seg[{i}] ts={} char={} vpos={} lh={} th={} bl={} gap={} cs={} sw={} tag=0x{:08x}",
+            seg.text_start,
+            para.utf16_pos_to_char_idx(seg.text_start),
+            seg.vertical_pos,
+            seg.line_height,
+            seg.text_height,
+            seg.baseline_distance,
+            seg.line_spacing,
+            seg.column_start,
+            seg.segment_width,
+            seg.tag
+        );
+    }
+
+    if para.controls.is_empty() {
+        println!("  controls=[]");
+    } else {
+        for (ci, ctrl) in para.controls.iter().enumerate() {
+            let pos = control_positions.get(ci).copied().unwrap_or(usize::MAX);
+            match ctrl {
+                Control::Equation(eq) => println!(
+                    "  control[{ci}] kind=Equation pos={} tac=true size={}x{} font={} baseline={} script={}",
+                    pos,
+                    eq.common.width,
+                    eq.common.height,
+                    eq.font_size,
+                    eq.baseline,
+                    brief_text(&eq.script, 100)
+                ),
+                Control::Picture(pic) => println!(
+                    "  control[{ci}] kind=Picture pos={} tac={} size={}x{}",
+                    pos, pic.common.treat_as_char, pic.common.width, pic.common.height
+                ),
+                Control::Shape(shape) => {
+                    let common = shape.common();
+                    println!(
+                        "  control[{ci}] kind=Shape pos={} tac={} size={}x{}",
+                        pos, common.treat_as_char, common.width, common.height
+                    );
+                }
+                Control::Table(table) => println!(
+                    "  control[{ci}] kind=Table pos={} tac={} rows={} cols={}",
+                    pos,
+                    table.common.treat_as_char,
+                    table.row_count,
+                    table.col_count
+                ),
+                other => println!(
+                    "  control[{ci}] kind={} pos={} tac=false",
+                    control_kind(other),
+                    pos
+                ),
+            }
+        }
+    }
+
+    println!("  composed_lines={}", composed.lines.len());
+    for (li, line) in composed.lines.iter().enumerate() {
+        let next_start = composed
+            .lines
+            .get(li + 1)
+            .map(|next| next.char_start)
+            .unwrap_or_else(|| {
+                line.char_start
+                    + line
+                        .runs
+                        .iter()
+                        .map(|run| run.text.chars().count())
+                        .sum::<usize>()
+                    + usize::from(line.has_line_break)
+            });
+        println!(
+            "    line[{li}] char={}..{} runs={} break={} lh={} bl={} gap={} cs={} sw={} layout_tacs={}",
+            line.char_start,
+            next_start,
+            format_runs(&line.runs),
+            line.has_line_break,
+            line.line_height,
+            line.baseline_distance,
+            line.line_spacing,
+            line.column_start,
+            line.segment_width,
+            format_layout_tac_hits(&composed, li)
+        );
+    }
+
+    if composed.tac_controls.is_empty() {
+        println!("  tac_controls=[]");
+    } else {
+        println!("  tac_controls:");
+        for (pos, width_hu, ci) in &composed.tac_controls {
+            let line_hits = composed
+                .lines
+                .iter()
+                .enumerate()
+                .filter_map(|(li, line)| {
+                    let start = line.char_start;
+                    let end = composed
+                        .lines
+                        .get(li + 1)
+                        .map(|next| next.char_start)
+                        .unwrap_or_else(|| {
+                            line.char_start
+                                + line
+                                    .runs
+                                    .iter()
+                                    .map(|run| run.text.chars().count())
+                                    .sum::<usize>()
+                                + usize::from(line.has_line_break)
+                        });
+                    if if end > start {
+                        *pos >= start && *pos < end
+                    } else {
+                        *pos == start
+                    } {
+                        Some(li.to_string())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+            println!(
+                "    tac ci={} pos={} width={} strict_line_candidates=[{}]",
+                ci, pos, width_hu, line_hits
+            );
+        }
+    }
+}
+
+fn format_layout_tac_hits(
+    composed: &rhwp::renderer::composer::ComposedParagraph,
+    line_idx: usize,
+) -> String {
+    let Some(line) = composed.lines.get(line_idx) else {
+        return "[]".to_string();
+    };
+    if composed.tac_controls.is_empty() {
+        return "[]".to_string();
+    }
+
+    let mut hits = Vec::new();
+    if line.runs.is_empty() {
+        let start = line.char_start;
+        let end = composed
+            .lines
+            .get(line_idx + 1)
+            .map(|next| next.char_start)
+            .unwrap_or(usize::MAX);
+        for (pos, _, ci) in &composed.tac_controls {
+            if *pos >= start && *pos < end {
+                hits.push(format!("ci{}@{}:empty", ci, pos));
+            }
+        }
+    } else {
+        let mut run_start = line.char_start;
+        for (run_idx, run) in line.runs.iter().enumerate() {
+            let run_len = run.text.chars().count();
+            let run_end = run_start + run_len;
+            let next_line_starts_at_run_end = composed
+                .lines
+                .get(line_idx + 1)
+                .is_some_and(|next| next.char_start == run_end);
+            let allow_end = run_idx == line.runs.len() - 1 && !next_line_starts_at_run_end;
+            for (pos, _, ci) in &composed.tac_controls {
+                if *pos >= run_start && (*pos < run_end || (allow_end && *pos == run_end)) {
+                    hits.push(format!(
+                        "ci{}@{}:run{}+{}",
+                        ci,
+                        pos,
+                        run_idx,
+                        pos.saturating_sub(run_start)
+                    ));
+                }
+            }
+            run_start = run_end;
+        }
+    }
+
+    if hits.is_empty() {
+        "[]".to_string()
+    } else {
+        format!("[{}]", hits.join(","))
+    }
+}
+
+fn control_kind(ctrl: &rhwp::model::control::Control) -> &'static str {
+    use rhwp::model::control::Control;
+    match ctrl {
+        Control::SectionDef(_) => "SectionDef",
+        Control::ColumnDef(_) => "ColumnDef",
+        Control::Table(_) => "Table",
+        Control::Shape(_) => "Shape",
+        Control::Picture(_) => "Picture",
+        Control::Header(_) => "Header",
+        Control::Footer(_) => "Footer",
+        Control::Footnote(_) => "Footnote",
+        Control::Endnote(_) => "Endnote",
+        Control::AutoNumber(_) => "AutoNumber",
+        Control::NewNumber(_) => "NewNumber",
+        Control::PageNumberPos(_) => "PageNumberPos",
+        Control::Bookmark(_) => "Bookmark",
+        Control::Hyperlink(_) => "Hyperlink",
+        Control::Ruby(_) => "Ruby",
+        Control::CharOverlap(_) => "CharOverlap",
+        Control::PageHide(_) => "PageHide",
+        Control::HiddenComment(_) => "HiddenComment",
+        Control::Equation(_) => "Equation",
+        Control::Field(_) => "Field",
+        Control::Form(_) => "Form",
+        Control::Unknown(_) => "Unknown",
+    }
+}
+
+fn format_control_positions(para: &rhwp::model::paragraph::Paragraph) -> String {
+    let positions = para.control_text_positions();
+    if positions.is_empty() {
+        return "[]".to_string();
+    }
+    positions
+        .iter()
+        .enumerate()
+        .map(|(ci, pos)| {
+            let kind = para.controls.get(ci).map(control_kind).unwrap_or("?");
+            format!("{ci}:{kind}@{pos}")
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn format_runs(runs: &[rhwp::renderer::composer::ComposedTextRun]) -> String {
+    if runs.is_empty() {
+        return "[]".to_string();
+    }
+    let parts = runs
+        .iter()
+        .map(|run| {
+            format!(
+                "cs{}:l{}:'{}'",
+                run.char_style_id,
+                run.lang_index,
+                brief_text(&run.text, 40)
+            )
+        })
+        .collect::<Vec<_>>();
+    format!("[{}]", parts.join("|"))
+}
+
+fn format_u32_list(values: &[u32]) -> String {
+    if values.is_empty() {
+        return "[]".to_string();
+    }
+    if values.len() <= 16 {
+        return format!("{:?}", values);
+    }
+    let head = values
+        .iter()
+        .take(8)
+        .map(|v| v.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let tail = values
+        .iter()
+        .rev()
+        .take(4)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .map(|v| v.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("[{}...{};len={}]", head, tail, values.len())
+}
+
+fn brief_text(text: &str, max_chars: usize) -> String {
+    let mut out = String::new();
+    for (count, ch) in text.chars().enumerate() {
+        if count >= max_chars {
+            out.push('…');
+            break;
+        }
+        match ch {
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\u{FFFC}' => out.push('□'),
+            c if c.is_control() => out.push_str(&format!("\\u{{{:04X}}}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 fn dump_controls(args: &[String]) {

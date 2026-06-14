@@ -20,7 +20,7 @@ use super::utils::{
     expand_numbering_format, extract_shape_transform, find_bin_data,
     numbering_format_to_number_format, picture_display_size_hu, resolve_numbering_id,
 };
-use super::{is_tolerated_endnote_column_bottom_bleed, CellContext, LayoutEngine};
+use super::{CellContext, LayoutEngine};
 use crate::model::bin_data::BinDataContent;
 use crate::model::control::Control;
 use crate::model::paragraph::Paragraph;
@@ -153,6 +153,10 @@ fn tac_picture_or_shape_height_for_line(
     })
 }
 
+fn is_treat_as_char_equation_control(ctrl: Option<&Control>) -> bool {
+    matches!(ctrl, Some(Control::Equation(eq)) if eq.common.treat_as_char)
+}
+
 fn composed_line_char_end(comp: &ComposedParagraph, line_idx: usize) -> usize {
     if let Some(next) = comp.lines.get(line_idx + 1) {
         return next.char_start;
@@ -224,12 +228,7 @@ fn line_has_strict_equation_tac_control(
     let end = composed_line_char_end(comp, line_idx);
     end > start
         && tac_offsets_px.iter().any(|(pos, _, ci)| {
-            *pos >= start
-                && *pos < end
-                && para
-                    .controls
-                    .get(*ci)
-                    .is_some_and(|ctrl| matches!(ctrl, Control::Equation(_)))
+            *pos >= start && *pos < end && is_treat_as_char_equation_control(para.controls.get(*ci))
         })
 }
 
@@ -428,6 +427,21 @@ fn is_blank_spacer_line(
         return false;
     }
     is_endnote_virtual_para || para.map(|p| p.controls.is_empty()).unwrap_or(false)
+}
+
+fn is_equation_only_tac_line(
+    para: Option<&Paragraph>,
+    runs_all_whitespace: bool,
+    line_tac_offsets: &[(usize, f64, usize)],
+) -> bool {
+    let Some(para) = para else {
+        return false;
+    };
+    runs_all_whitespace
+        && !line_tac_offsets.is_empty()
+        && line_tac_offsets
+            .iter()
+            .all(|(_, _, ci)| is_treat_as_char_equation_control(para.controls.get(*ci)))
 }
 
 fn tac_picture_label_extra_px(
@@ -1870,10 +1884,16 @@ impl LayoutEngine {
                 runs_all_whitespace,
                 &line_tac_offsets,
             );
-            let tolerated_endnote_bottom_bleed = is_tolerated_endnote_column_bottom_bleed(
+            let equation_only_endnote_tail_line = is_body_flow_col_area
+                && cell_ctx.is_none()
+                && is_endnote_virtual_para
+                && line_idx + 1 >= end
+                && is_equation_only_tac_line(para, runs_all_whitespace, &line_tac_offsets);
+            let tolerated_endnote_bottom_bleed = self.is_tolerated_current_endnote_bottom_bleed(
                 is_body_flow_col_area && cell_ctx.is_none() && is_endnote_virtual_para,
                 line_visual_bottom,
                 col_bottom,
+                equation_only_endnote_tail_line,
             );
             if is_body_flow_col_area
                 && cell_ctx.is_none()
@@ -2993,8 +3013,18 @@ impl LayoutEngine {
                 // `\n` 위치), 그 line 의 chars range [start, end) 에서 end 가 `\n` 위치
                 // 이므로 누락. has_line_break line 의 마지막 run 의 end position 도 TAC
                 // 포함하면 line 의 정확한 위치에 inline emit.
-                let allow_end_tac =
-                    is_last_run || (comp_line.has_line_break && is_last_run_of_line(run_idx));
+                //
+                // 다만 다음 LineSeg/ComposedLine 이 같은 char 위치에서 시작하면
+                // 그 boundary TAC 는 다음 줄의 시작 글자처럼 취급해야 한다. 현재 줄에서도
+                // end TAC 로 허용하면 미주 수식이 이전 줄 끝과 다음 줄 시작에 중복 emit 되어
+                // 같은 수식이 겹친다.
+                let next_line_starts_at_run_end = composed
+                    .lines
+                    .get(line_idx + 1)
+                    .is_some_and(|next| next.char_start == run_char_end);
+                let allow_end_tac = (is_last_run
+                    || (comp_line.has_line_break && is_last_run_of_line(run_idx)))
+                    && !next_line_starts_at_run_end;
                 let run_tacs: Vec<(usize, f64, usize)> = tac_offsets_px
                     .iter()
                     .filter(|(pos, _, _)| {
@@ -4124,6 +4154,31 @@ impl LayoutEngine {
                         row_base_x(row) + row_align_offset
                     })
                     .collect();
+                let zero_endnote_boundary_result_shift = if cell_ctx.is_none()
+                    && self.current_endnote_zero_spacing_profile()
+                    && para_index >= self.endnote_para_base.get()
+                    && !self.endnote_para_has_same_endnote_successor(para_index)
+                    && line_idx + 1 >= end
+                    && equation_tac_extra_rows == 0
+                    && line_tac_offsets.len() == 1
+                    && comp_line.runs.is_empty()
+                    && y + line_height > col_bottom - 20.0
+                    && line_tac_offsets.iter().all(|(_, _, ci)| {
+                        para.is_some_and(|p| {
+                            matches!(
+                                p.controls.get(*ci),
+                                Some(Control::Equation(eq))
+                                    if eq.common.treat_as_char && eq.common.height <= 1200
+                            )
+                        })
+                    }) {
+                    // 0/0/0 미주에서는 새 미주 제목이 바로 뒤따르는 작은 결과식 tail이
+                    // 저장 LINE_SEG 하단에 놓이면 제목과 순서가 뒤집혀 보일 수 있다.
+                    // 물리 흐름은 유지하고 마지막 작은 수식 표시만 한 줄 위 결과 위치로 붙인다.
+                    ((line_height + line_spacing_px) * 2.0).clamp(24.0, 42.0)
+                } else {
+                    0.0
+                };
                 for (tac_k, &(tac_pos, tac_w, tac_ci)) in tac_offsets_px.iter().enumerate() {
                     if !tac_on_line(tac_k, tac_pos) {
                         continue;
@@ -4152,7 +4207,9 @@ impl LayoutEngine {
                                 layout_box.height
                             };
                             let tac_row = tac_row_for(tac_k).min(row_inline_x.len() - 1);
-                            let row_y = y + tac_row as f64 * (line_height + line_spacing_px);
+                            let row_y = (y + tac_row as f64 * (line_height + line_spacing_px)
+                                - zero_endnote_boundary_result_shift)
+                                .max(col_area.y);
                             let inline_x = row_inline_x[tac_row];
                             let eq_y = if cell_ctx.is_some() {
                                 (row_y + baseline - layout_box.baseline).max(row_y)
@@ -4720,6 +4777,9 @@ impl LayoutEngine {
                     y + line_flow_height
                 };
                 self.last_item_content_bottom.set(content_bottom);
+                if equation_only_endnote_tail_line && content_bottom > col_bottom {
+                    self.last_item_endnote_equation_tail_line_box.set(true);
+                }
             }
             if endnote_line_vpos_base.is_some() {
                 let line_bottom = if skip_advance_empty_line {

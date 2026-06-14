@@ -149,11 +149,10 @@ fn synthesize_marker_paragraph(para: &Paragraph) -> Option<Paragraph> {
     let controls_are_tac_objects = para.controls.iter().all(|ctrl| {
         matches!(
             ctrl,
-            Control::Equation(_)
-                | Control::Picture(_)
-                | Control::Shape(_)
-                | Control::Table(_)
-                | Control::Form(_)
+            Control::Equation(eq) if eq.common.treat_as_char
+        ) || matches!(
+            ctrl,
+            Control::Picture(_) | Control::Shape(_) | Control::Table(_) | Control::Form(_)
         )
     });
     if text_has_only_layout_space && controls_are_tac_objects {
@@ -297,7 +296,7 @@ pub fn compose_paragraph(para: &Paragraph) -> ComposedParagraph {
                 Control::Shape(s) if s.common().treat_as_char => {
                     Some((pos, s.common().width as i32, i))
                 }
-                Control::Equation(eq) => {
+                Control::Equation(eq) if eq.common.treat_as_char => {
                     // HWP 저장값을 사용 — 한컴 편집기가 실제 폰트로 계산한 정확한 너비
                     Some((pos, eq.common.width as i32, i))
                 }
@@ -1042,9 +1041,8 @@ fn identify_inline_controls(para: &Paragraph) -> Vec<InlineControl> {
     for (ctrl_idx, ctrl) in para.controls.iter().enumerate() {
         let control_type = match ctrl {
             Control::Table(_) => InlineControlType::Table,
-            Control::Shape(_) | Control::Picture(_) | Control::Equation(_) => {
-                InlineControlType::Shape
-            }
+            Control::Shape(_) | Control::Picture(_) => InlineControlType::Shape,
+            Control::Equation(eq) if eq.common.treat_as_char => InlineControlType::Shape,
             Control::SectionDef(_) | Control::ColumnDef(_) => InlineControlType::Other,
             _ => continue,
         };

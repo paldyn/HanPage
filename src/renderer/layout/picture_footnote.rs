@@ -635,9 +635,9 @@ impl LayoutEngine {
         let mut total = 0.0;
 
         // 구분선 위 여백 + 구분선 + 아래 여백
-        total += hwpunit_to_px(shape.separator_margin_top as i32, self.dpi);
+        total += hwpunit_to_px(shape.separator_above_margin_hu() as i32, self.dpi);
         total += border_width_to_px(shape.separator_line_width).max(0.5);
-        total += hwpunit_to_px(shape.separator_margin_bottom as i32, self.dpi);
+        total += hwpunit_to_px(shape.separator_below_margin_hu() as i32, self.dpi);
 
         // 각 각주의 문단 높이 (LineSeg.line_height는 HWP에서 줄간격 이미 반영됨)
         for (i, fn_ref) in footnotes.iter().enumerate() {
@@ -653,7 +653,7 @@ impl LayoutEngine {
             }
             // 각주 간 간격
             if i + 1 < footnotes.len() {
-                total += hwpunit_to_px(shape.note_spacing as i32, self.dpi);
+                total += hwpunit_to_px(shape.between_notes_margin_hu() as i32, self.dpi);
             }
         }
         total
@@ -673,7 +673,7 @@ impl LayoutEngine {
         let mut y = fn_area.y;
 
         // (1) 구분선 위 여백
-        y += hwpunit_to_px(shape.separator_margin_top as i32, self.dpi);
+        y += hwpunit_to_px(shape.separator_above_margin_hu() as i32, self.dpi);
 
         // (2) 구분선
         let sep_length = if shape.separator_length > 0 {
@@ -706,7 +706,7 @@ impl LayoutEngine {
         y += line_width;
 
         // (3) 구분선 아래 여백
-        y += hwpunit_to_px(shape.separator_margin_bottom as i32, self.dpi);
+        y += hwpunit_to_px(shape.separator_below_margin_hu() as i32, self.dpi);
 
         // (4) 각 각주 렌더링
         // 각주 TextRun에 마커를 인코딩하여 히트테스트에서 식별 가능하도록 함
@@ -733,7 +733,7 @@ impl LayoutEngine {
                     .unwrap_or(composed.para_style_id as u32);
 
                 // [Issue #483] 각주의 마지막 paragraph 는 trailing line_spacing 미적용
-                // — 다음 각주와의 간격은 note_spacing 이 책임. trailing ls 까지 합산하면
+                // — 다음 각주와의 간격은 between-notes 값이 책임. trailing ls 까지 합산하면
                 // 각주 사이 gap 이 line_spacing 만큼 부풀려짐.
                 let is_last_para_of_fn = p_idx + 1 == fn_paras.len();
 
@@ -775,7 +775,7 @@ impl LayoutEngine {
                     );
                     if is_last_para_of_fn {
                         // layout_composed_paragraph 가 마지막 line 의 trailing line_spacing 을
-                        // 포함시키므로, 각주 마지막 paragraph 에서는 그만큼 빼서 note_spacing
+                        // 포함시키므로, 각주 마지막 paragraph 에서는 그만큼 빼서 between-notes
                         // 과의 이중 합산을 막는다.
                         let trail_ls = composed
                             .lines
@@ -791,7 +791,7 @@ impl LayoutEngine {
 
             // 각주 간 간격
             if i + 1 < footnotes.len() {
-                y += hwpunit_to_px(shape.note_spacing as i32, self.dpi);
+                y += hwpunit_to_px(shape.between_notes_margin_hu() as i32, self.dpi);
             }
         }
     }
@@ -812,7 +812,7 @@ impl LayoutEngine {
         marker_para: usize,
         base_cs_id: u32,
         // [Issue #483] true 면 각주의 마지막 paragraph — 마지막 line 의 trailing
-        // line_spacing 을 누적하지 않는다 (note_spacing 과 이중 합산 방지).
+        // line_spacing 을 누적하지 않는다 (between-notes 와 이중 합산 방지).
         is_last_para_of_fn: bool,
     ) -> f64 {
         let mut y = y_start;
@@ -906,7 +906,7 @@ impl LayoutEngine {
             parent.children.push(line_node);
             // [Issue #483] trailing line_spacing 추가 — layout_composed_paragraph:2560 과 정합.
             // 단, 각주의 마지막 paragraph 의 마지막 line 에서는 trailing line_spacing 을
-            // 누적하지 않는다 — 다음 각주와의 간격은 note_spacing 이 책임하므로
+            // 누적하지 않는다 — 다음 각주와의 간격은 between-notes 값이 책임하므로
             // 이중 합산을 피하기 위함.
             let is_last_line = line_idx + 1 >= composed.lines.len();
             if is_last_para_of_fn && is_last_line {
