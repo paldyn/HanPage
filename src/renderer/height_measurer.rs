@@ -2000,13 +2000,13 @@ impl HeightMeasurer {
 
         // 기본값: FootnoteShape이 없으면 기본 여백 사용
         let separator_margin_top = footnote_shape
-            .map(|s| hwpunit_to_px(s.separator_margin_top as i32, self.dpi))
+            .map(|s| hwpunit_to_px(s.separator_above_margin_hu() as i32, self.dpi))
             .unwrap_or(8.0); // 약 0.6mm
         let separator_margin_bottom = footnote_shape
-            .map(|s| hwpunit_to_px(s.separator_margin_bottom as i32, self.dpi))
+            .map(|s| hwpunit_to_px(s.separator_below_margin_hu() as i32, self.dpi))
             .unwrap_or(4.0); // 약 0.3mm
         let note_spacing = footnote_shape
-            .map(|s| hwpunit_to_px(s.note_spacing as i32, self.dpi))
+            .map(|s| hwpunit_to_px(s.between_notes_margin_hu() as i32, self.dpi))
             .unwrap_or(2.0); // 약 0.15mm
         let separator_height = 1.0; // 구분선 두께 (1px)
 

@@ -43,6 +43,7 @@ EQUATION_FLOW_LINE_OVERLAP_TOLERANCE_PX = 8.0
 TEXT_RUN_INK_HEIGHT_LIMIT_PX = 16.0
 LINE_ORDER_OVERLAP_LIMIT = 0.65
 LINE_ORDER_OVERLAP_MIN_PX = 4.0
+QUESTION_TITLE_OVERLAP_MIN_PX = 3.0
 FRAME_TAIL_LINE_OVERFLOW_MIN_PX = 4.0
 COLUMN_X_OVERLAP_LIMIT = 0.55
 QUESTION_MARKER_Y_DRIFT_LIMIT_PX = 42.0
@@ -104,12 +105,6 @@ TARGETS = {
         "2022-11-practice",
         Path("samples/3-11월_실전_통합_2022.hwp"),
         Path("pdf/3-11월_실전_통합_2022.pdf"),
-    ),
-    # [Task #1357] 미주 다단 오버플로 정밀 수정 대상 (p21 col0 본문 하단 초과)
-    "2024-09-below20above20": Target(
-        "2024-09-below20above20",
-        Path("samples/3-09월_교육_통합_2024-구분선아래20구분선위20.hwp"),
-        Path("pdf/3-09월_교육_통합_2024-구분선아래20구분선위20.pdf"),
     ),
     "2024-11-practice-shape987": Target(
         "2024-11-practice-shape987",
@@ -1829,12 +1824,14 @@ def render_tree_question_title_overlap_candidates(tree_path: Path) -> list[dict[
         assert isinstance(title_box, tuple)
         assert isinstance(next_box, tuple)
         ratio = bbox_overlap_ratio(title_box, next_box)
-        if ratio >= 0.05:
+        _, overlap_height = bbox_overlap_size(title_box, next_box)
+        if ratio >= 0.05 and overlap_height >= QUESTION_TITLE_OVERLAP_MIN_PX:
             candidates.append(
                 {
                     "title_index": index,
                     "next_index": index + 1,
                     "overlap_ratio": round(ratio, 3),
+                    "overlap_px": round(overlap_height, 1),
                     "title_path": title_line["path"],
                     "next_path": next_line["path"],
                     "title_pi": title_line.get("pi"),
@@ -1871,6 +1868,14 @@ def render_tree_line_order_overlap_candidates(tree_path: Path) -> list[dict[str,
         if prev_text == "[VISUAL]" and not QUESTION_TITLE_RE.match(next_text):
             continue
         if "[EQ]" in prev_text and QUESTION_TITLE_RE.match(next_text):
+            continue
+        if (
+            next_text == "[VISUAL]"
+            and prev_text != "[VISUAL]"
+            and not QUESTION_TITLE_RE.match(prev_text)
+            and next_box[1] < prev_box[1]
+            and next_box[1] + next_box[3] <= prev_box[1] + prev_box[3] + LINE_ORDER_OVERLAP_MIN_PX
+        ):
             continue
         if bbox_x_overlap_ratio(prev_box, next_box) < COLUMN_X_OVERLAP_LIMIT:
             continue
@@ -1950,6 +1955,8 @@ def suppress_tolerated_frame_tail_candidates(
     candidates: list[dict[str, object]],
     *,
     rhwp_out_pixels: int,
+    rhwp_outside_frame_bleed_px: int,
+    pdf_outside_frame_bleed_px: int,
     content_bottom_delta: float | None,
     question_marker_drifts: list[dict[str, object]],
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
@@ -1967,8 +1974,34 @@ def suppress_tolerated_frame_tail_candidates(
         equation_line_height_bleed = overflow <= 12.0 and rhwp_out_pixels <= 10 and (
             "[EQ]" in text or line_height >= 20.0
         )
+        actual_bottom_bleed_is_tolerated = (
+            0 < rhwp_outside_frame_bleed_px <= FRAME_BOTTOM_GLYPH_BLEED_TOLERANCE_PX
+            and pdf_outside_frame_bleed_px <= FRAME_BOTTOM_GLYPH_BLEED_TOLERANCE_PX
+            and rhwp_out_pixels <= 300
+        )
+        actual_bottom_extent_is_tolerated = (
+            0 < rhwp_outside_frame_bleed_px <= FRAME_BOTTOM_GLYPH_BLEED_TOLERANCE_PX
+            and pdf_outside_frame_bleed_px <= FRAME_BOTTOM_GLYPH_BLEED_TOLERANCE_PX
+        )
+        equation_logical_box_bleed = (
+            "[EQ]" in text
+            and line_height > 0.0
+            and overflow <= line_height + FRAME_BOTTOM_GLYPH_BLEED_TOLERANCE_PX
+            and actual_bottom_bleed_is_tolerated
+            and (content_bottom_delta is None or abs(content_bottom_delta) < CONTENT_BOTTOM_DELTA_LIMIT_PX)
+        )
+        text_logical_box_bleed = (
+            line_height > 0.0
+            and overflow <= line_height
+            and actual_bottom_extent_is_tolerated
+            and (content_bottom_delta is None or abs(content_bottom_delta) < CONTENT_BOTTOM_DELTA_LIMIT_PX)
+        )
 
-        if marker_is_stable and bottom_is_close and (small_bottom_bleed or equation_line_height_bleed):
+        if marker_is_stable and (
+            (bottom_is_close and (small_bottom_bleed or equation_line_height_bleed))
+            or equation_logical_box_bleed
+            or text_logical_box_bleed
+        ):
             suppressed.append({**item, "suppressed_reason": "small_visual_tail_bleed"})
         else:
             active.append(item)
@@ -2119,6 +2152,8 @@ def analyze_page(
     frame_tail_overflows, suppressed_frame_tail_overflows = suppress_tolerated_frame_tail_candidates(
         frame_tail_overflows,
         rhwp_out_pixels=rhwp_out_pixels,
+        rhwp_outside_frame_bleed_px=rhwp_outside_frame_bleed_px,
+        pdf_outside_frame_bleed_px=pdf_outside_frame_bleed_px,
         content_bottom_delta=content_bottom_delta,
         question_marker_drifts=question_marker_drifts,
     )

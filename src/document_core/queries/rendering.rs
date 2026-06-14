@@ -2109,6 +2109,8 @@ impl DocumentCore {
                 endnote_paragraphs: Vec::new(),
                 endnote_para_sources: Vec::new(),
                 endnote_between_notes_hu: 0,
+                endnote_separator_above_hu: 0,
+                endnote_separator_below_hu: 0,
             });
         }
         self.pagination.truncate(sec_count);
@@ -2818,6 +2820,25 @@ impl DocumentCore {
                     ));
 
                     for item in &cc.items {
+                        let endnote_source_info = |para_index: usize| -> String {
+                            if para_index < body_len {
+                                return String::new();
+                            }
+                            let local = para_index - body_len;
+                            pr.endnote_para_sources
+                                .get(local)
+                                .map(|src| {
+                                    format!(
+                                        " src=s{}:p{}:ci{}:note{}",
+                                        src.section_index,
+                                        src.para_index,
+                                        src.control_index,
+                                        src.note_para_index
+                                    )
+                                })
+                                .unwrap_or_default()
+                        };
+
                         match item {
                             PageItem::FullParagraph { para_index } => {
                                 let text_preview = paragraphs
@@ -2857,14 +2878,23 @@ impl DocumentCore {
                                     .unwrap_or_default();
                                 let vpos_info =
                                     format_vpos_range(paragraphs.get(*para_index), None, None);
+                                let line_seg_info =
+                                    format_line_seg_brief(paragraphs.get(*para_index));
+                                let source_info = endnote_source_info(*para_index);
                                 let kind = if *para_index >= body_len {
                                     "FullParagraph[미주]"
                                 } else {
                                     "FullParagraph"
                                 };
                                 out.push_str(&format!(
-                                    "    {}  pi={}  {}  {}  \"{}\"\n",
-                                    kind, para_index, height, vpos_info, text_preview
+                                    "    {}  pi={}  {}  {}{}  {}  \"{}\"\n",
+                                    kind,
+                                    para_index,
+                                    height,
+                                    vpos_info,
+                                    source_info,
+                                    line_seg_info,
+                                    text_preview
                                 ));
                             }
                             PageItem::PartialParagraph {
@@ -2877,9 +2907,17 @@ impl DocumentCore {
                                     Some(*start_line),
                                     Some(*end_line),
                                 );
+                                let line_seg_info =
+                                    format_line_seg_brief(paragraphs.get(*para_index));
+                                let source_info = endnote_source_info(*para_index);
                                 out.push_str(&format!(
-                                    "    PartialParagraph  pi={}  lines={}..{}  {}\n",
-                                    para_index, start_line, end_line, vpos_info
+                                    "    PartialParagraph  pi={}  lines={}..{}  {}{}  {}\n",
+                                    para_index,
+                                    start_line,
+                                    end_line,
+                                    vpos_info,
+                                    source_info,
+                                    line_seg_info
                                 ));
                             }
                             PageItem::Table {
@@ -2909,9 +2947,17 @@ impl DocumentCore {
                                     .unwrap_or_default();
                                 let vpos_info =
                                     format_vpos_range(paragraphs.get(*para_index), None, None);
+                                let line_seg_info =
+                                    format_line_seg_brief(paragraphs.get(*para_index));
+                                let source_info = endnote_source_info(*para_index);
                                 out.push_str(&format!(
-                                    "    Table          pi={} ci={}  {}  {}\n",
-                                    para_index, control_index, table_info, vpos_info
+                                    "    Table          pi={} ci={}  {}  {}{}  {}\n",
+                                    para_index,
+                                    control_index,
+                                    table_info,
+                                    vpos_info,
+                                    source_info,
+                                    line_seg_info
                                 ));
                             }
                             PageItem::PartialTable {
@@ -2937,6 +2983,9 @@ impl DocumentCore {
                                     .unwrap_or_default();
                                 let vpos_info =
                                     format_vpos_range(paragraphs.get(*para_index), None, None);
+                                let line_seg_info =
+                                    format_line_seg_brief(paragraphs.get(*para_index));
+                                let source_info = endnote_source_info(*para_index);
                                 // [Task #993] 분할 표 진단 정보 — 행 컷이 비어 있지
                                 // 않으면 셀 내 분할(컷 = 셀별 소비 유닛 수).
                                 let split_info = if !start_cut.is_empty() || !end_cut.is_empty() {
@@ -2944,8 +2993,8 @@ impl DocumentCore {
                                 } else {
                                     String::new()
                                 };
-                                out.push_str(&format!("    PartialTable   pi={} ci={}  rows={}..{}  cont={}  {}  {}{}\n",
-                                    para_index, control_index, start_row, end_row, is_continuation, table_info, vpos_info, split_info));
+                                out.push_str(&format!("    PartialTable   pi={} ci={}  rows={}..{}  cont={}  {}  {}{}  {}{}\n",
+                                    para_index, control_index, start_row, end_row, is_continuation, table_info, vpos_info, source_info, line_seg_info, split_info));
                             }
                             PageItem::Shape {
                                 para_index,
@@ -2969,9 +3018,17 @@ impl DocumentCore {
                                     .unwrap_or_default();
                                 let vpos_info =
                                     format_vpos_range(paragraphs.get(*para_index), None, None);
+                                let line_seg_info =
+                                    format_line_seg_brief(paragraphs.get(*para_index));
+                                let source_info = endnote_source_info(*para_index);
                                 out.push_str(&format!(
-                                    "    Shape          pi={} ci={}  {}  {}\n",
-                                    para_index, control_index, shape_info, vpos_info
+                                    "    Shape          pi={} ci={}  {}  {}{}  {}\n",
+                                    para_index,
+                                    control_index,
+                                    shape_info,
+                                    vpos_info,
+                                    source_info,
+                                    line_seg_info
                                 ));
                             }
                             PageItem::EndnoteSeparator {
@@ -3200,9 +3257,12 @@ impl DocumentCore {
                 .set_hidden_empty_paras(&pr.hidden_empty_paras);
             self.layout_engine
                 .set_endnote_para_sources(paragraphs.len(), &pr.endnote_para_sources);
-            // [Task #1246] 섹션 미주 between-notes 마진(HU) 전달 → HeightCursor min-gap 보정.
-            self.layout_engine
-                .set_endnote_between_notes_hu(pr.endnote_between_notes_hu);
+            // 섹션 미주 모양의 정규화 여백 전달 → HeightCursor min-gap 및 renderer overflow 판정.
+            self.layout_engine.set_endnote_shape_margins_hu(
+                pr.endnote_separator_above_hu,
+                pr.endnote_between_notes_hu,
+                pr.endnote_separator_below_hu,
+            );
         }
 
         // [Task #836] 미주 paragraphs를 본문 paragraphs 뒤에 합쳐서 전달
@@ -3726,18 +3786,23 @@ fn format_vpos_range(
     };
     let total = p.line_segs.len();
     let s = start_line.unwrap_or(0).min(total.saturating_sub(1));
-    let e = end_line.unwrap_or(total - 1).min(total - 1);
-    if s > e {
+    let end_exclusive = end_line.unwrap_or(total).min(total);
+    if s >= end_exclusive {
         return String::new();
     };
+    let e = end_exclusive - 1;
 
     let first = p.line_segs[s].vertical_pos;
     let last = p.line_segs[e].vertical_pos;
     let mut resets: Vec<usize> = Vec::new();
+    let mut rewinds: Vec<usize> = Vec::new();
     for i in s..=e {
         // 문단 첫 줄(line 0)의 vpos는 자연 시작점이므로 제외
         if i > 0 && p.line_segs[i].vertical_pos == 0 {
             resets.push(i);
+        }
+        if i > s && p.line_segs[i].vertical_pos < p.line_segs[i - 1].vertical_pos {
+            rewinds.push(i);
         }
     }
     let mut s_out = if s == e {
@@ -3748,7 +3813,53 @@ fn format_vpos_range(
     for r in resets {
         s_out.push_str(&format!(" [vpos-reset@line{}]", r));
     }
+    for r in rewinds {
+        s_out.push_str(&format!(" [vpos-rewind@line{}]", r));
+    }
     s_out
+}
+
+/// dump-pages에서 line_seg 계약을 빠르게 대조하기 위한 한 줄 요약.
+fn format_line_seg_brief(para: Option<&Paragraph>) -> String {
+    let Some(p) = para else {
+        return String::new();
+    };
+    if p.line_segs.is_empty() {
+        return "ls=0".to_string();
+    }
+    let first = &p.line_segs[0];
+    let last = p.line_segs.last().unwrap_or(first);
+    if p.line_segs.len() == 1 {
+        format!(
+            "ls=1[ts={} lh={} th={} bl={} gap={} cs={} sw={}]",
+            first.text_start,
+            first.line_height,
+            first.text_height,
+            first.baseline_distance,
+            first.line_spacing,
+            first.column_start,
+            first.segment_width
+        )
+    } else {
+        format!(
+            "ls={}[first ts={} lh={} th={} bl={} gap={} cs={} sw={}; last ts={} lh={} th={} bl={} gap={} cs={} sw={}]",
+            p.line_segs.len(),
+            first.text_start,
+            first.line_height,
+            first.text_height,
+            first.baseline_distance,
+            first.line_spacing,
+            first.column_start,
+            first.segment_width,
+            last.text_start,
+            last.line_height,
+            last.text_height,
+            last.baseline_distance,
+            last.line_spacing,
+            last.column_start,
+            last.segment_width
+        )
+    }
 }
 
 #[cfg(test)]
