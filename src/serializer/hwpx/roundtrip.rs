@@ -187,6 +187,35 @@ pub enum IrDifference {
         path: String,
         detail: String,
     },
+    /// 필드 parameters / MEMO 본문 불일치 — 필드 보존 게이트 (#1391).
+    ///
+    /// `path` 는 `…field` (parameters) 또는 `…field.memo.p[k]` (본문 재귀).
+    FieldContent {
+        section: usize,
+        paragraph: usize,
+        path: String,
+        detail: String,
+    },
+    /// 그림 크기 요소(curSz/imgRect/imgDim) 불일치 — 그림 크기 보존 게이트 (#1389).
+    ///
+    /// `path` 는 `…pic`. `detail` 은 불일치 필드별 "field: expected=.. actual=.."
+    /// 세미콜론 연결.
+    PictureSize {
+        section: usize,
+        paragraph: usize,
+        path: String,
+        detail: String,
+    },
+    /// 표 `page_break` 불일치 — 표 분할 속성 보존 게이트 (#1393).
+    ///
+    /// 방출(serializer)은 PR #1405 에서 정정됨 — 본 게이트는 회귀 봉인용.
+    /// `path` 는 `…tbl`.
+    TablePageBreak {
+        section: usize,
+        paragraph: usize,
+        path: String,
+        detail: String,
+    },
 }
 
 impl std::fmt::Display for IrDifference {
@@ -301,7 +330,74 @@ impl std::fmt::Display for IrDifference {
                 "section[{}] paragraph[{}]{} comment: {}",
                 section, paragraph, path, detail
             ),
+            FieldContent {
+                section,
+                paragraph,
+                path,
+                detail,
+            } => write!(
+                f,
+                "section[{}] paragraph[{}]{} field: {}",
+                section, paragraph, path, detail
+            ),
+            PictureSize {
+                section,
+                paragraph,
+                path,
+                detail,
+            } => write!(
+                f,
+                "section[{}] paragraph[{}]{} pic_size: {}",
+                section, paragraph, path, detail
+            ),
+            TablePageBreak {
+                section,
+                paragraph,
+                path,
+                detail,
+            } => write!(
+                f,
+                "section[{}] paragraph[{}]{} tbl page_break: {}",
+                section, paragraph, path, detail
+            ),
         }
+    }
+}
+
+/// 그림 크기 요소 비교 (#1389) — curSz(shape_attr current)·imgRect(border_x/y)·
+/// imgDim. 불일치 필드를 세미콜론으로 연결. 일치하면 None.
+fn diff_picture_size(
+    a: &crate::model::image::Picture,
+    b: &crate::model::image::Picture,
+) -> Option<String> {
+    let mut parts: Vec<String> = Vec::new();
+    if a.shape_attr.current_width != b.shape_attr.current_width
+        || a.shape_attr.current_height != b.shape_attr.current_height
+    {
+        parts.push(format!(
+            "curSz: expected={}x{} actual={}x{}",
+            a.shape_attr.current_width,
+            a.shape_attr.current_height,
+            b.shape_attr.current_width,
+            b.shape_attr.current_height
+        ));
+    }
+    if a.border_x != b.border_x || a.border_y != b.border_y {
+        parts.push(format!(
+            "imgRect: expected={:?}/{:?} actual={:?}/{:?}",
+            a.border_x, a.border_y, b.border_x, b.border_y
+        ));
+    }
+    if a.img_dim != b.img_dim {
+        parts.push(format!(
+            "imgDim: expected={:?} actual={:?}",
+            a.img_dim, b.img_dim
+        ));
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("; "))
     }
 }
 
@@ -721,6 +817,18 @@ fn diff_paragraph_linesegs(
                     diff_paragraph_linesegs(out, section, paragraph, &p, qa, qb);
                 }
             }
+            // MEMO 본문 문단 lineseg 재귀 (#1391).
+            (Control::Field(fa), Control::Field(fb)) => {
+                for (k, (qa, qb)) in fa
+                    .memo_paragraphs
+                    .iter()
+                    .zip(fb.memo_paragraphs.iter())
+                    .enumerate()
+                {
+                    let p = format!("{path}/ctrl[{ci}]field.memo.p[{k}]");
+                    diff_paragraph_linesegs(out, section, paragraph, &p, qa, qb);
+                }
+            }
             _ => {}
         }
     }
@@ -819,6 +927,15 @@ fn diff_paragraph_char_shapes(
     for (ci, (ctrl_a, ctrl_b)) in pa.controls.iter().zip(pb.controls.iter()).enumerate() {
         match (ctrl_a, ctrl_b) {
             (Control::Table(ta), Control::Table(tb)) => {
+                // 표 page_break 비교 (#1393) — 방출은 PR #1405 정정, 게이트 회귀 봉인.
+                if ta.page_break != tb.page_break {
+                    diff.push(IrDifference::TablePageBreak {
+                        section,
+                        paragraph,
+                        path: format!("{path}/ctrl[{ci}]tbl"),
+                        detail: format!("expected={:?} actual={:?}", ta.page_break, tb.page_break),
+                    });
+                }
                 for (cell_i, (cea, ceb)) in ta.cells.iter().zip(tb.cells.iter()).enumerate() {
                     for (k, (qa, qb)) in
                         cea.paragraphs.iter().zip(ceb.paragraphs.iter()).enumerate()
@@ -846,6 +963,15 @@ fn diff_paragraph_char_shapes(
             }
             // 그림 캡션 비교 (#1403) — 존재/속성/문단 수 + 내부 문단 재귀.
             (Control::Picture(pia), Control::Picture(pib)) => {
+                // 그림 크기 요소 비교 (#1389) — curSz/imgRect/imgDim IR 보존 게이트.
+                if let Some(detail) = diff_picture_size(pia, pib) {
+                    diff.push(IrDifference::PictureSize {
+                        section,
+                        paragraph,
+                        path: format!("{path}/ctrl[{ci}]pic"),
+                        detail,
+                    });
+                }
                 if let Some(detail) = diff_table_caption(&pia.caption, &pib.caption) {
                     diff.push(IrDifference::ObjectCaption {
                         section,
@@ -900,6 +1026,41 @@ fn diff_paragraph_char_shapes(
             (Control::Endnote(na), Control::Endnote(nb)) => {
                 for (k, (qa, qb)) in na.paragraphs.iter().zip(nb.paragraphs.iter()).enumerate() {
                     let p = format!("{path}/ctrl[{ci}]en.p[{k}]");
+                    diff_paragraph_char_shapes(diff, section, paragraph, &p, qa, qb);
+                }
+            }
+            // 필드 parameters / MEMO 본문 비교 (#1391).
+            (Control::Field(fa), Control::Field(fb)) => {
+                if fa.raw_parameters_xml != fb.raw_parameters_xml {
+                    diff.push(IrDifference::FieldContent {
+                        section,
+                        paragraph,
+                        path: format!("{path}/ctrl[{ci}]field"),
+                        detail: format!(
+                            "parameters: expected={:?} actual={:?}",
+                            fa.raw_parameters_xml, fb.raw_parameters_xml
+                        ),
+                    });
+                }
+                if fa.memo_paragraphs.len() != fb.memo_paragraphs.len() {
+                    diff.push(IrDifference::FieldContent {
+                        section,
+                        paragraph,
+                        path: format!("{path}/ctrl[{ci}]field"),
+                        detail: format!(
+                            "memo paragraphs: expected={} actual={}",
+                            fa.memo_paragraphs.len(),
+                            fb.memo_paragraphs.len()
+                        ),
+                    });
+                }
+                for (k, (qa, qb)) in fa
+                    .memo_paragraphs
+                    .iter()
+                    .zip(fb.memo_paragraphs.iter())
+                    .enumerate()
+                {
+                    let p = format!("{path}/ctrl[{ci}]field.memo.p[{k}]");
                     diff_paragraph_char_shapes(diff, section, paragraph, &p, qa, qb);
                 }
             }
@@ -1990,5 +2151,149 @@ mod tests {
         let a = doc_with_control(crate::model::control::Control::Picture(Box::new(pa)));
         let b = doc_with_control(crate::model::control::Control::Picture(Box::new(pb)));
         assert!(diff_documents(&a, &b).is_empty());
+    }
+
+    // ---------- #1391: 필드 parameters / MEMO 본문 게이트 동승 ----------
+
+    #[test]
+    fn task1391_field_parameters_loss_in_gate() {
+        let mut fa = crate::model::control::Field::default();
+        fa.raw_parameters_xml = Some("<hp:parameters cnt=\"1\"></hp:parameters>".into());
+        let fb = crate::model::control::Field::default();
+        let a = doc_with_control(crate::model::control::Control::Field(fa));
+        let b = doc_with_control(crate::model::control::Control::Field(fb));
+        let diff = diff_documents(&a, &b);
+        assert_eq!(diff.differences.len(), 1, "{:?}", diff.differences);
+        match &diff.differences[0] {
+            IrDifference::FieldContent { path, detail, .. } => {
+                assert_eq!(path, "/ctrl[0]field");
+                assert!(detail.starts_with("parameters: expected="), "{detail}");
+            }
+            other => panic!("FieldContent 여야 함: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn task1391_memo_paragraph_loss_in_gate() {
+        let mut fa = crate::model::control::Field::default();
+        fa.field_type = crate::model::control::FieldType::Memo;
+        fa.memo_paragraphs.push(Paragraph::default());
+        let mut fb = crate::model::control::Field::default();
+        fb.field_type = crate::model::control::FieldType::Memo;
+        let a = doc_with_control(crate::model::control::Control::Field(fa));
+        let b = doc_with_control(crate::model::control::Control::Field(fb));
+        let diff = diff_documents(&a, &b);
+        assert_eq!(diff.differences.len(), 1, "{:?}", diff.differences);
+        match &diff.differences[0] {
+            IrDifference::FieldContent { detail, .. } => {
+                assert_eq!(detail, "memo paragraphs: expected=1 actual=0");
+            }
+            other => panic!("FieldContent 여야 함: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn task1391_aift_memo_roundtrips() {
+        // 실샘플 — aift MEMO 2건 parameters + 본문 보존, roundtrip 게이트 0.
+        let bytes = std::fs::read("samples/hwpx/aift.hwpx").expect("샘플 읽기");
+        let doc1 = parse_hwpx(&bytes).expect("parse 원본");
+        let memo_count = doc1
+            .sections
+            .iter()
+            .flat_map(|s| &s.paragraphs)
+            .flat_map(|p| &p.controls)
+            .filter(|c| {
+                matches!(c, crate::model::control::Control::Field(f)
+                if f.field_type == crate::model::control::FieldType::Memo)
+            })
+            .count();
+        assert_eq!(memo_count, 2, "aift MEMO 2건");
+        let out = serialize_hwpx(&doc1).expect("serialize");
+        let doc2 = parse_hwpx(&out).expect("reparse");
+        let diff = diff_documents(&doc1, &doc2);
+        assert!(diff.is_empty(), "{:?}", diff.differences);
+    }
+
+    // ---------- #1389: 그림 크기 요소 게이트 동승 ----------
+
+    #[test]
+    fn task1389_picture_size_diff_in_gate() {
+        let mut pa = crate::model::image::Picture::default();
+        pa.shape_attr.current_width = 1366;
+        pa.img_dim = (49380, 45840);
+        let pb = crate::model::image::Picture::default(); // 크기 0
+        let a = doc_with_control(crate::model::control::Control::Picture(Box::new(pa)));
+        let b = doc_with_control(crate::model::control::Control::Picture(Box::new(pb)));
+        let diff = diff_documents(&a, &b);
+        assert_eq!(diff.differences.len(), 1, "{:?}", diff.differences);
+        match &diff.differences[0] {
+            IrDifference::PictureSize { path, detail, .. } => {
+                assert_eq!(path, "/ctrl[0]pic");
+                assert!(
+                    detail.contains("curSz") && detail.contains("imgDim"),
+                    "{detail}"
+                );
+            }
+            other => panic!("PictureSize 여야 함: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn task1389_ta_pic_size_roundtrips() {
+        // 실샘플 — ta-pic 셀 내 그림 curSz/imgRect/imgDim 보존, roundtrip 게이트 0.
+        let bytes = std::fs::read("samples/hwpx/ta-pic-001-r.hwpx").expect("샘플 읽기");
+        let doc1 = parse_hwpx(&bytes).expect("parse 원본");
+        // 셀 내 pic 의 img_dim 이 적재됐는지 전제 확인 (49380 등 비0).
+        let has_dim = doc1
+            .sections
+            .iter()
+            .flat_map(|s| &s.paragraphs)
+            .flat_map(|p| &p.controls)
+            .any(|c| matches!(c, crate::model::control::Control::Table(t)
+                if t.cells.iter().flat_map(|ce| &ce.paragraphs).flat_map(|q| &q.controls)
+                    .any(|cc| matches!(cc, crate::model::control::Control::Picture(pic) if pic.img_dim.0 > 0))));
+        assert!(has_dim, "셀 내 pic img_dim 적재 전제");
+        let out = serialize_hwpx(&doc1).expect("serialize");
+        let doc2 = parse_hwpx(&out).expect("reparse");
+        let diff = diff_documents(&doc1, &doc2);
+        assert!(diff.is_empty(), "{:?}", diff.differences);
+    }
+
+    // ---------- #1393: 표 page_break 게이트 동승 ----------
+
+    #[test]
+    fn task1393_table_page_break_diff_in_gate() {
+        use crate::model::table::TablePageBreak;
+        fn tbl(pb: TablePageBreak) -> crate::model::control::Control {
+            match table_control(&[]) {
+                crate::model::control::Control::Table(mut t) => {
+                    t.page_break = pb;
+                    crate::model::control::Control::Table(t)
+                }
+                _ => unreachable!(),
+            }
+        }
+        let a = doc_with_control(tbl(TablePageBreak::RowBreak));
+        let b = doc_with_control(tbl(TablePageBreak::CellBreak));
+        let diff = diff_documents(&a, &b);
+        assert_eq!(diff.differences.len(), 1, "{:?}", diff.differences);
+        match &diff.differences[0] {
+            IrDifference::TablePageBreak { path, detail, .. } => {
+                assert_eq!(path, "/ctrl[0]tbl");
+                assert_eq!(detail, "expected=RowBreak actual=CellBreak");
+            }
+            other => panic!("TablePageBreak 여야 함: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn task1393_form_002_page_break_roundtrips() {
+        // 실샘플 — form-002 표 page_break(CELL=RowBreak) 보존, roundtrip 게이트 0.
+        let bytes = std::fs::read("samples/hwpx/form-002.hwpx").expect("샘플 읽기");
+        let doc1 = parse_hwpx(&bytes).expect("parse 원본");
+        let out = serialize_hwpx(&doc1).expect("serialize");
+        let doc2 = parse_hwpx(&out).expect("reparse");
+        let diff = diff_documents(&doc1, &doc2);
+        assert!(diff.is_empty(), "{:?}", diff.differences);
     }
 }

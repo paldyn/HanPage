@@ -83,11 +83,11 @@ pub fn write_picture<W: Write>(
     // inMargin, imgDim, img, effects, sz, pos, outMargin
     write_offset(w, &pic.common)?;
     write_org_sz(w, &pic.shape_attr)?;
-    write_cur_sz(w, &pic.common)?;
+    write_cur_sz(w, pic)?;
     write_flip(w, &pic.shape_attr)?;
     write_rotation_info(w, &pic.shape_attr)?;
     write_rendering_info(w)?;
-    write_img_rect(w, &pic.common)?;
+    write_img_rect(w, pic)?;
     write_img_clip(w, pic)?;
     write_in_margin(w, pic)?;
     write_img_dim(w, pic)?;
@@ -124,10 +124,24 @@ fn write_org_sz<W: Write>(
     empty_tag(w, "hp:orgSz", &[("width", &ow), ("height", &oh)])
 }
 
-fn write_cur_sz<W: Write>(w: &mut Writer<W>, c: &CommonObjAttr) -> Result<(), SerializeError> {
-    let width = c.width.to_string();
-    let height = c.height.to_string();
-    empty_tag(w, "hp:curSz", &[("width", &width), ("height", &height)])
+fn write_cur_sz<W: Write>(w: &mut Writer<W>, p: &Picture) -> Result<(), SerializeError> {
+    // [#1389] 현재 크기는 shape_attr.current_width/height (IR 보존). 0 이면 common(sz)
+    // 폴백 — 원본도 그 경우 sz=curSz. 종전 common 직출이라 current≠sz 인 pic 변형.
+    let cw = if p.shape_attr.current_width > 0 {
+        p.shape_attr.current_width
+    } else {
+        p.common.width
+    };
+    let ch = if p.shape_attr.current_height > 0 {
+        p.shape_attr.current_height
+    } else {
+        p.common.height
+    };
+    empty_tag(
+        w,
+        "hp:curSz",
+        &[("width", &cw.to_string()), ("height", &ch.to_string())],
+    )
 }
 
 fn write_flip<W: Write>(w: &mut Writer<W>, sa: &ShapeComponentAttr) -> Result<(), SerializeError> {
@@ -181,15 +195,38 @@ fn write_matrix<W: Write>(w: &mut Writer<W>, name: &str) -> Result<(), Serialize
     )
 }
 
-fn write_img_rect<W: Write>(w: &mut Writer<W>, c: &CommonObjAttr) -> Result<(), SerializeError> {
-    // 사각형 4개 꼭짓점 — 원본 크기 기준 직사각형
-    let w_str = c.width.to_string();
-    let h_str = c.height.to_string();
+fn write_img_rect<W: Write>(w: &mut Writer<W>, p: &Picture) -> Result<(), SerializeError> {
+    // [#1389] 꼭짓점은 border_x/border_y (IR 보존). 파서(parse_picture_img_rect)는
+    // HWP5 SHAPE_PICTURE 스칼라 레이아웃으로 저장한다:
+    //   border_x = [pt0.x, pt0.y, pt1.x, pt1.y], border_y = [pt2.x, pt2.y, pt3.x, pt3.y]
+    // 따라서 역매핑하여 pt0~pt3 을 복원한다. 모두 0(미적재)이면 common 합성 폴백.
+    let bx = &p.border_x;
+    let by = &p.border_y;
+    if bx.iter().all(|&v| v == 0) && by.iter().all(|&v| v == 0) {
+        let w_str = p.common.width.to_string();
+        let h_str = p.common.height.to_string();
+        start_tag(w, "hp:imgRect")?;
+        empty_tag(w, "hc:pt0", &[("x", "0"), ("y", "0")])?;
+        empty_tag(w, "hc:pt1", &[("x", &w_str), ("y", "0")])?;
+        empty_tag(w, "hc:pt2", &[("x", &w_str), ("y", &h_str)])?;
+        empty_tag(w, "hc:pt3", &[("x", "0"), ("y", &h_str)])?;
+        end_tag(w, "hp:imgRect")?;
+        return Ok(());
+    }
+    let pts = [
+        (bx[0], bx[1]), // pt0
+        (bx[2], bx[3]), // pt1
+        (by[0], by[1]), // pt2
+        (by[2], by[3]), // pt3
+    ];
     start_tag(w, "hp:imgRect")?;
-    empty_tag(w, "hc:pt0", &[("x", "0"), ("y", "0")])?;
-    empty_tag(w, "hc:pt1", &[("x", &w_str), ("y", "0")])?;
-    empty_tag(w, "hc:pt2", &[("x", &w_str), ("y", &h_str)])?;
-    empty_tag(w, "hc:pt3", &[("x", "0"), ("y", &h_str)])?;
+    for (i, (x, y)) in pts.iter().enumerate() {
+        empty_tag(
+            w,
+            &format!("hc:pt{i}"),
+            &[("x", &x.to_string()), ("y", &y.to_string())],
+        )?;
+    }
     end_tag(w, "hp:imgRect")?;
     Ok(())
 }
@@ -219,14 +256,16 @@ fn write_in_margin<W: Write>(w: &mut Writer<W>, p: &Picture) -> Result<(), Seria
 }
 
 fn write_img_dim<W: Write>(w: &mut Writer<W>, p: &Picture) -> Result<(), SerializeError> {
-    // imgDim은 원본 크기의 clip 적용 결과. 간이 구현.
-    let dw = (p.common.width as i32 - p.crop.left - p.crop.right)
-        .max(0)
-        .to_string();
-    let dh = (p.common.height as i32 - p.crop.top - p.crop.bottom)
-        .max(0)
-        .to_string();
-    empty_tag(w, "hp:imgDim", &[("dimwidth", &dw), ("dimheight", &dh)])
+    // [#1389] 원본 이미지 픽셀 크기 verbatim (IR img_dim). 종전 간이 계산
+    // (common - crop)은 imgClip extent 의미 오해로 음수→0 변형이었다.
+    empty_tag(
+        w,
+        "hp:imgDim",
+        &[
+            ("dimwidth", &p.img_dim.0.to_string()),
+            ("dimheight", &p.img_dim.1.to_string()),
+        ],
+    )
 }
 
 /// `<hc:img binaryItemIDRef>` 출력. 3-way 단언의 1차 지점.
@@ -516,6 +555,71 @@ mod tests {
         let mut w: Writer<Vec<u8>> = Writer::new(Vec::new());
         write_picture(&mut w, pic, ctx).expect("write_picture");
         String::from_utf8(w.into_inner()).unwrap()
+    }
+
+    #[test]
+    fn task1389_cur_sz_uses_shape_attr() {
+        let doc = make_doc_with_bin(1, "png");
+        let mut ctx = SerializeContext::collect_from_document(&doc);
+        let mut pic = make_picture(1); // common 1000x500
+        pic.shape_attr.current_width = 1366;
+        pic.shape_attr.current_height = 1268;
+        let xml = serialize(&pic, &mut ctx);
+        assert!(
+            xml.contains(r#"<hp:curSz width="1366" height="1268"/>"#),
+            "curSz 는 shape_attr.current 사용(sz 아님): {xml}"
+        );
+    }
+
+    #[test]
+    fn task1389_cur_sz_falls_back_to_common_when_zero() {
+        let doc = make_doc_with_bin(1, "png");
+        let mut ctx = SerializeContext::collect_from_document(&doc);
+        let pic = make_picture(1); // current_width=0 → common 폴백
+        let xml = serialize(&pic, &mut ctx);
+        assert!(xml.contains(r#"<hp:curSz width="1000" height="500"/>"#));
+    }
+
+    #[test]
+    fn task1389_img_rect_uses_border_scalar_layout() {
+        let doc = make_doc_with_bin(1, "png");
+        let mut ctx = SerializeContext::collect_from_document(&doc);
+        let mut pic = make_picture(1);
+        // ta-pic pic0 실측: pt0(0,0) pt1(49380,0) pt2(49380,45840) pt3(0,45840)
+        // 스칼라 레이아웃: border_x=[pt0.x,pt0.y,pt1.x,pt1.y], border_y=[pt2.x,pt2.y,pt3.x,pt3.y]
+        pic.border_x = [0, 0, 49380, 0];
+        pic.border_y = [49380, 45840, 0, 45840];
+        let xml = serialize(&pic, &mut ctx);
+        assert!(
+            xml.contains(
+                r#"<hp:imgRect><hc:pt0 x="0" y="0"/><hc:pt1 x="49380" y="0"/><hc:pt2 x="49380" y="45840"/><hc:pt3 x="0" y="45840"/></hp:imgRect>"#
+            ),
+            "imgRect 는 border 스칼라 레이아웃 역매핑: {xml}"
+        );
+    }
+
+    #[test]
+    fn task1389_img_rect_synthesizes_when_border_zero() {
+        let doc = make_doc_with_bin(1, "png");
+        let mut ctx = SerializeContext::collect_from_document(&doc);
+        let pic = make_picture(1); // border 전부 0 → common 합성
+        let xml = serialize(&pic, &mut ctx);
+        assert!(xml.contains(r#"<hc:pt2 x="1000" y="500"/>"#), "{xml}");
+    }
+
+    #[test]
+    fn task1389_img_dim_verbatim() {
+        let doc = make_doc_with_bin(1, "png");
+        let mut ctx = SerializeContext::collect_from_document(&doc);
+        let mut pic = make_picture(1);
+        pic.img_dim = (49380, 45840);
+        // crop 이 달라도 img_dim verbatim (clip 파생 아님)
+        pic.crop.right = 99999;
+        let xml = serialize(&pic, &mut ctx);
+        assert!(
+            xml.contains(r#"<hp:imgDim dimwidth="49380" dimheight="45840"/>"#),
+            "imgDim 은 IR verbatim (clip 파생 금지): {xml}"
+        );
     }
 
     #[test]
