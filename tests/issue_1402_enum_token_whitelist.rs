@@ -22,10 +22,15 @@ fn whitelist() -> HashMap<&'static str, Vec<&'static str>> {
     // autoNum/newNum numType — #1387: PICTURE(실물), FIGURE 금지. 나머지 owpml 표준.
     m.insert(
         "numType",
-        vec!["PAGE", "FOOTNOTE", "ENDNOTE", "PICTURE", "TABLE", "EQUATION"],
+        vec![
+            "PAGE", "FOOTNOTE", "ENDNOTE", "PICTURE", "TABLE", "EQUATION",
+        ],
     );
     // 개체 numberingType
-    m.insert("numberingType", vec!["NONE", "PICTURE", "TABLE", "EQUATION"]);
+    m.insert(
+        "numberingType",
+        vec!["NONE", "PICTURE", "TABLE", "EQUATION"],
+    );
     // 표 pageBreak (#1393): NONE/CELL/TABLE. (셀 외 pageBreak="0/1"은 다른 의미라 제외)
     m.insert("pageBreak", vec!["NONE", "CELL", "TABLE"]);
     m.insert(
