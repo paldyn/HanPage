@@ -1872,6 +1872,14 @@ def render_tree_line_order_overlap_candidates(tree_path: Path) -> list[dict[str,
             continue
         if "[EQ]" in prev_text and QUESTION_TITLE_RE.match(next_text):
             continue
+        if (
+            next_text == "[VISUAL]"
+            and prev_text != "[VISUAL]"
+            and not QUESTION_TITLE_RE.match(prev_text)
+            and next_box[1] < prev_box[1]
+            and next_box[1] + next_box[3] <= prev_box[1] + prev_box[3] + LINE_ORDER_OVERLAP_MIN_PX
+        ):
+            continue
         if bbox_x_overlap_ratio(prev_box, next_box) < COLUMN_X_OVERLAP_LIMIT:
             continue
         px, py, pw, ph = prev_box
