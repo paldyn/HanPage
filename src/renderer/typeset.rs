@@ -7066,7 +7066,7 @@ impl TypesetEngine {
                                         && !st.current_items.is_empty()
                                         && fmt.line_heights.len() == 1
                                         && st.current_height > available * 0.85
-                                        && st.current_height < available * 0.92
+                                        && st.current_height < available * 0.93
                                         && endnote_shape
                                             .map(|shape| {
                                                 endnote_separator_below_margin(shape) as i32
