@@ -43,6 +43,7 @@ EQUATION_FLOW_LINE_OVERLAP_TOLERANCE_PX = 8.0
 TEXT_RUN_INK_HEIGHT_LIMIT_PX = 16.0
 LINE_ORDER_OVERLAP_LIMIT = 0.65
 LINE_ORDER_OVERLAP_MIN_PX = 4.0
+QUESTION_TITLE_OVERLAP_MIN_PX = 3.0
 FRAME_TAIL_LINE_OVERFLOW_MIN_PX = 4.0
 COLUMN_X_OVERLAP_LIMIT = 0.55
 QUESTION_MARKER_Y_DRIFT_LIMIT_PX = 42.0
@@ -1829,12 +1830,14 @@ def render_tree_question_title_overlap_candidates(tree_path: Path) -> list[dict[
         assert isinstance(title_box, tuple)
         assert isinstance(next_box, tuple)
         ratio = bbox_overlap_ratio(title_box, next_box)
-        if ratio >= 0.05:
+        _, overlap_height = bbox_overlap_size(title_box, next_box)
+        if ratio >= 0.05 and overlap_height >= QUESTION_TITLE_OVERLAP_MIN_PX:
             candidates.append(
                 {
                     "title_index": index,
                     "next_index": index + 1,
                     "overlap_ratio": round(ratio, 3),
+                    "overlap_px": round(overlap_height, 1),
                     "title_path": title_line["path"],
                     "next_path": next_line["path"],
                     "title_pi": title_line.get("pi"),
