@@ -704,6 +704,18 @@ impl HeightCursor {
             && seg.line_spacing >= self.endnote_between_notes_hu
             && y_offset > self.col_area_y + self.col_area_height * 0.55
             && y_offset <= self.col_area_y + self.col_area_height * 0.85;
+        let compact_endnote_page_title_default_mid_gap = self.suppress_large_forward_jump
+            && is_page_path
+            && !vpos_rewind
+            && current_is_endnote_title
+            && self.endnote_between_notes_hu > 0
+            && self.endnote_between_notes_hu <= 2500
+            && seg.line_spacing > 0
+            && seg.line_spacing < self.endnote_between_notes_hu
+            && end_y > y_offset + 48.0
+            && end_y <= y_offset + 120.0
+            && y_offset > self.col_area_y + self.col_area_height * 0.35
+            && y_offset <= self.col_area_y + self.col_area_height * 0.55;
         let compact_endnote_large_empty_spacer_collapse = self.suppress_large_forward_jump
             && !is_page_path
             && stale_forward
@@ -899,6 +911,17 @@ impl HeightCursor {
                 .max(prev_content_floor_y)
                 .max(self.col_area_y)
                 .min(y_offset)
+        } else if compact_endnote_page_title_default_mid_gap {
+            // 직전 줄이 기본 lineSpacing만 들고 있는 page-path 중단 제목은
+            // 저장 vpos forward를 그대로 쓰면 `미주 사이`가 과대해진다.
+            // 순차 y 뒤에 공식 미주 사이에서 이미 소비된 lineSpacing만 뺀
+            // gap을 보존해 한컴/PDF의 중단 제목 위치에 맞춘다.
+            let target_gap =
+                hwpunit_to_px(self.endnote_between_notes_hu, self.dpi) - prev_line_spacing_px;
+            (y_offset + target_gap.max(0.0))
+                .max(prev_content_floor_y)
+                .max(self.col_area_y)
+                .min(end_y)
         } else if compact_endnote_page_tail_backtrack {
             // page-path 하단 tail은 frame 안에 남기기 위해 저장 vpos를 따르되,
             // 이전 텍스트 line의 실제 하단을 깊게 침범하면 문20처럼 본문/수식이
@@ -1051,7 +1074,8 @@ impl HeightCursor {
             || compact_endnote_question_title_after_tall_regular_gap
             || compact_endnote_question_title_after_tall_upper_flow
             || compact_endnote_zero_gap_title_forward
-            || compact_endnote_zero_gap_title_boundary_applied)
+            || compact_endnote_zero_gap_title_boundary_applied
+            || compact_endnote_page_title_default_mid_gap)
             && result < end_y - 0.5
         {
             let base_delta_hu = ((end_y - result) / self.dpi * 7200.0).round() as i32;
