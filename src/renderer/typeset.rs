@@ -5803,6 +5803,34 @@ impl TypesetEngine {
                                             })
                                             .unwrap_or(true))
                                     && endnote_has_visible_payload;
+                            let large_between_last_column_render_title_tail_fits =
+                                !default_between_notes_gap
+                                    && compact_endnote_separator_profile
+                                    && has_visible_endnote_separator
+                                    && visible_large_between_notes_gap
+                                    && !compact_between_notes_gap
+                                    && ep_idx == 0
+                                    && emitted_endnote_count > 0
+                                    && en_ref.number > 0
+                                    && st.current_column + 1 >= st.col_count
+                                    && fmt.line_heights.len() == 1
+                                    && st.current_height > available * 0.80
+                                    && st.current_height < available * 0.85
+                                    && !st.current_items.is_empty()
+                                    && large_between_question_title_head_inside_frame
+                                    && large_between_question_title_render_y
+                                        .map(|predicted_y| {
+                                            // 마지막 단의 20mm급 `미주 사이`는 제목 앞 렌더 gap을
+                                            // 만든 뒤 제목 한 줄만 쪽 하단에 남길 수 있다. 본문
+                                            // head group까지 같은 쪽에 들어가야 한다고 보면 문항
+                                            // 시작이 한컴보다 한 쪽 늦어진다.
+                                            predicted_y + fmt.line_advance(0)
+                                                <= available
+                                                    + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX
+                                                    + 2.0
+                                        })
+                                        .unwrap_or(false)
+                                    && endnote_has_visible_payload;
                             let large_between_last_column_title_body_tail_fits =
                                 !default_between_notes_gap
                                     && compact_endnote_separator_profile
@@ -6451,6 +6479,7 @@ impl TypesetEngine {
                                 && st.current_height > available * 0.90
                                 && !st.current_items.is_empty()
                                 && !large_between_last_column_question_title_tail_fits
+                                && !large_between_last_column_render_title_tail_fits
                                 && endnote_has_visible_payload;
                             let large_between_short_text_before_equation_tail_bleeds_previous_column =
                                 !default_between_notes_gap
@@ -6811,6 +6840,7 @@ impl TypesetEngine {
                                 && !zero_visible_text_tail_before_rewind_fits
                                 && !zero_between_large_separator_tail_group_fits
                                 && !large_between_last_column_question_title_tail_fits
+                                && !large_between_last_column_render_title_tail_fits
                                 && !large_between_last_column_title_body_tail_fits
                                 && (!default_between_notes_gap
                                     || internal_rewind_split.is_none()
@@ -7311,6 +7341,7 @@ impl TypesetEngine {
                                 && !allow_default_question_title_tail
                                 && !allow_large_between_question_title_tail
                                 && !large_between_last_column_question_title_tail_fits
+                                && !large_between_last_column_render_title_tail_fits
                                 && !default_question_title_tail_fits_by_line_height
                                 && !zero_question_title_tail_fits_by_line_height
                                 && !allow_compact_question_title_tail
@@ -7331,7 +7362,7 @@ impl TypesetEngine {
                                 && !st.current_items.is_empty();
                             if std::env::var("RHWP_ENDNOTE_ADVANCE_DEBUG").is_ok() {
                                 eprintln!(
-                                    "ENDNOTE_ADV phase=new note={} ep={} col={}/{} cur={:.2} avail={:.2} en_fit={:.2} total={:.2} gap={:?} default_gap={} compact_gap={} zero_gap={} visible_sep={} render_y={:?} lead_group_outside={} has_rewind={} rewind_near_bottom={} rewind_would_split={} large_head_outside={} stale_forward={} allow_default_late={} allow_default_col_bottom={} allow_default_title={} allow_large_title={} allow_large_last_title={} allow_default_line={} allow_zero_line={} allow_compact={} allow_large_sep_first={} zero_full_tail={} zero_title_tail={} large_zero_small_bleed={} advance_new={} advance_internal={}",
+                                    "ENDNOTE_ADV phase=new note={} ep={} col={}/{} cur={:.2} avail={:.2} en_fit={:.2} total={:.2} gap={:?} default_gap={} compact_gap={} zero_gap={} visible_sep={} render_y={:?} lead_group_outside={} has_rewind={} rewind_near_bottom={} rewind_would_split={} large_head_outside={} stale_forward={} allow_default_late={} allow_default_col_bottom={} allow_default_title={} allow_large_title={} allow_large_last_title={} allow_large_render_title={} allow_default_line={} allow_zero_line={} allow_compact={} allow_large_sep_first={} zero_full_tail={} zero_title_tail={} large_zero_small_bleed={} advance_new={} advance_internal={}",
                                     en_ref.number,
                                     ep_idx,
                                     st.current_column + 1,
@@ -7357,6 +7388,7 @@ impl TypesetEngine {
                                     allow_default_question_title_tail,
                                     allow_large_between_question_title_tail,
                                     large_between_last_column_question_title_tail_fits,
+                                    large_between_last_column_render_title_tail_fits,
                                     default_question_title_tail_fits_by_line_height,
                                     zero_question_title_tail_fits_by_line_height,
                                     allow_compact_question_title_tail,
@@ -7491,7 +7523,9 @@ impl TypesetEngine {
                             );
                             // advance 후 재평가 — 새 단 첫 미주는 prev=None → 자체 높이.
                             let (_, mut en_advance) = compute_en_metrics(prev_en_bottom_vpos, true);
-                            if large_between_last_column_question_title_tail_fits {
+                            if large_between_last_column_question_title_tail_fits
+                                || large_between_last_column_render_title_tail_fits
+                            {
                                 // 큰 미주 사이가 있는 마지막 단에서 새 미주 제목만
                                 // frame 안쪽 tail로 남길 때는 제목-본문 vpos 간격을
                                 // 현재 단 높이로 소비하지 않는다. 그 간격까지 소비하면
