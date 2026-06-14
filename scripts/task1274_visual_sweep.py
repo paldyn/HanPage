@@ -1950,6 +1950,8 @@ def suppress_tolerated_frame_tail_candidates(
     candidates: list[dict[str, object]],
     *,
     rhwp_out_pixels: int,
+    rhwp_outside_frame_bleed_px: int,
+    pdf_outside_frame_bleed_px: int,
     content_bottom_delta: float | None,
     question_marker_drifts: list[dict[str, object]],
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
@@ -1967,8 +1969,23 @@ def suppress_tolerated_frame_tail_candidates(
         equation_line_height_bleed = overflow <= 12.0 and rhwp_out_pixels <= 10 and (
             "[EQ]" in text or line_height >= 20.0
         )
+        actual_bottom_bleed_is_tolerated = (
+            0 < rhwp_outside_frame_bleed_px <= FRAME_BOTTOM_GLYPH_BLEED_TOLERANCE_PX
+            and pdf_outside_frame_bleed_px <= FRAME_BOTTOM_GLYPH_BLEED_TOLERANCE_PX
+            and rhwp_out_pixels <= 300
+        )
+        equation_logical_box_bleed = (
+            "[EQ]" in text
+            and line_height > 0.0
+            and overflow <= line_height + FRAME_BOTTOM_GLYPH_BLEED_TOLERANCE_PX
+            and actual_bottom_bleed_is_tolerated
+            and (content_bottom_delta is None or abs(content_bottom_delta) < CONTENT_BOTTOM_DELTA_LIMIT_PX)
+        )
 
-        if marker_is_stable and bottom_is_close and (small_bottom_bleed or equation_line_height_bleed):
+        if marker_is_stable and (
+            (bottom_is_close and (small_bottom_bleed or equation_line_height_bleed))
+            or equation_logical_box_bleed
+        ):
             suppressed.append({**item, "suppressed_reason": "small_visual_tail_bleed"})
         else:
             active.append(item)
@@ -2119,6 +2136,8 @@ def analyze_page(
     frame_tail_overflows, suppressed_frame_tail_overflows = suppress_tolerated_frame_tail_candidates(
         frame_tail_overflows,
         rhwp_out_pixels=rhwp_out_pixels,
+        rhwp_outside_frame_bleed_px=rhwp_outside_frame_bleed_px,
+        pdf_outside_frame_bleed_px=pdf_outside_frame_bleed_px,
         content_bottom_delta=content_bottom_delta,
         question_marker_drifts=question_marker_drifts,
     )
