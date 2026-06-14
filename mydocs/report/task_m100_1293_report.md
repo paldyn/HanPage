@@ -27,6 +27,7 @@
   - 같은 HWP/PDF를 두 번 검사하던 `2024-09-below20above20` 중복 target 제거.
 - `tests/issue_1139_inline_picture_duplicate.rs`, `tests/issue_1050_footnote_serialize.rs`, `src/renderer/layout/tests.rs`
   - 미주 모양/간격/overflow 회귀 검증 보강.
+  - rebase 후 clean sweep target 12개의 page count와 공식 미주 모양 profile 회귀 테스트 추가.
 
 ## 3. 최종 검증
 
@@ -35,14 +36,18 @@
 - 최근 코드 stage 검증:
   - `cargo fmt --check`: 통과
   - `cargo build --bin rhwp`: 통과
+  - `cargo test --test issue_1139_inline_picture_duplicate issue_1293`: 통과 (`10 passed`)
+  - 참고: `cargo test --test issue_1139_inline_picture_duplicate` 전체 실행은 기존 #1274/#1284 strict 위치 검사 7건이 현재 sweep 기준과 불일치해 실패
   - targeted visual sweep:
     - stage115: 4개 target 모두 0
     - stage117: `2022-09` 0 전환, 회귀 target 0 유지
-- 최종 전체 visual sweep:
-  - 명령: `python3 scripts/task1274_visual_sweep.py --target all --out output/task1293_stage121_full_sweep`
+- rebase 후 최종 전체 visual sweep:
+  - 기준: `upstream/devel` `a0a37d72`
+  - 명령: `python3 scripts/task1274_visual_sweep.py --target all --out output/task1293_stage122_rebase_full_sweep`
   - 결과: `flagged=7/323`
   - 0 target: 12개
   - 잔여 target: 3개 key
+  - stage121 최종 보고서의 잔여 key와 동일함
 
 ## 4. 최종 잔여 판단
 
@@ -58,8 +63,8 @@
 
 - 수행 계획서: `mydocs/plans/task_m100_1293.md`
 - 구현 계획서: `mydocs/plans/task_m100_1293_impl.md`
-- 단계 문서: `mydocs/working/task_m100_1293_stage1.md`부터 `stage121.md`
-- 최종 sweep: `output/task1293_stage121_full_sweep/summary.json`
+- 단계 문서: `mydocs/working/task_m100_1293_stage1.md`부터 `stage122.md`
+- 최종 sweep: `output/task1293_stage122_rebase_full_sweep/summary.json`
 
 ## 6. 미수행 항목
 

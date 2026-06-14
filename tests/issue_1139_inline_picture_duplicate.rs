@@ -927,6 +927,180 @@ fn issue_1139_endnote_spacing_reference_files_match_hancom_page_counts() {
 }
 
 #[test]
+fn issue_1293_clean_visual_sweep_targets_keep_page_counts_and_shape_profiles() {
+    struct CleanTarget {
+        key: &'static str,
+        path: &'static str,
+        pages: u32,
+        separator_above_mm: f64,
+        between_notes_mm: f64,
+        separator_below_mm: f64,
+        visible_separator: bool,
+    }
+
+    let targets = [
+        CleanTarget {
+            key: "2022-09",
+            path: "samples/3-09월_교육_통합_2022.hwp",
+            pages: 23,
+            separator_above_mm: 0.0,
+            between_notes_mm: 7.0,
+            separator_below_mm: 2.0,
+            visible_separator: true,
+        },
+        CleanTarget {
+            key: "2023-09",
+            path: "samples/3-09월_교육_통합_2023.hwp",
+            pages: 20,
+            separator_above_mm: 0.0,
+            between_notes_mm: 7.0,
+            separator_below_mm: 2.0,
+            visible_separator: true,
+        },
+        CleanTarget {
+            key: "2024-09-below20",
+            path: "samples/3-09월_교육_통합_2024-구분선아래20.hwp",
+            pages: 23,
+            separator_above_mm: 0.0,
+            between_notes_mm: 7.0,
+            separator_below_mm: 20.0,
+            visible_separator: true,
+        },
+        CleanTarget {
+            key: "2024-09-between20",
+            path: "samples/3-09월_교육_통합_2024-미주사이20.hwp",
+            pages: 24,
+            separator_above_mm: 0.0,
+            between_notes_mm: 20.0,
+            separator_below_mm: 2.0,
+            visible_separator: true,
+        },
+        CleanTarget {
+            key: "2022-11-practice",
+            path: "samples/3-11월_실전_통합_2022.hwp",
+            pages: 21,
+            separator_above_mm: 0.0,
+            between_notes_mm: 7.0,
+            separator_below_mm: 2.0,
+            visible_separator: true,
+        },
+        CleanTarget {
+            key: "2024-11-practice-shape987",
+            path: "samples/3-11월_실전_통합_2024-구분선위9미주사이8구분선아래7.hwp",
+            pages: 21,
+            separator_above_mm: 9.0,
+            between_notes_mm: 8.0,
+            separator_below_mm: 7.0,
+            visible_separator: true,
+        },
+        CleanTarget {
+            key: "2024-11-practice-above0-between0-below0",
+            path: "samples/3-11월_실전_통합_2024-구분선위0미주사이0구분선아래0.hwp",
+            pages: 21,
+            separator_above_mm: 0.0,
+            between_notes_mm: 0.0,
+            separator_below_mm: 0.0,
+            visible_separator: true,
+        },
+        CleanTarget {
+            key: "2024-11-practice-above0-between7-below2",
+            path: "samples/3-11월_실전_통합_2024-구분선위0미주사이7구분선아래2.hwp",
+            pages: 21,
+            separator_above_mm: 0.0,
+            between_notes_mm: 7.0,
+            separator_below_mm: 2.0,
+            visible_separator: true,
+        },
+        CleanTarget {
+            key: "2024-11-practice-above0-between7-below20",
+            path: "samples/3-11월_실전_통합_2024-구분선위0미주사이7구분선아래20.hwp",
+            pages: 21,
+            separator_above_mm: 0.0,
+            between_notes_mm: 7.0,
+            separator_below_mm: 20.0,
+            visible_separator: true,
+        },
+        CleanTarget {
+            key: "2024-11-practice-above20-between0-below20",
+            path: "samples/3-11월_실전_통합_2024-구분선위20미주사이0구분선아래20.hwp",
+            pages: 21,
+            separator_above_mm: 20.0,
+            between_notes_mm: 0.0,
+            separator_below_mm: 20.0,
+            visible_separator: true,
+        },
+        CleanTarget {
+            key: "2024-11-practice-above20-between7-below2",
+            path: "samples/3-11월_실전_통합_2024-구분선위20미주사이7구분선아래2.hwp",
+            pages: 21,
+            separator_above_mm: 20.0,
+            between_notes_mm: 7.0,
+            separator_below_mm: 2.0,
+            visible_separator: true,
+        },
+        CleanTarget {
+            key: "2024-11-practice-no-separator-above20-between20-below20",
+            path: "samples/3-11월_실전_통합_2024-구분선없음구분선위20미주사이20구분선아래20.hwp",
+            pages: 23,
+            separator_above_mm: 20.0,
+            between_notes_mm: 20.0,
+            separator_below_mm: 20.0,
+            visible_separator: false,
+        },
+    ];
+
+    for target in targets {
+        let bytes = std::fs::read(target.path).unwrap_or_else(|err| {
+            panic!("{} 샘플을 읽을 수 없음: {err}", target.key);
+        });
+        let doc = HwpDocument::from_bytes(&bytes).unwrap_or_else(|err| {
+            panic!("{} 샘플을 파싱할 수 없음: {err}", target.key);
+        });
+        assert_eq!(
+            doc.page_count(),
+            target.pages,
+            "{} clean sweep target의 한컴/PDF 기준 page count가 바뀌면 안 됨",
+            target.key
+        );
+
+        let shape = &doc.document().sections[0].section_def.endnote_shape;
+        let visible_separator = shape.separator_length != 0
+            || shape.separator_line_type != 0
+            || shape.separator_line_width != 0;
+        assert_eq!(
+            visible_separator, target.visible_separator,
+            "{} 구분선 표시 여부가 sweep 기준과 달라지면 안 됨",
+            target.key
+        );
+
+        let above_mm = hwpunit_to_mm(shape.separator_above_margin_hu() as i32);
+        let between_mm = hwpunit_to_mm(shape.between_notes_margin_hu() as i32);
+        let below_mm = hwpunit_to_mm(shape.separator_below_margin_hu() as i32);
+        assert!(
+            (above_mm - target.separator_above_mm).abs() < 0.08,
+            "{} 구분선 위 값이 달라짐: expected={}mm actual={}mm",
+            target.key,
+            target.separator_above_mm,
+            above_mm
+        );
+        assert!(
+            (between_mm - target.between_notes_mm).abs() < 0.08,
+            "{} 미주 사이 값이 달라짐: expected={}mm actual={}mm",
+            target.key,
+            target.between_notes_mm,
+            between_mm
+        );
+        assert!(
+            (below_mm - target.separator_below_mm).abs() < 0.08,
+            "{} 구분선 아래 값이 달라짐: expected={}mm actual={}mm",
+            target.key,
+            target.separator_below_mm,
+            below_mm
+        );
+    }
+}
+
+#[test]
 fn issue_1139_small_inline_picture_rendered_once_per_control() {
     let bytes = std::fs::read("samples/3-09월_교육_통합_2022.hwp").expect("sample");
     let doc = HwpDocument::from_bytes(&bytes).expect("parse");
