@@ -10,6 +10,7 @@ on:
       - 'src/renderer/**'
       - 'src/document_core/queries/rendering.rs'
       - 'src/wasm_api.rs'
+      - 'src/main.rs'
       - 'rhwp-studio/**'
       - '.github/workflows/render-diff.yml'
   workflow_dispatch:
@@ -29,7 +30,7 @@ on:
         default: false
         type: boolean
       write-images:
-        description: 'Write PNG artifacts even when cases pass'
+        description: 'Write Canvas PNG artifacts even when cases pass. PDF report artifacts are always retained.'
         required: false
         default: false
         type: boolean
@@ -58,6 +59,10 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      - name: Install PDF raster tools
+        continue-on-error: true
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
@@ -74,6 +79,10 @@ jobs:
 
       - name: Build WASM package
         run: wasm-pack build --target web --dev
+
+      - name: Build native CLI for PDF report
+        continue-on-error: true
+        run: cargo build --bin rhwp
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -97,9 +106,10 @@ jobs:
         working-directory: rhwp-studio
         run: |
           node --check e2e/canvas-render-diff.test.mjs
+          node --check e2e/pdf-render-diff-report.mjs
           node --check e2e/run-render-diff.mjs
 
-      - name: Run canvas visual diff
+      - name: Run canvas visual diff and PDF report
         working-directory: rhwp-studio
         env:
           VITE_PORT: 7700
@@ -107,15 +117,24 @@ jobs:
           RHWP_RENDER_DIFF_MAX_PAGES: ${{ inputs['max-pages'] || '1' }}
           RHWP_RENDER_DIFF_ALL: ${{ inputs['full-suite'] == true && '1' || '0' }}
           RHWP_RENDER_DIFF_WRITE_IMAGES: ${{ inputs['write-images'] == true && '1' || '0' }}
+          RHWP_RENDER_DIFF_PDF: '1'
+          RHWP_RENDER_DIFF_PDF_WRITE_IMAGES: '1'
+          RHWP_RENDER_DIFF_RHWP_BIN: ../target/debug/rhwp
         run: npm run e2e:render-diff:ci
 
       - name: Add render diff summary
         if: always()
         working-directory: rhwp-studio
         run: |
-          if [ -f e2e/screenshots/render-diff/summary.md ]; then
-            cat e2e/screenshots/render-diff/summary.md >> "$GITHUB_STEP_SUMMARY"
-          fi
+          for summary in \
+            e2e/screenshots/render-diff/summary.md \
+            e2e/screenshots/render-diff/pdf-summary.md
+          do
+            if [ -f "$summary" ]; then
+              cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+              printf '\n\n' >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
 
       - name: Upload render diff artifacts
         if: always()

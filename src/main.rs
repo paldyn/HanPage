@@ -1001,123 +1001,123 @@ fn export_pdf(args: &[String]) {
         return;
     }
 
-    let file_path = &args[0];
-    let mut output_file = String::new();
-    let mut target_page: Option<u32> = None;
-
-    let mut i = 1;
-    while i < args.len() {
-        match args[i].as_str() {
-            "--output" | "-o" => {
-                if i + 1 < args.len() {
-                    output_file = args[i + 1].clone();
-                    i += 2;
-                } else {
-                    eprintln!("오류: --output 뒤에 파일 경로가 필요합니다.");
-                    return;
-                }
-            }
-            "--page" | "-p" => {
-                if i + 1 < args.len() {
-                    match args[i + 1].parse::<u32>() {
-                        Ok(n) => target_page = Some(n),
-                        Err(_) => {
-                            eprintln!("오류: 페이지 번호가 올바르지 않습니다.");
-                            return;
-                        }
-                    }
-                    i += 2;
-                } else {
-                    eprintln!("오류: --page 뒤에 페이지 번호가 필요합니다.");
-                    return;
-                }
-            }
-            _ => {
-                i += 1;
-            }
-        }
-    }
-
-    // 기본 출력 파일명
-    if output_file.is_empty() {
-        let stem = Path::new(file_path)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("output");
-        output_file = format!("output/{}.pdf", stem);
-    }
-
-    let data = match fs::read(file_path) {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!("오류: 파일을 읽을 수 없습니다 - {}: {}", file_path, e);
-            return;
-        }
-    };
-
-    let mut doc = match rhwp::wasm_api::HwpDocument::from_bytes(&data) {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!("오류: HWP 파싱 실패 - {}", e);
-            return;
-        }
-    };
-
-    let page_count = doc.page_count();
-    println!("문서 로드 완료: {} ({}페이지)", file_path, page_count);
-
-    // 출력 디렉토리 생성
-    if let Some(parent) = Path::new(&output_file).parent() {
-        if !parent.exists() {
-            let _ = fs::create_dir_all(parent);
-        }
-    }
-
-    // 페이지 범위 결정
-    let pages: Vec<u32> = match target_page {
-        Some(p) => {
-            if p >= page_count {
-                eprintln!(
-                    "오류: 페이지 번호가 범위를 벗어났습니다 (0~{})",
-                    page_count - 1
-                );
-                return;
-            }
-            vec![p]
-        }
-        None => (0..page_count).collect(),
-    };
-
-    // SVG 렌더링 → PDF 변환
-    let mut svg_pages: Vec<String> = Vec::new();
-    for page_num in &pages {
-        match doc.render_page_svg(*page_num) {
-            Ok(svg) => svg_pages.push(svg),
-            Err(e) => {
-                eprintln!("오류: 페이지 {} 렌더링 실패 - {:?}", page_num, e);
-                return;
-            }
-        }
+    #[cfg(target_arch = "wasm32")]
+    {
+        eprintln!("오류: PDF 내보내기는 native 빌드에서만 지원됩니다.");
+        return;
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     {
-        use rhwp::renderer::pdf;
-        match pdf::svgs_to_pdf(&svg_pages) {
-            Ok(pdf_bytes) => match fs::write(&output_file, &pdf_bytes) {
-                Ok(_) => println!(
-                    "  → {} ({}KB, {}페이지)",
-                    output_file,
-                    pdf_bytes.len() / 1024,
-                    svg_pages.len()
-                ),
-                Err(e) => eprintln!("오류: PDF 저장 실패 - {}", e),
-            },
-            Err(e) => eprintln!("오류: PDF 변환 실패 - {}", e),
-        }
-    }
+        let file_path = &args[0];
+        let mut output_file = String::new();
+        let mut target_page: Option<u32> = None;
 
-    println!("PDF 내보내기 완료");
+        let mut i = 1;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--output" | "-o" => {
+                    if i + 1 < args.len() {
+                        output_file = args[i + 1].clone();
+                        i += 2;
+                    } else {
+                        eprintln!("오류: --output 뒤에 파일 경로가 필요합니다.");
+                        return;
+                    }
+                }
+                "--page" | "-p" => {
+                    if i + 1 < args.len() {
+                        match args[i + 1].parse::<u32>() {
+                            Ok(n) => target_page = Some(n),
+                            Err(_) => {
+                                eprintln!("오류: 페이지 번호가 올바르지 않습니다.");
+                                return;
+                            }
+                        }
+                        i += 2;
+                    } else {
+                        eprintln!("오류: --page 뒤에 페이지 번호가 필요합니다.");
+                        return;
+                    }
+                }
+                _ => {
+                    i += 1;
+                }
+            }
+        }
+
+        // 기본 출력 파일명
+        if output_file.is_empty() {
+            let stem = Path::new(file_path)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("output");
+            output_file = format!("output/{}.pdf", stem);
+        }
+
+        let data = match fs::read(file_path) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("오류: 파일을 읽을 수 없습니다 - {}: {}", file_path, e);
+                return;
+            }
+        };
+
+        let doc = match rhwp::wasm_api::HwpDocument::from_bytes(&data) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("오류: HWP 파싱 실패 - {}", e);
+                return;
+            }
+        };
+
+        let page_count = doc.page_count();
+        println!("문서 로드 완료: {} ({}페이지)", file_path, page_count);
+
+        // 출력 디렉토리 생성
+        if let Some(parent) = Path::new(&output_file).parent() {
+            if !parent.exists() {
+                if let Err(e) = fs::create_dir_all(parent) {
+                    eprintln!("오류: 출력 디렉토리를 만들 수 없습니다 - {}", e);
+                    return;
+                }
+            }
+        }
+
+        // 페이지 범위 결정
+        let pages: Vec<u32> = match target_page {
+            Some(p) => {
+                if p >= page_count {
+                    eprintln!(
+                        "오류: 페이지 번호가 범위를 벗어났습니다 (0~{})",
+                        page_count - 1
+                    );
+                    return;
+                }
+                vec![p]
+            }
+            None => (0..page_count).collect(),
+        };
+
+        let pdf_bytes = match doc.render_pages_pdf_native(&pages) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                eprintln!("오류: PDF 변환 실패 - {}", e);
+                return;
+            }
+        };
+        if let Err(e) = fs::write(&output_file, &pdf_bytes) {
+            eprintln!("오류: PDF 저장 실패 - {}", e);
+            return;
+        }
+        println!(
+            "  → {} ({}KB, {}페이지)",
+            output_file,
+            pdf_bytes.len() / 1024,
+            pages.len()
+        );
+        println!("PDF 내보내기 완료");
+    }
 }
 
 fn export_text(args: &[String]) {
@@ -1888,31 +1888,16 @@ fn note_shape_json(shape: &rhwp::model::footnote::FootnoteShape) -> serde_json::
             "separatorColor": format!("0x{:08x}", shape.separator_color),
             "numbering": format!("{:?}", shape.numbering),
             "placement": format!("{:?}", shape.placement),
+            "numberCodeSuperscript": shape.number_code_superscript,
+            "printInlineAfterText": shape.print_inline_after_text,
             "rawUnknown": hu_json(shape.raw_unknown as i32),
         },
         "ui": {
-            "separatorAbove": hu_json(note_shape_separator_above_margin_hu(shape) as i32),
-            "separatorBelow": hu_json(note_shape_separator_below_margin_hu(shape) as i32),
-            "betweenNotes": hu_json(note_shape_between_notes_margin_hu(shape) as i32),
+            "separatorAbove": hu_json(shape.separator_above_margin_hu() as i32),
+            "separatorBelow": hu_json(shape.separator_below_margin_hu() as i32),
+            "betweenNotes": hu_json(shape.between_notes_margin_hu() as i32),
         },
     })
-}
-
-fn note_shape_separator_above_margin_hu(shape: &rhwp::model::footnote::FootnoteShape) -> i16 {
-    let hwpx_above = shape.separator_margin_top.max(0);
-    if hwpx_above != 0 {
-        hwpx_above
-    } else {
-        shape.separator_margin_bottom.max(0)
-    }
-}
-
-fn note_shape_separator_below_margin_hu(shape: &rhwp::model::footnote::FootnoteShape) -> i16 {
-    shape.note_spacing.max(0)
-}
-
-fn note_shape_between_notes_margin_hu(shape: &rhwp::model::footnote::FootnoteShape) -> u16 {
-    shape.raw_unknown
 }
 
 fn hu_json(hu: i32) -> serde_json::Value {

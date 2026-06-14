@@ -830,6 +830,7 @@ fn parse_note_pr_children(
     end_tag: &[u8],
 ) -> Result<(), HwpxError> {
     let is_end_note = end_tag == b"endNotePr";
+    let mut saw_above_line = false;
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
@@ -840,6 +841,15 @@ fn parse_note_pr_children(
                     b"autoNumFormat" => {
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
+                                b"type" => {
+                                    if let Ok(s) = std::str::from_utf8(&attr.value) {
+                                        shape.number_format =
+                                            crate::model::footnote::FootnoteShape::number_format_from_name(
+                                                s,
+                                                shape.number_format,
+                                            );
+                                    }
+                                }
                                 b"suffixChar" => {
                                     if let Ok(s) = std::str::from_utf8(&attr.value) {
                                         if let Some(c) = s.chars().next() {
@@ -860,6 +870,9 @@ fn parse_note_pr_children(
                                             shape.user_char = c;
                                         }
                                     }
+                                }
+                                b"supscript" => {
+                                    shape.number_code_superscript = parse_bool_attr(&attr);
                                 }
                                 _ => {}
                             }
@@ -925,10 +938,10 @@ fn parse_note_pr_children(
                     b"noteSpacing" => {
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
-                                // [Task #1050] HWP5 spec 의 정답지 매핑:
-                                // betweenNotes → raw_unknown (실제는 between-notes spacing)
-                                // belowLine → note_spacing
-                                // aboveLine → separator_margin_bottom
+                                // 공식 미주/각주 모양 의미:
+                                // betweenNotes → 앞 번호 주석 내용과 다음 번호 주석 내용 사이
+                                // belowLine → 구분선과 주석 내용 사이
+                                // aboveLine → 본문과 구분선 사이
                                 b"betweenNotes" => {
                                     if let Ok(s) = std::str::from_utf8(&attr.value) {
                                         if let Ok(v) = s.parse::<u16>() {
@@ -946,16 +959,20 @@ fn parse_note_pr_children(
                                 b"aboveLine" => {
                                     if let Ok(s) = std::str::from_utf8(&attr.value) {
                                         if let Ok(v) = s.parse::<i16>() {
-                                            shape.separator_margin_bottom = v;
+                                            shape.separator_margin_top = v;
+                                            saw_above_line = true;
                                         }
                                     }
                                 }
                                 _ => {}
                             }
                         }
-                        // [Task #1050] separator_margin_top: HWPX 미보유 → 한컴 default -1 (sentinel).
-                        // 단, 미주 noteLine type="NONE" 에서는 한컴 저장본이 0을 유지한다.
-                        if shape.separator_margin_top == 0 && shape.separator_line_type != 0 {
+                        // 일부 오래된 HWPX에는 aboveLine 이 생략될 수 있으므로 기존 sentinel
+                        // fallback 만 유지한다. aboveLine 이 있으면 공식 "구분선 위" 값으로 쓴다.
+                        if !saw_above_line
+                            && shape.separator_margin_top == 0
+                            && shape.separator_line_type != 0
+                        {
                             shape.separator_margin_top =
                                 if is_end_note && shape.separator_length > 0 {
                                     224
@@ -969,23 +986,19 @@ fn parse_note_pr_children(
                             match attr.key.as_ref() {
                                 b"type" => {
                                     if let Ok(s) = std::str::from_utf8(&attr.value) {
-                                        let (numbering, attr_bits) = match s {
-                                            "CONTINUOUS" | "continue" => (
-                                                crate::model::footnote::FootnoteNumbering::Continue,
-                                                0u32,
-                                            ),
-                                            "ON_SECTION" | "RESTART_SECTION" | "restartSection" => (
-                                                crate::model::footnote::FootnoteNumbering::RestartSection,
-                                                1u32,
-                                            ),
-                                            "ON_PAGE" | "RESTART_PAGE" | "restartPage" => (
-                                                crate::model::footnote::FootnoteNumbering::RestartPage,
-                                                2u32,
-                                            ),
+                                        let numbering = match s {
+                                            "CONTINUOUS" | "continue" => {
+                                                crate::model::footnote::FootnoteNumbering::Continue
+                                            }
+                                            "ON_SECTION" | "RESTART_SECTION" | "restartSection" => {
+                                                crate::model::footnote::FootnoteNumbering::RestartSection
+                                            }
+                                            "ON_PAGE" | "RESTART_PAGE" | "restartPage" => {
+                                                crate::model::footnote::FootnoteNumbering::RestartPage
+                                            }
                                             _ => continue,
                                         };
                                         shape.numbering = numbering;
-                                        shape.attr = (shape.attr & !(0x03 << 8)) | (attr_bits << 8);
                                     }
                                 }
                                 b"newNum" => {
@@ -1001,28 +1014,30 @@ fn parse_note_pr_children(
                     }
                     b"placement" => {
                         for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"place" {
-                                if let Ok(s) = std::str::from_utf8(&attr.value) {
-                                    let (placement, attr_bits) = match s {
-                                        "END_OF_SECTION" | "BELOW_TEXT" | "sectionEnd"
-                                        | "belowText" => (
-                                            crate::model::footnote::FootnotePlacement::BelowText,
-                                            1u32,
-                                        ),
-                                        "RIGHT_COLUMN" | "rightColumn" => (
-                                            crate::model::footnote::FootnotePlacement::RightColumn,
-                                            2u32,
-                                        ),
-                                        "END_OF_DOCUMENT" | "EACH_COLUMN" | "documentEnd"
-                                        | "eachColumn" => (
-                                            crate::model::footnote::FootnotePlacement::EachColumn,
-                                            0u32,
-                                        ),
-                                        _ => continue,
-                                    };
-                                    shape.placement = placement;
-                                    shape.attr = (shape.attr & !(0x03 << 8)) | (attr_bits << 8);
+                            match attr.key.as_ref() {
+                                b"place" => {
+                                    if let Ok(s) = std::str::from_utf8(&attr.value) {
+                                        let placement = match s {
+                                            "END_OF_SECTION" | "BELOW_TEXT" | "sectionEnd"
+                                            | "belowText" => {
+                                                crate::model::footnote::FootnotePlacement::BelowText
+                                            }
+                                            "RIGHT_COLUMN" | "rightColumn" => {
+                                                crate::model::footnote::FootnotePlacement::RightColumn
+                                            }
+                                            "END_OF_DOCUMENT" | "EACH_COLUMN" | "documentEnd"
+                                            | "eachColumn" => {
+                                                crate::model::footnote::FootnotePlacement::EachColumn
+                                            }
+                                            _ => continue,
+                                        };
+                                        shape.placement = placement;
+                                    }
                                 }
+                                b"beneathText" => {
+                                    shape.print_inline_after_text = parse_bool_attr(&attr);
+                                }
+                                _ => {}
                             }
                         }
                     }
@@ -1046,6 +1061,7 @@ fn parse_note_pr_children(
         }
         buf.clear();
     }
+    shape.attr = shape.encode_attr();
     Ok(())
 }
 
@@ -5799,12 +5815,22 @@ mod tests {
         let section = parse_hwpx_section(xml).unwrap();
 
         assert_eq!(section.section_def.endnote_shape.separator_length, 0x2ff8);
-        assert_eq!(section.section_def.endnote_shape.separator_margin_top, 224);
         assert_eq!(
-            section.section_def.endnote_shape.separator_margin_bottom,
-            850
+            section
+                .section_def
+                .endnote_shape
+                .separator_above_margin_hu(),
+            850,
+            "aboveLine은 공식 '구분선 위' 값"
         );
-        assert_eq!(section.section_def.endnote_shape.note_spacing, 567);
+        assert_eq!(
+            section
+                .section_def
+                .endnote_shape
+                .separator_below_margin_hu(),
+            567,
+            "belowLine은 공식 '구분선 아래' 값"
+        );
         assert_eq!(
             section.section_def.endnote_shape.separator_line_width, 1,
             "HWPX noteLine width도 공통 선 굵기 코드표를 사용해야 함"
@@ -5842,6 +5868,7 @@ mod tests {
             crate::model::footnote::FootnotePlacement::BelowText
         );
         assert_eq!((section.section_def.endnote_shape.attr >> 8) & 0x03, 1);
+        assert_eq!((section.section_def.endnote_shape.attr >> 10) & 0x03, 0);
     }
 
     #[test]
@@ -5870,7 +5897,45 @@ mod tests {
             crate::model::footnote::FootnoteNumbering::RestartSection
         );
         assert_eq!(section.section_def.endnote_shape.start_number, 5);
-        assert_eq!((section.section_def.endnote_shape.attr >> 8) & 0x03, 1);
+        assert_eq!((section.section_def.endnote_shape.attr >> 8) & 0x03, 0);
+        assert_eq!((section.section_def.endnote_shape.attr >> 10) & 0x03, 1);
+    }
+
+    #[test]
+    fn test_parse_endnote_shape_attr_table134_flags() {
+        let xml = r##"<?xml version="1.0" encoding="UTF-8"?>
+<hs:sec xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph"
+        xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section">
+  <hp:p paraPrIDRef="0" styleIDRef="0">
+    <hp:run charPrIDRef="0">
+      <hp:secPr textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000" outlineShapeIDRef="1" masterPageCnt="0">
+        <hp:endNotePr>
+          <hp:autoNumFormat type="USER_CHAR" userChar="*" prefixChar="[" suffixChar="]" supscript="1"/>
+          <hp:noteLine length="0" type="NONE" width="0.12 mm" color="#000000"/>
+          <hp:noteSpacing betweenNotes="0" belowLine="567" aboveLine="850"/>
+          <hp:numbering type="ON_PAGE" newNum="1"/>
+          <hp:placement place="END_OF_SECTION" beneathText="1"/>
+        </hp:endNotePr>
+      </hp:secPr>
+    </hp:run>
+  </hp:p>
+</hs:sec>"##;
+
+        let section = parse_hwpx_section(xml).unwrap();
+        let shape = &section.section_def.endnote_shape;
+
+        assert_eq!(
+            shape.number_format,
+            crate::model::footnote::NumberFormat::UserChar
+        );
+        assert_eq!(shape.user_char, '*');
+        assert!(shape.number_code_superscript);
+        assert!(shape.print_inline_after_text);
+        assert_eq!((shape.attr & 0xff), 0x81);
+        assert_eq!((shape.attr >> 8) & 0x03, 1);
+        assert_eq!((shape.attr >> 10) & 0x03, 2);
+        assert_ne!(shape.attr & (1 << 12), 0);
+        assert_ne!(shape.attr & (1 << 13), 0);
     }
 
     /// [#1199] HWPX 미주/각주 ctrl 의 prefixChar(코드포인트 숫자) 가
