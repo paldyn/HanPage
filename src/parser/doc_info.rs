@@ -307,6 +307,8 @@ fn parse_face_name(data: &[u8]) -> Result<Font, DocInfoError> {
         alt_name,
         type_info,
         default_name,
+        // HWP5 FACE_NAME 에는 HWPX substFont 개념이 없다.
+        subst_font: None,
     })
 }
 

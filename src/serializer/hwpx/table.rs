@@ -96,6 +96,9 @@ pub fn write_table<W: Write>(
         write_caption(w, caption, ctx)?;
     }
     write_in_margin(w, table)?;
+    // cellzoneList: inMargin 다음, tr 앞 (OWPML 자식 순서). 셀 영역 테두리/배경
+    // 오버레이를 정의한다. 파서가 table.zones 로 보존하므로 그대로 되살린다.
+    write_cellzone_list(w, table)?;
 
     // tr[]: 행 단위 반복. 각 행에 속한 셀 (cell.row == r) 을 col 오름차순으로 출력.
     for row_idx in 0..table.row_count {
@@ -183,6 +186,37 @@ fn write_in_margin<W: Write>(w: &mut Writer<W>, t: &Table) -> Result<(), Seriali
             ("bottom", &bottom),
         ],
     )
+}
+
+/// `<hp:cellzoneList>` + `<hp:cellzone>` 자식들. 셀 영역(범위) 단위 테두리/배경
+/// 오버레이. `table.zones` 가 비어 있으면 원본에 없었던 것이므로 미방출.
+/// 속성 순서는 OWPML 관찰 순서: startRowAddr, startColAddr, endRowAddr,
+/// endColAddr, borderFillIDRef. borderFillIDRef 는 셀과 동일하게 raw 값(오프셋
+/// 없음)으로 쓴다 (parser `parse_u16`, 헤더 borderFill id 와 1:1).
+fn write_cellzone_list<W: Write>(w: &mut Writer<W>, t: &Table) -> Result<(), SerializeError> {
+    if t.zones.is_empty() {
+        return Ok(());
+    }
+    start_tag(w, "hp:cellzoneList")?;
+    for zone in &t.zones {
+        let start_row = zone.start_row.to_string();
+        let start_col = zone.start_col.to_string();
+        let end_row = zone.end_row.to_string();
+        let end_col = zone.end_col.to_string();
+        let border_fill = zone.border_fill_id.to_string();
+        empty_tag(
+            w,
+            "hp:cellzone",
+            &[
+                ("startRowAddr", &start_row),
+                ("startColAddr", &start_col),
+                ("endRowAddr", &end_row),
+                ("endColAddr", &end_col),
+                ("borderFillIDRef", &border_fill),
+            ],
+        )?;
+    }
+    end_tag(w, "hp:cellzoneList")
 }
 
 fn write_cell<W: Write>(
@@ -404,10 +438,17 @@ fn text_flow_str(f: TextFlow) -> &'static str {
 
 fn table_page_break_str(pb: TablePageBreak) -> &'static str {
     use TablePageBreak::*;
+    // HWPX 문자열 매핑은 파서(parser/hwpx/section.rs `pageBreak`)의 정확한 역이어야
+    // HWPX→HWPX 왕복이 충실하다. 파서는 한컴 관찰 기준으로
+    // `"TABLE"→CellBreak`, `"CELL"/"ROW"→RowBreak` 로 매핑하므로 (한컴 HWPX
+    // "CELL" = HWP5 row-break bit 1 = RowBreak), 직렬화도 그 역으로 방출한다.
+    // (이전 구현은 CellBreak→"CELL", RowBreak→"TABLE" 로 파서와 불일치해 왕복 시
+    //  CELL↔TABLE 이 뒤바뀌었다.) enum→HWP5 bit 매핑(hwpx_to_hwp.rs)은 enum 을
+    // 직접 쓰므로 이 변경의 영향을 받지 않는다.
     match pb {
         None => "NONE",
-        CellBreak => "CELL",
-        RowBreak => "TABLE",
+        CellBreak => "TABLE",
+        RowBreak => "CELL",
     }
 }
 
@@ -625,6 +666,48 @@ mod tests {
         let t = empty_table(4, 2);
         let xml = serialize(&t);
         assert_eq!(xml.matches("<hp:tr>").count(), 4);
+    }
+
+    #[test]
+    fn cellzone_list_omitted_when_no_zones() {
+        // 셀 영역이 없으면(원본에 cellzoneList 부재) 출력하지 않는다.
+        let t = empty_table(2, 2);
+        assert!(t.zones.is_empty());
+        let xml = serialize(&t);
+        assert!(
+            !xml.contains("cellzone"),
+            "zones 없음 → cellzoneList 미출력: {xml}"
+        );
+    }
+
+    #[test]
+    fn cellzone_list_serialized_between_inmargin_and_tr() {
+        // [Finding 13] 셀 영역 테두리/배경(cellzone)이 inMargin 다음, 첫 tr 앞에
+        // 정확한 속성 순서로 복원되어야 한다(종전엔 IR 에만 있고 직렬화 누락).
+        use crate::model::table::TableZone;
+        let mut t = empty_table(15, 12);
+        t.zones.push(TableZone {
+            start_row: 2,
+            start_col: 0,
+            end_row: 14,
+            end_col: 11,
+            border_fill_id: 5,
+        });
+        let xml = serialize(&t);
+        assert!(
+            xml.contains(
+                r#"<hp:cellzoneList><hp:cellzone startRowAddr="2" startColAddr="0" endRowAddr="14" endColAddr="11" borderFillIDRef="5"/></hp:cellzoneList>"#
+            ),
+            "cellzone 정확 복원 실패: {xml}"
+        );
+        // 자식 순서: inMargin < cellzoneList < 첫 tr
+        let im = xml.find("<hp:inMargin").expect("inMargin");
+        let cz = xml.find("<hp:cellzoneList>").expect("cellzoneList");
+        let tr = xml.find("<hp:tr>").expect("tr");
+        assert!(
+            im < cz && cz < tr,
+            "순서 inMargin<cellzoneList<tr 위반: {xml}"
+        );
     }
 
     #[test]
@@ -951,6 +1034,17 @@ mod tests {
         let p = xml.find("<hp:pic ").expect("hp:pic");
         let b = xml.find("<hp:t>b</hp:t>").expect("b 텍스트");
         assert!(a < p && p < b, "슬롯이 a 와 b 사이에 와야 함: {}", xml);
+    }
+
+    #[test]
+    fn page_break_str_is_exact_inverse_of_parser() {
+        // 직렬화 문자열은 파서(parser/hwpx/section.rs pageBreak)의 정확한 역이어야
+        // HWPX→HWPX 왕복이 충실하다. 파서: "TABLE"→CellBreak, "CELL"/"ROW"→RowBreak.
+        // 따라서 직렬화: CellBreak→"TABLE", RowBreak→"CELL". (뒤바뀌면 한컴 HWPX 의
+        // CELL↔TABLE 의미가 왕복 시 스왑된다.)
+        assert_eq!(table_page_break_str(TablePageBreak::None), "NONE");
+        assert_eq!(table_page_break_str(TablePageBreak::CellBreak), "TABLE");
+        assert_eq!(table_page_break_str(TablePageBreak::RowBreak), "CELL");
     }
 
     #[test]
