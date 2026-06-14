@@ -46,18 +46,40 @@ autoNum(#1382)은 placeholder 공백으로 슬롯 위치가 char_offsets 에 명
 newNum 은 placeholder 가 없어(파서 `section.rs:3891` 주석: newNum 은 text/offsets 미 push)
 위치 정보가 char_offsets 에 남지 않는다 → controls 배열 순서 + 8유닛 갭 추론에만 의존.
 
-## RT 페이지 수 1→2 (증상 ②)
+## 해소 (증상 ①) — post-char fieldEnd 에 expected+=8
 
-원본 1페이지가 RT 에서 2페이지. tbl pageBreak(#1393) 패치로도 불변. newNum(PAGE 새번호 2)
-의 적용 위치가 텍스트 앞으로 이동하면서 페이지 번호/머리말 적용에 영향을 줄 가능성 —
-슬롯 위치 정정 후 재현 여부로 귀속 확정 대상.
+실측 추적 결과 가로채기는 1단계 가설(pre-char 가드)보다 한 idx 앞이었다. post-char
+fieldEnd 방출(`section.rs:525~`)이 `expected_utf16_pos` 를 +8 진행하지 않아, 다음 idx
+에서 텍스트-끝 슬롯(newNum)이 그 8유닛 갭을 차지했다. **fieldEnd 방출 직후 `expected
++= 8`** 1줄로 정정 → newNum 은 남은 슬롯 일괄 방출로 텍스트 끝 배치. 143E ir-diff 0.
+
+## RT 페이지 수 1→2 (증상 ②) — 별개 원인: 본문 colPr 템플릿 하드코딩
+
+슬롯 정정 후에도 페이지 수는 1→2 그대로. `dump-pages` 대조로 **2단(컬럼) 손실**이
+원인임을 확정:
+
+- 원본: `colCount="2" sameGap="2268"`(2단) / RT: `colCount="1" sameGap="0"`(단일 단)
+- 본문(depth 0) ColumnDef 가 `render_runs` 인라인 슬롯에서 제외되고(#1379), 템플릿
+  `empty_section0.xml` 의 하드코딩 colPr(colCount=1)만 방출 → 2단→1단 → 페이지 넘침.
+- **#1388(secPr 여백 템플릿 하드코딩) 동형**. newNum 슬롯과 별개 결함.
+
+해소: `write_section` 에서 첫 문단 ColumnDef IR 을 템플릿 colPr anchor 에 치환
+(`render_col_pr_ctrl` 재사용). RT colCount=2 복원, 페이지 1→1.
+
+## 게이트 사각
+
+143E 는 ir-diff·baseline IR diff 가 0인데도 페이지 수가 달랐다. 본문 colPr **방출 손실**
+은 재파싱 시 colCount=1 로 읽혀 양쪽 IR 이 같아 보이는 사각이었다(IR→XML 손실). 방출
+정정으로 표면화 종결. 다른 본문 템플릿 하드코딩(secPr=#1388, colPr=#1407) 잔여 점검 필요.
 
 ## 재발 방지 체크리스트
 
-- [ ] placeholder 없는 inline 슬롯(newNum/pageHide/pageNum 등)이 **텍스트 끝**에 올 때,
-      메인 루프가 텍스트 중간 갭(fieldEnd 등)으로 가로채지 않는지 점검
-- [ ] field_ranges(fieldEnd) 갭과 controls 슬롯의 우선순위 — fieldEnd 가 먼저 소비돼야
-      하는 위치인지 char_offsets 로 판별
+- [x] placeholder 없는 inline 슬롯(newNum 등)이 **텍스트 끝**에 올 때, 메인 루프가
+      텍스트 중간 갭(fieldEnd)으로 가로채지 않는지 — post-char fieldEnd expected+=8 로 봉인
+- [x] field_ranges(fieldEnd) 갭과 controls 슬롯의 우선순위 — fieldEnd 가 expected 를
+      진행시켜 슬롯 가로채기 차단
+- [x] 본문(depth 0) 섹션 colPr 이 IR ColumnDef 로 방출되는지 (템플릿 하드코딩 금지) —
+      #1388(secPr)·#1407(colPr) 동형 패턴, 향후 본문 템플릿 고정값 추가 시 IR 치환 점검
 
 ## 관련
 

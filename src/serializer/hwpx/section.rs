@@ -2246,7 +2246,10 @@ mod tests {
         let newnum_pos = xml.find("newNum").expect("newNum");
         // " DEF" 텍스트(<hp:t> DEF</hp:t>) 위치 — fieldEnd 닫힘 뒤의 'DEF'.
         let after_end = end_pos + xml[end_pos..].find('>').unwrap();
-        let def_pos = xml[after_end..].find("DEF").map(|p| p + after_end).expect("DEF");
+        let def_pos = xml[after_end..]
+            .find("DEF")
+            .map(|p| p + after_end)
+            .expect("DEF");
 
         assert!(begin_pos < end_pos, "fieldBegin이 fieldEnd보다 앞: {xml}");
         assert!(
