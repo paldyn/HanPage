@@ -68,7 +68,7 @@ borderFill만 1-based라 어긋남 — 같은 header.xml 안에서 리소스별 
 `write_numbering`(header.rs:788)도 `id + 1`(1-based) 방출인데 등록은 `idx`(0-based)
 — borderFill과 동형 불일치. **단 numbering은 `reference()` 호출이 없어**
 (`unresolved` 항상 빈집합) SERIALIZE_FAIL을 안 낸다. 표면화 안 됨이라 본 타스크
-범위 밖. 동일 패턴이므로 **별도 이슈 등록 제안** (선제 정합 — numberingIDRef 비교가
+범위 밖. 동일 패턴이므로 **별도 이슈 등록 완료 (#1409)** (선제 정합 — numberingIDRef 비교가
 게이트에 추가되면 표면화될 수 있음).
 
 ## 5. 잔존 한계 (기지 이슈)
@@ -79,7 +79,7 @@ borderFill만 1-based라 어긋남 — 같은 header.xml 안에서 리소스별 
 | hp:pic 크기 요소 IR 미반영 | #1389 |
 | 열거 속성 표면 표기 정합 검사 | #1402 |
 | newNum 슬롯 위치 + 143E RT 페이지 수 | #1407 |
-| numbering 등록 축 잠재 불일치 | 신규 — 4절 제안 |
+| numbering 등록 축 잠재 불일치 | #1409 (4절) |
 
 ## 6. 산출물
 
