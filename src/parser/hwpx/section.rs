@@ -841,6 +841,15 @@ fn parse_note_pr_children(
                     b"autoNumFormat" => {
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
+                                b"type" => {
+                                    if let Ok(s) = std::str::from_utf8(&attr.value) {
+                                        shape.number_format =
+                                            crate::model::footnote::FootnoteShape::number_format_from_name(
+                                                s,
+                                                shape.number_format,
+                                            );
+                                    }
+                                }
                                 b"suffixChar" => {
                                     if let Ok(s) = std::str::from_utf8(&attr.value) {
                                         if let Some(c) = s.chars().next() {
@@ -861,6 +870,9 @@ fn parse_note_pr_children(
                                             shape.user_char = c;
                                         }
                                     }
+                                }
+                                b"supscript" => {
+                                    shape.number_code_superscript = parse_bool_attr(&attr);
                                 }
                                 _ => {}
                             }
@@ -974,23 +986,19 @@ fn parse_note_pr_children(
                             match attr.key.as_ref() {
                                 b"type" => {
                                     if let Ok(s) = std::str::from_utf8(&attr.value) {
-                                        let (numbering, attr_bits) = match s {
-                                            "CONTINUOUS" | "continue" => (
-                                                crate::model::footnote::FootnoteNumbering::Continue,
-                                                0u32,
-                                            ),
-                                            "ON_SECTION" | "RESTART_SECTION" | "restartSection" => (
-                                                crate::model::footnote::FootnoteNumbering::RestartSection,
-                                                1u32,
-                                            ),
-                                            "ON_PAGE" | "RESTART_PAGE" | "restartPage" => (
-                                                crate::model::footnote::FootnoteNumbering::RestartPage,
-                                                2u32,
-                                            ),
+                                        let numbering = match s {
+                                            "CONTINUOUS" | "continue" => {
+                                                crate::model::footnote::FootnoteNumbering::Continue
+                                            }
+                                            "ON_SECTION" | "RESTART_SECTION" | "restartSection" => {
+                                                crate::model::footnote::FootnoteNumbering::RestartSection
+                                            }
+                                            "ON_PAGE" | "RESTART_PAGE" | "restartPage" => {
+                                                crate::model::footnote::FootnoteNumbering::RestartPage
+                                            }
                                             _ => continue,
                                         };
                                         shape.numbering = numbering;
-                                        shape.attr = (shape.attr & !(0x03 << 8)) | (attr_bits << 8);
                                     }
                                 }
                                 b"newNum" => {
@@ -1006,28 +1014,30 @@ fn parse_note_pr_children(
                     }
                     b"placement" => {
                         for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"place" {
-                                if let Ok(s) = std::str::from_utf8(&attr.value) {
-                                    let (placement, attr_bits) = match s {
-                                        "END_OF_SECTION" | "BELOW_TEXT" | "sectionEnd"
-                                        | "belowText" => (
-                                            crate::model::footnote::FootnotePlacement::BelowText,
-                                            1u32,
-                                        ),
-                                        "RIGHT_COLUMN" | "rightColumn" => (
-                                            crate::model::footnote::FootnotePlacement::RightColumn,
-                                            2u32,
-                                        ),
-                                        "END_OF_DOCUMENT" | "EACH_COLUMN" | "documentEnd"
-                                        | "eachColumn" => (
-                                            crate::model::footnote::FootnotePlacement::EachColumn,
-                                            0u32,
-                                        ),
-                                        _ => continue,
-                                    };
-                                    shape.placement = placement;
-                                    shape.attr = (shape.attr & !(0x03 << 8)) | (attr_bits << 8);
+                            match attr.key.as_ref() {
+                                b"place" => {
+                                    if let Ok(s) = std::str::from_utf8(&attr.value) {
+                                        let placement = match s {
+                                            "END_OF_SECTION" | "BELOW_TEXT" | "sectionEnd"
+                                            | "belowText" => {
+                                                crate::model::footnote::FootnotePlacement::BelowText
+                                            }
+                                            "RIGHT_COLUMN" | "rightColumn" => {
+                                                crate::model::footnote::FootnotePlacement::RightColumn
+                                            }
+                                            "END_OF_DOCUMENT" | "EACH_COLUMN" | "documentEnd"
+                                            | "eachColumn" => {
+                                                crate::model::footnote::FootnotePlacement::EachColumn
+                                            }
+                                            _ => continue,
+                                        };
+                                        shape.placement = placement;
+                                    }
                                 }
+                                b"beneathText" => {
+                                    shape.print_inline_after_text = parse_bool_attr(&attr);
+                                }
+                                _ => {}
                             }
                         }
                     }
@@ -1051,6 +1061,7 @@ fn parse_note_pr_children(
         }
         buf.clear();
     }
+    shape.attr = shape.encode_attr();
     Ok(())
 }
 
@@ -5857,6 +5868,7 @@ mod tests {
             crate::model::footnote::FootnotePlacement::BelowText
         );
         assert_eq!((section.section_def.endnote_shape.attr >> 8) & 0x03, 1);
+        assert_eq!((section.section_def.endnote_shape.attr >> 10) & 0x03, 0);
     }
 
     #[test]
@@ -5885,7 +5897,45 @@ mod tests {
             crate::model::footnote::FootnoteNumbering::RestartSection
         );
         assert_eq!(section.section_def.endnote_shape.start_number, 5);
-        assert_eq!((section.section_def.endnote_shape.attr >> 8) & 0x03, 1);
+        assert_eq!((section.section_def.endnote_shape.attr >> 8) & 0x03, 0);
+        assert_eq!((section.section_def.endnote_shape.attr >> 10) & 0x03, 1);
+    }
+
+    #[test]
+    fn test_parse_endnote_shape_attr_table134_flags() {
+        let xml = r##"<?xml version="1.0" encoding="UTF-8"?>
+<hs:sec xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph"
+        xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section">
+  <hp:p paraPrIDRef="0" styleIDRef="0">
+    <hp:run charPrIDRef="0">
+      <hp:secPr textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000" outlineShapeIDRef="1" masterPageCnt="0">
+        <hp:endNotePr>
+          <hp:autoNumFormat type="USER_CHAR" userChar="*" prefixChar="[" suffixChar="]" supscript="1"/>
+          <hp:noteLine length="0" type="NONE" width="0.12 mm" color="#000000"/>
+          <hp:noteSpacing betweenNotes="0" belowLine="567" aboveLine="850"/>
+          <hp:numbering type="ON_PAGE" newNum="1"/>
+          <hp:placement place="END_OF_SECTION" beneathText="1"/>
+        </hp:endNotePr>
+      </hp:secPr>
+    </hp:run>
+  </hp:p>
+</hs:sec>"##;
+
+        let section = parse_hwpx_section(xml).unwrap();
+        let shape = &section.section_def.endnote_shape;
+
+        assert_eq!(
+            shape.number_format,
+            crate::model::footnote::NumberFormat::UserChar
+        );
+        assert_eq!(shape.user_char, '*');
+        assert!(shape.number_code_superscript);
+        assert!(shape.print_inline_after_text);
+        assert_eq!((shape.attr & 0xff), 0x81);
+        assert_eq!((shape.attr >> 8) & 0x03, 1);
+        assert_eq!((shape.attr >> 10) & 0x03, 2);
+        assert_ne!(shape.attr & (1 << 12), 0);
+        assert_ne!(shape.attr & (1 << 13), 0);
     }
 
     /// [#1199] HWPX 미주/각주 ctrl 의 prefixChar(코드포인트 숫자) 가

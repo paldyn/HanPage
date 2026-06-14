@@ -1888,6 +1888,8 @@ fn note_shape_json(shape: &rhwp::model::footnote::FootnoteShape) -> serde_json::
             "separatorColor": format!("0x{:08x}", shape.separator_color),
             "numbering": format!("{:?}", shape.numbering),
             "placement": format!("{:?}", shape.placement),
+            "numberCodeSuperscript": shape.number_code_superscript,
+            "printInlineAfterText": shape.print_inline_after_text,
             "rawUnknown": hu_json(shape.raw_unknown as i32),
         },
         "ui": {

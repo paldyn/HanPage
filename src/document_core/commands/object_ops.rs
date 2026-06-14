@@ -5893,57 +5893,14 @@ impl DocumentCore {
     // ─── 각주 삽입/삭제 API ──────────────────────────────
 
     fn footnote_shape_number_format_code(format: crate::model::footnote::NumberFormat) -> u8 {
-        use crate::model::footnote::NumberFormat;
-        match format {
-            NumberFormat::Digit => 0,
-            NumberFormat::CircledDigit => 1,
-            NumberFormat::UpperRoman => 2,
-            NumberFormat::LowerRoman => 3,
-            NumberFormat::UpperAlpha => 4,
-            NumberFormat::LowerAlpha => 5,
-            NumberFormat::CircledUpperAlpha => 6,
-            NumberFormat::CircledLowerAlpha => 7,
-            NumberFormat::HangulSyllable => 8,
-            NumberFormat::CircledHangulSyllable => 9,
-            NumberFormat::HangulJamo => 10,
-            NumberFormat::CircledHangulJamo => 11,
-            NumberFormat::HangulDigit => 12,
-            NumberFormat::HanjaDigit => 13,
-            NumberFormat::CircledHanjaDigit => 14,
-            NumberFormat::HanjaGapEul => 15,
-            NumberFormat::HanjaGapEulHanja => 16,
-            NumberFormat::FourSymbol => 17,
-            NumberFormat::UserChar => 18,
-        }
+        crate::model::footnote::FootnoteShape::number_format_attr_code(format) as u8
     }
 
     fn footnote_shape_number_format_from_str(
         value: &str,
         fallback: crate::model::footnote::NumberFormat,
     ) -> crate::model::footnote::NumberFormat {
-        use crate::model::footnote::NumberFormat;
-        match value {
-            "digit" => NumberFormat::Digit,
-            "circledDigit" => NumberFormat::CircledDigit,
-            "upperRoman" => NumberFormat::UpperRoman,
-            "lowerRoman" => NumberFormat::LowerRoman,
-            "upperAlpha" => NumberFormat::UpperAlpha,
-            "lowerAlpha" => NumberFormat::LowerAlpha,
-            "circledUpperAlpha" => NumberFormat::CircledUpperAlpha,
-            "circledLowerAlpha" => NumberFormat::CircledLowerAlpha,
-            "hangulSyllable" => NumberFormat::HangulSyllable,
-            "circledHangulSyllable" => NumberFormat::CircledHangulSyllable,
-            "hangulJamo" => NumberFormat::HangulJamo,
-            "circledHangulJamo" => NumberFormat::CircledHangulJamo,
-            "hangulDigit" => NumberFormat::HangulDigit,
-            "hanjaDigit" => NumberFormat::HanjaDigit,
-            "circledHanjaDigit" => NumberFormat::CircledHanjaDigit,
-            "hanjaGapEul" => NumberFormat::HanjaGapEul,
-            "hanjaGapEulHanja" => NumberFormat::HanjaGapEulHanja,
-            "fourSymbol" => NumberFormat::FourSymbol,
-            "userChar" => NumberFormat::UserChar,
-            _ => fallback,
-        }
+        crate::model::footnote::FootnoteShape::number_format_from_name(value, fallback)
     }
 
     fn footnote_shape_number_format_name(
@@ -6024,14 +5981,7 @@ impl DocumentCore {
     }
 
     fn encode_footnote_shape_attr(shape: &crate::model::footnote::FootnoteShape) -> u32 {
-        use crate::model::footnote::{FootnoteNumbering, FootnotePlacement};
-        let number_format = Self::footnote_shape_number_format_code(shape.number_format) as u32;
-        let placement_numbering_bits = match (shape.numbering, shape.placement) {
-            (FootnoteNumbering::RestartPage, _) | (_, FootnotePlacement::RightColumn) => 2,
-            (FootnoteNumbering::RestartSection, _) | (_, FootnotePlacement::BelowText) => 1,
-            _ => 0,
-        };
-        (shape.attr & !0x03ff) | number_format | ((placement_numbering_bits & 0x03) << 8)
+        shape.encode_attr()
     }
 
     fn first_char_or_nul(value: &str) -> char {
@@ -6761,6 +6711,8 @@ impl DocumentCore {
                 "\"separatorLineType\":{},",
                 "\"separatorLineWidth\":{},",
                 "\"separatorColor\":\"{}\",",
+                "\"numberCodeSuperscript\":{},",
+                "\"printInlineAfterText\":{},",
                 "\"numbering\":\"{}\",",
                 "\"placement\":\"{}\"",
                 "}}"
@@ -6778,6 +6730,16 @@ impl DocumentCore {
             shape.separator_line_type,
             shape.separator_line_width,
             separator_color,
+            if shape.number_code_superscript {
+                "true"
+            } else {
+                "false"
+            },
+            if shape.print_inline_after_text {
+                "true"
+            } else {
+                "false"
+            },
             Self::footnote_numbering_name(shape.numbering),
             Self::footnote_placement_name(shape.placement),
         ))
@@ -6839,6 +6801,16 @@ impl DocumentCore {
         }
         if let Some(v) = crate::document_core::helpers::json_str(props_json, "placement") {
             shape.placement = Self::footnote_placement_from_str(&v, shape.placement);
+        }
+        if let Some(v) =
+            crate::document_core::helpers::json_bool(props_json, "numberCodeSuperscript")
+        {
+            shape.number_code_superscript = v;
+        }
+        if let Some(v) =
+            crate::document_core::helpers::json_bool(props_json, "printInlineAfterText")
+        {
+            shape.print_inline_after_text = v;
         }
         if let Some(false) =
             crate::document_core::helpers::json_bool(props_json, "separatorEnabled")

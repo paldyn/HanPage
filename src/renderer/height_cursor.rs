@@ -668,6 +668,7 @@ impl HeightCursor {
         // note-gap must remain authoritative.
         let compact_endnote_safe_vpos_backtrack = self.suppress_large_forward_jump
             && !vpos_rewind
+            && !(current_is_endnote_title && self.endnote_between_notes_hu > 3000)
             && end_y < y_offset - 8.0
             && end_y >= prev_content_bottom_y
             && end_y <= self.col_area_y + self.col_area_height

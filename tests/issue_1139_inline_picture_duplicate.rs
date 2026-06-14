@@ -267,6 +267,23 @@ fn count_text_line_nodes(node: &RenderNode, para_index: usize) -> usize {
         .sum::<usize>()
 }
 
+fn count_equations_under_text_line(node: &RenderNode, para_index: usize) -> usize {
+    let child_count = match &node.node_type {
+        RenderNodeType::TextLine(line) if line.para_index == Some(para_index) => node
+            .children
+            .iter()
+            .filter(|child| matches!(child.node_type, RenderNodeType::Equation(_)))
+            .count(),
+        _ => 0,
+    };
+    child_count
+        + node
+            .children
+            .iter()
+            .map(|child| count_equations_under_text_line(child, para_index))
+            .sum::<usize>()
+}
+
 fn max_equation_bottom_in_region(
     node: &RenderNode,
     x_min: f64,
@@ -389,6 +406,13 @@ fn issue_1293_equation_control_is_not_always_treat_as_char() {
     assert!(
         page_dump.contains("Shape          pi=0 ci=2  수식"),
         "비TAC 수식은 텍스트 줄 안 TAC가 아니라 별도 Shape item으로 라우팅되어야 함\n{page_dump}"
+    );
+
+    let tree = doc.build_page_render_tree(0).expect("page 1 render tree");
+    assert_eq!(
+        count_equations_under_text_line(&tree.root, 0),
+        0,
+        "비TAC 수식은 문단 TextLine 내부 인라인 Equation으로 중복 렌더되면 안 됨"
     );
 }
 
@@ -730,6 +754,8 @@ fn issue_1139_stage31_endnote_shape_api_updates_section_shape() {
     assert_eq!(shape.separator_color, 0x0055_aa11);
     assert_eq!(shape.numbering, FootnoteNumbering::RestartSection);
     assert_eq!(shape.placement, FootnotePlacement::BelowText);
+    assert_eq!((shape.attr >> 8) & 0x03, 1, "placement bit 8~9");
+    assert_eq!((shape.attr >> 10) & 0x03, 1, "numbering bit 10~11");
 
     let after = doc
         .get_endnote_shape_native(0)

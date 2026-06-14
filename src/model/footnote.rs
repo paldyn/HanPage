@@ -82,11 +82,138 @@ pub struct FootnoteShape {
     pub numbering: FootnoteNumbering,
     /// 배치 방법 (각주: 단 배치, 미주: 문서/구역 끝)
     pub placement: FootnotePlacement,
+    /// 주석 내용 중 번호 코드의 모양을 위첨자로 출력할지 여부.
+    pub number_code_superscript: bool,
+    /// 텍스트에 이어 바로 출력할지 여부.
+    pub print_inline_after_text: bool,
     /// HWP5 미문서화 2바이트. 한컴 UI의 "주석 사이" 값으로 사용된다.
     pub raw_unknown: u16,
 }
 
 impl FootnoteShape {
+    /// HWP5 `attr` 비트에서 각주/미주 모양 semantic 필드를 갱신한다.
+    pub fn apply_attr_fields_from_raw(&mut self) {
+        self.number_format = Self::number_format_from_attr_code(self.attr & 0xff);
+        self.placement = match (self.attr >> 8) & 0x03 {
+            1 => FootnotePlacement::BelowText,
+            2 => FootnotePlacement::RightColumn,
+            _ => FootnotePlacement::EachColumn,
+        };
+        self.numbering = match (self.attr >> 10) & 0x03 {
+            1 => FootnoteNumbering::RestartSection,
+            2 => FootnoteNumbering::RestartPage,
+            _ => FootnoteNumbering::Continue,
+        };
+        self.number_code_superscript = (self.attr & (1 << 12)) != 0;
+        self.print_inline_after_text = (self.attr & (1 << 13)) != 0;
+    }
+
+    /// 각주/미주 모양 semantic 필드를 HWP5 `attr` 비트로 인코딩한다.
+    pub fn encode_attr(&self) -> u32 {
+        let number_format = Self::number_format_attr_code(self.number_format);
+        let placement = match self.placement {
+            FootnotePlacement::BelowText => 1,
+            FootnotePlacement::RightColumn => 2,
+            FootnotePlacement::EachColumn => 0,
+        };
+        let numbering = match self.numbering {
+            FootnoteNumbering::RestartSection => 1,
+            FootnoteNumbering::RestartPage => 2,
+            FootnoteNumbering::Continue => 0,
+        };
+
+        let mut attr = self.attr & !0x3fff;
+        attr |= number_format;
+        attr |= (placement & 0x03) << 8;
+        attr |= (numbering & 0x03) << 10;
+        if self.number_code_superscript {
+            attr |= 1 << 12;
+        }
+        if self.print_inline_after_text {
+            attr |= 1 << 13;
+        }
+        attr
+    }
+
+    /// 표 134의 번호 모양 코드를 모델 값으로 변환한다.
+    pub fn number_format_from_attr_code(code: u32) -> NumberFormat {
+        match code & 0xff {
+            0 => NumberFormat::Digit,
+            1 => NumberFormat::CircledDigit,
+            2 => NumberFormat::UpperRoman,
+            3 => NumberFormat::LowerRoman,
+            4 => NumberFormat::UpperAlpha,
+            5 => NumberFormat::LowerAlpha,
+            6 => NumberFormat::CircledUpperAlpha,
+            7 => NumberFormat::CircledLowerAlpha,
+            8 => NumberFormat::HangulSyllable,
+            9 => NumberFormat::CircledHangulSyllable,
+            10 => NumberFormat::HangulJamo,
+            11 => NumberFormat::CircledHangulJamo,
+            12 => NumberFormat::HangulDigit,
+            13 => NumberFormat::HanjaDigit,
+            14 => NumberFormat::CircledHanjaDigit,
+            15 => NumberFormat::HanjaGapEul,
+            16 => NumberFormat::HanjaGapEulHanja,
+            0x80 | 17 => NumberFormat::FourSymbol,
+            0x81 | 18 => NumberFormat::UserChar,
+            _ => NumberFormat::Digit,
+        }
+    }
+
+    /// 표 134의 번호 모양 코드로 변환한다.
+    pub fn number_format_attr_code(format: NumberFormat) -> u32 {
+        match format {
+            NumberFormat::Digit => 0,
+            NumberFormat::CircledDigit => 1,
+            NumberFormat::UpperRoman => 2,
+            NumberFormat::LowerRoman => 3,
+            NumberFormat::UpperAlpha => 4,
+            NumberFormat::LowerAlpha => 5,
+            NumberFormat::CircledUpperAlpha => 6,
+            NumberFormat::CircledLowerAlpha => 7,
+            NumberFormat::HangulSyllable => 8,
+            NumberFormat::CircledHangulSyllable => 9,
+            NumberFormat::HangulJamo => 10,
+            NumberFormat::CircledHangulJamo => 11,
+            NumberFormat::HangulDigit => 12,
+            NumberFormat::HanjaDigit => 13,
+            NumberFormat::CircledHanjaDigit => 14,
+            NumberFormat::HanjaGapEul => 15,
+            NumberFormat::HanjaGapEulHanja => 16,
+            NumberFormat::FourSymbol => 0x80,
+            NumberFormat::UserChar => 0x81,
+        }
+    }
+
+    /// HWPX/API 번호 모양 이름을 모델 값으로 변환한다.
+    pub fn number_format_from_name(value: &str, fallback: NumberFormat) -> NumberFormat {
+        match value {
+            "digit" | "DIGIT" => NumberFormat::Digit,
+            "circledDigit" | "CIRCLED_DIGIT" => NumberFormat::CircledDigit,
+            "upperRoman" | "ROMAN_CAPITAL" => NumberFormat::UpperRoman,
+            "lowerRoman" | "ROMAN_SMALL" => NumberFormat::LowerRoman,
+            "upperAlpha" | "LATIN_CAPITAL" => NumberFormat::UpperAlpha,
+            "lowerAlpha" | "LATIN_SMALL" => NumberFormat::LowerAlpha,
+            "circledUpperAlpha" | "CIRCLED_LATIN_CAPITAL" => NumberFormat::CircledUpperAlpha,
+            "circledLowerAlpha" | "CIRCLED_LATIN_SMALL" => NumberFormat::CircledLowerAlpha,
+            "hangulSyllable" | "HANGUL_SYLLABLE" => NumberFormat::HangulSyllable,
+            "circledHangulSyllable" | "CIRCLED_HANGUL_SYLLABLE" => {
+                NumberFormat::CircledHangulSyllable
+            }
+            "hangulJamo" | "HANGUL_JAMO" => NumberFormat::HangulJamo,
+            "circledHangulJamo" | "CIRCLED_HANGUL_JAMO" => NumberFormat::CircledHangulJamo,
+            "hangulDigit" | "HANGUL_PHONETIC" => NumberFormat::HangulDigit,
+            "hanjaDigit" | "IDEOGRAPH" => NumberFormat::HanjaDigit,
+            "circledHanjaDigit" | "CIRCLED_IDEOGRAPH" => NumberFormat::CircledHanjaDigit,
+            "hanjaGapEul" | "DECAGON_CIRCLE" => NumberFormat::HanjaGapEul,
+            "hanjaGapEulHanja" | "DECAGON_CIRCLE_HANJA" => NumberFormat::HanjaGapEulHanja,
+            "fourSymbol" | "SYMBOL" => NumberFormat::FourSymbol,
+            "userChar" | "USER_CHAR" => NumberFormat::UserChar,
+            _ => fallback,
+        }
+    }
+
     /// 한컴 UI "구분선 위": 본문과 주석 구분선 사이의 간격.
     pub fn separator_above_margin_hu(&self) -> HwpUnit16 {
         let hwpx_above = self.separator_margin_top.max(0);
@@ -173,5 +300,25 @@ mod tests {
         let shape = FootnoteShape::default();
         assert_eq!(shape.number_format, NumberFormat::Digit);
         assert_eq!(shape.numbering, FootnoteNumbering::Continue);
+    }
+
+    #[test]
+    fn test_footnote_shape_attr_bits_follow_table_134() {
+        let mut shape = FootnoteShape {
+            attr: 0x81 | (1 << 8) | (2 << 10) | (1 << 12) | (1 << 13),
+            ..Default::default()
+        };
+
+        shape.apply_attr_fields_from_raw();
+
+        assert_eq!(shape.number_format, NumberFormat::UserChar);
+        assert_eq!(shape.placement, FootnotePlacement::BelowText);
+        assert_eq!(shape.numbering, FootnoteNumbering::RestartPage);
+        assert!(shape.number_code_superscript);
+        assert!(shape.print_inline_after_text);
+        assert_eq!(
+            shape.encode_attr() & 0x3fff,
+            0x81 | (1 << 8) | (2 << 10) | (1 << 12) | (1 << 13)
+        );
     }
 }
