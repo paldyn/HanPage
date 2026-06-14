@@ -5669,8 +5669,39 @@ impl TypesetEngine {
                                             })
                                             .unwrap_or(false))
                                     && endnote_has_visible_payload;
+                            let default_compact_below_last_column_title_orphan =
+                                compact_endnote_separator_profile
+                                    && default_between_notes_gap
+                                    && has_visible_endnote_separator
+                                    && endnote_shape
+                                        .map(|shape| {
+                                            endnote_separator_below_margin(shape) as i32
+                                                <= ENDNOTE_BETWEEN_NOTES_BASE_FLOW_HU
+                                        })
+                                        .unwrap_or(false)
+                                    && ep_idx == 0
+                                    && en_ref.number > 0
+                                    && st.current_column + 1 >= st.col_count
+                                    && fmt.line_heights.len() == 1
+                                    && st.current_height > available * 0.95
+                                    && st.current_height + fmt.line_advance(0)
+                                        <= available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX
+                                    && en_ctrl.paragraphs.get(1).is_some_and(|next_para| {
+                                        !para_has_visible_text(next_para)
+                                            && para_has_visible_text_or_equation(next_para)
+                                    })
+                                    && next_endnote_head_pair_advance
+                                        .map(|next_h| {
+                                            st.current_height + fmt.line_advance(0) + next_h
+                                                > available
+                                                    + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX
+                                                    + 2.0
+                                        })
+                                        .unwrap_or(false)
+                                    && endnote_has_visible_payload;
                             if zero_between_large_separator_last_column_title_orphan
                                 || default_large_below_last_column_title_orphan
+                                || default_compact_below_last_column_title_orphan
                             {
                                 st.advance_column_or_new_page();
                                 prev_en_bottom_vpos = None;
@@ -7084,6 +7115,40 @@ impl TypesetEngine {
                                                         + 2.0
                                             })
                                             .is_some()
+                                        && para_has_visible_text_or_equation(en_para));
+                            let allow_default_question_title_tail =
+                                allow_default_question_title_tail
+                                    // 구분선 아래가 기본값 근방이어도 저장 vpos rewind가 있는
+                                    // 새 미주 제목은 제목 앞 공식 "미주 사이" gap까지 현재
+                                    // 단에 들어가면 하단 tail로 남긴다. head group 전체를
+                                    // 기준으로 밀면 한컴보다 다음 단으로 일찍 넘어간다.
+                                    || (default_between_notes_gap
+                                        && compact_endnote_separator_profile
+                                        && has_visible_endnote_separator
+                                        && endnote_has_vpos_rewind
+                                        && ep_idx == 0
+                                        && en_ref.number > 0
+                                        && st.current_column + 1 < st.col_count
+                                        && !st.current_items.is_empty()
+                                        && fmt.line_heights.len() == 1
+                                        && st.current_height > available * 0.85
+                                        && st.current_height < available * 0.90
+                                        && endnote_shape
+                                            .map(|shape| {
+                                                endnote_separator_below_margin(shape) as i32
+                                                    <= ENDNOTE_BETWEEN_NOTES_BASE_FLOW_HU
+                                                    && st.current_height
+                                                        + hwpunit_to_px(
+                                                            endnote_between_notes_margin(shape)
+                                                                as i32,
+                                                            self.dpi,
+                                                        )
+                                                        + en_fit
+                                                        <= available
+                                                            + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX
+                                                            + 2.0
+                                            })
+                                            .unwrap_or(false)
                                         && para_has_visible_text_or_equation(en_para));
                             let rewind_endnote_head_near_bottom = endnote_has_vpos_rewind
                                 && st.current_height + total_advance_fit
