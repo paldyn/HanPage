@@ -2138,6 +2138,7 @@ fn parse_picture(
     let mut padding = crate::model::Padding::default();
     let mut border_x = [0i32; 4];
     let mut border_y = [0i32; 4];
+    let mut img_dim: (u32, u32) = (0, 0); // [#1389] hp:imgDim 원본 이미지 픽셀 크기
     let mut href: Option<String> = None;
     let mut picture_instance_id = 0;
     let mut effects = PictureEffects::default();
@@ -2239,6 +2240,16 @@ fn parse_picture(
                                         common.height = v;
                                     }
                                 }
+                                _ => {}
+                            }
+                        }
+                    }
+                    // [#1389] 원본 이미지 픽셀 크기 — verbatim 적재
+                    b"imgDim" => {
+                        for attr in ce.attributes().flatten() {
+                            match attr.key.as_ref() {
+                                b"dimwidth" => img_dim.0 = parse_u32(&attr),
+                                b"dimheight" => img_dim.1 = parse_u32(&attr),
                                 _ => {}
                             }
                         }
@@ -2449,6 +2460,7 @@ fn parse_picture(
     pic.instance_id = picture_instance_id;
     pic.effects = effects;
     pic.caption = caption;
+    pic.img_dim = img_dim;
 
     Ok(Control::Picture(Box::new(pic)))
 }
