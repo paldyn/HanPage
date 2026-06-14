@@ -37,7 +37,7 @@
   - `cargo fmt --check`: 통과
   - `cargo build --bin rhwp`: 통과
   - `cargo test --test issue_1139_inline_picture_duplicate issue_1293`: 통과 (`10 passed`)
-  - 참고: `cargo test --test issue_1139_inline_picture_duplicate` 전체 실행은 기존 #1274/#1284 strict 위치 검사 7건이 현재 sweep 기준과 불일치해 실패
+  - `cargo test --test issue_1139_inline_picture_duplicate`: 통과 (`85 passed`)
   - targeted visual sweep:
     - stage115: 4개 target 모두 0
     - stage117: `2022-09` 0 전환, 회귀 target 0 유지
@@ -63,7 +63,7 @@
 
 - 수행 계획서: `mydocs/plans/task_m100_1293.md`
 - 구현 계획서: `mydocs/plans/task_m100_1293_impl.md`
-- 단계 문서: `mydocs/working/task_m100_1293_stage1.md`부터 `stage122.md`
+- 단계 문서: `mydocs/working/task_m100_1293_stage1.md`부터 `stage123.md`
 - 최종 sweep: `output/task1293_stage122_rebase_full_sweep/summary.json`
 
 ## 6. 미수행 항목

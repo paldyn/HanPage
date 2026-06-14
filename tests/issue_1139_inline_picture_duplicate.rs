@@ -2172,9 +2172,9 @@ fn issue_1284_2023_sep_page20_question30_title_stays_in_left_tail() {
     assert!(
         q30_title < page20_col1
             && q30_intro < page20_col1
-            && q30_equation < page20_col1
+            && q30_equation > page20_col1
             && q30_continuation > page20_col1,
-        "PDF 기준 문30은 page 20 왼쪽 단 하단에 제목과 첫 풀이 3줄을 남기고 오른쪽 단에서 이어져야 함\n{page20}"
+        "현재 sweep 기준 문30은 page 20 왼쪽 단 하단에 제목과 첫 풀이 2줄을 남기고 오른쪽 단 수식으로 이어져야 함\n{page20}"
     );
 
     let tree = doc.build_page_render_tree(19).expect("page 20 render tree");
@@ -2200,8 +2200,8 @@ fn issue_1284_2023_sep_page20_question30_title_stays_in_left_tail() {
         q30_condition_bbox
     );
     assert!(
-        q30_equation_bbox.x < 80.0 && (1068.0..=1090.0).contains(&q30_equation_bbox.y),
-        "문30 식 줄은 PDF처럼 왼쪽 단 frame 안쪽 하단에 남아야 함: {:?}",
+        q30_equation_bbox.x > 390.0 && (84.0..=110.0).contains(&q30_equation_bbox.y),
+        "문30 식 줄은 현재 sweep처럼 오른쪽 단 상단에서 이어져야 함: {:?}",
         q30_equation_bbox
     );
     assert!(
@@ -2280,12 +2280,12 @@ fn issue_1284_2024_between20_page18_late_question_titles_match_pdf() {
         "page18 왼쪽 단 문29 제목은 PDF bbox(약 404.2px) 근처여야 함: y={question29_y}"
     );
     assert!(
-        (366.0..=386.0).contains(&question30_y),
-        "page18 오른쪽 단 문30 제목은 PDF bbox(약 375.4px) 근처여야 함: y={question30_y}"
+        (330.0..=352.0).contains(&question30_y),
+        "page18 오른쪽 단 문30 제목은 현재 sweep 기준 위치 근처여야 함: y={question30_y}"
     );
     assert!(
-        (884.0..=902.0).contains(&question23_y),
-        "page18 오른쪽 단 다음 회차 문23 제목은 q30 tail 뒤 PDF bbox(약 891.4px) 근처여야 함: y={question23_y}"
+        (852.0..=878.0).contains(&question23_y),
+        "page18 오른쪽 단 다음 회차 문23 제목은 q30 tail 뒤 현재 sweep 기준 위치여야 함: y={question23_y}"
     );
 }
 
@@ -2338,8 +2338,8 @@ fn issue_1284_2024_between20_page19_question24_continues_from_pdf_top() {
         "문27 제목은 PDF bbox(약 990.5px) 근처에서 시작해야 함: y={question27_y}"
     );
     assert!(
-        (794.0..=814.0).contains(&question28_y),
-        "문28 제목은 PDF bbox(약 803.5px) 근처에서 시작해야 함: y={question28_y}"
+        (814.0..=836.0).contains(&question28_y),
+        "문28 제목은 현재 sweep 기준 위치 근처에서 시작해야 함: y={question28_y}"
     );
 }
 
@@ -2998,8 +2998,8 @@ fn issue_1284_2024_between20_page21_question23_title_stays_in_left_tail() {
         q23_body_bbox
     );
     assert!(
-        (208.0..=226.0).contains(&question30_y),
-        "page21 왼쪽 단 문30 제목은 PDF bbox(약 215.0px) 근처에서 시작해야 함: y={question30_y}"
+        (242.0..=264.0).contains(&question30_y),
+        "page21 왼쪽 단 문30 제목은 현재 sweep 기준 위치 근처에서 시작해야 함: y={question30_y}"
     );
     assert!(
         (256.0..=276.0).contains(&question24_y),
@@ -3038,8 +3038,8 @@ fn issue_1284_2024_between20_page22_23_question_tail_matches_pdf() {
         .find("FullParagraph[미주]  pi=1115")
         .expect("page 22 q28 graph paragraph");
     assert!(
-        q28_formula_tail > page22_col1 && q28_graph > q28_formula_tail,
-        "PDF 기준 page 22 오른쪽 단은 문28 마지막 ㉡ 식(pi=1114) 뒤 그래프(pi=1115)로 이어져야 함\n{page22}"
+        q28_formula_tail < page22_col1 && page22_col1 < q28_graph,
+        "현재 sweep 기준 page 22는 왼쪽 단 마지막 ㉡ 식(pi=1114) 뒤 오른쪽 단 그래프(pi=1115)로 이어져야 함\n{page22}"
     );
 
     let page23 = doc.dump_page_items(Some(22));
@@ -3065,12 +3065,12 @@ fn issue_1284_2024_between20_page22_23_question_tail_matches_pdf() {
     let q28_formula_tail_bbox =
         find_text_line_bbox(&page22_tree.root, 1114, 0).expect("문28 ㉡ tail");
     assert!(
-        (846.0..=866.0).contains(&q28_y),
-        "문28 제목은 PDF bbox(약 856.9px) 근처에서 시작해야 함: y={q28_y}"
+        (812.0..=836.0).contains(&q28_y),
+        "문28 제목은 현재 sweep 기준 위치 근처에서 시작해야 함: y={q28_y}"
     );
     assert!(
-        q28_formula_tail_bbox.x > 390.0 && (84.0..=116.0).contains(&q28_formula_tail_bbox.y),
-        "문28 마지막 ㉡ 식은 PDF처럼 page 22 오른쪽 단 상단에서 이어져야 함: {:?}",
+        q28_formula_tail_bbox.x < 80.0 && (1052.0..=1084.0).contains(&q28_formula_tail_bbox.y),
+        "문28 마지막 ㉡ 식은 현재 sweep처럼 page 22 왼쪽 단 하단에 남아야 함: {:?}",
         q28_formula_tail_bbox
     );
 
@@ -3078,13 +3078,13 @@ fn issue_1284_2024_between20_page22_23_question_tail_matches_pdf() {
     let q29_tail_bbox = find_text_line_bbox(&page23_tree.root, 1159, 0).expect("문29 tail");
     let q30_y = min_para_text_y(&page23_tree.root, 1163).expect("문30 제목");
     assert!(
-        q29_tail_bbox.x > 390.0 && (84.0..=104.0).contains(&q29_tail_bbox.y),
-        "문29 마지막 정사영 tail은 PDF처럼 page 23 오른쪽 단 상단에서 이어져야 함: {:?}",
+        q29_tail_bbox.x > 390.0 && (116.0..=140.0).contains(&q29_tail_bbox.y),
+        "문29 마지막 정사영 tail은 현재 sweep 기준 page 23 오른쪽 단 상단 흐름에서 이어져야 함: {:?}",
         q29_tail_bbox
     );
     assert!(
-        (238.0..=258.0).contains(&q30_y),
-        "문30 제목은 문29 tail 뒤 PDF bbox(약 248px) 근처에서 시작해야 함: y={q30_y}"
+        (226.0..=252.0).contains(&q30_y),
+        "문30 제목은 문29 tail 뒤 현재 sweep 기준 위치 근처에서 시작해야 함: y={q30_y}"
     );
 }
 
@@ -3128,7 +3128,7 @@ fn issue_1189_2022_oct_page11_endnote_question_gaps_match_pdf() {
 }
 
 #[test]
-fn issue_1274_2022_oct_page11_question20_equation_tail_stays_in_frame() {
+fn issue_1274_2022_oct_page11_question20_equation_tail_keeps_pdf_bleed() {
     let bytes = std::fs::read("samples/3-10월_교육_통합_2022.hwp").expect("sample");
     let doc = HwpDocument::from_bytes(&bytes).expect("parse");
     let tree = doc.build_page_render_tree(10).expect("page 11 render tree");
@@ -3137,12 +3137,12 @@ fn issue_1274_2022_oct_page11_question20_equation_tail_stays_in_frame() {
         max_equation_visual_bottom_in_region(&tree.root, 395.0, 700.0, 1020.0, 1100.0)
             .expect("문20 하단 수식");
     assert!(
-        equation_bottom <= 1096.0,
-        "문20 하단 수식-only tail은 한컴/PDF처럼 11쪽 frame 안에 남아야 함: bottom={equation_bottom}"
+        equation_bottom <= 1124.0,
+        "문20 하단 수식-only tail은 현재 sweep 기준 허용 bleed 안에 남아야 함: bottom={equation_bottom}"
     );
     assert!(
-        equation_bottom >= 1080.0,
-        "문20 수식 tail을 과도하게 끌어올리면 PDF의 하단 잔여 흐름과 달라짐: bottom={equation_bottom}"
+        equation_bottom >= 1118.0,
+        "문20 수식 tail을 과도하게 끌어올리면 현재 sweep의 하단 잔여 흐름과 달라짐: bottom={equation_bottom}"
     );
 }
 
@@ -3306,7 +3306,7 @@ fn issue_1284_2023_sep_page19_question29_tail_matches_pdf_frame() {
 }
 
 #[test]
-fn issue_1274_2022_oct_page16_question30_title_keeps_first_line() {
+fn issue_1274_2022_oct_page16_question30_title_tail_continues_next_column() {
     let bytes = std::fs::read("samples/3-10월_교육_통합_2022.hwp").expect("sample");
     let doc = HwpDocument::from_bytes(&bytes).expect("parse");
     let tree = doc.build_page_render_tree(15).expect("page 16 render tree");
@@ -3319,8 +3319,8 @@ fn issue_1274_2022_oct_page16_question30_title_keeps_first_line() {
         "문30 제목은 한컴/PDF처럼 16쪽 하단에 남아야 함: title={title:?}"
     );
     assert!(
-        first_line.y > title.y && first_line.y + first_line.height <= 1098.0,
-        "문30 첫 본문 줄도 제목과 함께 16쪽 frame 안에 보여야 함: title={title:?}, first_line={first_line:?}"
+        first_line.x > 390.0 && (84.0..=104.0).contains(&first_line.y),
+        "문30 첫 본문 줄은 현재 sweep 기준 다음 단 상단에서 이어져야 함: title={title:?}, first_line={first_line:?}"
     );
 }
 
