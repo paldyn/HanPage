@@ -1708,6 +1708,9 @@ export class WasmBridge {
     command: string;
     value: string;
     location: { sectionIndex: number; paraIndex: number; path?: Array<any> };
+    startCharIdx?: number;
+    endCharIdx?: number;
+    editableInForm?: boolean;
   }> {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
     return JSON.parse((this.doc as any).getFieldList());

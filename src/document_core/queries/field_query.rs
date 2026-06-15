@@ -63,21 +63,29 @@ impl DocumentCore {
     /// getFieldList: 모든 필드를 JSON 배열로 반환
     pub fn get_field_list_json(&self) -> String {
         let fields = self.collect_all_fields();
-        let entries: Vec<String> = fields.iter().map(|fi| {
-            let name = fi.field.field_name().unwrap_or("");
-            let guide = fi.field.guide_text().unwrap_or("");
-            let location_json = field_location_json(&fi.location);
-            format!(
-                "{{\"fieldId\":{},\"fieldType\":\"{}\",\"name\":{},\"guide\":{},\"command\":{},\"value\":{},\"location\":{}}}",
-                fi.field.field_id,
-                fi.field.field_type_str(),
-                json_escape(name),
-                json_escape(guide),
-                json_escape(&fi.field.command),
-                json_escape(&fi.value),
-                location_json,
-            )
-        }).collect();
+        let entries: Vec<String> = fields
+            .iter()
+            .map(|fi| {
+                let name = fi.field.field_name().unwrap_or("");
+                let guide = fi.field.guide_text().unwrap_or("");
+                let location_json = field_location_json(&fi.location);
+                let (start_char_idx, end_char_idx) = field_range_bounds(self, fi)
+                    .unwrap_or((0, fi.value.chars().count()));
+                format!(
+                    "{{\"fieldId\":{},\"fieldType\":\"{}\",\"name\":{},\"guide\":{},\"command\":{},\"value\":{},\"location\":{},\"startCharIdx\":{},\"endCharIdx\":{},\"editableInForm\":{}}}",
+                    fi.field.field_id,
+                    fi.field.field_type_str(),
+                    json_escape(name),
+                    json_escape(guide),
+                    json_escape(&fi.field.command),
+                    json_escape(&fi.value),
+                    location_json,
+                    start_char_idx,
+                    end_char_idx,
+                    fi.field.is_editable_in_form(),
+                )
+            })
+            .collect();
         format!("[{}]", entries.join(","))
     }
 
@@ -866,6 +874,56 @@ fn field_location_json(loc: &FieldLocation) -> String {
             path_entries.join(","),
         )
     }
+}
+
+fn para_at_location<'a>(core: &'a DocumentCore, location: &FieldLocation) -> Option<&'a Paragraph> {
+    let mut para = core
+        .document
+        .sections
+        .get(location.section_index)?
+        .paragraphs
+        .get(location.para_index)?;
+
+    for entry in &location.nested_path {
+        para = match entry {
+            NestedEntry::TableCell {
+                control_index,
+                cell_index,
+                para_index,
+            } => {
+                let ctrl = para.controls.get(*control_index)?;
+                if let Control::Table(table) = ctrl {
+                    table.cells.get(*cell_index)?.paragraphs.get(*para_index)?
+                } else {
+                    return None;
+                }
+            }
+            NestedEntry::TextBox {
+                control_index,
+                para_index,
+            } => {
+                let ctrl = para.controls.get(*control_index)?;
+                if let Control::Shape(shape) = ctrl {
+                    shape
+                        .drawing()?
+                        .text_box
+                        .as_ref()?
+                        .paragraphs
+                        .get(*para_index)?
+                } else {
+                    return None;
+                }
+            }
+        };
+    }
+
+    Some(para)
+}
+
+fn field_range_bounds(core: &DocumentCore, fi: &FieldInfo) -> Option<(usize, usize)> {
+    let para = para_at_location(core, &fi.location)?;
+    let range = para.field_ranges.get(fi.field_range_index)?;
+    Some((range.start_char_idx, range.end_char_idx))
 }
 
 impl DocumentCore {

@@ -1141,7 +1141,10 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
     }
     case 'Tab': {
       e.preventDefault();
-      if (this.isFormMode?.()) return;
+      if (this.isFormMode?.()) {
+        this.moveToAdjacentFormField?.(e.shiftKey ? -1 : 1);
+        return;
+      }
       if (e.shiftKey) {
         this.applyHangingIndentAtCursor();
         break;

@@ -51,6 +51,24 @@ fn assert_clickhere_form_editable(path: &Path) {
             info
         );
     }
+
+    let list_json = core.get_field_list_json();
+    assert!(
+        list_json.contains("\"editableInForm\":true"),
+        "field list should expose editableInForm=true for {}: {}",
+        path.display(),
+        list_json
+    );
+    assert!(
+        list_json.contains("\"startCharIdx\":"),
+        "field list should expose startCharIdx for form navigation: {}",
+        list_json
+    );
+    assert!(
+        list_json.contains("\"endCharIdx\":"),
+        "field list should expose endCharIdx for form navigation: {}",
+        list_json
+    );
 }
 
 #[test]

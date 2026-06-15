@@ -2507,6 +2507,101 @@ export class InputHandler {
     return sel.start.charOffset >= start && sel.end.charOffset <= end;
   }
 
+  moveToAdjacentFormField(delta: number): boolean {
+    if (this.editMode !== 'form') return false;
+    const currentInfo = this.getFormFieldInfoAt(this.cursor.getPosition());
+    const currentFieldId = currentInfo?.fieldId;
+    const currentKey = this.formFieldSortKey(this.cursor.getPosition());
+    const fields = this.wasm.getFieldList()
+      .filter((field: any) =>
+        field.fieldType === 'clickhere'
+        && field.editableInForm === true
+        && typeof field.startCharIdx === 'number')
+      .map((field: any) => {
+        const pos = this.formFieldPosition(field);
+        return pos ? { field, pos, key: this.formFieldSortKey(pos) } : null;
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) => this.compareFormFieldKeys(a.key, b.key));
+
+    if (fields.length === 0) return false;
+
+    const forward = delta >= 0;
+    const withoutCurrent = fields.filter((entry: any) => entry.field.fieldId !== currentFieldId);
+    const candidates = withoutCurrent.length > 0 ? withoutCurrent : fields;
+    const target = forward
+      ? candidates.find((entry: any) => this.compareFormFieldKeys(entry.key, currentKey) > 0) ?? candidates[0]
+      : [...candidates].reverse().find((entry: any) => this.compareFormFieldKeys(entry.key, currentKey) < 0) ?? candidates[candidates.length - 1];
+
+    if (!target) return false;
+    this.cursor.clearSelection();
+    this.cursor.moveTo(target.pos);
+    this.cursor.resetPreferredX();
+    this.active = true;
+    this.updateCaret();
+    this.updateFieldMarkers();
+    this.focusTextarea();
+    this.eventBus.emit('command-state-changed');
+    return true;
+  }
+
+  private formFieldPosition(field: any): DocumentPosition | null {
+    const loc = field.location;
+    if (!loc || typeof loc.sectionIndex !== 'number' || typeof loc.paraIndex !== 'number') {
+      return null;
+    }
+    const charOffset = typeof field.startCharIdx === 'number' ? field.startCharIdx : 0;
+    const path = Array.isArray(loc.path) ? loc.path : [];
+    if (path.length === 0) {
+      return { sectionIndex: loc.sectionIndex, paragraphIndex: loc.paraIndex, charOffset };
+    }
+
+    const cellPath = path.map((entry: any) => ({
+      controlIndex: entry.controlIndex ?? 0,
+      cellIndex: entry.type === 'textbox' ? 0 : (entry.cellIndex ?? 0),
+      cellParaIndex: entry.paraIndex ?? 0,
+    }));
+    const last = cellPath[cellPath.length - 1];
+    const lastRaw = path[path.length - 1] ?? {};
+    return {
+      sectionIndex: loc.sectionIndex,
+      paragraphIndex: last.cellParaIndex,
+      charOffset,
+      parentParaIndex: loc.paraIndex,
+      controlIndex: cellPath[0].controlIndex,
+      cellIndex: last.cellIndex,
+      cellParaIndex: last.cellParaIndex,
+      cellPath,
+      isTextBox: lastRaw.type === 'textbox',
+    };
+  }
+
+  private formFieldSortKey(pos: DocumentPosition): number[] {
+    const pathKey = (pos.cellPath ?? [])
+      .flatMap((entry: any) => [
+        entry.controlIndex ?? entry.controlIdx ?? 0,
+        entry.cellIndex ?? entry.cellIdx ?? 0,
+        entry.cellParaIndex ?? entry.cellParaIdx ?? 0,
+      ]);
+    return [
+      pos.sectionIndex,
+      pos.parentParaIndex ?? pos.paragraphIndex,
+      ...pathKey,
+      pos.paragraphIndex,
+      pos.charOffset,
+    ];
+  }
+
+  private compareFormFieldKeys(a: number[], b: number[]): number {
+    const len = Math.max(a.length, b.length);
+    for (let i = 0; i < len; i++) {
+      const av = a[i] ?? -1;
+      const bv = b[i] ?? -1;
+      if (av !== bv) return av - bv;
+    }
+    return 0;
+  }
+
   private isOperationAllowedInEditMode(desc: OperationDescriptor): boolean {
     if (this.editMode !== 'form') return true;
     if (desc.kind === 'snapshot') return false;
