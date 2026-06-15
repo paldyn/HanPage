@@ -24,6 +24,8 @@
   누름틀 경계 삭제는 한컴처럼 `[누름틀]을 지울까요?` 확인을 거치게 했다.
 - 빈 누름틀 안내문 클릭 후 첫 입력 위치를 field start로 정규화해 `입력하세요` 클릭 뒤
   바로 `123` 같은 값을 입력할 수 있게 했다.
+- 빈 누름틀 첫 입력 직후 active field와 마커를 새 field value 기준으로 다시 계산해,
+  Enter 같은 추가 편집 없이도 입력값과 누름틀 마커가 즉시 표시되도록 보정했다.
 
 ## 2. 검증
 
@@ -46,6 +48,13 @@ Stage9 추가 검증:
 - `cargo fmt`
 - `cargo test --test issue_258_clickhere_form_mode`
 - `npm run build`
+
+Stage10 추가 검증:
+
+- `cargo test --test issue_258_clickhere_form_mode`
+- 루트 `npm run build`는 스크립트가 없어 실행 불가 확인
+- `cd rhwp-studio && npm run build`
+- `git diff --check`
 
 ## 3. 남은 후속
 

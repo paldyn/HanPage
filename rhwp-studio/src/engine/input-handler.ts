@@ -2835,6 +2835,29 @@ export class InputHandler {
     }
   }
 
+  /** 현재 위치가 빈 누름틀 안내문 영역인지 확인한다. */
+  isClickHereGuidePosition(pos: DocumentPosition): boolean {
+    try {
+      const fi = this.wasm.getFieldInfoAt(pos);
+      return fi.inField && fi.fieldType === 'clickhere' && fi.isGuide === true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** 빈 누름틀 첫 입력 직후 안내문/마커 캐시를 새 field value 기준으로 다시 잡는다. */
+  refreshClickHereAfterFirstInput(): void {
+    this.lastCellKey = null;
+    this.fieldEndExitKey = null;
+    this.fieldMarker.hide();
+    this.wasm.clearActiveField();
+    this.eventBus.emit('document-changed');
+    requestAnimationFrame(() => {
+      this.updateCaret();
+      this.eventBus.emit('document-changed');
+    });
+  }
+
   private fieldBoundaryKey(pos: DocumentPosition, fieldId: number | undefined, charOffset: number): string {
     const path = JSON.stringify(pos.cellPath ?? []);
     return [

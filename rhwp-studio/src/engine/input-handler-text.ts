@@ -544,6 +544,7 @@ export function onInput(this: any, e?: InputEvent): void {
 
   // 선택 영역이 있으면 먼저 삭제
   let insertPos = this.prepareClickHereInputPosition?.() ?? this.cursor.getPosition();
+  let refreshClickHereGuide = this.isClickHereGuidePosition?.(insertPos) === true;
   if (this.cursor.hasSelection()) {
     if (!this.canDeleteSelectionInFormMode?.()) {
       this.textarea.value = '';
@@ -551,12 +552,16 @@ export function onInput(this: any, e?: InputEvent): void {
     }
     this.deleteSelection();
     insertPos = this.prepareClickHereInputPosition?.() ?? this.cursor.getPosition();
+    refreshClickHereGuide = this.isClickHereGuidePosition?.(insertPos) === true;
   }
   if (!this.canInsertTextInFormMode?.(insertPos)) {
     this.textarea.value = '';
     return;
   }
   this.executeOperation({ kind: 'command', command: new InsertTextCommand(insertPos, text) });
+  if (refreshClickHereGuide) {
+    this.refreshClickHereAfterFirstInput?.();
+  }
 }
 
 export function insertTextAtRaw(this: any, pos: DocumentPosition, text: string): void {
