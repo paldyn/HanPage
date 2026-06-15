@@ -19,6 +19,7 @@ import type { CellSelectionRenderer } from './cell-selection-renderer';
 import type { TableObjectRenderer } from './table-object-renderer';
 import type { TableResizeRenderer, BorderEdge } from './table-resize-renderer';
 import type { CellBbox, CellPathLike } from '@/core/types';
+import { showConfirm } from '@/ui/confirm-dialog';
 import * as _mouse from './input-handler-mouse';
 import * as _table from './input-handler-table';
 import * as _keyboard from './input-handler-keyboard';
@@ -103,6 +104,8 @@ export class InputHandler {
   private pictureObjectRenderer: TableObjectRenderer | null = null;
   /** 마지막 rhwp-studio 내부 복사의 시스템 클립보드 marker token */
   private rhwpClipboardToken: string | null = null;
+  /** 누름틀 끝 경계에서 오른쪽 이동으로 필드 밖에 머문 상태 */
+  private fieldEndExitKey: string | null = null;
 
   // 마우스 드래그 선택 상태
   private isDragging = false;
@@ -2752,12 +2755,77 @@ export class InputHandler {
     try {
       const result = this.wasm.removeFieldAt(pos);
       if (result.ok) {
+        this.fieldMarker.hide();
+        this.fieldEndExitKey = null;
+        this.wasm.clearActiveField();
         this.afterEdit();
         this.eventBus.emit('field-info-changed', null);
       }
     } catch (err) {
       console.warn('[InputHandler] 누름틀 제거 실패:', err);
     }
+  }
+
+  /** 현재 커서 위치의 누름틀 제거를 한컴처럼 확인 후 수행한다. */
+  confirmRemoveCurrentField(): boolean {
+    const pos = this.cursor.getPosition();
+    try {
+      const fi = this.wasm.getFieldInfoAt(pos);
+      if (!fi.inField || fi.fieldType !== 'clickhere') return false;
+    } catch {
+      return false;
+    }
+
+    void showConfirm('지우기', '[누름틀]을 지울까요?')
+      .then((ok) => {
+        if (ok) this.removeCurrentField();
+        this.focusTextarea();
+      })
+      .catch(() => {
+        this.focusTextarea();
+      });
+    return true;
+  }
+
+  /** 누름틀 끝에서 오른쪽 이동 시 같은 charOffset을 필드 밖 위치로 취급한다. */
+  tryExitCurrentFieldEnd(): boolean {
+    const pos = this.cursor.getPosition();
+    try {
+      const fi = this.wasm.getFieldInfoAt(pos);
+      const start = fi.startCharIdx ?? -1;
+      const end = fi.endCharIdx ?? -1;
+      if (!fi.inField || fi.fieldType !== 'clickhere' || start < 0 || end < 0) return false;
+      if (start === end || pos.charOffset < end) return false;
+      this.fieldEndExitKey = this.fieldBoundaryKey(pos, fi.fieldId, end);
+      this.fieldMarker.hide();
+      this.wasm.clearActiveField();
+      this.eventBus.emit('field-info-changed', null);
+      this.eventBus.emit('document-changed');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  isAtExitedFieldEnd(pos: DocumentPosition, fi?: { fieldId?: number; endCharIdx?: number }): boolean {
+    const end = fi?.endCharIdx ?? pos.charOffset;
+    return this.fieldEndExitKey === this.fieldBoundaryKey(pos, fi?.fieldId, end);
+  }
+
+  private fieldBoundaryKey(pos: DocumentPosition, fieldId: number | undefined, charOffset: number): string {
+    const path = JSON.stringify(pos.cellPath ?? []);
+    return [
+      pos.sectionIndex,
+      pos.parentParaIndex ?? -1,
+      pos.paragraphIndex,
+      pos.controlIndex ?? -1,
+      pos.cellIndex ?? -1,
+      pos.cellParaIndex ?? -1,
+      pos.isTextBox ? 1 : 0,
+      path,
+      fieldId ?? -1,
+      charOffset,
+    ].join(':');
   }
 
   /** 커서 위치의 필드 상태에 따라 낫표 마커를 표시/숨김한다 */
@@ -2767,6 +2835,13 @@ export class InputHandler {
       const pos = this.cursor.getPosition();
       const fi = this.wasm.getFieldInfoAt(pos);
       if (fi.inField && fi.startCharIdx !== undefined && fi.endCharIdx !== undefined) {
+        if (this.isAtExitedFieldEnd(pos, fi)) {
+          if (wasVisible) this.fieldMarker.hide();
+          this.wasm.clearActiveField();
+          this.eventBus.emit('field-info-changed', null);
+          return;
+        }
+        this.fieldEndExitKey = null;
         // 활성 필드 설정 → 안내문 숨김 + 페이지 캐시 무효화
         const fieldChanged = this.wasm.setActiveField(pos);
         const zoom = this.viewportManager.getZoom();
@@ -2810,6 +2885,7 @@ export class InputHandler {
       }
     } catch (err) { console.warn('[updateFieldMarkers] 필드 마커 갱신 실패:', err); }
     // 필드 밖이면 마커 숨김 + 활성 필드 해제
+    this.fieldEndExitKey = null;
     if (wasVisible) {
       this.fieldMarker.hide();
       this.wasm.clearActiveField();

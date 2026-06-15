@@ -244,7 +244,7 @@ export const editCommands: CommandDef[] = [
     canExecute: (ctx) => ctx.hasDocument && !ctx.isFormMode && ctx.inField,
     execute(services) {
       const ih = services.getInputHandler();
-      if (ih) (ih as any).removeCurrentField();
+      if (ih) (ih as any).confirmRemoveCurrentField?.();
     },
   },
 ];

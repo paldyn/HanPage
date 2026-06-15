@@ -131,6 +131,51 @@ fn clickhere_insert_api_creates_empty_editable_field() {
 }
 
 #[test]
+fn clickhere_end_boundary_insert_respects_active_field_state() {
+    let mut core = make_doc_with_inserted_clickhere();
+
+    core.insert_text_native(0, 0, 1, "값")
+        .expect("first input should fill empty clickhere");
+    let fields = core.collect_all_fields();
+    let field = fields
+        .iter()
+        .find(|f| f.field.field_type == FieldType::ClickHere)
+        .expect("clickhere field");
+    let range = &core.document().sections[0].paragraphs[0].field_ranges[field.field_range_index];
+    assert_eq!((range.start_char_idx, range.end_char_idx), (1, 2));
+    assert_eq!(field.value, "값");
+
+    assert!(
+        core.set_active_field(0, 0, 2),
+        "field end should be an editable active boundary"
+    );
+    core.insert_text_native(0, 0, 2, "1")
+        .expect("active field end should append to clickhere value");
+    let fields = core.collect_all_fields();
+    let field = fields
+        .iter()
+        .find(|f| f.field.field_type == FieldType::ClickHere)
+        .expect("clickhere field after active append");
+    let range = &core.document().sections[0].paragraphs[0].field_ranges[field.field_range_index];
+    assert_eq!((range.start_char_idx, range.end_char_idx), (1, 3));
+    assert_eq!(field.value, "값1");
+
+    core.clear_active_field();
+    core.insert_text_native(0, 0, 3, "밖")
+        .expect("inactive field end should insert outside clickhere");
+    let fields = core.collect_all_fields();
+    let field = fields
+        .iter()
+        .find(|f| f.field.field_type == FieldType::ClickHere)
+        .expect("clickhere field after outside insert");
+    let para = &core.document().sections[0].paragraphs[0];
+    let range = &para.field_ranges[field.field_range_index];
+    assert_eq!((range.start_char_idx, range.end_char_idx), (1, 3));
+    assert_eq!(field.value, "값1");
+    assert_eq!(para.text, "A값1밖BC");
+}
+
+#[test]
 fn inserted_clickhere_roundtrips_hwp_and_hwpx() {
     let core = make_doc_with_inserted_clickhere();
 

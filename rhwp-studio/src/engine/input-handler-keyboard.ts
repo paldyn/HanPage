@@ -1091,6 +1091,10 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
       } else {
         this.cursor.clearSelection();
       }
+      if (!e.shiftKey && moveH === 1 && this.tryExitCurrentFieldEnd?.()) {
+        this.updateCaret();
+        break;
+      }
       if (moveH !== null) this.cursor.moveHorizontal(moveH);
       if (moveV !== null) this.cursor.moveVertical(moveV);
       this.updateCaret();

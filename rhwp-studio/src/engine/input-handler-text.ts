@@ -15,6 +15,30 @@ import {
 const FOOTNOTE_DELETE_TITLE = '각주 삭제';
 const FOOTNOTE_DELETE_MESSAGE = '각주를 삭제하시겠습니까?';
 
+function tryConfirmRemoveClickHereAtBoundary(
+  this: any,
+  pos: DocumentPosition,
+  direction: 'backward' | 'forward',
+): boolean {
+  if (this.isFormMode?.()) return false;
+  try {
+    const fi = this.wasm.getFieldInfoAt(pos);
+    if (!fi.inField || fi.fieldType !== 'clickhere') return false;
+    const start = fi.startCharIdx ?? -1;
+    const end = fi.endCharIdx ?? -1;
+    if (start < 0 || end < 0) return false;
+
+    const atBoundary = direction === 'forward'
+      ? pos.charOffset >= end
+      : pos.charOffset <= start || (pos.charOffset >= end && this.isAtExitedFieldEnd?.(pos, fi));
+    if (!atBoundary) return false;
+
+    return this.confirmRemoveCurrentField?.() ?? true;
+  } catch {
+    return false;
+  }
+}
+
 /** IME 조합 종료 후 대기 중인 탐색 키를 처리한다 */
 function executeNavigationAction(this: any, action: NavigationAction, shiftKey: boolean): void {
   if (shiftKey) this.cursor.setAnchor();
@@ -170,7 +194,13 @@ export function handleBackspace(this: any, pos: DocumentPosition, inCell: boolea
   // 필드 경계 보호: 필드 시작 위치에서는 Backspace 차단
   try {
     const fi = this.wasm.getFieldInfoAt(pos);
-    if (fi.inField && charOffset <= fi.startCharIdx) return;
+    if (fi.inField && charOffset <= fi.startCharIdx) {
+      if (tryConfirmRemoveClickHereAtBoundary.call(this, pos, 'backward')) return;
+      return;
+    }
+    if (fi.inField && this.isAtExitedFieldEnd?.(pos, fi)) {
+      if (tryConfirmRemoveClickHereAtBoundary.call(this, pos, 'backward')) return;
+    }
   } catch { /* 무시 */ }
 
   if (inCell) {
@@ -229,7 +259,10 @@ export function handleDelete(this: any, pos: DocumentPosition, inCell: boolean):
   // 필드 경계 보호: 필드 끝 위치에서는 Delete 차단
   try {
     const fi = this.wasm.getFieldInfoAt(pos);
-    if (fi.inField && charOffset >= fi.endCharIdx) return;
+    if (fi.inField && charOffset >= fi.endCharIdx) {
+      if (tryConfirmRemoveClickHereAtBoundary.call(this, pos, 'forward')) return;
+      return;
+    }
   } catch { /* 무시 */ }
 
   if (inCell) {

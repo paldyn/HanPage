@@ -20,6 +20,8 @@
   HWPX 재파싱 시 안내문/메모가 보존되도록 했다.
 - 누름틀 입력/고치기 대화상자는 바깥 클릭으로 닫히지 않게 했고, 누름틀 삽입 직후에는
   한컴처럼 안내문이 표시되도록 active field를 즉시 잡지 않게 했다.
+- 누름틀 끝에서 오른쪽 이동 후 이어 입력하면 field range 밖 본문으로 들어가도록 했고,
+  누름틀 경계 삭제는 한컴처럼 `[누름틀]을 지울까요?` 확인을 거치게 했다.
 
 ## 2. 검증
 
@@ -27,6 +29,13 @@
 - `cargo test --test issue_258_clickhere_form_mode`
 - `cargo test --test issue_838_field_set_value`
 - `wasm-pack build --target web --out-dir pkg`
+- `npm run build`
+- `git diff --check`
+
+Stage8 추가 검증:
+
+- `cargo fmt`
+- `cargo test --test issue_258_clickhere_form_mode`
 - `npm run build`
 - `git diff --check`
 
