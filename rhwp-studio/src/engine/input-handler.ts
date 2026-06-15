@@ -2812,6 +2812,29 @@ export class InputHandler {
     return this.fieldEndExitKey === this.fieldBoundaryKey(pos, fi?.fieldId, end);
   }
 
+  /** 빈 누름틀 안내문 클릭 후 첫 입력 위치를 실제 field start로 정규화한다. */
+  prepareClickHereInputPosition(): DocumentPosition {
+    const pos = this.cursor.getPosition();
+    try {
+      const fi = this.wasm.getFieldInfoAt(pos);
+      const start = fi.startCharIdx ?? -1;
+      if (!fi.inField || fi.fieldType !== 'clickhere' || !fi.isGuide || start < 0) {
+        return pos;
+      }
+
+      const normalized = { ...pos, charOffset: start };
+      this.fieldEndExitKey = null;
+      this.cursor.clearSelection();
+      if (pos.charOffset !== start) {
+        this.cursor.moveTo(normalized);
+      }
+      this.wasm.setActiveField(normalized);
+      return normalized;
+    } catch {
+      return pos;
+    }
+  }
+
   private fieldBoundaryKey(pos: DocumentPosition, fieldId: number | undefined, charOffset: number): string {
     const path = JSON.stringify(pos.cellPath ?? []);
     return [

@@ -134,6 +134,10 @@ fn clickhere_insert_api_creates_empty_editable_field() {
 fn clickhere_end_boundary_insert_respects_active_field_state() {
     let mut core = make_doc_with_inserted_clickhere();
 
+    assert!(
+        core.set_active_field(0, 0, 1),
+        "empty field guide click should activate clickhere"
+    );
     core.insert_text_native(0, 0, 1, "값")
         .expect("first input should fill empty clickhere");
     let fields = core.collect_all_fields();
@@ -145,10 +149,13 @@ fn clickhere_end_boundary_insert_respects_active_field_state() {
     assert_eq!((range.start_char_idx, range.end_char_idx), (1, 2));
     assert_eq!(field.value, "값");
 
+    let info = core.get_field_info_at(0, 0, 2);
     assert!(
-        core.set_active_field(0, 0, 2),
-        "field end should be an editable active boundary"
+        info.contains(r#""inField":true"#),
+        "field end should be an editable boundary: {}",
+        info
     );
+    let _ = core.set_active_field(0, 0, 2);
     core.insert_text_native(0, 0, 2, "1")
         .expect("active field end should append to clickhere value");
     let fields = core.collect_all_fields();

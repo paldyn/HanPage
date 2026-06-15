@@ -312,11 +312,14 @@ export function onCompositionStart(this: any): void {
     }
     this.deleteSelection();
   }
-  const basePos = this.cursor.isInHeaderFooter()
+  let basePos = this.cursor.isInHeaderFooter()
     ? { ...this.cursor.getPosition(), charOffset: this.cursor.hfCharOffset }
     : this.cursor.isInFootnote()
       ? { ...this.cursor.getPosition(), charOffset: this.cursor.fnCharOffset }
       : this.cursor.getPosition();
+  if (!this.cursor.isInHeaderFooter() && !this.cursor.isInFootnote()) {
+    basePos = this.prepareClickHereInputPosition?.() ?? basePos;
+  }
   if (!this.canInsertTextInFormMode?.(basePos)) {
     this.textarea.value = '';
     this.isComposing = false;
@@ -451,7 +454,7 @@ export function onInput(this: any, e?: InputEvent): void {
       } else if (this.cursor.isInFootnote()) {
         this._iosAnchor = { ...this.cursor.getPosition(), charOffset: this.cursor.fnCharOffset };
       } else {
-        this._iosAnchor = this.cursor.getPosition();
+        this._iosAnchor = this.prepareClickHereInputPosition?.() ?? this.cursor.getPosition();
       }
       this._iosLength = 0;
     }
@@ -540,18 +543,20 @@ export function onInput(this: any, e?: InputEvent): void {
   }
 
   // 선택 영역이 있으면 먼저 삭제
+  let insertPos = this.prepareClickHereInputPosition?.() ?? this.cursor.getPosition();
   if (this.cursor.hasSelection()) {
     if (!this.canDeleteSelectionInFormMode?.()) {
       this.textarea.value = '';
       return;
     }
     this.deleteSelection();
+    insertPos = this.prepareClickHereInputPosition?.() ?? this.cursor.getPosition();
   }
-  if (!this.canInsertTextInFormMode?.(this.cursor.getPosition())) {
+  if (!this.canInsertTextInFormMode?.(insertPos)) {
     this.textarea.value = '';
     return;
   }
-  this.executeOperation({ kind: 'command', command: new InsertTextCommand(this.cursor.getPosition(), text) });
+  this.executeOperation({ kind: 'command', command: new InsertTextCommand(insertPos, text) });
 }
 
 export function insertTextAtRaw(this: any, pos: DocumentPosition, text: string): void {
