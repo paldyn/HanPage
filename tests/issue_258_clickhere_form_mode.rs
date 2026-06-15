@@ -91,6 +91,59 @@ fn clickhere_form_editable_attribute_is_preserved_in_hwp_and_hwpx() {
 }
 
 #[test]
+fn clickhere_hwp_sample_cursor_rects_follow_visible_value() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let bytes = fs::read(repo_root.join("samples/누름틀-2024.hwp")).expect("read clickhere sample");
+    let core = DocumentCore::from_bytes(&bytes).expect("parse clickhere sample");
+
+    let fields = core.collect_all_fields();
+    let first = fields
+        .iter()
+        .find(|f| f.field.field_type == FieldType::ClickHere && f.location.para_index == 0)
+        .expect("first clickhere field");
+    assert_eq!(first.value, "11223344");
+
+    let para = &core.document().sections[0].paragraphs[0];
+    let range = &para.field_ranges[first.field_range_index];
+    assert_eq!((range.start_char_idx, range.end_char_idx), (0, 8));
+
+    let mut prev_x = None;
+    for offset in range.start_char_idx..=range.end_char_idx {
+        let rect: Value = serde_json::from_str(
+            &core
+                .get_cursor_rect_native(0, 0, offset)
+                .expect("cursor rect in clickhere sample"),
+        )
+        .expect("parse cursor rect");
+        let x = rect["x"].as_f64().expect("cursor x");
+        if let Some(prev) = prev_x {
+            assert!(
+                x >= prev,
+                "clickhere sample cursor x should be monotonic at offset {offset}: prev={prev}, x={x}"
+            );
+        }
+        prev_x = Some(x);
+    }
+
+    let start_rect: Value = serde_json::from_str(
+        &core
+            .get_cursor_rect_native(0, 0, range.start_char_idx)
+            .expect("field start rect"),
+    )
+    .expect("parse start rect");
+    let end_rect: Value = serde_json::from_str(
+        &core
+            .get_cursor_rect_native(0, 0, range.end_char_idx)
+            .expect("field end rect"),
+    )
+    .expect("parse end rect");
+    assert!(
+        end_rect["x"].as_f64().unwrap() > start_rect["x"].as_f64().unwrap(),
+        "field end cursor should be after start: start={start_rect}, end={end_rect}"
+    );
+}
+
+#[test]
 fn clickhere_insert_api_creates_empty_editable_field() {
     let core = make_doc_with_inserted_clickhere();
 

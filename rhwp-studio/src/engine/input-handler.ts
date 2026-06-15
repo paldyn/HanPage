@@ -2750,8 +2750,8 @@ export class InputHandler {
   }
 
   /** 현재 커서 위치의 누름틀 필드를 제거한다 (텍스트 유지). */
-  removeCurrentField(): void {
-    const pos = this.cursor.getPosition();
+  removeCurrentField(posOverride?: DocumentPosition): void {
+    const pos = posOverride ?? this.cursor.getPosition();
     try {
       const result = this.wasm.removeFieldAt(pos);
       if (result.ok) {
@@ -2778,7 +2778,7 @@ export class InputHandler {
 
     void showConfirm('지우기', '[누름틀]을 지울까요?')
       .then((ok) => {
-        if (ok) this.removeCurrentField();
+        if (ok) this.removeCurrentField(pos);
         this.focusTextarea();
       })
       .catch(() => {

@@ -28,6 +28,10 @@
   Enter 같은 추가 편집 없이도 입력값과 누름틀 마커가 즉시 표시되도록 보정했다.
 - 빈 누름틀 첫 입력 뒤 `getCursorRect()`가 0폭 placeholder가 아니라 실제 입력값 기준
   caret x를 반환하도록 해 field end 마커가 입력값 끝을 따라가게 했다.
+- 기존 HWP 샘플에서 `SectionDef`/`ColumnDef`/`Field` 같은 비가시 컨트롤 gap이
+  본문 TextRun source offset을 밀지 않도록 placeholder 합성 대상을 좁혔다.
+- 누름틀 삭제 확인 대화상자의 `확인`이 대화상자를 띄운 원래 커서 위치의 field를
+  제거하도록 고정했다.
 
 ## 2. 검증
 
@@ -68,6 +72,17 @@ Stage11 추가 검증:
 - `wasm-pack build --target web --out-dir pkg`
 - `http://localhost:7700/` Playwright 검증 통과
   (`value=123`, field range `0..3`, cursor x `113.4→135.4`, `「123」` 표시)
+
+Stage12 추가 검증:
+
+- `cargo test --test issue_258_clickhere_form_mode clickhere_hwp_sample_cursor_rects_follow_visible_value -- --nocapture`
+- `cargo test --test issue_258_clickhere_form_mode`
+- `cargo fmt --check`
+- `git diff --check`
+- `cd rhwp-studio && npm run build`
+- `wasm-pack build --target web --out-dir pkg`
+- `http://localhost:7700/` Playwright 검증 통과
+  (`누름틀-2024.hwp` range `0..8`, cursor x `113.4→172.1`, 삭제 확인 후 첫 field 제거)
 
 ## 3. 남은 후속
 
