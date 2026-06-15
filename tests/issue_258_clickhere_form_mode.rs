@@ -6,6 +6,17 @@ use std::path::Path;
 use rhwp::document_core::DocumentCore;
 use rhwp::model::control::FieldType;
 
+fn make_doc_with_inserted_clickhere() -> DocumentCore {
+    let mut core = DocumentCore::new_empty();
+    core.create_blank_document_native()
+        .expect("create blank document");
+    core.insert_text_native(0, 0, 0, "ABC")
+        .expect("insert base text");
+    core.insert_click_here_field_at(0, 0, 1, "입력하세요", "메모", "name01", true)
+        .expect("insert clickhere field");
+    core
+}
+
 fn assert_clickhere_form_editable(path: &Path) {
     let bytes = fs::read(path).unwrap_or_else(|e| panic!("read {}: {}", path.display(), e));
     let core = DocumentCore::from_bytes(&bytes)
@@ -80,18 +91,7 @@ fn clickhere_form_editable_attribute_is_preserved_in_hwp_and_hwpx() {
 
 #[test]
 fn clickhere_insert_api_creates_empty_editable_field() {
-    let mut core = DocumentCore::new_empty();
-    core.create_blank_document_native()
-        .expect("create blank document");
-    core.insert_text_native(0, 0, 0, "ABC")
-        .expect("insert base text");
-
-    let result = core
-        .insert_click_here_field_at(0, 0, 1, "입력하세요", "메모", "name01", true)
-        .expect("insert clickhere field");
-
-    assert!(result.contains(r#""ok":true"#), "{}", result);
-    assert!(result.contains(r#""charOffset":1"#), "{}", result);
+    let core = make_doc_with_inserted_clickhere();
 
     let fields = core.collect_all_fields();
     let click_fields: Vec<_> = fields
@@ -128,4 +128,42 @@ fn clickhere_insert_api_creates_empty_editable_field() {
     assert!(list_json.contains(r#""name":"name01""#), "{}", list_json);
     assert!(list_json.contains(r#""startCharIdx":1"#), "{}", list_json);
     assert!(list_json.contains(r#""endCharIdx":1"#), "{}", list_json);
+}
+
+#[test]
+fn inserted_clickhere_roundtrips_hwp_and_hwpx() {
+    let core = make_doc_with_inserted_clickhere();
+
+    let hwp = core.export_hwp_native().expect("export hwp");
+    let reparsed_hwp = DocumentCore::from_bytes(&hwp).expect("reparse exported hwp");
+    assert_inserted_clickhere_roundtrip(&reparsed_hwp, "HWP");
+
+    let hwpx = core.export_hwpx_native().expect("export hwpx");
+    let reparsed_hwpx = DocumentCore::from_bytes(&hwpx).expect("reparse exported hwpx");
+    assert_inserted_clickhere_roundtrip(&reparsed_hwpx, "HWPX");
+}
+
+fn assert_inserted_clickhere_roundtrip(core: &DocumentCore, label: &str) {
+    let fields = core.collect_all_fields();
+    let click_fields: Vec<_> = fields
+        .iter()
+        .filter(|f| f.field.field_type == FieldType::ClickHere)
+        .collect();
+    assert_eq!(click_fields.len(), 1, "{} ClickHere count", label);
+
+    let field = click_fields[0];
+    assert_eq!(field.value, "", "{} value", label);
+    assert_eq!(
+        field.field.guide_text(),
+        Some("입력하세요"),
+        "{} guide",
+        label
+    );
+    assert_eq!(field.field.memo_text(), Some("메모"), "{} memo", label);
+    assert_eq!(field.field.field_name(), Some("name01"), "{} name", label);
+    assert!(
+        field.field.is_editable_in_form(),
+        "{} editableInForm",
+        label
+    );
 }
