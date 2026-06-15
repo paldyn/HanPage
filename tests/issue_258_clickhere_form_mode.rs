@@ -77,3 +77,55 @@ fn clickhere_form_editable_attribute_is_preserved_in_hwp_and_hwpx() {
     assert_clickhere_form_editable(&repo_root.join("samples/누름틀-2024.hwp"));
     assert_clickhere_form_editable(&repo_root.join("samples/누름틀-2024.hwpx"));
 }
+
+#[test]
+fn clickhere_insert_api_creates_empty_editable_field() {
+    let mut core = DocumentCore::new_empty();
+    core.create_blank_document_native()
+        .expect("create blank document");
+    core.insert_text_native(0, 0, 0, "ABC")
+        .expect("insert base text");
+
+    let result = core
+        .insert_click_here_field_at(0, 0, 1, "입력하세요", "메모", "name01", true)
+        .expect("insert clickhere field");
+
+    assert!(result.contains(r#""ok":true"#), "{}", result);
+    assert!(result.contains(r#""charOffset":1"#), "{}", result);
+
+    let fields = core.collect_all_fields();
+    let click_fields: Vec<_> = fields
+        .iter()
+        .filter(|f| f.field.field_type == FieldType::ClickHere)
+        .collect();
+    assert_eq!(click_fields.len(), 1);
+
+    let field = click_fields[0];
+    assert_eq!(field.value, "");
+    assert_eq!(field.field.guide_text(), Some("입력하세요"));
+    assert_eq!(field.field.memo_text(), Some("메모"));
+    assert_eq!(field.field.field_name(), Some("name01"));
+    assert!(field.field.is_editable_in_form());
+
+    let para = &core.document().sections[0].paragraphs[0];
+    let range = &para.field_ranges[field.field_range_index];
+    assert_eq!(range.start_char_idx, 1);
+    assert_eq!(range.end_char_idx, 1);
+    assert_eq!(para.char_offsets, vec![16, 33, 34]);
+    assert_eq!(para.char_offsets[1] - (para.char_offsets[0] + 1), 16);
+
+    let info = core.get_field_info_at(0, 0, 1);
+    assert!(info.contains(r#""inField":true"#), "{}", info);
+    assert!(info.contains(r#""isGuide":true"#), "{}", info);
+    assert!(info.contains(r#""editableInForm":true"#), "{}", info);
+
+    let list_json = core.get_field_list_json();
+    assert!(
+        list_json.contains(r#""guide":"입력하세요""#),
+        "{}",
+        list_json
+    );
+    assert!(list_json.contains(r#""name":"name01""#), "{}", list_json);
+    assert!(list_json.contains(r#""startCharIdx":1"#), "{}", list_json);
+    assert!(list_json.contains(r#""endCharIdx":1"#), "{}", list_json);
+}
