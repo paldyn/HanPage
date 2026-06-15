@@ -24,7 +24,7 @@ export class FieldEditDialog extends ModalDialog {
   private initialProps: ClickHereProps = { guide: '', memo: '', name: '', editable: true };
 
   constructor() {
-    super('필드 입력 고치기', 420);
+    super('필드 입력 고치기', 420, false);
   }
 
   /** 대화상자를 열고 초기값을 설정한다 */

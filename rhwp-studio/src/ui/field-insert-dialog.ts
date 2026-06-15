@@ -16,7 +16,7 @@ export class FieldInsertDialog extends ModalDialog {
   onApply: ((props: ClickHereProps) => void) | null = null;
 
   constructor() {
-    super('필드 입력', 420);
+    super('필드 입력', 420, false);
   }
 
   protected createBody(): HTMLElement {
