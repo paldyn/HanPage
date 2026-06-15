@@ -2155,22 +2155,34 @@ mod tests {
         let svg = core.render_page_svg_native(0).unwrap_or_default();
         assert!(!svg.is_empty(), "fixture page 1 SVG is empty");
 
-        // per-char <text> elements: find the 'N' of "NEXT PARAGRAPH"
-        let mut next_y: Option<f64> = None;
-        for chunk in svg.split("<text").skip(1) {
-            let Some(gt) = chunk.find('>') else { continue };
-            let attrs = &chunk[..gt];
-            let body = &chunk[gt + 1..chunk.find("</text>").unwrap_or(chunk.len())];
-            if body.trim() == "N" {
-                next_y = attrs
-                    .split("y=\"")
-                    .nth(1)
-                    .and_then(|r| r.split('\"').next())
-                    .and_then(|v| v.parse::<f64>().ok());
-                break;
+        let find_text_y = |needle: &str| -> Option<f64> {
+            for chunk in svg.split("<text").skip(1) {
+                let Some(gt) = chunk.find('>') else {
+                    continue;
+                };
+                let attrs = &chunk[..gt];
+                let body = &chunk[gt + 1..chunk.find("</text>").unwrap_or(chunk.len())];
+                if body.trim() == needle {
+                    return attrs
+                        .split("y=\"")
+                        .nth(1)
+                        .and_then(|r| r.split('\"').next())
+                        .and_then(|v| v.parse::<f64>().ok());
+                }
             }
-        }
-        let y = next_y.expect("'N' of NEXT PARAGRAPH not found in SVG");
+            None
+        };
+
+        // 한컴 PDF 기준 CELL baseline은 셀 중앙 쪽이다. 회귀 전에는 셀 하단
+        // 근처(~133.5px)에 그려져 세로 가운데 정렬이 적용되지 않았다.
+        let cell_y = find_text_y("C").expect("'C' of CELL not found in SVG");
+        assert!(
+            (cell_y - 122.1).abs() < 2.0,
+            "CELL baseline {} px — expected ~122.1 from Hancom PDF centered cell text",
+            cell_y
+        );
+
+        let y = find_text_y("N").expect("'N' of NEXT PARAGRAPH not found in SVG");
         assert!(
             (y - 161.3).abs() < 2.0,
             "next paragraph baseline {} px — expected ~161.3 (file lineSegArray              vertical_pos=4160); ~153.3 means the TAC host line_spacing was dropped",
