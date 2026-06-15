@@ -634,7 +634,7 @@ impl DocumentCore {
         Ok(para)
     }
 
-    /// 본문 문단의 커서 위치에서 필드를 제거한다 (텍스트 유지, 필드 마커만 삭제).
+    /// 본문 문단의 커서 위치에서 필드를 제거한다 (텍스트 유지, 필드 컨트롤 삭제).
     ///
     /// 성공 시 `{"ok":true}`, 필드가 없으면 에러를 반환한다.
     pub fn remove_field_at(
@@ -1278,7 +1278,7 @@ fn find_field_ctrl_idx_in_para(para: &Paragraph, char_offset: usize) -> Option<u
     None
 }
 
-/// 문단 내 커서 위치의 누름틀 필드를 제거한다 (FieldRange만 삭제, 텍스트 유지).
+/// 문단 내 커서 위치의 누름틀 필드를 제거한다 (본문 텍스트 유지).
 fn remove_field_in_para(para: &mut Paragraph, char_offset: usize) -> Result<(), HwpError> {
     let idx = para.field_ranges.iter().position(|fr| {
         if let Some(Control::Field(field)) = para.controls.get(fr.control_idx) {
@@ -1292,7 +1292,20 @@ fn remove_field_in_para(para: &mut Paragraph, char_offset: usize) -> Result<(), 
     });
     match idx {
         Some(i) => {
+            let removed_control_idx = para.field_ranges[i].control_idx;
             para.field_ranges.remove(i);
+            if removed_control_idx < para.controls.len() {
+                para.controls.remove(removed_control_idx);
+            }
+            if removed_control_idx < para.ctrl_data_records.len() {
+                para.ctrl_data_records.remove(removed_control_idx);
+            }
+            for range in &mut para.field_ranges {
+                if range.control_idx > removed_control_idx {
+                    range.control_idx -= 1;
+                }
+            }
+            rebuild_char_offsets(para);
             Ok(())
         }
         None => Err(HwpError::InvalidField(
@@ -1316,7 +1329,8 @@ pub(crate) fn rebuild_char_offsets(para: &mut Paragraph) {
         para.char_offsets[0] as usize / 8
     } else {
         para.controls.len()
-    };
+    }
+    .min(para.controls.len());
 
     // FIELD_BEGIN: 이미 char_offsets의 첫 갭에 포함된 선행 컨트롤은 보존하고,
     // 새로 삽입된 시작 위치 필드는 첫 문자 앞에도 갭을 추가해야 한다.

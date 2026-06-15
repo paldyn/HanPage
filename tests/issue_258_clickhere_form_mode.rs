@@ -144,6 +144,46 @@ fn clickhere_hwp_sample_cursor_rects_follow_visible_value() {
 }
 
 #[test]
+fn removing_clickhere_keeps_text_but_removes_field_control() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let bytes = fs::read(repo_root.join("samples/누름틀-2024.hwp")).expect("read clickhere sample");
+    let mut core = DocumentCore::from_bytes(&bytes).expect("parse clickhere sample");
+
+    let para_before = &core.document().sections[0].paragraphs[0];
+    assert_eq!(para_before.text, "11223344");
+    assert_eq!(para_before.controls.len(), 3);
+    assert_eq!(para_before.field_ranges.len(), 1);
+
+    core.remove_field_at(0, 0, 8)
+        .expect("remove first clickhere");
+
+    let para_after = &core.document().sections[0].paragraphs[0];
+    assert_eq!(para_after.text, "11223344");
+    assert_eq!(
+        para_after.field_ranges.len(),
+        0,
+        "field range should be removed"
+    );
+    assert_eq!(
+        para_after.controls.len(),
+        2,
+        "ClickHere control should be removed while SectionDef/ColumnDef remain"
+    );
+    assert_eq!(
+        para_after.char_offsets,
+        vec![16, 17, 18, 19, 20, 21, 22, 23]
+    );
+
+    let fields = core.collect_all_fields();
+    let click_fields: Vec<_> = fields
+        .iter()
+        .filter(|f| f.field.field_type == FieldType::ClickHere)
+        .collect();
+    assert_eq!(click_fields.len(), 1);
+    assert_eq!(click_fields[0].value, "222212212");
+}
+
+#[test]
 fn clickhere_insert_api_creates_empty_editable_field() {
     let core = make_doc_with_inserted_clickhere();
 

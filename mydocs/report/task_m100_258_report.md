@@ -32,6 +32,8 @@
   본문 TextRun source offset을 밀지 않도록 placeholder 합성 대상을 좁혔다.
 - 누름틀 삭제 확인 대화상자의 `확인`이 대화상자를 띄운 원래 커서 위치의 field를
   제거하도록 고정했다.
+- 누름틀 삭제 시 본문 텍스트는 유지하되 `FieldRange`뿐 아니라 `Control::Field`와
+  대응 `ctrl_data_records`까지 제거하도록 고정했다.
 
 ## 2. 검증
 
@@ -83,6 +85,17 @@ Stage12 추가 검증:
 - `wasm-pack build --target web --out-dir pkg`
 - `http://localhost:7700/` Playwright 검증 통과
   (`누름틀-2024.hwp` range `0..8`, cursor x `113.4→172.1`, 삭제 확인 후 첫 field 제거)
+
+Stage13 추가 검증:
+
+- `cargo test --test issue_258_clickhere_form_mode removing_clickhere_keeps_text_but_removes_field_control -- --nocapture`
+- `cargo test --test issue_258_clickhere_form_mode`
+- `cargo test --lib rebuild_`
+- `cargo fmt --check`
+- `git diff --check`
+- `wasm-pack build --target web --out-dir pkg`
+- `http://localhost:7700/` Playwright 검증 통과
+  (`확인` 클릭 후 첫 field 제거, `getFieldInfoAt(0,0,8)={"inField":false}`, 텍스트는 본문으로 유지)
 
 ## 3. 남은 후속
 
