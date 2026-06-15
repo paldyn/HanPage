@@ -11,6 +11,7 @@ import { VirtualScroll } from '@/view/virtual-scroll';
 import { ViewportManager } from '@/view/viewport-manager';
 import type { DocumentPosition, CharProperties, ParaProperties, CursorRect, FormObjectHitResult } from '@/core/types';
 import type { CommandDispatcher } from '@/command/dispatcher';
+import type { EditorEditMode } from '@/command/types';
 import { matchShortcut, defaultShortcuts } from '@/command/shortcut-map';
 import type { ContextMenu, ContextMenuItem } from '@/ui/context-menu';
 import type { CommandPalette } from '@/ui/command-palette';
@@ -90,6 +91,7 @@ export class InputHandler {
   private textarea: HTMLTextAreaElement;
   private active = false;
   private insertMode = true;  // true=삽입, false=수정(덮어쓰기)
+  private editMode: EditorEditMode = 'normal';
   /** 마지막 셀 키 (눈금자 셀 bbox 중복 조회 방지) */
   private lastCellKey: string | null = null;
   private dispatcher: CommandDispatcher | null = null;
@@ -415,6 +417,7 @@ export class InputHandler {
     // Toolbar에서 서식 적용 요청 수신 (글꼴명, 크기, 색상 — 커맨드 시스템 미경유)
     eventBus.on('format-char', (props) => {
       if (!this.active) return;
+      if (this.editMode === 'form') return;
       if (this.cursor.hasSelection()) {
         this.applyCharFormat(props as Partial<CharProperties>);
       }
@@ -1723,6 +1726,7 @@ export class InputHandler {
   private deleteSelection(): void {
     const sel = this.cursor.getSelectionOrdered();
     if (!sel) return;
+    if (!this.canDeleteSelectionInFormMode()) return;
 
     const cmd = new DeleteSelectionCommand(sel.start, sel.end);
     this.cursor.clearSelection();
@@ -1753,6 +1757,7 @@ export class InputHandler {
    * 라우터가 적절한 Undo 전략을 자동 선택한다.
    */
   executeOperation(desc: OperationDescriptor): void {
+    if (!this.isOperationAllowedInEditMode(desc)) return;
     switch (desc.kind) {
       case 'command': {
         const beforePos = this.cursor.getPosition();
@@ -2416,6 +2421,109 @@ export class InputHandler {
   /** 커맨드 디스패처를 주입한다 (main.ts에서 호출) */
   setDispatcher(d: CommandDispatcher): void { this.dispatcher = d; }
 
+  /** 현재 편집 모드를 설정한다 */
+  setEditMode(mode: EditorEditMode): void {
+    this.editMode = mode;
+    if (mode === 'form') {
+      if (this.cursor.isInPictureObjectSelection()) {
+        this.cursor.moveOutOfSelectedPicture();
+        this.pictureObjectRenderer?.clear();
+        this.eventBus.emit('picture-object-selection-changed', false);
+      }
+      if (this.cursor.isInTableObjectSelection()) {
+        this.cursor.moveOutOfSelectedTable();
+        this.tableObjectRenderer?.clear();
+        this.eventBus.emit('table-object-selection-changed', false);
+      }
+    }
+    this.eventBus.emit('command-state-changed');
+  }
+
+  /** 양식 모드인가? */
+  isFormMode(): boolean { return this.editMode === 'form'; }
+
+  /** 현재 커서가 양식 모드에서 편집 가능한 누름틀 안인가? */
+  canEditCurrentFormField(): boolean {
+    return this.isEditableFormFieldPosition(this.cursor.getPosition());
+  }
+
+  private isSameTextContainer(a: DocumentPosition, b: DocumentPosition): boolean {
+    if (a.sectionIndex !== b.sectionIndex) return false;
+    if (a.paragraphIndex !== b.paragraphIndex) return false;
+    if (a.parentParaIndex !== b.parentParaIndex) return false;
+    if (a.controlIndex !== b.controlIndex) return false;
+    if (a.cellIndex !== b.cellIndex) return false;
+    if (a.cellParaIndex !== b.cellParaIndex) return false;
+    if ((a.isTextBox ?? false) !== (b.isTextBox ?? false)) return false;
+    return JSON.stringify(a.cellPath ?? []) === JSON.stringify(b.cellPath ?? []);
+  }
+
+  private getFormFieldInfoAt(pos: DocumentPosition): any | null {
+    if (this.cursor.isInHeaderFooter() || this.cursor.isInFootnote()) return null;
+    try {
+      const fi = this.wasm.getFieldInfoAt(pos);
+      if (!fi?.inField) return null;
+      if (fi.fieldType !== 'clickhere') return null;
+      return fi;
+    } catch {
+      return null;
+    }
+  }
+
+  private isEditableFormFieldPosition(pos: DocumentPosition): boolean {
+    const fi = this.getFormFieldInfoAt(pos);
+    if (!fi?.editableInForm) return false;
+    const start = fi.startCharIdx ?? -1;
+    const end = fi.endCharIdx ?? -1;
+    return pos.charOffset >= start && pos.charOffset <= end;
+  }
+
+  canInsertTextInFormMode(pos: DocumentPosition): boolean {
+    if (this.editMode !== 'form') return true;
+    return this.isEditableFormFieldPosition(pos);
+  }
+
+  canDeleteTextInFormMode(pos: DocumentPosition, count: number): boolean {
+    if (this.editMode !== 'form') return true;
+    const fi = this.getFormFieldInfoAt(pos);
+    if (!fi?.editableInForm) return false;
+    const start = fi.startCharIdx ?? -1;
+    const end = fi.endCharIdx ?? -1;
+    return pos.charOffset >= start && pos.charOffset + count <= end;
+  }
+
+  canDeleteSelectionInFormMode(): boolean {
+    if (this.editMode !== 'form') return true;
+    const sel = this.cursor.getSelectionOrdered();
+    if (!sel) return this.canEditCurrentFormField();
+    if (!this.isSameTextContainer(sel.start, sel.end)) return false;
+    const fi = this.getFormFieldInfoAt(sel.start);
+    if (!fi?.editableInForm) return false;
+    if (fi.fieldId === undefined) return false;
+    const endInfo = this.getFormFieldInfoAt(sel.end);
+    if (!endInfo?.editableInForm || endInfo.fieldId !== fi.fieldId) return false;
+    const start = fi.startCharIdx ?? -1;
+    const end = fi.endCharIdx ?? -1;
+    return sel.start.charOffset >= start && sel.end.charOffset <= end;
+  }
+
+  private isOperationAllowedInEditMode(desc: OperationDescriptor): boolean {
+    if (this.editMode !== 'form') return true;
+    if (desc.kind === 'snapshot') return false;
+
+    const command = desc.command as any;
+    switch (command.type) {
+      case 'insertText':
+        return this.canInsertTextInFormMode(command.position ?? this.cursor.getPosition());
+      case 'deleteText':
+        return this.canDeleteTextInFormMode(command.position ?? this.cursor.getPosition(), command.count ?? 1);
+      case 'deleteSelection':
+        return this.canDeleteSelectionInFormMode();
+      default:
+        return false;
+    }
+  }
+
   /** 편집 영역이 활성 상태인지 (문서 로드 + 편집 영역 포커스) */
   isActive(): boolean { return this.active; }
 
@@ -2727,12 +2835,14 @@ export class InputHandler {
 
   /** 붙이기 (커맨드 시스템용 — 컨텍스트 메뉴/도구 상자에서 호출) */
   performPaste(): boolean {
+    if (this.editMode === 'form') return false;
     this.focusTextarea();
     return document.execCommand('paste');
   }
 
   /** 잘라내기 (커맨드 시스템용 — 컨텍스트 메뉴/도구 상자에서 호출) */
   performCut(): void {
+    if (this.editMode === 'form') return;
     // 개체 선택 모드 → 복사 + 삭제
     if (this.cursor.isInPictureObjectSelection()) {
       const ref = this.cursor.getSelectedPictureRef();
@@ -2778,6 +2888,7 @@ export class InputHandler {
 
   /** 선택 영역 삭제 (커맨드 시스템용 — 편집 > 지우기) */
   performDelete(): void {
+    if (this.editMode === 'form') return;
     if (this.cursor.isInPictureObjectSelection()) {
       const ref = this.cursor.getSelectedPictureRef();
       if (ref) {

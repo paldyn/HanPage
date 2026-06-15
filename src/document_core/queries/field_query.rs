@@ -730,13 +730,14 @@ fn field_info_at_in_para(para: &Paragraph, char_offset: usize) -> String {
                 let is_guide = fr.start_char_idx == fr.end_char_idx;
                 let guide = field.guide_text().unwrap_or("");
                 return format!(
-                    "{{\"inField\":true,\"fieldId\":{},\"fieldType\":\"{}\",\"startCharIdx\":{},\"endCharIdx\":{},\"isGuide\":{},\"guideName\":{}}}",
+                    "{{\"inField\":true,\"fieldId\":{},\"fieldType\":\"{}\",\"startCharIdx\":{},\"endCharIdx\":{},\"isGuide\":{},\"guideName\":{},\"editableInForm\":{}}}",
                     field.field_id,
                     field.field_type_str(),
                     fr.start_char_idx,
                     fr.end_char_idx,
                     is_guide,
                     json_escape(guide),
+                    field.is_editable_in_form(),
                 );
             }
         }

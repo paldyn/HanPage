@@ -1038,6 +1038,7 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
     case 'Backspace':
     case 'Delete': {
       e.preventDefault();
+      if (this.isFormMode?.() && e.altKey) return;
       if (this.cursor.hasSelection()) {
         this.deleteSelection();
       } else if (e.altKey) {
@@ -1054,6 +1055,7 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
     }
     case 'Enter': {
       e.preventDefault();
+      if (this.isFormMode?.()) return;
       if (this.cursor.hasSelection()) this.deleteSelection();
       if (e.shiftKey) {
         // Shift+Enter: 강제 줄바꿈 (문단 유지, 줄만 바꿈)
@@ -1139,6 +1141,7 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
     }
     case 'Tab': {
       e.preventDefault();
+      if (this.isFormMode?.()) return;
       if (e.shiftKey) {
         this.applyHangingIndentAtCursor();
         break;
@@ -1208,6 +1211,7 @@ export function handleCtrlKey(this: any, e: KeyboardEvent): void {
   switch (e.key.toLowerCase()) {
     case 'backspace': {
       e.preventDefault();
+      if (this.isFormMode?.()) return;
       if (this.cursor.hasSelection()) {
         this.deleteSelection();
       } else if (e.metaKey && !e.ctrlKey) {
@@ -1226,6 +1230,7 @@ export function handleCtrlKey(this: any, e: KeyboardEvent): void {
     case 'delete': {
       if (!e.ctrlKey) break;
       e.preventDefault();
+      if (this.isFormMode?.()) return;
       if (this.cursor.hasSelection()) {
         this.deleteSelection();
       } else {
@@ -1401,6 +1406,10 @@ export function onCopy(this: any, e: ClipboardEvent): void {
 
 export function onCut(this: any, e: ClipboardEvent): void {
   if (!this.active) return;
+  if (this.isFormMode?.()) {
+    e.preventDefault();
+    return;
+  }
 
   // 개체 선택 모드 → 개체 잘라내기 (복사 후 삭제)
   if (this.cursor.isInPictureObjectSelection()) {
@@ -1428,6 +1437,7 @@ export function onCut(this: any, e: ClipboardEvent): void {
 export function onPaste(this: any, e: ClipboardEvent): void {
   if (!this.active) return;
   e.preventDefault();
+  if (this.isFormMode?.()) return;
 
   // 개체/표 선택 모드 해제 후 붙여넣기 진행
   if (this.cursor.isInPictureObjectSelection()) {

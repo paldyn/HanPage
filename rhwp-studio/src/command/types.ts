@@ -4,6 +4,8 @@ import type { DocumentDirtyState } from '@/core/document-dirty-state';
 import type { InputHandler } from '@/engine/input-handler';
 import type { ViewportManager } from '@/view/viewport-manager';
 
+export type EditorEditMode = 'normal' | 'form';
+
 /** 커맨드 실행 가능 여부 판단용 에디터 상태 스냅샷 */
 export interface EditorContext {
   /** 문서가 로드되어 있는가? */
@@ -22,6 +24,12 @@ export interface EditorContext {
   inField: boolean;
   /** 편집 가능 모드인가? (vs 읽기 전용) */
   isEditable: boolean;
+  /** 현재 편집 모드 */
+  editMode: EditorEditMode;
+  /** 양식 모드인가? */
+  isFormMode: boolean;
+  /** 현재 커서 위치가 양식 모드에서 수정 가능한 누름틀인가? */
+  canEditFormField: boolean;
   /** Undo 가능한가? */
   canUndo: boolean;
   /** Redo 가능한가? */
@@ -67,4 +75,6 @@ export interface CommandServices {
   getInputHandler: () => InputHandler | null;
   /** ViewportManager 접근 (문서 미로드 시 null) */
   getViewportManager: () => ViewportManager | null;
+  /** 에디터 편집 모드 변경 */
+  setEditMode: (mode: EditorEditMode) => void;
 }

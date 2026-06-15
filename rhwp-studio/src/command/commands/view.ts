@@ -149,6 +149,15 @@ export const viewCommands: CommandDef[] = [
   zoomLevel(300),
   // ─── 보기 메뉴: 표시/숨기기 ─────────────────────────
   {
+    id: 'view:form-mode',
+    label: '양식 모드',
+    canExecute: (ctx) => ctx.hasDocument,
+    execute(services) {
+      const next = services.getContext().isFormMode ? 'normal' : 'form';
+      services.setEditMode(next);
+    },
+  },
+  {
     id: 'view:ctrl-mark',
     label: '조판 부호',
     icon: 'icon-ctrl-mark',

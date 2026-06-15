@@ -3686,7 +3686,7 @@ impl HwpDocument {
 
     /// 커서 위치의 필드 범위 정보를 조회한다 (본문 문단).
     ///
-    /// 반환: `{inField, fieldId?, startCharIdx?, endCharIdx?, isGuide?, guideName?}`
+    /// 반환: `{inField, fieldId?, startCharIdx?, endCharIdx?, isGuide?, guideName?, editableInForm?}`
     #[wasm_bindgen(js_name = getFieldInfoAt)]
     pub fn get_field_info_at_api(
         &self,

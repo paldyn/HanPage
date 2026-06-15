@@ -141,6 +141,7 @@ function tryDeleteBodyFootnoteAtCursor(
 }
 
 export function handleBackspace(this: any, pos: DocumentPosition, inCell: boolean): void {
+  if (this.isFormMode?.() && !this.canEditCurrentFormField?.()) return;
   // 머리말/꼬리말 편집 모드
   if (this.cursor.isInHeaderFooter()) {
     const isHeader = this.cursor.headerFooterMode === 'header';
@@ -194,6 +195,7 @@ export function handleBackspace(this: any, pos: DocumentPosition, inCell: boolea
 }
 
 export function handleDelete(this: any, pos: DocumentPosition, inCell: boolean): void {
+  if (this.isFormMode?.() && !this.canEditCurrentFormField?.()) return;
   // 머리말/꼬리말 편집 모드
   if (this.cursor.isInHeaderFooter()) {
     const isHeader = this.cursor.headerFooterMode === 'header';
@@ -271,23 +273,34 @@ export function handleDelete(this: any, pos: DocumentPosition, inCell: boolean):
 export function onCompositionStart(this: any): void {
   // 선택 영역이 있으면 삭제 후 조합 시작
   if (this.cursor.hasSelection()) {
+    if (!this.canDeleteSelectionInFormMode?.()) {
+      this.textarea.value = '';
+      return;
+    }
     this.deleteSelection();
   }
+  const basePos = this.cursor.isInHeaderFooter()
+    ? { ...this.cursor.getPosition(), charOffset: this.cursor.hfCharOffset }
+    : this.cursor.isInFootnote()
+      ? { ...this.cursor.getPosition(), charOffset: this.cursor.fnCharOffset }
+      : this.cursor.getPosition();
+  if (!this.canInsertTextInFormMode?.(basePos)) {
+    this.textarea.value = '';
+    this.isComposing = false;
+    this.compositionAnchor = null;
+    this.compositionLength = 0;
+    return;
+  }
+
   this.isComposing = true;
   if (this.cursor.isInHeaderFooter()) {
     // 머리말/꼬리말 모드에서는 hfCharOffset을 anchor의 charOffset으로 사용
-    this.compositionAnchor = {
-      ...this.cursor.getPosition(),
-      charOffset: this.cursor.hfCharOffset,
-    };
+    this.compositionAnchor = basePos;
   } else if (this.cursor.isInFootnote()) {
     // 각주 모드에서는 fnCharOffset을 anchor의 charOffset으로 사용
-    this.compositionAnchor = {
-      ...this.cursor.getPosition(),
-      charOffset: this.cursor.fnCharOffset,
-    };
+    this.compositionAnchor = basePos;
   } else {
-    this.compositionAnchor = this.cursor.getPosition();
+    this.compositionAnchor = basePos;
   }
   this.compositionLength = 0;
 }
@@ -351,6 +364,10 @@ export function onInput(this: any, e?: InputEvent): void {
   // Undo 스택에는 기록하지 않음 (compositionend에서 한 번에 기록)
   if (this.isComposing && this.compositionAnchor) {
     const anchor = this.compositionAnchor;
+    if (!this.canInsertTextInFormMode?.(anchor)) {
+      this.textarea.value = '';
+      return;
+    }
 
     // 이전 조합 텍스트 삭제
     if (this.compositionLength > 0) {
@@ -404,6 +421,10 @@ export function onInput(this: any, e?: InputEvent): void {
         this._iosAnchor = this.cursor.getPosition();
       }
       this._iosLength = 0;
+    }
+    if (!this.canInsertTextInFormMode?.(this._iosAnchor)) {
+      this.textarea.value = '';
+      return;
     }
 
     // 이전 삽입 전부 삭제
@@ -487,12 +508,21 @@ export function onInput(this: any, e?: InputEvent): void {
 
   // 선택 영역이 있으면 먼저 삭제
   if (this.cursor.hasSelection()) {
+    if (!this.canDeleteSelectionInFormMode?.()) {
+      this.textarea.value = '';
+      return;
+    }
     this.deleteSelection();
+  }
+  if (!this.canInsertTextInFormMode?.(this.cursor.getPosition())) {
+    this.textarea.value = '';
+    return;
   }
   this.executeOperation({ kind: 'command', command: new InsertTextCommand(this.cursor.getPosition(), text) });
 }
 
 export function insertTextAtRaw(this: any, pos: DocumentPosition, text: string): void {
+  if (!this.canInsertTextInFormMode?.(pos)) return;
   // 머리말/꼬리말 편집 모드
   if (this.cursor.isInHeaderFooter()) {
     const isHeader = this.cursor.headerFooterMode === 'header';
@@ -522,6 +552,7 @@ export function insertTextAtRaw(this: any, pos: DocumentPosition, text: string):
 }
 
 export function deleteTextAt(this: any, pos: DocumentPosition, count: number): void {
+  if (!this.canDeleteTextInFormMode?.(pos, count)) return;
   // 머리말/꼬리말 편집 모드
   if (this.cursor.isInHeaderFooter()) {
     const isHeader = this.cursor.headerFooterMode === 'header';
