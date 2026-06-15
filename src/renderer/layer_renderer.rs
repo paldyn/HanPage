@@ -148,6 +148,8 @@ pub enum VariantRejectReason {
     UnsupportedSvgGlyph,
     MissingGlyphPayloadResource,
     MixedPerGlyphAuthorityPending,
+    GlyphTransformAuthorityPending,
+    VerticalGlyphOrientationAuthorityPending,
     PositionAdjustedNotAllowed,
     PositionAdjustedResidualTooLarge,
 }
@@ -178,6 +180,10 @@ impl VariantRejectReason {
             Self::UnsupportedSvgGlyph => "unsupportedSvgGlyph",
             Self::MissingGlyphPayloadResource => "missingGlyphPayloadResource",
             Self::MixedPerGlyphAuthorityPending => "mixedPerGlyphAuthorityPending",
+            Self::GlyphTransformAuthorityPending => "glyphTransformAuthorityPending",
+            Self::VerticalGlyphOrientationAuthorityPending => {
+                "verticalGlyphOrientationAuthorityPending"
+            }
             Self::PositionAdjustedNotAllowed => "positionAdjustedNotAllowed",
             Self::PositionAdjustedResidualTooLarge => "positionAdjustedResidualTooLarge",
         }
@@ -522,8 +528,17 @@ fn collect_glyph_run_reject_reasons(
     if !run.paint_style.is_fill_only_glyph_replay() {
         reasons.insert(VariantRejectReason::UnsupportedPaintEffect);
     }
-    if matches!(run.orientation, GlyphRunOrientation::MixedPerGlyph) {
-        reasons.insert(VariantRejectReason::MixedPerGlyphAuthorityPending);
+    if run.glyph_transforms.is_some() {
+        reasons.insert(VariantRejectReason::GlyphTransformAuthorityPending);
+    }
+    match run.orientation {
+        GlyphRunOrientation::Horizontal => {}
+        GlyphRunOrientation::MixedPerGlyph => {
+            reasons.insert(VariantRejectReason::MixedPerGlyphAuthorityPending);
+        }
+        GlyphRunOrientation::VerticalUpright | GlyphRunOrientation::VerticalSideways => {
+            reasons.insert(VariantRejectReason::VerticalGlyphOrientationAuthorityPending);
+        }
     }
     if !matches!(run.orientation, GlyphRunOrientation::Horizontal) {
         reasons.insert(VariantRejectReason::UnsupportedPaintEffect);
@@ -1337,6 +1352,58 @@ mod tests {
         assert_eq!(
             VariantRejectReason::MixedPerGlyphAuthorityPending.as_str(),
             "mixedPerGlyphAuthorityPending"
+        );
+    }
+
+    #[test]
+    fn glyph_transform_runs_keep_text_fallback_until_transform_authority_exists() {
+        let mut op = glyph_run(diagnostics(), 42);
+        if let PaintOp::GlyphRun { run, .. } = &mut op {
+            run.glyph_transforms = Some(vec![GlyphTransform {
+                xx: 1.0,
+                xy: 0.0,
+                yx: 0.0,
+                yy: 1.0,
+                tx: 0.0,
+                ty: 0.0,
+            }]);
+        }
+        let report = first_report(
+            vec![text_op(), op],
+            TextVariantSelectionOptions::canvaskit(),
+        );
+
+        assert_eq!(report.selected_variant_kind, Some(TextVariantKind::TextRun));
+        assert!(report.fallback_required);
+        assert_eq!(
+            report.rejected_variants[0].reasons,
+            vec![VariantRejectReason::GlyphTransformAuthorityPending]
+        );
+        assert_eq!(
+            VariantRejectReason::GlyphTransformAuthorityPending.as_str(),
+            "glyphTransformAuthorityPending"
+        );
+    }
+
+    #[test]
+    fn vertical_glyph_runs_keep_text_fallback_until_orientation_authority_exists() {
+        let mut op = glyph_run(diagnostics(), 42);
+        if let PaintOp::GlyphRun { run, .. } = &mut op {
+            run.orientation = GlyphRunOrientation::VerticalUpright;
+        }
+        let report = first_report(
+            vec![text_op(), op],
+            TextVariantSelectionOptions::canvaskit(),
+        );
+
+        assert_eq!(report.selected_variant_kind, Some(TextVariantKind::TextRun));
+        assert!(report.fallback_required);
+        assert!(report.rejected_variants[0]
+            .reasons
+            .contains(&VariantRejectReason::VerticalGlyphOrientationAuthorityPending));
+        assert_eq!(
+            VariantRejectReason::VerticalGlyphOrientationAuthorityPending.as_str(),
+            "verticalGlyphOrientationAuthorityPending"
         );
     }
 

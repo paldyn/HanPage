@@ -273,9 +273,11 @@ P26 does not promote a new replay family. It closes the authority gaps left by
 the earlier v2 phases so experimental vocabulary cannot be mistaken for a stable
 backend contract.
 
-- `MixedPerGlyph` remains vocabulary for future vertical and per-glyph transform
-  work. CanvasKit/native selection now reports
-  `mixedPerGlyphAuthorityPending` and keeps the homogeneous `TextRun` fallback
+- `MixedPerGlyph`, non-horizontal glyph orientation, and `glyphTransforms`
+  remain vocabulary for future vertical and per-glyph transform work.
+  CanvasKit/native selection now reports `mixedPerGlyphAuthorityPending`,
+  `verticalGlyphOrientationAuthorityPending`, or
+  `glyphTransformAuthorityPending` and keeps the homogeneous `TextRun` fallback
   until cluster/grapheme orientation, transform replay, vertical fixtures, and
   backend fallback policy are proven together.
 - `lineBreakRisks` stays report-only telemetry. Even under

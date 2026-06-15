@@ -526,7 +526,8 @@ fn glyph_run_diagnostics_are_strict(diagnostics: &GlyphRunDiagnostics) -> bool {
 
 fn glyph_run_is_strict(run: &LayerGlyphRunPaint) -> bool {
     glyph_run_diagnostics_are_strict(&run.diagnostics)
-        && !matches!(run.orientation, GlyphRunOrientation::MixedPerGlyph)
+        && matches!(run.orientation, GlyphRunOrientation::Horizontal)
+        && run.glyph_transforms.is_none()
 }
 
 fn glyph_run_fallback_reason(run: &LayerGlyphRunPaint) -> Option<String> {
@@ -535,6 +536,12 @@ fn glyph_run_fallback_reason(run: &LayerGlyphRunPaint) -> Option<String> {
     }
     if matches!(run.orientation, GlyphRunOrientation::MixedPerGlyph) {
         return Some("mixedPerGlyphAuthorityPending".to_string());
+    }
+    if !matches!(run.orientation, GlyphRunOrientation::Horizontal) {
+        return Some("verticalGlyphOrientationAuthorityPending".to_string());
+    }
+    if run.glyph_transforms.is_some() {
+        return Some("glyphTransformAuthorityPending".to_string());
     }
     glyph_run_diagnostics_fallback_reason(&run.diagnostics)
 }
@@ -1071,6 +1078,69 @@ mod tests {
                 .fallback_reason
                 .as_deref(),
             Some("mixedPerGlyphAuthorityPending")
+        );
+    }
+
+    #[test]
+    fn reports_glyph_transform_as_authority_pending() {
+        let mut op = glyph_op(None, 0);
+        if let PaintOp::GlyphRun { run, .. } = &mut op {
+            run.glyph_transforms = Some(vec![GlyphTransform {
+                xx: 1.0,
+                xy: 0.0,
+                yx: 0.0,
+                yy: 1.0,
+                tx: 0.0,
+                ty: 0.0,
+            }]);
+        }
+        let tree = PageLayerTree::new(
+            100.0,
+            100.0,
+            LayerNode::leaf(
+                BoundingBox::new(0.0, 0.0, 100.0, 100.0),
+                None,
+                vec![text_op("A"), op],
+            ),
+        );
+        let diagnostics = TextV2Diagnostics::from_layer_tree_with_profile(
+            &tree,
+            TextV2CompatibilityProfile::FallbackFreeStrict,
+        );
+
+        assert!(diagnostics.has_errors());
+        assert!(!diagnostics.slot_diagnostics[0].strict_variant_available);
+        assert_eq!(
+            diagnostics.slot_diagnostics[0].fallback_reason.as_deref(),
+            Some("glyphTransformAuthorityPending")
+        );
+    }
+
+    #[test]
+    fn reports_vertical_glyph_orientation_as_authority_pending() {
+        let mut op = glyph_op(None, 0);
+        if let PaintOp::GlyphRun { run, .. } = &mut op {
+            run.orientation = GlyphRunOrientation::VerticalUpright;
+        }
+        let tree = PageLayerTree::new(
+            100.0,
+            100.0,
+            LayerNode::leaf(
+                BoundingBox::new(0.0, 0.0, 100.0, 100.0),
+                None,
+                vec![text_op("A"), op],
+            ),
+        );
+        let diagnostics = TextV2Diagnostics::from_layer_tree_with_profile(
+            &tree,
+            TextV2CompatibilityProfile::FallbackFreeStrict,
+        );
+
+        assert!(diagnostics.has_errors());
+        assert!(!diagnostics.slot_diagnostics[0].strict_variant_available);
+        assert_eq!(
+            diagnostics.slot_diagnostics[0].fallback_reason.as_deref(),
+            Some("verticalGlyphOrientationAuthorityPending")
         );
     }
 
