@@ -24,6 +24,7 @@ import { showValidationModalIfNeeded } from '@/ui/validation-modal';
 import { showToast } from '@/ui/toast';
 import { initRhwpDev } from '@/core/rhwp-dev';
 import { DocumentDirtyState } from '@/core/document-dirty-state';
+import { initThemeSync, setThemeMode, getThemeMode, getEffectiveTheme } from '@/core/theme';
 import { CellSelectionRenderer } from '@/engine/cell-selection-renderer';
 import { TableObjectRenderer } from '@/engine/table-object-renderer';
 import { TableResizeRenderer } from '@/engine/table-resize-renderer';
@@ -40,12 +41,17 @@ const wasm = new WasmBridge();
 const eventBus = new EventBus();
 const documentState = new DocumentDirtyState(eventBus);
 documentState.installBeforeUnload(window);
+initThemeSync((effective, mode) => {
+  eventBus.emit('theme-changed', { mode, effective });
+  eventBus.emit('command-state-changed');
+});
 
 // E2E 테스트용 전역 노출 (개발 모드 전용)
 if (import.meta.env.DEV) {
   (window as any).__wasm = wasm;
   (window as any).__eventBus = eventBus;
   (window as any).__documentState = documentState;
+  (window as any).__theme = { getThemeMode, getEffectiveTheme, setThemeMode };
   initRhwpDev(wasm);
 }
 let canvasView: CanvasView | null = null;
