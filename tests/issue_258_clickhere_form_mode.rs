@@ -369,6 +369,46 @@ fn clickhere_end_boundary_insert_respects_active_field_state() {
 }
 
 #[test]
+fn clickhere_start_boundary_insert_respects_active_field_state() {
+    let mut core = make_doc_with_inserted_clickhere();
+
+    assert!(
+        core.set_active_field(0, 0, 1),
+        "empty field guide click should activate clickhere"
+    );
+    core.insert_text_native(0, 0, 1, "값")
+        .expect("first input should fill empty clickhere");
+
+    core.clear_active_field();
+    core.insert_text_native(0, 0, 1, "앞")
+        .expect("inactive field start should insert before clickhere");
+    let fields = core.collect_all_fields();
+    let field = fields
+        .iter()
+        .find(|f| f.field.field_type == FieldType::ClickHere)
+        .expect("clickhere field after outside prefix");
+    let para = &core.document().sections[0].paragraphs[0];
+    let range = &para.field_ranges[field.field_range_index];
+    assert_eq!((range.start_char_idx, range.end_char_idx), (2, 3));
+    assert_eq!(field.value, "값");
+    assert_eq!(para.text, "A앞값BC");
+
+    let _ = core.set_active_field(0, 0, 2);
+    core.insert_text_native(0, 0, 2, "안")
+        .expect("active field start should insert inside clickhere");
+    let fields = core.collect_all_fields();
+    let field = fields
+        .iter()
+        .find(|f| f.field.field_type == FieldType::ClickHere)
+        .expect("clickhere field after active prefix");
+    let para = &core.document().sections[0].paragraphs[0];
+    let range = &para.field_ranges[field.field_range_index];
+    assert_eq!((range.start_char_idx, range.end_char_idx), (2, 4));
+    assert_eq!(field.value, "안값");
+    assert_eq!(para.text, "A앞안값BC");
+}
+
+#[test]
 fn first_input_into_empty_clickhere_is_rendered() {
     let mut core = DocumentCore::new_empty();
     core.create_blank_document_native()

@@ -18,6 +18,13 @@ struct FieldEndInsertion {
     end_char_idx: usize,
 }
 
+#[derive(Clone, Copy)]
+struct FieldStartInsertion {
+    control_idx: usize,
+    start_char_idx: usize,
+    end_char_idx: usize,
+}
+
 fn active_field_matches(
     active_field: Option<&ActiveFieldInfo>,
     section_idx: usize,
@@ -74,6 +81,43 @@ fn inactive_field_end_insertions(
         .collect()
 }
 
+fn inactive_field_start_insertions(
+    para: &Paragraph,
+    active_field: Option<&ActiveFieldInfo>,
+    section_idx: usize,
+    para_idx: usize,
+    cell_path: Option<&[(usize, usize, usize)]>,
+    char_offset: usize,
+) -> Vec<FieldStartInsertion> {
+    para.field_ranges
+        .iter()
+        .filter_map(|fr| {
+            match para.controls.get(fr.control_idx) {
+                Some(Control::Field(field)) if field.field_type == FieldType::ClickHere => {}
+                _ => return None,
+            }
+            // 빈 누름틀은 시작/끝 경계가 없고 첫 입력이 필드 값이어야 한다.
+            if fr.start_char_idx == fr.end_char_idx || fr.start_char_idx != char_offset {
+                return None;
+            }
+            if active_field_matches(
+                active_field,
+                section_idx,
+                para_idx,
+                cell_path,
+                fr.control_idx,
+            ) {
+                return None;
+            }
+            Some(FieldStartInsertion {
+                control_idx: fr.control_idx,
+                start_char_idx: fr.start_char_idx,
+                end_char_idx: fr.end_char_idx,
+            })
+        })
+        .collect()
+}
+
 fn keep_inactive_field_end_outside(
     para: &mut Paragraph,
     insertions: &[FieldEndInsertion],
@@ -89,6 +133,25 @@ fn keep_inactive_field_end_outside(
                 && fr.end_char_idx == target.end_char_idx + inserted_len
         }) {
             fr.end_char_idx = target.end_char_idx;
+        }
+    }
+}
+
+fn keep_inactive_field_start_outside(
+    para: &mut Paragraph,
+    insertions: &[FieldStartInsertion],
+    inserted_len: usize,
+) {
+    if inserted_len == 0 || insertions.is_empty() {
+        return;
+    }
+    for target in insertions {
+        if let Some(fr) = para.field_ranges.iter_mut().find(|fr| {
+            fr.control_idx == target.control_idx
+                && fr.start_char_idx == target.start_char_idx
+                && fr.end_char_idx == target.end_char_idx + inserted_len
+        }) {
+            fr.start_char_idx = target.start_char_idx + inserted_len;
         }
     }
 }
@@ -141,9 +204,18 @@ impl DocumentCore {
             None,
             char_offset,
         );
+        let before_insertions = inactive_field_start_insertions(
+            &self.document.sections[section_idx].paragraphs[para_idx],
+            active_field.as_ref(),
+            section_idx,
+            para_idx,
+            None,
+            char_offset,
+        );
         {
             let para = &mut self.document.sections[section_idx].paragraphs[para_idx];
             para.insert_text_at(char_offset, text);
+            keep_inactive_field_start_outside(para, &before_insertions, new_chars_count);
             keep_inactive_field_end_outside(para, &outside_insertions, new_chars_count);
             if has_clickhere_field_range(para) {
                 rebuild_char_offsets(para);
@@ -401,7 +473,16 @@ impl DocumentCore {
             Some(&cell_path),
             char_offset,
         );
+        let before_insertions = inactive_field_start_insertions(
+            cell_para,
+            active_field.as_ref(),
+            section_idx,
+            cell_para_idx,
+            Some(&cell_path),
+            char_offset,
+        );
         cell_para.insert_text_at(char_offset, text);
+        keep_inactive_field_start_outside(cell_para, &before_insertions, new_chars_count);
         keep_inactive_field_end_outside(cell_para, &outside_insertions, new_chars_count);
         if has_clickhere_field_range(cell_para) {
             rebuild_char_offsets(cell_para);
@@ -2408,7 +2489,16 @@ impl DocumentCore {
             Some(path),
             char_offset,
         );
+        let before_insertions = inactive_field_start_insertions(
+            cell_para,
+            active_field.as_ref(),
+            section_idx,
+            cell_para_idx,
+            Some(path),
+            char_offset,
+        );
         cell_para.insert_text_at(char_offset, text);
+        keep_inactive_field_start_outside(cell_para, &before_insertions, new_chars_count);
         keep_inactive_field_end_outside(cell_para, &outside_insertions, new_chars_count);
         if has_clickhere_field_range(cell_para) {
             rebuild_char_offsets(cell_para);

@@ -42,6 +42,8 @@
   분리되어 빈 누름틀처럼 붙여넣어지던 문제를 보정했다.
 - 누름틀 시작/끝 경계의 바깥 상태를 분리해 방향키와 Home/End가 한컴처럼 누름틀 이전/이후
   위치를 만들 수 있게 했다.
+- 누름틀 시작 이전 위치에서 입력한 텍스트가 누름틀 값으로 들어가지 않고 일반 본문으로
+  남도록 field start 삽입 경계를 보정했다.
 
 ## 2. 검증
 
@@ -149,6 +151,14 @@ Stage18 추가 검증:
 - `cargo test --test issue_258_clickhere_form_mode copying_clickhere_after_prefix_preserves_field_value -- --nocapture`
 - `cargo test --test issue_258_clickhere_form_mode`
 - `cd rhwp-studio && npm run build`
+- `wasm-pack build --target web --out-dir pkg`
+
+Stage19 추가 검증:
+
+- `cargo fmt`
+- `git diff --check`
+- `cargo test --test issue_258_clickhere_form_mode clickhere_start_boundary_insert_respects_active_field_state -- --nocapture`
+- `cargo test --test issue_258_clickhere_form_mode`
 - `wasm-pack build --target web --out-dir pkg`
 
 ## 3. 남은 후속
