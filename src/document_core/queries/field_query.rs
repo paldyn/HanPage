@@ -1511,7 +1511,7 @@ mod tests {
     fn set_cell_field_text_updates_text_metadata() {
         let cell_para = Paragraph {
             text: "기존값".into(),
-            char_count: 3,
+            char_count: 4,
             char_offsets: vec![0, 1, 2],
             ..Default::default()
         };
@@ -1551,7 +1551,7 @@ mod tests {
         };
         let updated = &table.cells[0].paragraphs[0];
         assert_eq!(updated.text, "새값");
-        assert_eq!(updated.char_count, 2);
+        assert_eq!(updated.char_count, 3);
         assert_eq!(updated.char_offsets, vec![0, 1]);
     }
 }

@@ -119,6 +119,16 @@ Stage15 추가 검증:
   (`Delete` 확인 후 첫 문단 text 빈 문자열, 커서 `charOffset=8→0`, 삭제 후
   `getFieldInfoAt(0,0,0)={"inField":false}`)
 
+Stage16 추가 검증:
+
+- `upstream/devel` fetch/rebase 완료 (`upstream/devel` `df4f4a83` 기준)
+- `cargo build --release`: 통과
+- `cargo test --release --lib`: 최초 실패 후 테스트 fixture 기대값 정정
+  - 실패 테스트: `document_core::queries::field_query::tests::set_cell_field_text_updates_text_metadata`
+  - 원인: `Paragraph.char_count`는 문단 끝 마커 포함 기준인데 테스트 기대값이 텍스트 길이만 반영
+  - 수정 후 `cargo test --release --lib set_cell_field_text_updates_text_metadata`: 통과
+  - 수정 후 `cargo test --release --lib`: 통과
+
 ## 3. 남은 후속
 
 - 사용자 정보, 문서 요약, 작성한 날짜, 파일 이름/경로 등 누름틀 외 필드 탭은 후속 이슈로 분리한다.
