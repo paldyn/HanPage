@@ -2752,9 +2752,27 @@ export class InputHandler {
   /** 현재 커서 위치의 누름틀 필드와 내용을 제거한다. */
   removeCurrentField(posOverride?: DocumentPosition): void {
     const pos = posOverride ?? this.cursor.getPosition();
+    let restorePos: DocumentPosition | null = null;
+    try {
+      const fi = this.wasm.getFieldInfoAt(pos);
+      if (fi.inField && fi.fieldType === 'clickhere') {
+        restorePos = {
+          ...pos,
+          charOffset: fi.startCharIdx ?? pos.charOffset,
+        };
+      }
+    } catch {
+      restorePos = null;
+    }
+
     try {
       const result = this.wasm.removeFieldAt(pos);
       if (result.ok) {
+        if (restorePos) {
+          this.cursor.clearSelection();
+          this.cursor.moveTo(restorePos);
+          this.cursor.resetPreferredX();
+        }
         this.fieldMarker.hide();
         this.fieldEndExitKey = null;
         this.wasm.clearActiveField();

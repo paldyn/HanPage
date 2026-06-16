@@ -34,6 +34,8 @@
   제거하도록 고정했다.
 - 누름틀 삭제 확인 시 한컴 동작에 맞춰 `FieldRange`, `Control::Field`,
   대응 `ctrl_data_records`, field range 내부 본문 텍스트까지 함께 제거하도록 고정했다.
+- 누름틀 삭제 후 커서가 삭제된 field 끝 offset에 남지 않고 삭제 전 field 시작 위치로
+  돌아가도록 고정했다.
 
 ## 2. 검증
 
@@ -108,6 +110,14 @@ Stage14 추가 검증:
 - `http://localhost:7700/` Playwright 검증 통과
   (`Delete` 확인 후 첫 문단 text 빈 문자열, field 목록에는 두 번째 `222212212`만 유지,
   렌더 SVG에 `11223344` 미존재)
+
+Stage15 추가 검증:
+
+- `cd rhwp-studio && npm run build`
+- `git diff --check`
+- `http://localhost:7700/` Playwright 검증 통과
+  (`Delete` 확인 후 첫 문단 text 빈 문자열, 커서 `charOffset=8→0`, 삭제 후
+  `getFieldInfoAt(0,0,0)={"inField":false}`)
 
 ## 3. 남은 후속
 

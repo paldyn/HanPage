@@ -1761,7 +1761,7 @@ export class WasmBridge {
     ));
   }
 
-  /** 커서 위치의 누름틀 필드를 제거한다 (텍스트 유지). */
+  /** 커서 위치의 누름틀 필드와 내용을 제거한다. */
   removeFieldAt(pos: DocumentPosition): { ok: boolean } {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
     if (pos.parentParaIndex !== undefined && pos.controlIndex !== undefined) {
