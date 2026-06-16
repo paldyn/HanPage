@@ -22,7 +22,8 @@
 use quick_xml::Writer;
 
 use crate::model::control::{
-    AutoNumber, AutoNumberType, CharOverlap, Control, Equation, NewNumber, PageHide, PageNumberPos,
+    AutoNumber, AutoNumberType, CharOverlap, Control, Equation, Field, NewNumber, PageHide,
+    PageNumberPos,
 };
 use crate::model::document::{Document, Section};
 use crate::model::footnote::{Endnote, Footnote};
@@ -688,14 +689,19 @@ fn render_control_slot(out: &mut String, control: &Control, ctx: &mut SerializeC
         Control::Field(f) => {
             // fieldBegin은 <hp:ctrl>...</hp:ctrl>로 감싸야 함 (Table/Picture와 달리)
             out.push_str("<hp:ctrl>");
-            let has_params = f.raw_parameters_xml.is_some();
+            let generated_params = generated_field_parameters(f);
+            let has_params = f.raw_parameters_xml.is_some() || generated_params.is_some();
             let has_memo = f.field_type == crate::model::control::FieldType::Memo
                 && !f.memo_paragraphs.is_empty();
             if has_params || has_memo {
                 // [#1391] 자식(parameters / memo subList)이 있으면 start/end 태그.
                 out.push_str(&super::field::field_begin_open_tag(f));
                 out.push('>');
-                if let Some(params) = &f.raw_parameters_xml {
+                if let Some(params) = f
+                    .raw_parameters_xml
+                    .as_deref()
+                    .or(generated_params.as_deref())
+                {
                     out.push_str(params);
                 }
                 if has_memo {
@@ -742,6 +748,16 @@ fn render_control_slot(out: &mut String, control: &Control, ctx: &mut SerializeC
         }
         _ => {}
     }
+}
+
+fn generated_field_parameters(field: &Field) -> Option<String> {
+    if field.command.is_empty() || field.raw_parameters_xml.is_some() {
+        return None;
+    }
+    Some(format!(
+        r#"<hp:parameters cnt="1" name=""><hp:stringParam name="Command">{}</hp:stringParam></hp:parameters>"#,
+        xml_escape(&field.command),
+    ))
 }
 
 /// 셀·글상자 subList 인라인 `<hp:ctrl><hp:colPr .../></hp:ctrl>` (#1379 3단계).

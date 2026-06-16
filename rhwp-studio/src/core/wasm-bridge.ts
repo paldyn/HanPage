@@ -1708,6 +1708,9 @@ export class WasmBridge {
     command: string;
     value: string;
     location: { sectionIndex: number; paraIndex: number; path?: Array<any> };
+    startCharIdx?: number;
+    endCharIdx?: number;
+    editableInForm?: boolean;
   }> {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
     return JSON.parse((this.doc as any).getFieldList());
@@ -1758,7 +1761,7 @@ export class WasmBridge {
     ));
   }
 
-  /** 커서 위치의 누름틀 필드를 제거한다 (텍스트 유지). */
+  /** 커서 위치의 누름틀 필드와 내용을 제거한다. */
   removeFieldAt(pos: DocumentPosition): { ok: boolean } {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
     if (pos.parentParaIndex !== undefined && pos.controlIndex !== undefined) {
@@ -1811,6 +1814,54 @@ export class WasmBridge {
   updateClickHereProps(fieldId: number, guide: string, memo: string, name: string, editable: boolean): { ok: boolean } {
     if (!this.doc) return { ok: false };
     return JSON.parse((this.doc as any).updateClickHereProps(fieldId, guide, memo, name, editable));
+  }
+
+  /** 현재 커서 위치에 누름틀 필드를 삽입한다. */
+  insertClickHereField(
+    pos: DocumentPosition,
+    guide: string,
+    memo: string,
+    name: string,
+    editable: boolean,
+  ): { ok: boolean; fieldId?: number; charOffset?: number } {
+    if (!this.doc) return { ok: false };
+    const doc = this.doc as any;
+    if ((pos.cellPath?.length ?? 0) > 1 && pos.parentParaIndex !== undefined) {
+      return JSON.parse(doc.insertClickHereFieldByPath(
+        pos.sectionIndex,
+        pos.parentParaIndex,
+        JSON.stringify(pos.cellPath),
+        pos.charOffset,
+        guide,
+        memo,
+        name,
+        editable,
+      ));
+    }
+    if (pos.parentParaIndex !== undefined && pos.controlIndex !== undefined) {
+      return JSON.parse(doc.insertClickHereFieldInCell(
+        pos.sectionIndex,
+        pos.parentParaIndex,
+        pos.controlIndex,
+        pos.cellIndex ?? 0,
+        pos.cellParaIndex ?? 0,
+        pos.charOffset,
+        pos.isTextBox ?? false,
+        guide,
+        memo,
+        name,
+        editable,
+      ));
+    }
+    return JSON.parse(doc.insertClickHereField(
+      pos.sectionIndex,
+      pos.paragraphIndex,
+      pos.charOffset,
+      guide,
+      memo,
+      name,
+      editable,
+    ));
   }
 
   // ─────────────────────────────────────────────

@@ -8,7 +8,7 @@ import { MenuBar } from '@/ui/menu-bar';
 import { loadWebFonts } from '@/core/font-loader';
 import { CommandRegistry } from '@/command/registry';
 import { CommandDispatcher } from '@/command/dispatcher';
-import type { EditorContext, CommandServices } from '@/command/types';
+import type { EditorContext, CommandServices, EditorEditMode } from '@/command/types';
 import { confirmSaveBeforeReplacingDocument, fileCommands } from '@/command/commands/file';
 import { editCommands } from '@/command/commands/edit';
 import { viewCommands } from '@/command/commands/view';
@@ -52,6 +52,7 @@ let canvasView: CanvasView | null = null;
 let inputHandler: InputHandler | null = null;
 let toolbar: Toolbar | null = null;
 let ruler: Ruler | null = null;
+let editMode: EditorEditMode = 'normal';
 
 
 // ─── 커맨드 시스템 ─────────────────────────────
@@ -59,6 +60,8 @@ const registry = new CommandRegistry();
 
 function getContext(): EditorContext {
   const hasDoc = wasm.pageCount > 0;
+  const canEditFormField = inputHandler?.canEditCurrentFormField() ?? false;
+  const isFormMode = editMode === 'form';
   return {
     hasDocument: hasDoc,
     hasSelection: inputHandler?.hasSelection() ?? false,
@@ -67,7 +70,10 @@ function getContext(): EditorContext {
     inTableObjectSelection: inputHandler?.isInTableObjectSelection() ?? false,
     inPictureObjectSelection: inputHandler?.isInPictureObjectSelection() ?? false,
     inField: inputHandler?.isInField() ?? false,
-    isEditable: true,
+    isEditable: !isFormMode || canEditFormField,
+    editMode,
+    isFormMode,
+    canEditFormField,
     canUndo: inputHandler?.canUndo() ?? false,
     canRedo: inputHandler?.canRedo() ?? false,
     zoom: canvasView?.getViewportManager().getZoom() ?? 1.0,
@@ -77,6 +83,18 @@ function getContext(): EditorContext {
   };
 }
 
+function setEditMode(mode: EditorEditMode): void {
+  editMode = mode;
+  inputHandler?.setEditMode(mode);
+  document.documentElement.dataset.editMode = mode;
+  document.querySelectorAll('[data-cmd="view:form-mode"]').forEach(el => {
+    el.classList.toggle('active', mode === 'form');
+  });
+  sbMessage().textContent = mode === 'form' ? '양식 모드' : '기본 편집 모드';
+  eventBus.emit('edit-mode-changed', mode);
+  eventBus.emit('command-state-changed');
+}
+
 const commandServices: CommandServices = {
   eventBus,
   wasm,
@@ -84,6 +102,7 @@ const commandServices: CommandServices = {
   getContext,
   getInputHandler: () => inputHandler,
   getViewportManager: () => canvasView?.getViewportManager() ?? null,
+  setEditMode,
 };
 
 const dispatcher = new CommandDispatcher(registry, commandServices, eventBus);
@@ -164,6 +183,7 @@ async function initialize(): Promise<void> {
       canvasView.getVirtualScroll(),
       canvasView.getViewportManager(),
     );
+    inputHandler.setEditMode(editMode);
 
     toolbar = new Toolbar(document.getElementById('style-bar')!, wasm, eventBus, dispatcher);
     toolbar.setEnabled(false);

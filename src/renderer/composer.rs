@@ -118,20 +118,23 @@ pub fn compose_section(section: &Section) -> Vec<ComposedParagraph> {
 ///
 /// 영향 범위: composer 내부만 (rendering pipeline). para 원본 (editor) 영향 없음.
 fn synthesize_marker_paragraph(para: &Paragraph) -> Option<Paragraph> {
-    // inline-visible extended ctrls 수 계산 (header/footer/footnote/endnote/hidden 제외)
+    fn needs_synthesized_inline_marker(ctrl: &Control) -> bool {
+        matches!(
+            ctrl,
+            Control::Picture(_) | Control::Shape(_) | Control::Table(_) | Control::Form(_)
+        ) || matches!(
+            ctrl,
+            Control::Equation(eq) if eq.common.treat_as_char
+        )
+    }
+
+    // 렌더에 실제 자리를 차지하는 TAC/개체 컨트롤 수 계산.
+    // Field/ColumnDef/SectionDef 같은 비가시 컨트롤은 char_offsets gap에 있어도
+    // 본문 텍스트 char_start를 밀면 안 된다.
     let inline_ctrl_count = para
         .controls
         .iter()
-        .filter(|c| {
-            !matches!(
-                c,
-                Control::Header(_)
-                    | Control::Footer(_)
-                    | Control::Footnote(_)
-                    | Control::Endnote(_)
-                    | Control::HiddenComment(_)
-            )
-        })
+        .filter(|ctrl| needs_synthesized_inline_marker(ctrl))
         .count();
 
     if inline_ctrl_count == 0 {
@@ -192,16 +195,7 @@ fn synthesize_marker_paragraph(para: &Paragraph) -> Option<Paragraph> {
         .controls
         .iter()
         .enumerate()
-        .filter(|(_, c)| {
-            !matches!(
-                c,
-                Control::Header(_)
-                    | Control::Footer(_)
-                    | Control::Footnote(_)
-                    | Control::Endnote(_)
-                    | Control::HiddenComment(_)
-            )
-        })
+        .filter(|(_, ctrl)| needs_synthesized_inline_marker(ctrl))
         .filter_map(|(i, _)| raw_positions.get(i).copied())
         .collect();
     if raw_inline_positions.iter().any(|pos| *pos > 0) {

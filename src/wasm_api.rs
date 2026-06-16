@@ -3499,6 +3499,89 @@ impl HwpDocument {
             .map_err(|e| e.into())
     }
 
+    /// 현재 본문 위치에 ClickHere 누름틀 필드를 삽입한다.
+    #[wasm_bindgen(js_name = insertClickHereField)]
+    pub fn insert_click_here_field_api(
+        &mut self,
+        section_idx: u32,
+        para_idx: u32,
+        char_offset: u32,
+        guide: &str,
+        memo: &str,
+        name: &str,
+        editable: bool,
+    ) -> Result<String, JsValue> {
+        self.insert_click_here_field_at(
+            section_idx as usize,
+            para_idx as usize,
+            char_offset as usize,
+            guide,
+            memo,
+            name,
+            editable,
+        )
+        .map_err(|e| e.into())
+    }
+
+    /// 현재 셀/글상자 위치에 ClickHere 누름틀 필드를 삽입한다.
+    #[wasm_bindgen(js_name = insertClickHereFieldInCell)]
+    pub fn insert_click_here_field_in_cell_api(
+        &mut self,
+        section_idx: u32,
+        parent_para_idx: u32,
+        control_idx: u32,
+        cell_idx: u32,
+        cell_para_idx: u32,
+        char_offset: u32,
+        is_textbox: bool,
+        guide: &str,
+        memo: &str,
+        name: &str,
+        editable: bool,
+    ) -> Result<String, JsValue> {
+        self.insert_click_here_field_at_in_cell(
+            section_idx as usize,
+            parent_para_idx as usize,
+            control_idx as usize,
+            cell_idx as usize,
+            cell_para_idx as usize,
+            char_offset as usize,
+            is_textbox,
+            guide,
+            memo,
+            name,
+            editable,
+        )
+        .map_err(|e| e.into())
+    }
+
+    /// 현재 중첩 표 cellPath 위치에 ClickHere 누름틀 필드를 삽입한다.
+    #[wasm_bindgen(js_name = insertClickHereFieldByPath)]
+    pub fn insert_click_here_field_by_path_api(
+        &mut self,
+        section_idx: u32,
+        parent_para_idx: u32,
+        path_json: &str,
+        char_offset: u32,
+        guide: &str,
+        memo: &str,
+        name: &str,
+        editable: bool,
+    ) -> Result<String, JsValue> {
+        let path = DocumentCore::parse_cell_path(path_json)?;
+        self.insert_click_here_field_at_by_path(
+            section_idx as usize,
+            parent_para_idx as usize,
+            &path,
+            char_offset as usize,
+            guide,
+            memo,
+            name,
+            editable,
+        )
+        .map_err(|e| e.into())
+    }
+
     // ─────────────────────────────────────────────
     // 양식 개체(Form Object) API
     // ─────────────────────────────────────────────
@@ -3686,7 +3769,7 @@ impl HwpDocument {
 
     /// 커서 위치의 필드 범위 정보를 조회한다 (본문 문단).
     ///
-    /// 반환: `{inField, fieldId?, startCharIdx?, endCharIdx?, isGuide?, guideName?}`
+    /// 반환: `{inField, fieldId?, startCharIdx?, endCharIdx?, isGuide?, guideName?, editableInForm?}`
     #[wasm_bindgen(js_name = getFieldInfoAt)]
     pub fn get_field_info_at_api(
         &self,

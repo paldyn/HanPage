@@ -248,6 +248,7 @@ export interface FieldInfoResult {
   endCharIdx?: number;
   isGuide?: boolean;
   guideName?: string;
+  editableInForm?: boolean;
 }
 
 /** WASM getLineInfo() 반환 타입 */

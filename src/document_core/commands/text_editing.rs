@@ -1,14 +1,169 @@
 //! 텍스트 삽입/삭제/문단 분리·병합/범위 삭제/문단 쿼리 관련 native 메서드
 
 use super::super::helpers::get_textbox_from_shape;
-use crate::document_core::DocumentCore;
+use super::super::queries::field_query::rebuild_char_offsets;
+use crate::document_core::{ActiveFieldInfo, DocumentCore};
 use crate::error::HwpError;
-use crate::model::control::Control;
+use crate::model::control::{Control, FieldType};
 use crate::model::event::DocumentEvent;
 use crate::model::page::ColumnDef;
 use crate::model::paragraph::Paragraph;
 use crate::renderer::composer::{compose_paragraph, reflow_line_segs, ComposedParagraph};
 use crate::renderer::page_layout::PageLayoutInfo;
+
+#[derive(Clone, Copy)]
+struct FieldEndInsertion {
+    control_idx: usize,
+    start_char_idx: usize,
+    end_char_idx: usize,
+}
+
+#[derive(Clone, Copy)]
+struct FieldStartInsertion {
+    control_idx: usize,
+    start_char_idx: usize,
+    end_char_idx: usize,
+}
+
+fn active_field_matches(
+    active_field: Option<&ActiveFieldInfo>,
+    section_idx: usize,
+    para_idx: usize,
+    cell_path: Option<&[(usize, usize, usize)]>,
+    control_idx: usize,
+) -> bool {
+    active_field.is_some_and(|af| {
+        af.section_idx == section_idx
+            && af.para_idx == para_idx
+            && af.control_idx == control_idx
+            && match (&af.cell_path, cell_path) {
+                (None, None) => true,
+                (Some(a), Some(b)) => a.as_slice() == b,
+                _ => false,
+            }
+    })
+}
+
+fn inactive_field_end_insertions(
+    para: &Paragraph,
+    active_field: Option<&ActiveFieldInfo>,
+    section_idx: usize,
+    para_idx: usize,
+    cell_path: Option<&[(usize, usize, usize)]>,
+    char_offset: usize,
+) -> Vec<FieldEndInsertion> {
+    para.field_ranges
+        .iter()
+        .filter_map(|fr| {
+            match para.controls.get(fr.control_idx) {
+                Some(Control::Field(field)) if field.field_type == FieldType::ClickHere => {}
+                _ => return None,
+            }
+            // 빈 누름틀은 active 상태가 아직 반영되기 전 첫 입력도 값으로 받아야 한다.
+            if fr.start_char_idx == fr.end_char_idx || fr.end_char_idx != char_offset {
+                return None;
+            }
+            if active_field_matches(
+                active_field,
+                section_idx,
+                para_idx,
+                cell_path,
+                fr.control_idx,
+            ) {
+                return None;
+            }
+            Some(FieldEndInsertion {
+                control_idx: fr.control_idx,
+                start_char_idx: fr.start_char_idx,
+                end_char_idx: fr.end_char_idx,
+            })
+        })
+        .collect()
+}
+
+fn inactive_field_start_insertions(
+    para: &Paragraph,
+    active_field: Option<&ActiveFieldInfo>,
+    section_idx: usize,
+    para_idx: usize,
+    cell_path: Option<&[(usize, usize, usize)]>,
+    char_offset: usize,
+) -> Vec<FieldStartInsertion> {
+    para.field_ranges
+        .iter()
+        .filter_map(|fr| {
+            match para.controls.get(fr.control_idx) {
+                Some(Control::Field(field)) if field.field_type == FieldType::ClickHere => {}
+                _ => return None,
+            }
+            // 빈 누름틀은 시작/끝 경계가 없고 첫 입력이 필드 값이어야 한다.
+            if fr.start_char_idx == fr.end_char_idx || fr.start_char_idx != char_offset {
+                return None;
+            }
+            if active_field_matches(
+                active_field,
+                section_idx,
+                para_idx,
+                cell_path,
+                fr.control_idx,
+            ) {
+                return None;
+            }
+            Some(FieldStartInsertion {
+                control_idx: fr.control_idx,
+                start_char_idx: fr.start_char_idx,
+                end_char_idx: fr.end_char_idx,
+            })
+        })
+        .collect()
+}
+
+fn keep_inactive_field_end_outside(
+    para: &mut Paragraph,
+    insertions: &[FieldEndInsertion],
+    inserted_len: usize,
+) {
+    if inserted_len == 0 || insertions.is_empty() {
+        return;
+    }
+    for target in insertions {
+        if let Some(fr) = para.field_ranges.iter_mut().find(|fr| {
+            fr.control_idx == target.control_idx
+                && fr.start_char_idx == target.start_char_idx
+                && fr.end_char_idx == target.end_char_idx + inserted_len
+        }) {
+            fr.end_char_idx = target.end_char_idx;
+        }
+    }
+}
+
+fn keep_inactive_field_start_outside(
+    para: &mut Paragraph,
+    insertions: &[FieldStartInsertion],
+    inserted_len: usize,
+) {
+    if inserted_len == 0 || insertions.is_empty() {
+        return;
+    }
+    for target in insertions {
+        if let Some(fr) = para.field_ranges.iter_mut().find(|fr| {
+            fr.control_idx == target.control_idx
+                && fr.start_char_idx == target.start_char_idx
+                && fr.end_char_idx == target.end_char_idx + inserted_len
+        }) {
+            fr.start_char_idx = target.start_char_idx + inserted_len;
+        }
+    }
+}
+
+fn has_clickhere_field_range(para: &Paragraph) -> bool {
+    para.field_ranges.iter().any(|fr| {
+        matches!(
+            para.controls.get(fr.control_idx),
+            Some(Control::Field(field)) if field.field_type == FieldType::ClickHere
+        )
+    })
+}
 
 impl DocumentCore {
     pub fn insert_text_native(
@@ -40,7 +195,32 @@ impl DocumentCore {
 
         // 텍스트 삽입
         let new_chars_count = text.chars().count();
-        self.document.sections[section_idx].paragraphs[para_idx].insert_text_at(char_offset, text);
+        let active_field = self.active_field.clone();
+        let outside_insertions = inactive_field_end_insertions(
+            &self.document.sections[section_idx].paragraphs[para_idx],
+            active_field.as_ref(),
+            section_idx,
+            para_idx,
+            None,
+            char_offset,
+        );
+        let before_insertions = inactive_field_start_insertions(
+            &self.document.sections[section_idx].paragraphs[para_idx],
+            active_field.as_ref(),
+            section_idx,
+            para_idx,
+            None,
+            char_offset,
+        );
+        {
+            let para = &mut self.document.sections[section_idx].paragraphs[para_idx];
+            para.insert_text_at(char_offset, text);
+            keep_inactive_field_start_outside(para, &before_insertions, new_chars_count);
+            keep_inactive_field_end_outside(para, &outside_insertions, new_chars_count);
+            if has_clickhere_field_range(para) {
+                rebuild_char_offsets(para);
+            }
+        }
 
         // line_segs 재계산 (리플로우) → vpos 재계산 → 재구성 → 재페이지네이션
         // 다단 문서에서 편집 후 문단이 다른 단으로 재배치될 수 있으므로
@@ -275,6 +455,8 @@ impl DocumentCore {
         text: &str,
     ) -> Result<String, HwpError> {
         // 셀 문단 접근 검증 및 텍스트 삽입
+        let active_field = self.active_field.clone();
+        let cell_path = [(control_idx, cell_idx, cell_para_idx)];
         let cell_para = self.get_cell_paragraph_mut(
             section_idx,
             parent_para_idx,
@@ -283,7 +465,28 @@ impl DocumentCore {
             cell_para_idx,
         )?;
         let new_chars_count = text.chars().count();
+        let outside_insertions = inactive_field_end_insertions(
+            cell_para,
+            active_field.as_ref(),
+            section_idx,
+            cell_para_idx,
+            Some(&cell_path),
+            char_offset,
+        );
+        let before_insertions = inactive_field_start_insertions(
+            cell_para,
+            active_field.as_ref(),
+            section_idx,
+            cell_para_idx,
+            Some(&cell_path),
+            char_offset,
+        );
         cell_para.insert_text_at(char_offset, text);
+        keep_inactive_field_start_outside(cell_para, &before_insertions, new_chars_count);
+        keep_inactive_field_end_outside(cell_para, &outside_insertions, new_chars_count);
+        if has_clickhere_field_range(cell_para) {
+            rebuild_char_offsets(cell_para);
+        }
 
         // 부모 컨트롤 dirty 마킹 (표 또는 글상자)
         self.mark_cell_control_dirty(section_idx, parent_para_idx, control_idx);
@@ -844,6 +1047,14 @@ impl DocumentCore {
         self.document.sections[section_idx]
             .paragraphs
             .insert(new_para_idx, new_para);
+        for i in para_idx..=new_para_idx {
+            if !self.document.sections[section_idx].paragraphs[i]
+                .field_ranges
+                .is_empty()
+            {
+                rebuild_char_offsets(&mut self.document.sections[section_idx].paragraphs[i]);
+            }
+        }
 
         // 양쪽 문단 리플로우 → vpos 재계산 → 재구성 → 재페이지네이션 + 다단 수렴 루프
         let old_col1 = self
@@ -926,6 +1137,14 @@ impl DocumentCore {
         self.document.sections[section_idx]
             .paragraphs
             .insert(new_para_idx, new_para);
+        for i in para_idx..=new_para_idx {
+            if !self.document.sections[section_idx].paragraphs[i]
+                .field_ranges
+                .is_empty()
+            {
+                rebuild_char_offsets(&mut self.document.sections[section_idx].paragraphs[i]);
+            }
+        }
 
         // 새 문단에 쪽 나누기 설정
         self.document.sections[section_idx].paragraphs[new_para_idx].column_type =
@@ -2275,8 +2494,31 @@ impl DocumentCore {
         text: &str,
     ) -> Result<String, HwpError> {
         let new_chars_count = text.chars().count();
+        let active_field = self.active_field.clone();
         let cell_para = self.get_cell_paragraph_mut_by_path(section_idx, parent_para_idx, path)?;
+        let cell_para_idx = path.last().map(|entry| entry.2).unwrap_or(0);
+        let outside_insertions = inactive_field_end_insertions(
+            cell_para,
+            active_field.as_ref(),
+            section_idx,
+            cell_para_idx,
+            Some(path),
+            char_offset,
+        );
+        let before_insertions = inactive_field_start_insertions(
+            cell_para,
+            active_field.as_ref(),
+            section_idx,
+            cell_para_idx,
+            Some(path),
+            char_offset,
+        );
         cell_para.insert_text_at(char_offset, text);
+        keep_inactive_field_start_outside(cell_para, &before_insertions, new_chars_count);
+        keep_inactive_field_end_outside(cell_para, &outside_insertions, new_chars_count);
+        if has_clickhere_field_range(cell_para) {
+            rebuild_char_offsets(cell_para);
+        }
 
         // 최외곽 표 dirty 마킹
         let outer_ctrl = path[0].0;
