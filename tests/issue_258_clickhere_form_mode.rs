@@ -369,6 +369,73 @@ fn clickhere_end_boundary_insert_respects_active_field_state() {
 }
 
 #[test]
+fn adjacent_clickhere_input_prefers_new_empty_field_at_shared_boundary() {
+    let mut core = DocumentCore::new_empty();
+    core.create_blank_document_native()
+        .expect("create blank document");
+    core.insert_text_native(0, 0, 0, "abc")
+        .expect("insert prefix");
+
+    core.insert_click_here_field_at(0, 0, 3, "첫 번째", "", "first", true)
+        .expect("insert first clickhere");
+    assert!(
+        core.set_active_field(0, 0, 3),
+        "first empty clickhere should activate"
+    );
+    core.insert_text_native(0, 0, 3, "123")
+        .expect("fill first clickhere");
+    core.clear_active_field();
+
+    let inserted_second = core
+        .insert_click_here_field_at(0, 0, 6, "두 번째", "", "second", true)
+        .expect("insert adjacent second clickhere");
+    let second_json: Value =
+        serde_json::from_str(&inserted_second).expect("parse inserted second json");
+    let second_id = second_json["fieldId"].as_u64().expect("second field id") as u32;
+
+    let shared_info = core.get_field_info_at(0, 0, 6);
+    assert!(
+        shared_info.contains(&format!(r#""fieldId":{}"#, second_id)),
+        "shared boundary should resolve to new empty clickhere: {}",
+        shared_info
+    );
+    assert!(
+        shared_info.contains(r#""isGuide":true"#),
+        "shared boundary should expose second field as guide: {}",
+        shared_info
+    );
+
+    assert!(
+        core.set_active_field(0, 0, 6),
+        "shared boundary guide click should activate second clickhere"
+    );
+    core.insert_text_native(0, 0, 6, "123")
+        .expect("fill second clickhere");
+
+    let para = &core.document().sections[0].paragraphs[0];
+    assert_eq!(para.text, "abc123123");
+
+    let fields = core.collect_all_fields();
+    let click_fields: Vec<_> = fields
+        .iter()
+        .filter(|f| f.field.field_type == FieldType::ClickHere)
+        .collect();
+    assert_eq!(click_fields.len(), 2);
+    let ranges: Vec<_> = click_fields
+        .iter()
+        .map(|field| {
+            let range = &para.field_ranges[field.field_range_index];
+            (
+                range.start_char_idx,
+                range.end_char_idx,
+                field.value.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(ranges, vec![(3, 6, "123"), (6, 9, "123")]);
+}
+
+#[test]
 fn clickhere_start_boundary_insert_respects_active_field_state() {
     let mut core = make_doc_with_inserted_clickhere();
 

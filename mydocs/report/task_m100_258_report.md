@@ -209,6 +209,19 @@ Stage24 추가 검증:
   start-exit 상태 Backspace는 확인창 없이 `ab|123`으로 앞 글자 삭제)
 - `git diff --check`
 
+Stage25 추가 검증:
+
+- `cargo test --test issue_258_clickhere_form_mode adjacent_clickhere_input_prefers_new_empty_field_at_shared_boundary -- --nocapture`
+- `cargo test --test issue_258_clickhere_form_mode`
+- `wasm-pack build --target web --out-dir pkg`
+- `cd rhwp-studio && npm run build`
+- `cargo fmt --check`
+- `git diff --check`
+- Browser plugin: `http://localhost:7700/` 로드, title `rhwp-studio`, console error/warn 없음
+- `http://localhost:7700/` Playwright 검증 통과
+  (`abc[123][123]` 구성 후 두 field value가 각각 `123`, field range가 `3..6`, `6..9`로 분리,
+  `Shift+ArrowRight` 6회 후 selection range `3..9`, selection rect 폭 `44px`로 `123123` 전체 선택)
+
 ## 3. 남은 후속
 
 - 사용자 정보, 문서 요약, 작성한 날짜, 파일 이름/경로 등 누름틀 외 필드 탭은 후속 이슈로 분리한다.

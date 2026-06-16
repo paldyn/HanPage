@@ -897,6 +897,27 @@ impl DocumentCore {
 /// 문단 내 커서 위치의 필드 범위 정보를 JSON으로 반환한다.
 fn field_info_at_in_para(para: &Paragraph, char_offset: usize) -> String {
     for fr in &para.field_ranges {
+        if fr.start_char_idx != fr.end_char_idx || char_offset != fr.start_char_idx {
+            continue;
+        }
+        if let Some(Control::Field(field)) = para.controls.get(fr.control_idx) {
+            if field.field_type != FieldType::ClickHere {
+                continue;
+            }
+            let guide = field.guide_text().unwrap_or("");
+            return format!(
+                "{{\"inField\":true,\"fieldId\":{},\"fieldType\":\"{}\",\"startCharIdx\":{},\"endCharIdx\":{},\"isGuide\":true,\"guideName\":{},\"editableInForm\":{}}}",
+                field.field_id,
+                field.field_type_str(),
+                fr.start_char_idx,
+                fr.end_char_idx,
+                json_escape(guide),
+                field.is_editable_in_form(),
+            );
+        }
+    }
+
+    for fr in &para.field_ranges {
         if let Some(Control::Field(field)) = para.controls.get(fr.control_idx) {
             if field.field_type != FieldType::ClickHere {
                 continue;
@@ -1265,6 +1286,19 @@ fn insert_click_here_field_in_para(
 
 /// 문단에서 커서 위치의 ClickHere 필드 컨트롤 인덱스를 반환한다.
 fn find_field_ctrl_idx_in_para(para: &Paragraph, char_offset: usize) -> Option<usize> {
+    // 인접 누름틀 경계에서는 앞 누름틀의 끝과 다음 빈 누름틀의 시작이
+    // 같은 charOffset을 공유한다. 새 빈 누름틀을 먼저 잡아야 첫 입력이
+    // 앞 누름틀 값으로 붙지 않는다.
+    for fr in &para.field_ranges {
+        if fr.start_char_idx == fr.end_char_idx && char_offset == fr.start_char_idx {
+            if let Some(Control::Field(field)) = para.controls.get(fr.control_idx) {
+                if field.field_type == FieldType::ClickHere {
+                    return Some(fr.control_idx);
+                }
+            }
+        }
+    }
+
     for fr in &para.field_ranges {
         if let Some(Control::Field(field)) = para.controls.get(fr.control_idx) {
             if field.field_type != FieldType::ClickHere {
