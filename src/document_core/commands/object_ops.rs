@@ -882,6 +882,60 @@ impl DocumentCore {
         Ok(current_para)
     }
 
+    fn required_cell_height_for_picture(
+        cell: &crate::model::table::Cell,
+        pic: &crate::model::image::Picture,
+    ) -> u32 {
+        let vert_offset = (pic.common.vertical_offset as i32).max(0) as u32;
+        vert_offset
+            .saturating_add(pic.common.height)
+            .saturating_add(cell.padding.top as u32)
+            .saturating_add(cell.padding.bottom as u32)
+    }
+
+    fn grow_direct_owner_cell_for_picture(
+        section: &mut crate::model::document::Section,
+        parent_para_idx: usize,
+        path: &[(usize, usize, usize)],
+        inner_control_idx: usize,
+    ) -> Result<(), HwpError> {
+        if path.len() != 1 {
+            return Ok(());
+        }
+
+        let (table_ctrl_idx, cell_idx, cell_para_idx) = path[0];
+        let para = section.paragraphs.get_mut(parent_para_idx).ok_or_else(|| {
+            HwpError::RenderError(format!("문단 인덱스 {} 범위 초과", parent_para_idx))
+        })?;
+        let table = match para.controls.get_mut(table_ctrl_idx) {
+            Some(Control::Table(table)) => table,
+            _ => return Ok(()),
+        };
+
+        let required_height = {
+            let cell = table.cells.get(cell_idx).ok_or_else(|| {
+                HwpError::RenderError(format!("경로[0]: cells[{}] 범위 초과", cell_idx))
+            })?;
+            let cell_para = cell.paragraphs.get(cell_para_idx).ok_or_else(|| {
+                HwpError::RenderError(format!("경로[0]: paragraphs[{}] 범위 초과", cell_para_idx))
+            })?;
+            let pic = match cell_para.controls.get(inner_control_idx) {
+                Some(Control::Picture(pic)) => pic,
+                _ => return Ok(()),
+            };
+            Self::required_cell_height_for_picture(cell, pic)
+        };
+
+        if let Some(cell) = table.cells.get_mut(cell_idx) {
+            if required_height > cell.height {
+                cell.height = required_height;
+                table.update_ctrl_dimensions();
+                table.dirty = true;
+            }
+        }
+        Ok(())
+    }
+
     /// path 의 마지막 엔트리가 글상자(Shape text_box)를 가리키는지 판정한다.
     ///
     /// 표 셀 picture 삽입은 한컴 정합상 parent paragraph 의 sibling floating
@@ -3495,6 +3549,12 @@ impl DocumentCore {
             Self::apply_picture_props_inner(pic, props_json);
         }
         let section = &mut self.document.sections[section_idx];
+        Self::grow_direct_owner_cell_for_picture(
+            section,
+            parent_para_idx,
+            &path,
+            inner_control_idx,
+        )?;
         section.raw_stream = None;
         self.recompose_section(section_idx);
         self.paginate_if_needed();
