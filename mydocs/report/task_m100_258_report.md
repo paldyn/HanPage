@@ -222,6 +222,19 @@ Stage25 추가 검증:
   (`abc[123][123]` 구성 후 두 field value가 각각 `123`, field range가 `3..6`, `6..9`로 분리,
   `Shift+ArrowRight` 6회 후 selection range `3..9`, selection rect 폭 `44px`로 `123123` 전체 선택)
 
+Stage26 추가 검증:
+
+- Browser plugin: `http://localhost:7700/` 로드, title `rhwp-studio`, console error/warn 없음
+  - Browser 탭에서는 개발용 `__wasm/__inputHandler` 전역이 없어 내부 상태 검증은 Playwright로 수행
+- `http://localhost:7700/` Playwright 실제 마우스 드래그 검증 통과
+  (`abc[123][123]` 구성 후 field range `3..6`, `6..9`, selection range `3..9`,
+  selection rect 폭 `44px`, selection layer `mix-blend-mode: difference`,
+  field marker `display:none`, `123123` 전체가 검은 배경/흰 글자로 표시)
+- `cargo test --test issue_258_clickhere_form_mode`
+- `cd rhwp-studio && npm run build`
+- `cargo fmt --check`
+- `git diff --check`
+
 ## 3. 남은 후속
 
 - 사용자 정보, 문서 요약, 작성한 날짜, 파일 이름/경로 등 누름틀 외 필드 탭은 후속 이슈로 분리한다.

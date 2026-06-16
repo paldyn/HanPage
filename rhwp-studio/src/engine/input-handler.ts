@@ -3109,6 +3109,12 @@ export class InputHandler {
   /** 커서 위치의 필드 상태에 따라 낫표 마커를 표시/숨김한다 */
   private updateFieldMarkers(): void {
     const wasVisible = this.fieldMarker.isVisible;
+    if (this.cursor.hasSelection()) {
+      if (wasVisible) this.fieldMarker.hide();
+      this.wasm.clearActiveField();
+      this.eventBus.emit('field-info-changed', null);
+      return;
+    }
     try {
       const pos = this.cursor.getPosition();
       const fi = this.wasm.getFieldInfoAt(pos);

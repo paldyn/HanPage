@@ -1,7 +1,7 @@
 import type { SelectionRect } from '@/core/types';
 import { VirtualScroll } from '@/view/virtual-scroll';
 
-/** 선택 영역을 파란색 반투명 사각형으로 렌더링한다 */
+/** 선택 영역을 한컴처럼 검은 반전 사각형으로 렌더링한다 */
 export class SelectionRenderer {
   private layer: HTMLDivElement;
   private highlights: HTMLDivElement[] = [];
@@ -14,7 +14,9 @@ export class SelectionRenderer {
   ) {
     this.layer = document.createElement('div');
     this.layer.className = 'selection-layer';
-    this.layer.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5;';
+    this.layer.style.cssText =
+      'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5;' +
+      'mix-blend-mode:difference;';
     const scrollContent = container.querySelector('#scroll-content');
     if (scrollContent) {
       scrollContent.appendChild(this.layer);
@@ -92,7 +94,7 @@ export class SelectionRenderer {
       div = document.createElement('div');
       div.className = 'selection-highlight';
       div.style.cssText =
-        'position:absolute;background:rgba(51,144,255,0.35);pointer-events:none;display:none;';
+        'position:absolute;background:#fff;pointer-events:none;display:none;';
       this.layer.appendChild(div);
       this.highlights[index] = div;
     }
