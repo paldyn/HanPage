@@ -198,6 +198,17 @@ Stage23 추가 검증:
   본문 text `abc123`, field value `123`, field range `3..6`,
   시작 낫표가 field 시작 경계 기준에 표시)
 
+Stage24 추가 검증:
+
+- `cd rhwp-studio && npm run build`
+- `http://localhost:7700/` Playwright 검증 통과
+  (새 누름틀 삽입 직후 guide `사용자 이름`과 caret이 오른쪽 바깥에 표시,
+  `←` 후 guide가 사라진 빈 입력칸으로 진입,
+  입력 없이 `→` 후 guide와 오른쪽 바깥 caret 복원,
+  `abc|123` start-exit 상태에서 `←`는 `ab|c123`으로 이동,
+  start-exit 상태 Backspace는 확인창 없이 `ab|123`으로 앞 글자 삭제)
+- `git diff --check`
+
 ## 3. 남은 후속
 
 - 사용자 정보, 문서 요약, 작성한 날짜, 파일 이름/경로 등 누름틀 외 필드 탭은 후속 이슈로 분리한다.

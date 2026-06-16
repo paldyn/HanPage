@@ -160,6 +160,9 @@ export const insertCommands: CommandDef[] = [
             props.editable,
           );
           if (result.ok) {
+            const insertedPos = { ...pos, charOffset: result.charOffset ?? pos.charOffset };
+            ih.moveCursorTo(insertedPos);
+            ih.markCurrentFieldEndOutside();
             services.wasm.clearActiveField();
             services.eventBus.emit('document-mutated', 'insert-field');
             services.eventBus.emit('document-changed');

@@ -214,7 +214,9 @@ export function handleBackspace(this: any, pos: DocumentPosition, inCell: boolea
   // 필드 경계 보호: 필드 시작 위치에서는 Backspace 차단
   try {
     const fi = this.wasm.getFieldInfoAt(pos);
-    if (fi.inField && charOffset <= fi.startCharIdx) {
+    if (fi.inField && this.isAtExitedFieldStart?.(pos, fi)) {
+      // 누름틀 시작 바깥에서는 Backspace가 앞쪽 본문 글자를 지운다.
+    } else if (fi.inField && charOffset <= fi.startCharIdx) {
       if (tryConfirmRemoveClickHereAtBoundary.call(this, pos, 'backward')) return;
       return;
     }

@@ -9,7 +9,15 @@ import { DeleteSelectionCommand, ApplyCharFormatCommand, ApplyParaFormatCommand,
 import type { OperationDescriptor, ParaFormatTarget, RefreshPolicy } from './command';
 import { VirtualScroll } from '@/view/virtual-scroll';
 import { ViewportManager } from '@/view/viewport-manager';
-import type { DocumentPosition, CharProperties, ParaProperties, CursorRect, FormObjectHitResult } from '@/core/types';
+import type {
+  DocumentPosition,
+  CharProperties,
+  ParaProperties,
+  CursorRect,
+  FormObjectHitResult,
+  LayerNode,
+  LayerTextRunOp,
+} from '@/core/types';
 import type { CommandDispatcher } from '@/command/dispatcher';
 import type { EditorEditMode } from '@/command/types';
 import { matchShortcut, defaultShortcuts } from '@/command/shortcut-map';
@@ -1766,7 +1774,7 @@ export class InputHandler {
     switch (desc.kind) {
       case 'command': {
         const beforePos = this.cursor.getPosition();
-        const keepFieldStartOutside = desc.command.type === 'insertText'
+        const keepFieldStartOutside = (desc.command.type === 'insertText' || desc.command.type === 'deleteText')
           && this.isExitedFieldStartPosition(beforePos);
         if (keepFieldStartOutside) {
           this.wasm.clearActiveField();
@@ -1922,6 +1930,7 @@ export class InputHandler {
     const rect = this.cursor.getRect();
     if (rect) {
       const zoom = this.viewportManager.getZoom();
+      const caretRect = this.adjustExitedFieldEndCaretRect(rect);
 
       // IME 조합 중: 블랙박스 캐럿 표시
       if (this.isComposing && this.compositionAnchor && this.compositionLength > 0) {
@@ -1971,10 +1980,10 @@ export class InputHandler {
         }
       } else {
         this.caret.hideComposition();
-        this.caret.update(rect, zoom);
+        this.caret.update(caretRect, zoom);
       }
       if (!skipScroll) {
-        this.scrollCaretIntoView(rect);
+        this.scrollCaretIntoView(caretRect);
       }
     }
     this.updateSelection();
@@ -1987,7 +1996,79 @@ export class InputHandler {
     // 눈금자 다단 영역 표시용 커서 좌표 전달
     const cursorRect = this.cursor.getRect();
     if (cursorRect) {
-      this.eventBus.emit('cursor-rect-updated', { x: cursorRect.x, y: cursorRect.y });
+      const adjustedCursorRect = this.adjustExitedFieldEndCaretRect(cursorRect);
+      this.eventBus.emit('cursor-rect-updated', { x: adjustedCursorRect.x, y: adjustedCursorRect.y });
+    }
+  }
+
+  /** 빈 누름틀 끝 바깥 상태에서는 caret을 안내문 오른쪽에 둔다. */
+  private adjustExitedFieldEndCaretRect(rect: CursorRect): CursorRect {
+    const pos = this.cursor.getPosition();
+    try {
+      const fi = this.wasm.getFieldInfoAt(pos);
+      if (!fi.inField || fi.fieldType !== 'clickhere' || !fi.isGuide || !fi.guideName) {
+        return rect;
+      }
+      if (!this.isAtExitedFieldEnd(pos, fi)) return rect;
+
+      const guideRect = this.findGuideTextRect(rect, fi.guideName);
+      if (guideRect) {
+        return { ...rect, x: guideRect.x + guideRect.width };
+      }
+
+      const measured = this.measureGuideTextWidth(fi.guideName, rect);
+      return measured > 0 ? { ...rect, x: rect.x + measured } : rect;
+    } catch {
+      return rect;
+    }
+  }
+
+  private findGuideTextRect(
+    caretRect: CursorRect,
+    guideName: string,
+  ): { x: number; y: number; width: number; height: number } | null {
+    let best: { x: number; y: number; width: number; height: number; score: number } | null = null;
+    try {
+      const tree = this.wasm.getPageLayerTreeObject(caretRect.pageIndex);
+      const visit = (node: LayerNode | undefined): void => {
+        if (!node) return;
+        if (node.kind === 'group') {
+          for (const child of node.children) visit(child);
+          return;
+        }
+        if (node.kind === 'clipRect') {
+          visit(node.child);
+          return;
+        }
+        for (const op of node.ops) {
+          if (op.type !== 'textRun') continue;
+          const textOp = op as LayerTextRunOp;
+          if (textOp.text !== guideName) continue;
+          const b = textOp.bbox;
+          const score = Math.abs(b.y - caretRect.y) + Math.abs(b.x - caretRect.x) * 0.25;
+          if (!best || score < best.score) {
+            best = { x: b.x, y: b.y, width: b.width, height: b.height, score };
+          }
+        }
+      };
+      visit(tree.root);
+    } catch {
+      return null;
+    }
+    const found = best as { x: number; y: number; width: number; height: number; score: number } | null;
+    return found ? { x: found.x, y: found.y, width: found.width, height: found.height } : null;
+  }
+
+  private measureGuideTextWidth(guideName: string, rect: CursorRect): number {
+    const measure = (globalThis as { measureTextWidth?: (font: string, text: string) => number }).measureTextWidth;
+    if (typeof measure !== 'function') return 0;
+    try {
+      const props = this.getCharPropertiesAtCursor();
+      const fontFamily = props.fontFamily || 'sans-serif';
+      const font = `italic ${Math.max(1, rect.height)}px ${fontFamily}`;
+      return measure(font, guideName);
+    } catch {
+      return 0;
     }
   }
 
@@ -2824,12 +2905,16 @@ export class InputHandler {
       const start = fi.startCharIdx ?? -1;
       const end = fi.endCharIdx ?? -1;
       if (!fi.inField || fi.fieldType !== 'clickhere' || start < 0 || end < 0) return false;
-      if (start === end || pos.charOffset < end) return false;
+      if (this.isAtExitedFieldEnd(pos, fi)) return false;
+      if (pos.charOffset < end) return false;
       this.fieldStartExitKey = null;
       this.fieldEndExitKey = this.fieldBoundaryKey(pos, fi.fieldId, end);
       this.fieldMarker.hide();
       this.wasm.clearActiveField();
       this.eventBus.emit('field-info-changed', null);
+      this.eventBus.emit('document-changed');
+      this.updateCaret(true);
+      requestAnimationFrame(() => this.updateCaret(true));
       return true;
     } catch {
       return false;
@@ -2844,12 +2929,14 @@ export class InputHandler {
       const start = fi.startCharIdx ?? -1;
       const end = fi.endCharIdx ?? -1;
       if (!fi.inField || fi.fieldType !== 'clickhere' || start < 0 || end < 0) return false;
+      if (this.isAtExitedFieldStart(pos, fi)) return false;
       if (start === end || pos.charOffset > start) return false;
       this.fieldEndExitKey = null;
       this.fieldStartExitKey = this.fieldBoundaryKey(pos, fi.fieldId, start);
       this.fieldMarker.hide();
       this.wasm.clearActiveField();
       this.eventBus.emit('field-info-changed', null);
+      this.eventBus.emit('document-changed');
       return true;
     } catch {
       return false;
@@ -2902,6 +2989,9 @@ export class InputHandler {
       this.fieldMarker.hide();
       this.wasm.clearActiveField();
       this.eventBus.emit('field-info-changed', null);
+      this.eventBus.emit('document-changed');
+      this.updateCaret(true);
+      requestAnimationFrame(() => this.updateCaret(true));
       return true;
     } catch {
       return false;
@@ -2916,12 +3006,15 @@ export class InputHandler {
       const start = fi.startCharIdx ?? -1;
       const end = fi.endCharIdx ?? -1;
       if (!fi.inField || fi.fieldType !== 'clickhere' || start < 0 || end < 0) return false;
-      if (start === end || pos.charOffset !== end) return false;
+      if (pos.charOffset !== end) return false;
       this.fieldStartExitKey = null;
       this.fieldEndExitKey = this.fieldBoundaryKey(pos, fi.fieldId, end);
       this.fieldMarker.hide();
       this.wasm.clearActiveField();
       this.eventBus.emit('field-info-changed', null);
+      this.eventBus.emit('document-changed');
+      this.updateCaret(true);
+      requestAnimationFrame(() => this.updateCaret(true));
       return true;
     } catch {
       return false;
