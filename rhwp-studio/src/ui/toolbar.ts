@@ -429,14 +429,14 @@ export class Toolbar {
       if (popup) { popup.remove(); popup = null; return; }
       popup = document.createElement('div');
       popup.className = 'bullet-popup';
-      popup.style.cssText = 'position:absolute;z-index:1000;background:#fff;border:1px solid #b0b8c8;border-radius:3px;box-shadow:0 2px 6px rgba(0,0,0,0.15);padding:4px;display:grid;grid-template-columns:repeat(6,1fr);gap:2px;';
+      popup.style.cssText = 'position:absolute;z-index:1000;background:var(--color-surface);border:1px solid var(--color-border);border-radius:3px;box-shadow:var(--shadow-dropdown);padding:4px;display:grid;grid-template-columns:repeat(6,1fr);gap:2px;color:var(--color-text);';
       const rect = btn.getBoundingClientRect();
       popup.style.left = `${rect.left}px`;
       popup.style.top = `${rect.bottom + 2}px`;
       for (const ch of BULLETS) {
         const cell = document.createElement('button');
         cell.type = 'button';
-        cell.style.cssText = 'width:28px;height:28px;border:1px solid #ddd;border-radius:2px;background:#fff;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;';
+        cell.style.cssText = 'width:28px;height:28px;border:1px solid var(--color-border);border-radius:2px;background:var(--color-surface);color:var(--color-text);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color-scheme:inherit;';
         cell.textContent = ch;
         cell.title = ch;
         cell.addEventListener('mousedown', (e) => {
@@ -446,8 +446,8 @@ export class Toolbar {
           popup = null;
           this.dispatcher.dispatch('format:apply-bullet', { bulletChar: ch });
         });
-        cell.addEventListener('mouseenter', () => { cell.style.background = '#e7eaf4'; });
-        cell.addEventListener('mouseleave', () => { cell.style.background = '#fff'; });
+        cell.addEventListener('mouseenter', () => { cell.style.background = 'var(--color-accent-bg)'; });
+        cell.addEventListener('mouseleave', () => { cell.style.background = 'var(--color-surface)'; });
         popup.appendChild(cell);
       }
       document.body.appendChild(popup);

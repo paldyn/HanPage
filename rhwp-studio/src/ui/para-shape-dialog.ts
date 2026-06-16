@@ -735,7 +735,7 @@ export class ParaShapeDialog {
       }
       p.style.fontSize = '11px';
       p.style.lineHeight = '1.5';
-      p.style.color = '#333';
+      p.style.color = '#111111';
       p.textContent = text;
       this.previewEl.appendChild(p);
     });
