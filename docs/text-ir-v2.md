@@ -246,6 +246,27 @@ the default public replay path.
   strict payloads still reject and the schema-v1 compatibility export keeps the
   `TextRun` fallback.
 
+## P25 Exact Font Replay Proof Corpus
+
+P25 widens the exact-font replay proof corpus while keeping public glyph-run
+fallback behavior conservative.
+
+- CanvasKit selection now rejects variable-font glyph-run instances with
+  `variationUnsupported` until an exact variation constructor is proven for the
+  public backend.
+- CanvasKit selection also rejects non-default TTC/OTC face indexes with
+  `faceIndexUnsupported`; default face index `0` remains the positive control.
+- Native Skia proof now distinguishes missing font blob bytes, exported
+  `dataRef` mismatch, and digest mismatch between the interned bytes and the
+  font metadata. Metadata mismatch is treated as a failed portable contract,
+  not as a best-effort construction case.
+- Native Skia still reports variation axes, non-zero collection face indexes,
+  and the intentionally unimplemented exact typeface constructor as separate
+  proof reasons. This keeps later exact-construction work from silently changing
+  fallback policy.
+- The glyph id field remains `u32` in Text IR, but backend selection/proof keeps
+  the current range guard before direct glyph replay.
+
 Every overlay removal requires a Canvas2D-vs-CanvasKit fixture. Rasterizer
 output can use fuzzy PNG comparison, but semantic decisions must be exact:
 selected variant id, fallback reason, resource resolution, effect preprocessing
