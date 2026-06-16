@@ -1768,6 +1768,9 @@ export class InputHandler {
         const beforePos = this.cursor.getPosition();
         const keepFieldStartOutside = desc.command.type === 'insertText'
           && this.isExitedFieldStartPosition(beforePos);
+        if (keepFieldStartOutside) {
+          this.wasm.clearActiveField();
+        }
         const newPos = this.history.execute(desc.command, this.wasm);
         // 글자/문단 서식 변경은 문서 구조 불변 → 선택 영역 유지
         if (desc.command.type !== 'applyCharFormat' && desc.command.type !== 'applyParaFormat') {
