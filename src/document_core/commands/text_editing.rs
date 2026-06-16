@@ -1047,6 +1047,14 @@ impl DocumentCore {
         self.document.sections[section_idx]
             .paragraphs
             .insert(new_para_idx, new_para);
+        for i in para_idx..=new_para_idx {
+            if !self.document.sections[section_idx].paragraphs[i]
+                .field_ranges
+                .is_empty()
+            {
+                rebuild_char_offsets(&mut self.document.sections[section_idx].paragraphs[i]);
+            }
+        }
 
         // 양쪽 문단 리플로우 → vpos 재계산 → 재구성 → 재페이지네이션 + 다단 수렴 루프
         let old_col1 = self
@@ -1129,6 +1137,14 @@ impl DocumentCore {
         self.document.sections[section_idx]
             .paragraphs
             .insert(new_para_idx, new_para);
+        for i in para_idx..=new_para_idx {
+            if !self.document.sections[section_idx].paragraphs[i]
+                .field_ranges
+                .is_empty()
+            {
+                rebuild_char_offsets(&mut self.document.sections[section_idx].paragraphs[i]);
+            }
+        }
 
         // 새 문단에 쪽 나누기 설정
         self.document.sections[section_idx].paragraphs[new_para_idx].column_type =

@@ -251,9 +251,26 @@ Stage27 추가 검증:
 - `cargo fmt --check`: 통과
 - `git diff --check`: 통과
 
+Stage28 추가 검증:
+
+- `[123][123]` 인접 누름틀 복사/붙여넣기 후 두 번째 누름틀이 숨는 문제를 재현하고 보정
+- 내부 클립보드 붙여넣기 시 복사본 field ID를 현재 문서 최대 ID 이후로 재부여
+- 붙여넣기/문단 분리 후 누름틀 `field_ranges`가 남은 문단은 `rebuild_char_offsets`로
+  FIELD_BEGIN/FIELD_END gap과 `char_count`를 재정규화
+- `copying_adjacent_clickheres_preserves_separate_pasted_fields` 회귀 테스트 추가
+  (원본 2개 + 붙여넣기 2개 field ID 분리, range `0..3`/`3..6`, SVG 숫자 4회 렌더, 삭제 후 남은 필드 보존)
+- 작업지시자 시각 확인: 복사/붙여넣기 표시 정상
+- `cargo test --test issue_258_clickhere_form_mode`: 통과 (12 passed)
+- `wasm-pack build --target web --out-dir pkg`: 통과
+- Browser plugin: `http://localhost:7700/` 로드, title `rhwp-studio`, toolbar 표시, console error/warn 없음
+- `cd rhwp-studio && npm run build`: 통과
+- `cargo fmt --check`: 통과
+- `git diff --check`: 통과
+
 ## 3. 남은 후속
 
 - 사용자 정보, 문서 요약, 작성한 날짜, 파일 이름/경로 등 누름틀 외 필드 탭은 후속 이슈로 분리한다.
 - 양식 개체 전체(Edit/CheckBox/RadioButton/ComboBox/PushButton)의 완전 상호작용은 기존
   FormObject 작업과 이어서 별도 처리한다.
+- Home/End 키가 누름틀 경계 밖 첫/끝 컬럼으로 이동하지 않는 문제는 Stage29에서 별도 보정한다.
 - PR 생성과 전체 CI급 검증은 작업지시자 별도 승인 후 진행한다.

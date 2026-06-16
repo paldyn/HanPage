@@ -2,7 +2,8 @@
 
 use super::super::helpers::{
     border_line_type_to_u8_val, clipboard_color_to_css, clipboard_escape_html, color_ref_to_css,
-    detect_clipboard_image_mime, get_textbox_from_shape, utf16_pos_to_char_idx,
+    detect_clipboard_image_mime, get_textbox_from_shape, get_textbox_from_shape_mut,
+    utf16_pos_to_char_idx,
 };
 use super::super::queries::field_query::rebuild_char_offsets;
 use crate::document_core::{ClipboardData, DocumentCore};
@@ -170,6 +171,81 @@ fn clip_paragraph_text_range_for_clipboard(
     suffix
 }
 
+fn collect_max_clipboard_field_id(para: &Paragraph, max_id: &mut u32) {
+    for ctrl in &para.controls {
+        match ctrl {
+            Control::Field(field) => {
+                *max_id = (*max_id).max(field.field_id);
+            }
+            Control::Table(table) => {
+                for cell in &table.cells {
+                    for cell_para in &cell.paragraphs {
+                        collect_max_clipboard_field_id(cell_para, max_id);
+                    }
+                }
+                if let Some(caption) = &table.caption {
+                    for cap_para in &caption.paragraphs {
+                        collect_max_clipboard_field_id(cap_para, max_id);
+                    }
+                }
+            }
+            Control::Shape(shape) => {
+                if let Some(text_box) = get_textbox_from_shape(shape) {
+                    for tb_para in &text_box.paragraphs {
+                        collect_max_clipboard_field_id(tb_para, max_id);
+                    }
+                }
+            }
+            Control::Picture(pic) => {
+                if let Some(caption) = &pic.caption {
+                    for cap_para in &caption.paragraphs {
+                        collect_max_clipboard_field_id(cap_para, max_id);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn assign_new_clipboard_field_ids(para: &mut Paragraph, next_id: &mut u32) {
+    for ctrl in &mut para.controls {
+        match ctrl {
+            Control::Field(field) => {
+                field.field_id = (*next_id).max(1);
+                *next_id = next_id.saturating_add(1).max(1);
+            }
+            Control::Table(table) => {
+                for cell in &mut table.cells {
+                    for cell_para in &mut cell.paragraphs {
+                        assign_new_clipboard_field_ids(cell_para, next_id);
+                    }
+                }
+                if let Some(caption) = &mut table.caption {
+                    for cap_para in &mut caption.paragraphs {
+                        assign_new_clipboard_field_ids(cap_para, next_id);
+                    }
+                }
+            }
+            Control::Shape(shape) => {
+                if let Some(text_box) = get_textbox_from_shape_mut(shape) {
+                    for tb_para in &mut text_box.paragraphs {
+                        assign_new_clipboard_field_ids(tb_para, next_id);
+                    }
+                }
+            }
+            Control::Picture(pic) => {
+                if let Some(caption) = &mut pic.caption {
+                    for cap_para in &mut caption.paragraphs {
+                        assign_new_clipboard_field_ids(cap_para, next_id);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 impl DocumentCore {
     pub fn has_internal_clipboard_native(&self) -> bool {
         self.clipboard.is_some()
@@ -186,6 +262,19 @@ impl DocumentCore {
     /// 내부 클립보드를 초기화한다.
     pub fn clear_clipboard_native(&mut self) {
         self.clipboard = None;
+    }
+
+    fn renumber_pasted_field_ids(&self, clip_paras: &mut [Paragraph]) {
+        let mut max_id = 0u32;
+        for section in &self.document.sections {
+            for para in &section.paragraphs {
+                collect_max_clipboard_field_id(para, &mut max_id);
+            }
+        }
+        let mut next_id = max_id.saturating_add(1).max(1);
+        for para in clip_paras {
+            assign_new_clipboard_field_ids(para, &mut next_id);
+        }
     }
 
     /// 선택 영역을 내부 클립보드에 복사한다.
@@ -469,7 +558,7 @@ impl DocumentCore {
         para_idx: usize,
         char_offset: usize,
     ) -> Result<String, HwpError> {
-        let clip_paras = match &self.clipboard {
+        let mut clip_paras = match &self.clipboard {
             Some(c) if !c.paragraphs.is_empty() => c.paragraphs.clone(),
             _ => return Ok("{\"ok\":false,\"error\":\"clipboard empty\"}".to_string()),
         };
@@ -489,6 +578,7 @@ impl DocumentCore {
         }
 
         self.document.sections[section_idx].raw_stream = None;
+        self.renumber_pasted_field_ids(&mut clip_paras);
 
         let clip_count = clip_paras.len();
 
@@ -549,6 +639,15 @@ impl DocumentCore {
         let last_para_idx = insert_idx - 1;
         let merge_point =
             self.document.sections[section_idx].paragraphs[last_para_idx].merge_from(&right_half);
+
+        for i in para_idx..=last_para_idx {
+            if !self.document.sections[section_idx].paragraphs[i]
+                .field_ranges
+                .is_empty()
+            {
+                rebuild_char_offsets(&mut self.document.sections[section_idx].paragraphs[i]);
+            }
+        }
 
         // 5. 영향받는 모든 문단 리플로우
         for i in para_idx..=last_para_idx {
@@ -616,6 +715,11 @@ impl DocumentCore {
 
         let last_para_idx = insert_idx - 1;
         let merge_point = cell_paras[last_para_idx].merge_from(&right_half);
+        for para in &mut cell_paras[cell_para_idx..=last_para_idx] {
+            if !para.field_ranges.is_empty() {
+                rebuild_char_offsets(para);
+            }
+        }
         Ok((last_para_idx, merge_point))
     }
 
@@ -629,10 +733,11 @@ impl DocumentCore {
         cell_para_idx: usize,
         char_offset: usize,
     ) -> Result<String, HwpError> {
-        let clip_paras = match &self.clipboard {
+        let mut clip_paras = match &self.clipboard {
             Some(c) if !c.paragraphs.is_empty() => c.paragraphs.clone(),
             _ => return Ok("{\"ok\":false,\"error\":\"clipboard empty\"}".to_string()),
         };
+        self.renumber_pasted_field_ids(&mut clip_paras);
 
         let (last_para_idx, merge_point) = {
             let section =
@@ -709,10 +814,11 @@ impl DocumentCore {
         path: &[(usize, usize, usize)],
         char_offset: usize,
     ) -> Result<String, HwpError> {
-        let clip_paras = match &self.clipboard {
+        let mut clip_paras = match &self.clipboard {
             Some(c) if !c.paragraphs.is_empty() => c.paragraphs.clone(),
             _ => return Ok("{\"ok\":false,\"error\":\"clipboard empty\"}".to_string()),
         };
+        self.renumber_pasted_field_ids(&mut clip_paras);
         if path.is_empty() {
             return Err(HwpError::RenderError("경로가 비어있습니다".to_string()));
         }

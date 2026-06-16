@@ -436,6 +436,114 @@ fn adjacent_clickhere_input_prefers_new_empty_field_at_shared_boundary() {
 }
 
 #[test]
+fn copying_adjacent_clickheres_preserves_separate_pasted_fields() {
+    let mut core = DocumentCore::new_empty();
+    core.create_blank_document_native()
+        .expect("create blank document");
+    core.insert_text_native(0, 0, 0, "abc")
+        .expect("insert prefix");
+
+    core.insert_click_here_field_at(0, 0, 3, "첫 번째", "", "first", true)
+        .expect("insert first clickhere");
+    assert!(core.set_active_field(0, 0, 3));
+    core.insert_text_native(0, 0, 3, "123")
+        .expect("fill first clickhere");
+    core.clear_active_field();
+
+    core.insert_click_here_field_at(0, 0, 6, "두 번째", "", "second", true)
+        .expect("insert adjacent second clickhere");
+    assert!(core.set_active_field(0, 0, 6));
+    core.insert_text_native(0, 0, 6, "123")
+        .expect("fill second clickhere");
+    core.clear_active_field();
+
+    core.copy_selection_native(0, 0, 3, 0, 9)
+        .expect("copy adjacent clickheres");
+    assert_eq!(core.get_clipboard_text_native(), "123123");
+
+    core.split_paragraph_native(0, 0, 9)
+        .expect("create paste target paragraph");
+    core.paste_internal_native(0, 1, 0)
+        .expect("paste adjacent clickheres into next paragraph");
+
+    assert_eq!(
+        core.document().sections[0].paragraphs[1].text,
+        "123123",
+        "pasted visible text should include both clickhere values"
+    );
+
+    let fields = core.collect_all_fields();
+    let pasted_fields: Vec<_> = fields
+        .iter()
+        .filter(|f| f.field.field_type == FieldType::ClickHere && f.location.para_index == 1)
+        .collect();
+    assert_eq!(
+        pasted_fields.len(),
+        2,
+        "pasted paragraph should contain two ClickHere fields"
+    );
+    let original_ids: Vec<_> = fields
+        .iter()
+        .filter(|f| f.field.field_type == FieldType::ClickHere && f.location.para_index == 0)
+        .map(|f| f.field.field_id)
+        .collect();
+    let pasted_ids: Vec<_> = pasted_fields.iter().map(|f| f.field.field_id).collect();
+    assert_eq!(original_ids.len(), 2);
+    assert_eq!(pasted_ids.len(), 2);
+    assert_ne!(
+        pasted_ids[0], pasted_ids[1],
+        "pasted ClickHere fields should have distinct IDs"
+    );
+    for id in &pasted_ids {
+        assert!(
+            !original_ids.contains(id),
+            "pasted ClickHere ID should not duplicate original IDs: originals={original_ids:?}, pasted={pasted_ids:?}"
+        );
+    }
+
+    let para = &core.document().sections[0].paragraphs[1];
+    assert_eq!(
+        para.char_offsets.len(),
+        6,
+        "pasted paragraph char_offsets should cover both adjacent field values"
+    );
+    let ranges: Vec<_> = pasted_fields
+        .iter()
+        .map(|field| {
+            let range = &para.field_ranges[field.field_range_index];
+            (
+                range.start_char_idx,
+                range.end_char_idx,
+                field.value.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(ranges, vec![(0, 3, "123"), (3, 6, "123")]);
+
+    let svg = core
+        .render_page_svg_native(0)
+        .expect("render pasted clickheres");
+    for digit in ["1", "2", "3"] {
+        assert_eq!(
+            svg.matches(&format!(">{digit}<")).count(),
+            4,
+            "original and pasted adjacent ClickHere values should both be visible for digit {digit}: {svg}"
+        );
+    }
+
+    core.remove_field_at(0, 1, 3)
+        .expect("remove pasted first clickhere");
+    let remaining_fields: Vec<_> = core
+        .collect_all_fields()
+        .into_iter()
+        .filter(|f| f.field.field_type == FieldType::ClickHere && f.location.para_index == 1)
+        .collect();
+    assert_eq!(remaining_fields.len(), 1);
+    assert_eq!(remaining_fields[0].value, "123");
+    assert_eq!(core.document().sections[0].paragraphs[1].text, "123");
+}
+
+#[test]
 fn clickhere_start_boundary_insert_respects_active_field_state() {
     let mut core = make_doc_with_inserted_clickhere();
 
