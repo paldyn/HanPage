@@ -61,6 +61,7 @@ cargo test --test issue_1071_tac_cursor_nav -- --nocapture
 cargo test --test issue_1285_tac_sequence_right_align -- --nocapture
 cargo test --test issue_1139_inline_picture_duplicate -- --nocapture
 cargo build --bin rhwp
+docker compose --env-file .env.docker run --rm wasm
 git diff --check
 ```
 
@@ -80,6 +81,7 @@ target/debug/rhwp export-render-tree samples/hwpx/pagenation-001.hwpx -o output/
 - 2페이지 `dump-pages`에 `Shape          pi=27`이 포함된다.
 - 2페이지 `dump-pages`에서 `PartialParagraph  pi=16`이 사라졌다.
 - `output/poc/task1417-final/pagenation-001_002.svg`에서 `s0:pi=27` 라벨을 확인했다.
+- WASM 산출물 생성 완료: `pkg/rhwp_bg.wasm` 약 5.5MB.
 
 ## 5. 시각 판정
 
@@ -91,5 +93,11 @@ target/debug/rhwp export-render-tree samples/hwpx/pagenation-001.hwpx -o output/
 
 ## 6. 남은 사항
 
-소스 수정과 로컬 검증, 시각 확인은 완료되었다. 완료 보고서 승인 후 프로젝트 git 워크플로우에 따라
-커밋/후속 절차를 진행한다.
+소스 수정과 로컬 검증, 시각 확인, `devel` 반영, 이슈 close를 완료했다.
+
+후속 기록:
+
+- `local/devel` → `devel` merge + push: `b39d680e`
+- Issue #1417 close
+- close 코멘트 정정 기록: https://github.com/edwardkim/rhwp/issues/1417#issuecomment-4715086216
+- WASM 빌드 완료: `docker compose --env-file .env.docker run --rm wasm`
