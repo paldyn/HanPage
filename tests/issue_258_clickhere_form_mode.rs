@@ -234,6 +234,48 @@ fn copying_clickhere_preserves_field_control_after_structural_controls_are_strip
 }
 
 #[test]
+fn copying_clickhere_after_prefix_preserves_field_value() {
+    let mut core = DocumentCore::new_empty();
+    core.create_blank_document_native()
+        .expect("create blank document");
+    core.insert_text_native(0, 0, 0, "AA")
+        .expect("insert prefix");
+    core.insert_click_here_field_at(0, 0, 2, "입력하세요", "메모", "prefixed", true)
+        .expect("insert clickhere after prefix");
+    core.insert_text_native(0, 0, 2, "11223344")
+        .expect("insert clickhere value");
+
+    let before_fields = core.collect_all_fields();
+    assert_eq!(before_fields.len(), 1);
+    assert_eq!(before_fields[0].value, "11223344");
+    let before_range =
+        &core.document().sections[0].paragraphs[0].field_ranges[before_fields[0].field_range_index];
+    assert_eq!(
+        (before_range.start_char_idx, before_range.end_char_idx),
+        (2, 10)
+    );
+
+    core.copy_selection_native(0, 0, 2, 0, 10)
+        .expect("copy prefixed clickhere selection");
+    assert_eq!(core.get_clipboard_text_native(), "11223344");
+
+    core.paste_internal_native(0, 0, 10)
+        .expect("paste prefixed clickhere after original field");
+
+    let after_fields = core.collect_all_fields();
+    let after_values: Vec<_> = after_fields
+        .iter()
+        .filter(|f| f.field.field_type == FieldType::ClickHere)
+        .map(|f| f.value.as_str())
+        .collect();
+    assert_eq!(after_values, vec!["11223344", "11223344"]);
+    assert_eq!(
+        core.document().sections[0].paragraphs[0].text,
+        "AA1122334411223344"
+    );
+}
+
+#[test]
 fn clickhere_insert_api_creates_empty_editable_field() {
     let core = make_doc_with_inserted_clickhere();
 

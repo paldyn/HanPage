@@ -4,11 +4,12 @@ use super::super::helpers::{
     border_line_type_to_u8_val, clipboard_color_to_css, clipboard_escape_html, color_ref_to_css,
     detect_clipboard_image_mime, get_textbox_from_shape, utf16_pos_to_char_idx,
 };
+use super::super::queries::field_query::rebuild_char_offsets;
 use crate::document_core::{ClipboardData, DocumentCore};
 use crate::error::HwpError;
 use crate::model::control::Control;
 use crate::model::event::DocumentEvent;
-use crate::model::paragraph::{LineSeg, Paragraph};
+use crate::model::paragraph::{FieldRange, LineSeg, Paragraph};
 
 /// [Task #1161] 떠 있는 개체 반복 붙여넣기 cascade 1 회당 위치 오프셋(HWPUNIT).
 /// 약 2mm (1mm = 7200/25.4 ≈ 283.46 HWPUNIT). 한컴 정합은 작업지시자 시각 대조로 미세조정.
@@ -81,6 +82,92 @@ fn strip_structural_controls_for_text_clipboard(para: &mut Paragraph) {
     para.controls = new_controls;
     para.ctrl_data_records = new_records;
     para.control_mask = recompute_clipboard_control_mask(para);
+    if !para.field_ranges.is_empty() {
+        rebuild_char_offsets(para);
+    }
+}
+
+fn clip_paragraph_text_range_for_clipboard(
+    source: &Paragraph,
+    start_char_offset: usize,
+    end_char_offset: usize,
+) -> Paragraph {
+    let text_len = source.text.chars().count();
+    let start = start_char_offset.min(text_len);
+    let end = end_char_offset.min(text_len).max(start);
+
+    let mut clipped = source.clone();
+    if end < text_len {
+        let _ = clipped.split_at(end);
+    }
+    if start == 0 {
+        return clipped;
+    }
+
+    let control_positions = clipped.control_text_positions();
+    let old_controls = clipped.controls.clone();
+    let old_records = clipped.ctrl_data_records.clone();
+    let old_ranges = clipped.field_ranges.clone();
+
+    let mut suffix = clipped.split_at(start);
+    let mut keep_control = vec![false; old_controls.len()];
+
+    for range in &old_ranges {
+        if range.start_char_idx >= start
+            && range.end_char_idx <= end
+            && range.control_idx < keep_control.len()
+        {
+            keep_control[range.control_idx] = true;
+        }
+    }
+
+    for (idx, ctrl) in old_controls.iter().enumerate() {
+        if matches!(
+            ctrl,
+            Control::SectionDef(_) | Control::ColumnDef(_) | Control::Field(_)
+        ) {
+            continue;
+        }
+        let pos = control_positions.get(idx).copied().unwrap_or(text_len);
+        if pos >= start && pos <= end {
+            keep_control[idx] = true;
+        }
+    }
+
+    let mut index_map = vec![None; old_controls.len()];
+    let mut new_controls = Vec::new();
+    let mut new_records = Vec::new();
+    for (old_idx, ctrl) in old_controls.into_iter().enumerate() {
+        if !keep_control.get(old_idx).copied().unwrap_or(false) {
+            continue;
+        }
+        index_map[old_idx] = Some(new_controls.len());
+        new_records.push(old_records.get(old_idx).cloned().flatten());
+        new_controls.push(ctrl);
+    }
+
+    let new_field_ranges: Vec<FieldRange> = old_ranges
+        .into_iter()
+        .filter_map(|mut range| {
+            if range.start_char_idx < start || range.end_char_idx > end {
+                return None;
+            }
+            let new_control_idx = index_map.get(range.control_idx).and_then(|idx| *idx)?;
+            range.start_char_idx -= start;
+            range.end_char_idx -= start;
+            range.control_idx = new_control_idx;
+            Some(range)
+        })
+        .collect();
+
+    suffix.controls = new_controls;
+    suffix.ctrl_data_records = new_records;
+    suffix.field_ranges = new_field_ranges;
+    suffix.control_mask = recompute_clipboard_control_mask(&suffix);
+    if !suffix.field_ranges.is_empty() {
+        rebuild_char_offsets(&mut suffix);
+    }
+    suffix
 }
 
 impl DocumentCore {
@@ -139,27 +226,20 @@ impl DocumentCore {
 
         if start_para_idx == end_para_idx {
             // 단일 문단 내 선택
-            let mut para = section.paragraphs[start_para_idx].clone();
-            let text_len = para.text.chars().count();
-
-            // 오른쪽 잘라내기 (end_offset 이후 제거)
-            if end_char_offset < text_len {
-                let _ = para.split_at(end_char_offset);
-            }
-            // 왼쪽 잘라내기 (start_offset 이전 제거)
-            if start_char_offset > 0 {
-                para = para.split_at(start_char_offset);
-            }
-
-            clip_paragraphs.push(para);
+            clip_paragraphs.push(clip_paragraph_text_range_for_clipboard(
+                &section.paragraphs[start_para_idx],
+                start_char_offset,
+                end_char_offset,
+            ));
         } else {
             // 다중 문단 선택
             // 첫 번째 문단: start_offset부터 끝까지
-            let mut first = section.paragraphs[start_para_idx].clone();
-            if start_char_offset > 0 {
-                first = first.split_at(start_char_offset);
-            }
-            clip_paragraphs.push(first);
+            let first_text_len = section.paragraphs[start_para_idx].text.chars().count();
+            clip_paragraphs.push(clip_paragraph_text_range_for_clipboard(
+                &section.paragraphs[start_para_idx],
+                start_char_offset,
+                first_text_len,
+            ));
 
             // 중간 문단: 전체 복사
             for i in (start_para_idx + 1)..end_para_idx {
@@ -167,12 +247,11 @@ impl DocumentCore {
             }
 
             // 마지막 문단: 처음부터 end_offset까지
-            let mut last = section.paragraphs[end_para_idx].clone();
-            let last_text_len = last.text.chars().count();
-            if end_char_offset < last_text_len {
-                let _ = last.split_at(end_char_offset);
-            }
-            clip_paragraphs.push(last);
+            clip_paragraphs.push(clip_paragraph_text_range_for_clipboard(
+                &section.paragraphs[end_para_idx],
+                0,
+                end_char_offset,
+            ));
         }
 
         // 구조적 컨트롤(SectionDef, ColumnDef 등) 제거 — 텍스트 복사에 불필요
@@ -243,32 +322,28 @@ impl DocumentCore {
         let mut clip_paragraphs = Vec::new();
 
         if start_cell_para_idx == end_cell_para_idx {
-            let mut para = cell_paragraphs[start_cell_para_idx].clone();
-            let text_len = para.text.chars().count();
-            if end_char_offset < text_len {
-                let _ = para.split_at(end_char_offset);
-            }
-            if start_char_offset > 0 {
-                para = para.split_at(start_char_offset);
-            }
-            clip_paragraphs.push(para);
+            clip_paragraphs.push(clip_paragraph_text_range_for_clipboard(
+                &cell_paragraphs[start_cell_para_idx],
+                start_char_offset,
+                end_char_offset,
+            ));
         } else {
-            let mut first = cell_paragraphs[start_cell_para_idx].clone();
-            if start_char_offset > 0 {
-                first = first.split_at(start_char_offset);
-            }
-            clip_paragraphs.push(first);
+            let first_text_len = cell_paragraphs[start_cell_para_idx].text.chars().count();
+            clip_paragraphs.push(clip_paragraph_text_range_for_clipboard(
+                &cell_paragraphs[start_cell_para_idx],
+                start_char_offset,
+                first_text_len,
+            ));
 
             for i in (start_cell_para_idx + 1)..end_cell_para_idx {
                 clip_paragraphs.push(cell_paragraphs[i].clone());
             }
 
-            let mut last = cell_paragraphs[end_cell_para_idx].clone();
-            let last_text_len = last.text.chars().count();
-            if end_char_offset < last_text_len {
-                let _ = last.split_at(end_char_offset);
-            }
-            clip_paragraphs.push(last);
+            clip_paragraphs.push(clip_paragraph_text_range_for_clipboard(
+                &cell_paragraphs[end_cell_para_idx],
+                0,
+                end_char_offset,
+            ));
         }
 
         for para in &mut clip_paragraphs {

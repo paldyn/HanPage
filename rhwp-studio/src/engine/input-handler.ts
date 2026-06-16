@@ -104,6 +104,8 @@ export class InputHandler {
   private pictureObjectRenderer: TableObjectRenderer | null = null;
   /** 마지막 rhwp-studio 내부 복사의 시스템 클립보드 marker token */
   private rhwpClipboardToken: string | null = null;
+  /** 누름틀 시작 경계에서 왼쪽/Home 이동으로 필드 밖에 머문 상태 */
+  private fieldStartExitKey: string | null = null;
   /** 누름틀 끝 경계에서 오른쪽 이동으로 필드 밖에 머문 상태 */
   private fieldEndExitKey: string | null = null;
 
@@ -2774,6 +2776,7 @@ export class InputHandler {
           this.cursor.resetPreferredX();
         }
         this.fieldMarker.hide();
+        this.fieldStartExitKey = null;
         this.fieldEndExitKey = null;
         this.wasm.clearActiveField();
         this.afterEdit();
@@ -2814,6 +2817,7 @@ export class InputHandler {
       const end = fi.endCharIdx ?? -1;
       if (!fi.inField || fi.fieldType !== 'clickhere' || start < 0 || end < 0) return false;
       if (start === end || pos.charOffset < end) return false;
+      this.fieldStartExitKey = null;
       this.fieldEndExitKey = this.fieldBoundaryKey(pos, fi.fieldId, end);
       this.fieldMarker.hide();
       this.wasm.clearActiveField();
@@ -2823,6 +2827,104 @@ export class InputHandler {
     } catch {
       return false;
     }
+  }
+
+  /** 누름틀 시작에서 왼쪽 이동 시 같은 charOffset을 필드 밖 위치로 취급한다. */
+  tryExitCurrentFieldStart(): boolean {
+    const pos = this.cursor.getPosition();
+    try {
+      const fi = this.wasm.getFieldInfoAt(pos);
+      const start = fi.startCharIdx ?? -1;
+      const end = fi.endCharIdx ?? -1;
+      if (!fi.inField || fi.fieldType !== 'clickhere' || start < 0 || end < 0) return false;
+      if (start === end || pos.charOffset > start) return false;
+      this.fieldEndExitKey = null;
+      this.fieldStartExitKey = this.fieldBoundaryKey(pos, fi.fieldId, start);
+      this.fieldMarker.hide();
+      this.wasm.clearActiveField();
+      this.eventBus.emit('field-info-changed', null);
+      this.eventBus.emit('document-changed');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** 누름틀 시작 밖 위치에서 오른쪽 이동하면 같은 charOffset의 필드 내부 시작으로 들어간다. */
+  tryEnterExitedFieldStart(): boolean {
+    const pos = this.cursor.getPosition();
+    try {
+      const fi = this.wasm.getFieldInfoAt(pos);
+      if (!fi.inField || fi.fieldType !== 'clickhere' || !this.isAtExitedFieldStart(pos, fi)) {
+        return false;
+      }
+      this.fieldStartExitKey = null;
+      this.updateFieldMarkers();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** 누름틀 끝 밖 위치에서 왼쪽 이동하면 같은 charOffset의 필드 내부 끝으로 들어간다. */
+  tryEnterExitedFieldEnd(): boolean {
+    const pos = this.cursor.getPosition();
+    try {
+      const fi = this.wasm.getFieldInfoAt(pos);
+      if (!fi.inField || fi.fieldType !== 'clickhere' || !this.isAtExitedFieldEnd(pos, fi)) {
+        return false;
+      }
+      this.fieldEndExitKey = null;
+      this.updateFieldMarkers();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Home 이동 결과가 누름틀 시작이면 한컴처럼 누름틀 이전 위치로 취급한다. */
+  markCurrentFieldStartOutside(): boolean {
+    const pos = this.cursor.getPosition();
+    try {
+      const fi = this.wasm.getFieldInfoAt(pos);
+      const start = fi.startCharIdx ?? -1;
+      const end = fi.endCharIdx ?? -1;
+      if (!fi.inField || fi.fieldType !== 'clickhere' || start < 0 || end < 0) return false;
+      if (start === end || pos.charOffset !== start) return false;
+      this.fieldEndExitKey = null;
+      this.fieldStartExitKey = this.fieldBoundaryKey(pos, fi.fieldId, start);
+      this.fieldMarker.hide();
+      this.wasm.clearActiveField();
+      this.eventBus.emit('field-info-changed', null);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** End 이동 결과가 누름틀 끝이면 한컴처럼 누름틀 이후 위치로 취급한다. */
+  markCurrentFieldEndOutside(): boolean {
+    const pos = this.cursor.getPosition();
+    try {
+      const fi = this.wasm.getFieldInfoAt(pos);
+      const start = fi.startCharIdx ?? -1;
+      const end = fi.endCharIdx ?? -1;
+      if (!fi.inField || fi.fieldType !== 'clickhere' || start < 0 || end < 0) return false;
+      if (start === end || pos.charOffset !== end) return false;
+      this.fieldStartExitKey = null;
+      this.fieldEndExitKey = this.fieldBoundaryKey(pos, fi.fieldId, end);
+      this.fieldMarker.hide();
+      this.wasm.clearActiveField();
+      this.eventBus.emit('field-info-changed', null);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  isAtExitedFieldStart(pos: DocumentPosition, fi?: { fieldId?: number; startCharIdx?: number }): boolean {
+    const start = fi?.startCharIdx ?? pos.charOffset;
+    return this.fieldStartExitKey === this.fieldBoundaryKey(pos, fi?.fieldId, start);
   }
 
   isAtExitedFieldEnd(pos: DocumentPosition, fi?: { fieldId?: number; endCharIdx?: number }): boolean {
@@ -2841,6 +2943,7 @@ export class InputHandler {
       }
 
       const normalized = { ...pos, charOffset: start };
+      this.fieldStartExitKey = null;
       this.fieldEndExitKey = null;
       this.cursor.clearSelection();
       if (pos.charOffset !== start) {
@@ -2866,6 +2969,7 @@ export class InputHandler {
   /** 빈 누름틀 첫 입력 직후 안내문/마커 캐시를 새 field value 기준으로 다시 잡는다. */
   refreshClickHereAfterFirstInput(): void {
     this.lastCellKey = null;
+    this.fieldStartExitKey = null;
     this.fieldEndExitKey = null;
     this.fieldMarker.hide();
     this.wasm.clearActiveField();
@@ -2899,12 +3003,13 @@ export class InputHandler {
       const pos = this.cursor.getPosition();
       const fi = this.wasm.getFieldInfoAt(pos);
       if (fi.inField && fi.startCharIdx !== undefined && fi.endCharIdx !== undefined) {
-        if (this.isAtExitedFieldEnd(pos, fi)) {
+        if (this.isAtExitedFieldStart(pos, fi) || this.isAtExitedFieldEnd(pos, fi)) {
           if (wasVisible) this.fieldMarker.hide();
           this.wasm.clearActiveField();
           this.eventBus.emit('field-info-changed', null);
           return;
         }
+        this.fieldStartExitKey = null;
         this.fieldEndExitKey = null;
         // 활성 필드 설정 → 안내문 숨김 + 페이지 캐시 무효화
         const fieldChanged = this.wasm.setActiveField(pos);
@@ -2949,6 +3054,7 @@ export class InputHandler {
       }
     } catch (err) { console.warn('[updateFieldMarkers] 필드 마커 갱신 실패:', err); }
     // 필드 밖이면 마커 숨김 + 활성 필드 해제
+    this.fieldStartExitKey = null;
     this.fieldEndExitKey = null;
     if (wasVisible) {
       this.fieldMarker.hide();

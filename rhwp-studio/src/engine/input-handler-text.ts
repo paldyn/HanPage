@@ -53,9 +53,11 @@ function executeNavigationAction(this: any, action: NavigationAction, shiftKey: 
       break;
     case 'lineStart':
       this.cursor.moveToLineStart();
+      this.markCurrentFieldStartOutside?.();
       break;
     case 'lineEnd':
       this.cursor.moveToLineEnd();
+      this.markCurrentFieldEndOutside?.();
       break;
     case 'paragraphBackward':
       this.cursor.moveToParagraphBoundary(-1);
@@ -99,16 +101,34 @@ function processPendingNav(this: any, nav: NavigationKeyInput): void {
     } else {
       if (vertical) moveH = 1; else moveV = 1;
     }
+    if (!shiftKey && moveH === 1 && this.tryEnterExitedFieldStart?.()) {
+      this.updateCaret();
+      return;
+    }
+    if (!shiftKey && moveH === -1 && this.tryEnterExitedFieldEnd?.()) {
+      this.updateCaret();
+      return;
+    }
+    if (!shiftKey && moveH === -1 && this.tryExitCurrentFieldStart?.()) {
+      this.updateCaret();
+      return;
+    }
+    if (!shiftKey && moveH === 1 && this.tryExitCurrentFieldEnd?.()) {
+      this.updateCaret();
+      return;
+    }
     if (moveH !== null) this.cursor.moveHorizontal(moveH);
     if (moveV !== null) this.cursor.moveVertical(moveV);
     this.updateCaret();
   } else if (code === 'Home') {
     if (shiftKey) this.cursor.setAnchor(); else this.cursor.clearSelection();
     this.cursor.moveToLineStart();
+    this.markCurrentFieldStartOutside?.();
     this.updateCaret();
   } else if (code === 'End') {
     if (shiftKey) this.cursor.setAnchor(); else this.cursor.clearSelection();
     this.cursor.moveToLineEnd();
+    this.markCurrentFieldEndOutside?.();
     this.updateCaret();
   } else if (code === 'Enter') {
     // Enter는 조합 확정만으로 충분 (줄바꿈은 별도 처리 불필요)

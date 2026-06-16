@@ -38,6 +38,10 @@
   돌아가도록 고정했다.
 - 누름틀 전체 선택 복사 시 구조 컨트롤 제거 후 `FieldRange.control_idx`와
   `ctrl_data_records`가 어긋나 ClickHere 속성이 사라지던 문제를 보정했다.
+- 문단 중간 누름틀 전체 선택 복사 시 `split_at(start)`로 값 텍스트와 `Control::Field`가
+  분리되어 빈 누름틀처럼 붙여넣어지던 문제를 보정했다.
+- 누름틀 시작/끝 경계의 바깥 상태를 분리해 방향키와 Home/End가 한컴처럼 누름틀 이전/이후
+  위치를 만들 수 있게 했다.
 
 ## 2. 검증
 
@@ -137,6 +141,15 @@ Stage17 추가 검증:
 - `git diff --check`
 - `cargo test --test issue_258_clickhere_form_mode copying_clickhere_preserves_field_control_after_structural_controls_are_stripped -- --nocapture`
 - `cargo test --test issue_258_clickhere_form_mode`
+
+Stage18 추가 검증:
+
+- `cargo fmt --check`
+- `git diff --check`
+- `cargo test --test issue_258_clickhere_form_mode copying_clickhere_after_prefix_preserves_field_value -- --nocapture`
+- `cargo test --test issue_258_clickhere_form_mode`
+- `cd rhwp-studio && npm run build`
+- `wasm-pack build --target web --out-dir pkg`
 
 ## 3. 남은 후속
 

@@ -1091,6 +1091,18 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
       } else {
         this.cursor.clearSelection();
       }
+      if (!e.shiftKey && moveH === 1 && this.tryEnterExitedFieldStart?.()) {
+        this.updateCaret();
+        break;
+      }
+      if (!e.shiftKey && moveH === -1 && this.tryEnterExitedFieldEnd?.()) {
+        this.updateCaret();
+        break;
+      }
+      if (!e.shiftKey && moveH === -1 && this.tryExitCurrentFieldStart?.()) {
+        this.updateCaret();
+        break;
+      }
       if (!e.shiftKey && moveH === 1 && this.tryExitCurrentFieldEnd?.()) {
         this.updateCaret();
         break;
@@ -1126,6 +1138,7 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
         this.cursor.clearSelection();
         this.cursor.moveToLineStart();
       }
+      this.markCurrentFieldStartOutside?.();
       this.updateCaret();
       if (e.shiftKey) this.updateSelection();
       break;
@@ -1139,6 +1152,7 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
         this.cursor.clearSelection();
         this.cursor.moveToLineEnd();
       }
+      this.markCurrentFieldEndOutside?.();
       this.updateCaret();
       if (e.shiftKey) this.updateSelection();
       break;
