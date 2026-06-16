@@ -17,7 +17,7 @@ function mmToHwp(value: number): number {
 type Side = 'Left' | 'Right' | 'Top' | 'Bottom';
 
 const DOC_PAPER_COLOR = 'var(--doc-paper)';
-const PREVIEW_GUIDE_STROKE = 'var(--ui-border-light)';
+const DOC_PREVIEW_GUIDE_STROKE = '#d0d0d0';
 
 interface TabDef {
   label: string;
@@ -556,7 +556,7 @@ export class PageBorderDialog extends ModalDialog {
     bg.setAttribute('width', '118');
     bg.setAttribute('height', '96');
     bg.style.fill = DOC_PAPER_COLOR;
-    bg.style.stroke = PREVIEW_GUIDE_STROKE;
+    bg.style.stroke = DOC_PREVIEW_GUIDE_STROKE;
     this.previewSvg.appendChild(bg);
     if (this.borderNoneCheck.checked) return;
 
