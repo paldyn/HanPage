@@ -13,6 +13,10 @@ function mmToHwp16(mm: number): number {
   return Math.round(mm * HWPUNIT_PER_MM);
 }
 
+const DOC_PAPER_COLOR = 'var(--doc-paper)';
+const PREVIEW_GUIDE_STROKE = 'var(--ui-border-light)';
+const LINE_SAMPLE_STROKE = 'currentColor';
+
 /** 탭 정의 */
 interface TabDef {
   id: string;
@@ -173,7 +177,7 @@ export class CellBorderBgDialog extends ModalDialog {
           const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
           l.setAttribute('x1', '0'); l.setAttribute('y1', String(y));
           l.setAttribute('x2', '48'); l.setAttribute('y2', String(y));
-          l.setAttribute('stroke', '#333'); l.setAttribute('stroke-width', '1');
+          l.setAttribute('stroke', LINE_SAMPLE_STROKE); l.setAttribute('stroke-width', '1');
           svg.appendChild(l);
         }
         item.appendChild(svg);
@@ -183,7 +187,7 @@ export class CellBorderBgDialog extends ModalDialog {
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         line.setAttribute('x1', '0'); line.setAttribute('y1', '5');
         line.setAttribute('x2', '48'); line.setAttribute('y2', '5');
-        line.setAttribute('stroke', '#333'); line.setAttribute('stroke-width', '1.5');
+        line.setAttribute('stroke', LINE_SAMPLE_STROKE); line.setAttribute('stroke-width', '1.5');
         if (def.dash) line.setAttribute('stroke-dasharray', def.dash);
         svg.appendChild(line);
         item.appendChild(svg);
@@ -310,7 +314,7 @@ export class CellBorderBgDialog extends ModalDialog {
     const bg = document.createElementNS(ns, 'rect');
     bg.setAttribute('x', '0'); bg.setAttribute('y', '0');
     bg.setAttribute('width', '120'); bg.setAttribute('height', '100');
-    bg.setAttribute('fill', '#fff');
+    bg.style.setProperty('fill', DOC_PAPER_COLOR);
     svg.appendChild(bg);
 
     // 십자선
@@ -318,7 +322,7 @@ export class CellBorderBgDialog extends ModalDialog {
       const line = document.createElementNS(ns, 'line');
       line.setAttribute('x1', x1); line.setAttribute('y1', y1);
       line.setAttribute('x2', x2); line.setAttribute('y2', y2);
-      line.setAttribute('stroke', '#ccc'); line.setAttribute('stroke-width', '0.5');
+      line.style.setProperty('stroke', PREVIEW_GUIDE_STROKE); line.setAttribute('stroke-width', '0.5');
       line.setAttribute('stroke-dasharray', '3,2');
       svg.appendChild(line);
     }
@@ -446,7 +450,7 @@ export class CellBorderBgDialog extends ModalDialog {
 
   private updateBgPreview(): void {
     if (!this.bgColorRadio.checked) {
-      this.bgPreviewBox.style.background = '#ffffff';
+      this.bgPreviewBox.style.background = DOC_PAPER_COLOR;
       return;
     }
     const faceColor = this.bgColorPicker.value;

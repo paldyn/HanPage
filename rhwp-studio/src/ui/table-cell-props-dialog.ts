@@ -23,6 +23,10 @@ function mmToHwp16(mm: number): number {
   return Math.round(mm * HWPUNIT_PER_MM);
 }
 
+const DOC_PAPER_COLOR = 'var(--doc-paper)';
+const PREVIEW_GUIDE_STROKE = 'var(--ui-border-light)';
+const LINE_SAMPLE_STROKE = 'currentColor';
+
 /** 탭 정의 */
 interface TabDef {
   id: string;
@@ -807,11 +811,11 @@ export class TableCellPropsDialog extends ModalDialog {
         const l1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         l1.setAttribute('x1', '0'); l1.setAttribute('y1', '3');
         l1.setAttribute('x2', '48'); l1.setAttribute('y2', '3');
-        l1.setAttribute('stroke', '#333'); l1.setAttribute('stroke-width', '1');
+        l1.setAttribute('stroke', LINE_SAMPLE_STROKE); l1.setAttribute('stroke-width', '1');
         const l2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         l2.setAttribute('x1', '0'); l2.setAttribute('y1', '7');
         l2.setAttribute('x2', '48'); l2.setAttribute('y2', '7');
-        l2.setAttribute('stroke', '#333'); l2.setAttribute('stroke-width', '1');
+        l2.setAttribute('stroke', LINE_SAMPLE_STROKE); l2.setAttribute('stroke-width', '1');
         svg.appendChild(l1); svg.appendChild(l2);
         item.appendChild(svg);
       } else {
@@ -820,7 +824,7 @@ export class TableCellPropsDialog extends ModalDialog {
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         line.setAttribute('x1', '0'); line.setAttribute('y1', '5');
         line.setAttribute('x2', '48'); line.setAttribute('y2', '5');
-        line.setAttribute('stroke', '#333'); line.setAttribute('stroke-width', '1.5');
+        line.setAttribute('stroke', LINE_SAMPLE_STROKE); line.setAttribute('stroke-width', '1.5');
         if (def.dash) line.setAttribute('stroke-dasharray', def.dash);
         svg.appendChild(line);
         item.appendChild(svg);
@@ -994,20 +998,20 @@ export class TableCellPropsDialog extends ModalDialog {
     const bg = document.createElementNS(ns, 'rect');
     bg.setAttribute('x', '0'); bg.setAttribute('y', '0');
     bg.setAttribute('width', '120'); bg.setAttribute('height', '100');
-    bg.setAttribute('fill', '#fff');
+    bg.style.setProperty('fill', DOC_PAPER_COLOR);
     svg.appendChild(bg);
 
     // 십자선 (셀 구분선) — 연한 회색 점선
     const cross1 = document.createElementNS(ns, 'line');
     cross1.setAttribute('x1', '60'); cross1.setAttribute('y1', '5');
     cross1.setAttribute('x2', '60'); cross1.setAttribute('y2', '95');
-    cross1.setAttribute('stroke', '#ccc'); cross1.setAttribute('stroke-width', '0.5');
+    cross1.style.setProperty('stroke', PREVIEW_GUIDE_STROKE); cross1.setAttribute('stroke-width', '0.5');
     cross1.setAttribute('stroke-dasharray', '3,2');
     svg.appendChild(cross1);
     const cross2 = document.createElementNS(ns, 'line');
     cross2.setAttribute('x1', '5'); cross2.setAttribute('y1', '50');
     cross2.setAttribute('x2', '115'); cross2.setAttribute('y2', '50');
-    cross2.setAttribute('stroke', '#ccc'); cross2.setAttribute('stroke-width', '0.5');
+    cross2.style.setProperty('stroke', PREVIEW_GUIDE_STROKE); cross2.setAttribute('stroke-width', '0.5');
     cross2.setAttribute('stroke-dasharray', '3,2');
     svg.appendChild(cross2);
 
@@ -1196,7 +1200,7 @@ export class TableCellPropsDialog extends ModalDialog {
   /** 배경 미리보기 갱신 (무늬 패턴 포함) */
   private updateBgPreview(): void {
     if (!this.bgColorRadio.checked) {
-      this.bgPreviewBox.style.background = '#ffffff';
+      this.bgPreviewBox.style.background = DOC_PAPER_COLOR;
       return;
     }
     const faceColor = this.bgColorPicker.value;
@@ -1248,12 +1252,12 @@ export class TableCellPropsDialog extends ModalDialog {
     if (tp.tableWidth != null) {
       this.basicWidthInput.value = hwpunitToMm(tp.tableWidth).toFixed(1);
       this.basicWidthInput.readOnly = true;
-      this.basicWidthInput.style.background = '#f5f5f5';
+      this.basicWidthInput.style.removeProperty('background');
     }
     if (tp.tableHeight != null) {
       this.basicHeightInput.value = hwpunitToMm(tp.tableHeight).toFixed(1);
       this.basicHeightInput.readOnly = true;
-      this.basicHeightInput.style.background = '#f5f5f5';
+      this.basicHeightInput.style.removeProperty('background');
     }
     this.treatAsCharCheck.checked = tp.treatAsChar ?? true;
     this.selectWrap(this.wrapValues.indexOf(tp.textWrap ?? 'Square'));
