@@ -405,7 +405,9 @@ fn textless_infront_para_host_requires_line_advance(para: &Paragraph) -> bool {
             let cm = shape.common();
             !cm.treat_as_char
                 && matches!(cm.text_wrap, TextWrap::InFrontOfText)
-                && matches!(cm.vert_rel_to, VertRelTo::Para)
+                && (matches!(cm.vert_rel_to, VertRelTo::Para)
+                    || (matches!(cm.vert_rel_to, VertRelTo::Paper)
+                        && shape.drawing().and_then(|d| d.text_box.as_ref()).is_some()))
         }
         _ => false,
     })
