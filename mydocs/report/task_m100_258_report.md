@@ -235,6 +235,22 @@ Stage26 추가 검증:
 - `cargo fmt --check`
 - `git diff --check`
 
+Stage27 추가 검증:
+
+- Stage26의 검은 반전 선택색은 작업지시자 기준과 달라 폐기하고, 선택 highlight를 기존 파란 반투명
+  `rgba(51,144,255,0.35)`로 복원
+- Browser plugin: `http://localhost:7700/` 로드, title `rhwp-studio`, console error/warn 없음
+- `http://localhost:7700/` Playwright 일반 본문 선택 검증 통과
+  (`dddddddddddd` 범위 `2..12`, selection layer `mix-blend-mode: normal`,
+  highlight background `rgba(51, 144, 255, 0.35)`)
+- `http://localhost:7700/` Playwright 샘플 누름틀 선택 검증 통과
+  (`samples/누름틀-2024.hwp` 첫 누름틀 `11223344`, selection layer `mix-blend-mode: normal`,
+  highlight background `rgba(51, 144, 255, 0.35)`)
+- `cargo test --test issue_258_clickhere_form_mode`: 통과 (11 passed)
+- `cd rhwp-studio && npm run build`: 통과
+- `cargo fmt --check`: 통과
+- `git diff --check`: 통과
+
 ## 3. 남은 후속
 
 - 사용자 정보, 문서 요약, 작성한 날짜, 파일 이름/경로 등 누름틀 외 필드 탭은 후속 이슈로 분리한다.
