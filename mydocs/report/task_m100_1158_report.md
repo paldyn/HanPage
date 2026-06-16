@@ -20,7 +20,7 @@
 - `meta[name="theme-color"]`가 현재 테마에 맞게 갱신되도록 했다.
 - 메뉴바, 툴바, 서식바, 상태바, 작업영역, command palette, 공통 dialog, 주요 개별 dialog를
   semantic token 기반으로 전환했다.
-- dark mode에서도 편집 용지와 눈금자 body는 흰색을 유지하도록 분리했다.
+- dark mode에서도 편집 용지는 흰색을 유지하고, 눈금자 body는 dark chrome 톤으로 분리했다.
 - 눈금자 canvas는 theme 변경 시 palette를 다시 읽고 redraw 하도록 했다.
 - 표/셀 선택 오버레이도 token 기반으로 정리했다.
 - 테마 스모크 E2E `rhwp-studio/e2e/theme-mode.test.mjs`를 추가했다.
@@ -35,6 +35,7 @@
 - Stage 1: 테마 설정 저장, DOM dataset 반영, 보기 메뉴 추가, 앱 chrome token화
 - Stage 2: 개별 dialog/overlay 색상 정리
 - Stage 3: 표 선택 오버레이 token화 및 잔여 절대색 최소화
+- Stage 4: 시각 검토 후 눈금자 dark tone 정정 및 e2e 가드 보강
 
 ## 4. 검증
 
@@ -54,9 +55,18 @@ Stage 3 검증:
 - `cd rhwp-studio && npm run build`
 - `cd rhwp-studio && node e2e/theme-mode.test.mjs --mode=headless`
 
+Stage 4 검증:
+
+- `cd rhwp-studio && npm run build`
+- `cd rhwp-studio && node e2e/theme-mode.test.mjs --mode=headless`
+- dark 계산값 확인
+  - `--ruler-bg=#2d333b`
+  - `--ruler-body=#363c45`
+
 ## 5. 최종 판단
 
 - theme 설정/저장/새로고침 유지/system 연동은 구현 완료
 - dark mode의 주요 UI chrome과 대표 dialog는 token 기반으로 정리 완료
 - 편집 용지는 dark mode에서도 흰색 유지
+- 눈금자 본문은 dark mode에서 흰 종이처럼 남지 않도록 별도 dark tone으로 정정 완료
 - 남은 절대색은 실제 색상 샘플 성격만 남겨 의도된 값으로 판단

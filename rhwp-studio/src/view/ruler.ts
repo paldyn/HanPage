@@ -220,18 +220,18 @@ export class Ruler {
     const pageScreenLeft = this.getPageScreenLeft(pageInfo, zoom, scrollX);
     const pageDisplayWidth = pageInfo.width * zoom;
 
-    // 본문 영역 배경 (흰색)
+    // 본문 영역 배경
     const bodyLeftPx = pageScreenLeft + pageInfo.marginLeft * zoom;
     const bodyRightPx = pageScreenLeft + pageDisplayWidth - pageInfo.marginRight * zoom;
 
     if (this.inCell) {
-      // 셀 모드: 셀 영역만 흰색, 나머지는 음영
+      // 셀 모드: 셀 영역만 본문 톤, 나머지는 여백 톤
       const cellLeftPx = pageScreenLeft + this.cellX * zoom;
       const cellRightPx = pageScreenLeft + (this.cellX + this.cellWidth) * zoom;
       ctx.fillStyle = palette.bgBody;
       ctx.fillRect(cellLeftPx, 0, cellRightPx - cellLeftPx, canvasH);
     } else if (pageInfo.columns && pageInfo.columns.length > 1) {
-      // 다단 모드: 현재 커서가 위치한 단만 흰색으로 표시
+      // 다단 모드: 현재 커서가 위치한 단만 본문 톤으로 표시
       const cursorX = this.cursorColumnX;
       let activeCol = 0;
       for (let i = 0; i < pageInfo.columns.length; i++) {
@@ -373,7 +373,7 @@ export class Ruler {
       const pageScreenTop = this.virtualScroll.getPageOffset(pageIdx) - scrollY;
       const pageInfo = this.wasm.getPageInfo(pageIdx);
 
-      // 본문 영역 배경 (흰색)
+      // 본문 영역 배경
       const bodyTopPx = pageScreenTop + (pageInfo.marginHeader + pageInfo.marginTop) * zoom;
       const bodyBottomPx = pageScreenTop + pageInfo.height * zoom - (pageInfo.marginFooter + pageInfo.marginBottom) * zoom;
       ctx.fillStyle = palette.bgBody;

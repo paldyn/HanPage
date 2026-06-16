@@ -197,7 +197,7 @@
   --table-selection-stroke: #8bb8ff;
 
   --ruler-bg: #2d333b;
-  --ruler-body: #ffffff;
+  --ruler-body: var(--ui-surface-raised);
   --ruler-tick: #c2cad6;
   --ruler-text: #e3e7ed;
   --ruler-marker: #8bb8ff;
