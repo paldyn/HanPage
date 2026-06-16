@@ -144,7 +144,7 @@ fn clickhere_hwp_sample_cursor_rects_follow_visible_value() {
 }
 
 #[test]
-fn removing_clickhere_keeps_text_but_removes_field_control() {
+fn removing_clickhere_removes_field_text_and_control() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let bytes = fs::read(repo_root.join("samples/누름틀-2024.hwp")).expect("read clickhere sample");
     let mut core = DocumentCore::from_bytes(&bytes).expect("parse clickhere sample");
@@ -158,7 +158,7 @@ fn removing_clickhere_keeps_text_but_removes_field_control() {
         .expect("remove first clickhere");
 
     let para_after = &core.document().sections[0].paragraphs[0];
-    assert_eq!(para_after.text, "11223344");
+    assert_eq!(para_after.text, "");
     assert_eq!(
         para_after.field_ranges.len(),
         0,
@@ -169,10 +169,7 @@ fn removing_clickhere_keeps_text_but_removes_field_control() {
         2,
         "ClickHere control should be removed while SectionDef/ColumnDef remain"
     );
-    assert_eq!(
-        para_after.char_offsets,
-        vec![16, 17, 18, 19, 20, 21, 22, 23]
-    );
+    assert_eq!(para_after.char_offsets, Vec::<u32>::new());
 
     let fields = core.collect_all_fields();
     let click_fields: Vec<_> = fields

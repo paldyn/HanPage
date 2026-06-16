@@ -2749,7 +2749,7 @@ export class InputHandler {
     return false;
   }
 
-  /** 현재 커서 위치의 누름틀 필드를 제거한다 (텍스트 유지). */
+  /** 현재 커서 위치의 누름틀 필드와 내용을 제거한다. */
   removeCurrentField(posOverride?: DocumentPosition): void {
     const pos = posOverride ?? this.cursor.getPosition();
     try {

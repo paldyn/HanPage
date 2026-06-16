@@ -634,7 +634,7 @@ impl DocumentCore {
         Ok(para)
     }
 
-    /// 본문 문단의 커서 위치에서 필드를 제거한다 (텍스트 유지, 필드 컨트롤 삭제).
+    /// 본문 문단의 커서 위치에서 필드를 제거한다 (필드 내용과 컨트롤 삭제).
     ///
     /// 성공 시 `{"ok":true}`, 필드가 없으면 에러를 반환한다.
     pub fn remove_field_at(
@@ -1278,7 +1278,7 @@ fn find_field_ctrl_idx_in_para(para: &Paragraph, char_offset: usize) -> Option<u
     None
 }
 
-/// 문단 내 커서 위치의 누름틀 필드를 제거한다 (본문 텍스트 유지).
+/// 문단 내 커서 위치의 누름틀 필드를 제거한다.
 fn remove_field_in_para(para: &mut Paragraph, char_offset: usize) -> Result<(), HwpError> {
     let idx = para.field_ranges.iter().position(|fr| {
         if let Some(Control::Field(field)) = para.controls.get(fr.control_idx) {
@@ -1292,8 +1292,13 @@ fn remove_field_in_para(para: &mut Paragraph, char_offset: usize) -> Result<(), 
     });
     match idx {
         Some(i) => {
+            let start = para.field_ranges[i].start_char_idx;
+            let end = para.field_ranges[i].end_char_idx;
             let removed_control_idx = para.field_ranges[i].control_idx;
             para.field_ranges.remove(i);
+            if end > start {
+                para.delete_text_at(start, end - start);
+            }
             if removed_control_idx < para.controls.len() {
                 para.controls.remove(removed_control_idx);
             }
