@@ -2822,7 +2822,6 @@ export class InputHandler {
       this.fieldMarker.hide();
       this.wasm.clearActiveField();
       this.eventBus.emit('field-info-changed', null);
-      this.eventBus.emit('document-changed');
       return true;
     } catch {
       return false;
@@ -2843,7 +2842,6 @@ export class InputHandler {
       this.fieldMarker.hide();
       this.wasm.clearActiveField();
       this.eventBus.emit('field-info-changed', null);
-      this.eventBus.emit('document-changed');
       return true;
     } catch {
       return false;
