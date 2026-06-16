@@ -38,7 +38,26 @@ gh pr view N --repo edwardkim/rhwp --json additions,deletions,files,commits
 
 ## 3. 리뷰 문서 작성
 
-각 PR 마다 `mydocs/pr/pr_{N}_review.md` + `pr_{N}_review_impl.md` 2건 작성한다.
+각 PR 마다 리뷰 문서 2건을 **처음부터 archive 경로에 직접 작성**한다.
+
+```text
+mydocs/pr/archives/pr_{N}_review.md
+mydocs/pr/archives/pr_{N}_review_impl.md
+```
+
+Collaborator 권한으로는 문서만 따로 원격 PR/push 하는 흐름이 성립하지 않으므로, PR 리뷰 문서는
+`mydocs/pr/` 임시 경로에 만들었다가 나중에 옮기지 않는다. 처음부터 `archives/`에 두고, 해당 PR head
+또는 메인테이너 반영 브랜치에 **코드 변경과 함께** push 한다.
+
+또한 Collaborator는 PR용 작업 브랜치를 fork 저장소(`origin`)에 우회 생성하지 않는다. 로컬 브랜치에서
+원본 저장소 remote(`upstream`)의 작업 브랜치로 **직접 push** 하는 것을 기본 규칙으로 삼는다.
+예:
+
+```bash
+git push upstream HEAD:task_m100_1158
+```
+
+fork 브랜치를 head 로 쓰는 방식은 권한 제약 때문에 직접 push 가 불가능한 경우에만 예외로 둔다.
 
 ### 3.1 리뷰 문서 (`pr_N_review.md`)
 
@@ -64,14 +83,14 @@ gh pr view N --repo edwardkim/rhwp --json additions,deletions,files,commits
 ### 4.1 PR 브랜치 fetch
 
 ```bash
-git fetch origin pull/N/head:local/prN
+git fetch upstream pull/N/head:local/prN
 ```
 
 ### 4.2 Merge 시뮬레이션
 
 ```bash
 git checkout -b prN-merge-test local/prN
-git merge origin/devel --no-commit --no-ff
+git merge upstream/devel --no-commit --no-ff
 # 충돌 여부 확인
 git status
 ```
@@ -114,7 +133,7 @@ PR #N 검토 결과 · admin merge 준비 완료.
 - 충돌 시뮬레이션: 0건
 - cargo test --lib: XYZ passed
 - Clippy: 0 warning
-- 리뷰 문서: mydocs/pr/pr_N_review.md
+- 리뷰 문서: mydocs/pr/archives/pr_N_review.md
 
 어떻게 진행할까요?
 - A) admin merge
@@ -168,9 +187,9 @@ PR 에 감사 + 검증 결과 요약 + 다음 PR 격려:
 ### 7.3 devel Sync
 
 ```bash
-git fetch origin
+git fetch upstream
 git checkout local/devel
-git rebase origin/devel   # 로컬 작업분이 있으면 머지 커밋 위로 재적용
+git rebase upstream/devel   # 로컬 작업분이 있으면 머지 커밋 위로 재적용
 ```
 
 ### 7.4 렌더 영향 PR 의 경우 · Golden 재생성 체크
@@ -188,19 +207,23 @@ UPDATE_GOLDEN=1 cargo test --test svg_snapshot
 cargo test --test svg_snapshot   # 결정성 재확인
 git add tests/golden_svg/
 git commit -m "test(svg_snapshot): regenerate golden after #N (...)"
-git push origin devel
+git push upstream devel
 ```
 
 2회 연속 재현된 실수 (PR #221 / PR #251 사이클) 로 인해 **체크리스트 수준의 필수 절차**.
 
-### 7.5 리뷰 문서 archives 이동
+### 7.5 리뷰 문서 archive 경로 유지 확인
 
-```bash
-mv mydocs/pr/pr_N_review.md mydocs/pr/archives/
-mv mydocs/pr/pr_N_review_impl.md mydocs/pr/archives/
-```
+PR 리뷰 문서는 처음부터 `mydocs/pr/archives/`에 작성한다. 따라서 merge 직전에 별도 `mv` 단계는 없다.
 
-다음 커밋에 포함하거나 오늘할일 커밋에 동반.
+운영 규칙:
+
+- `mydocs/pr/pr_N_review*.md` 형태의 active 경로 문서를 새로 만들지 않는다.
+- Collaborator는 문서만 위한 별도 remote PR/push를 만들지 않는다.
+- Collaborator는 PR용 브랜치를 fork(`origin`)에 먼저 push 하지 않고 `upstream` 작업 브랜치로 직접 push 한다.
+- 리뷰 문서는 해당 PR head 또는 메인테이너 반영 브랜치에 **처음부터 archive 경로로 포함**시킨다.
+- 이미 active 경로에 잘못 만들었더라도, 다음 PR에 임시 동반하는 식으로 일반화하지 말고 같은 PR 준비 단계에서
+  archive 경로로 바로 정리한 뒤 push 한다.
 
 ### 7.6 로컬 브랜치 정리
 

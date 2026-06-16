@@ -1,4 +1,6 @@
 import type { CommandDef } from '../types';
+import { setThemeMode, syncThemeMenu, type EffectiveTheme } from '../../core/theme';
+import type { ThemeMode } from '../../core/user-settings';
 import { GridSettingsDialog } from '../../ui/grid-settings-dialog';
 import {
   type GridOffsetMm,
@@ -18,6 +20,19 @@ function zoomLevel(pct: number): CommandDef {
     label: `${pct}%`,
     execute(services) {
       services.getViewportManager()?.setZoom(pct / 100);
+    },
+  };
+}
+
+function themeModeCommand(mode: ThemeMode, label: string): CommandDef {
+  return {
+    id: `view:theme-${mode}`,
+    label,
+    execute(services) {
+      const effective: EffectiveTheme = setThemeMode(mode);
+      syncThemeMenu(mode);
+      services.eventBus.emit('theme-changed', { mode, effective });
+      services.eventBus.emit('document-view-changed');
     },
   };
 }
@@ -147,6 +162,9 @@ export const viewCommands: CommandDef[] = [
   zoomLevel(150),
   zoomLevel(200),
   zoomLevel(300),
+  themeModeCommand('system', '시스템 설정'),
+  themeModeCommand('light', '밝게'),
+  themeModeCommand('dark', '어둡게'),
   // ─── 보기 메뉴: 표시/숨기기 ─────────────────────────
   {
     id: 'view:form-mode',

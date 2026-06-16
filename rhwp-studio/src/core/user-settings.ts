@@ -27,10 +27,20 @@ export interface FontSettings {
   recentFontCount: number;
 }
 
+/** 앱 UI 테마 설정값 */
+export type ThemeMode = 'system' | 'light' | 'dark';
+
+/** 앱 UI 테마 설정 */
+export interface ThemeSettings {
+  /** 사용자가 선택한 테마 모드 */
+  mode: ThemeMode;
+}
+
 /** 전체 설정 구조 */
 export interface AppSettings {
   version: number;
   font: FontSettings;
+  theme: ThemeSettings;
 }
 
 /** 언어 인덱스 상수 (HWP 7개 언어) */
@@ -86,7 +96,14 @@ function defaultSettings(): AppSettings {
       showRecentFonts: true,
       recentFontCount: 3,
     },
+    theme: {
+      mode: 'system',
+    },
   };
+}
+
+function normalizeThemeMode(value: unknown): ThemeMode {
+  return value === 'light' || value === 'dark' || value === 'system' ? value : 'system';
 }
 
 /** 사용자 환경설정 서비스 (싱글턴) */
@@ -109,6 +126,11 @@ class UserSettingsService {
         font: {
           ...defaults.font,
           ...(parsed.font ?? {}),
+        },
+        theme: {
+          ...defaults.theme,
+          ...(parsed.theme ?? {}),
+          mode: normalizeThemeMode(parsed.theme?.mode),
         },
       };
     } catch {
@@ -133,6 +155,17 @@ class UserSettingsService {
   /** 글꼴 설정 업데이트 */
   updateFontSettings(partial: Partial<FontSettings>): void {
     Object.assign(this.data.font, partial);
+    this.save();
+  }
+
+  /** 테마 설정 반환 */
+  getThemeSettings(): ThemeSettings {
+    return this.data.theme;
+  }
+
+  /** 테마 모드 설정 */
+  setThemeMode(mode: ThemeMode): void {
+    this.data.theme.mode = normalizeThemeMode(mode);
     this.save();
   }
 
