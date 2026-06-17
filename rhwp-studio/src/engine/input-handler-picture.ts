@@ -699,8 +699,8 @@ export function updatePictureResizeDrag(this: any, e: MouseEvent): void {
         const newW = Math.max(Math.round(r.origWidth * sx), MIN_SIZE_HWP);
         const newH = Math.max(Math.round(r.origHeight * sy), MIN_SIZE_HWP);
         const updated: Record<string, unknown> = { width: newW, height: newH };
-        if (deltaH !== 0) updated['horzOffset'] = ((r.origHorzOffset + deltaH) >>> 0);
-        if (deltaV !== 0) updated['vertOffset'] = ((r.origVertOffset + deltaV) >>> 0);
+        if (deltaH !== 0) updated['horzOffset'] = r.origHorzOffset + deltaH;
+        if (deltaV !== 0) updated['vertOffset'] = r.origVertOffset + deltaV;
         setObjectProperties.call(this, r, updated);
       }
       this.eventBus.emit('document-changed');
@@ -727,8 +727,8 @@ export function updatePictureResizeDrag(this: any, e: MouseEvent): void {
       setObjectProperties.call(this, state.ref, {
         width: newW,
         height: newH,
-        horzOffset: ((beforeHorzOffset + (newHorzOffset - origHorzOffset)) >>> 0),
-        vertOffset: ((beforeVertOffset + (newVertOffset - origVertOffset)) >>> 0),
+        horzOffset: beforeHorzOffset + (newHorzOffset - origHorzOffset),
+        vertOffset: beforeVertOffset + (newVertOffset - origVertOffset),
       });
       this.eventBus.emit('document-changed');
     } catch { /* ignore */ }
@@ -769,11 +769,11 @@ export function finishPictureResizeDrag(this: any, e: MouseEvent): void {
         const updated: Record<string, unknown> = { width: newW, height: newH };
         const before: Record<string, unknown> = { width: r.origWidth, height: r.origHeight };
         if (deltaH !== 0) {
-          updated['horzOffset'] = ((r.origHorzOffset + deltaH) >>> 0);
+          updated['horzOffset'] = r.origHorzOffset + deltaH;
           before['horzOffset'] = r.origHorzOffset;
         }
         if (deltaV !== 0) {
-          updated['vertOffset'] = ((r.origVertOffset + deltaV) >>> 0);
+          updated['vertOffset'] = r.origVertOffset + deltaV;
           before['vertOffset'] = r.origVertOffset;
         }
         const changed = Object.keys(updated).some(key => updated[key] !== before[key]);
@@ -825,11 +825,11 @@ export function finishPictureResizeDrag(this: any, e: MouseEvent): void {
     const deltaHorz = newHorzOffset - origHorzOffset;
     const deltaVert = newVertOffset - origVertOffset;
     if (deltaHorz !== 0) {
-      updated['horzOffset'] = ((beforeHorzOffset + deltaHorz) >>> 0);
+      updated['horzOffset'] = beforeHorzOffset + deltaHorz;
       before['horzOffset'] = beforeHorzOffset;
     }
     if (deltaVert !== 0) {
-      updated['vertOffset'] = ((beforeVertOffset + deltaVert) >>> 0);
+      updated['vertOffset'] = beforeVertOffset + deltaVert;
       before['vertOffset'] = beforeVertOffset;
     }
     if (Object.keys(updated).length > 0) {
@@ -922,8 +922,8 @@ export function updatePictureMoveDrag(this: any, e: MouseEvent): void {
     for (const ref of targets) {
       const props = getObjectProperties.call(this, ref);
       setObjectProperties.call(this, ref, {
-        horzOffset: ((props.horzOffset + deltaH) >>> 0),
-        vertOffset: ((props.vertOffset + deltaV) >>> 0),
+        horzOffset: props.horzOffset + deltaH,
+        vertOffset: props.vertOffset + deltaV,
       });
     }
     this.pictureMoveState.lastPageX = px;

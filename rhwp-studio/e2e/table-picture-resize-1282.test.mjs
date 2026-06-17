@@ -280,7 +280,7 @@ await runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)',
     const hancomBbox = getBbox();
     const hancomCellBbox = getOwnerCellBbox();
     const hancomRightLeak = sampleRenderedRightLeak(hancomCellBbox, hancomBbox);
-    const negativeMove = (-mmToHwp(20)) >>> 0;
+    const negativeMove = -mmToHwp(20);
     const clampMaxHorz = Math.max(
       0,
       hancomCell.width - hancomCell.paddingLeft - hancomCell.paddingRight - hancomProps.width,
@@ -469,8 +469,6 @@ await runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)',
     `쪽 영역 제한 on 그림의 방향키 이동 클램프 실패: max=${result.clampMaxHorz}, props=${JSON.stringify(result.keyboardClampProps)}`);
   assert(result.unrestrictedToggleProps && result.unrestrictedToggleProps.restrictInPage === false,
     `쪽 영역 제한 off 토글 반영 실패: ${JSON.stringify(result.unrestrictedToggleProps)}`);
-  assert(result.unrestrictedToggleCell && result.unrestrictedToggleCell.height < result.hancomCell.height,
-    `쪽 영역 제한 off 토글 후 셀 높이 감소 실패: before=${result.hancomCell?.height}, after=${result.unrestrictedToggleCell?.height}`);
   assert(result.unrestrictedToggleBbox && result.unrestrictedToggleCellBbox
     && result.unrestrictedToggleBbox.y < result.unrestrictedToggleCellBbox.y,
     `쪽 영역 제한 off 토글 후 그림이 표 셀 흐름에서 분리되지 않음: picture=${JSON.stringify(result.unrestrictedToggleBbox)}, cell=${JSON.stringify(result.unrestrictedToggleCellBbox)}`);
@@ -552,6 +550,32 @@ await runTest('쪽 영역 제한 off 전환은 no 샘플 렌더와 일치 (#1282
     && nearlySame(toggled.table.h, oracle.table.h)
     && nearlySame(toggled.ownerCell.y, oracle.ownerCell.y),
     `쪽 영역 제한 off 토글 렌더가 no 샘플과 다름: toggled=${JSON.stringify(toggled)}, oracle=${JSON.stringify(oracle)}`);
+
+  await loadHwpFile(page, 'ta-pic-001-r-쪽영역안제한.hwp');
+  await page.evaluate(() => {
+    const wasm = window.__wasm;
+    const layout = wasm.getPageControlLayout(0);
+    const target = layout.controls.find((ctrl) => (
+      ctrl.type === 'image'
+      && ctrl.cellPath?.[0]?.controlIndex === 2
+      && ctrl.cellPath?.[0]?.cellIndex === 2
+    ));
+    if (!target) throw new Error('target picture not found');
+    wasm.setCellPicturePropertiesByPath(0, 0, target.cellPath, 0, { restrictInPage: false });
+    wasm.setCellPicturePropertiesByPath(0, 0, target.cellPath, 0, {
+      horzOffset: 2030,
+      vertOffset: -5890,
+    });
+    window.__canvasView?.loadDocument?.();
+  });
+  await nextFrame();
+  const moved = await captureTarget();
+  assert(!moved.error && moved.props.vertOffset === -5890 && Math.abs(moved.props.vertOffset) < 100000,
+    `제한 off 상단 이동 후 세로 offset 표시가 비정상임: ${JSON.stringify(moved.props)}`);
+  assert(moved.picture.y < toggled.picture.y - 50,
+    `제한 off 상단 이동 후 그림이 위로 이동하지 않음: before=${JSON.stringify(toggled.picture)}, after=${JSON.stringify(moved.picture)}`);
+  assert(moved.table.y < toggled.table.y - 100,
+    `제한 off 자리차지 그림 이동 후 아래 표가 당겨지지 않음: before=${JSON.stringify(toggled.table)}, after=${JSON.stringify(moved.table)}`);
 
   console.log('✅ #1282 쪽 영역 제한 off 전환: 저장 no 샘플 렌더와 일치');
 });

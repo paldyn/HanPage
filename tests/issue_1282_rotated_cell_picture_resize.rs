@@ -123,14 +123,13 @@ fn issue_1282_page_area_limit_samples_drive_table_height_only_when_enabled() {
 fn issue_1282_restrict_in_page_clamps_cell_picture_move_offsets() {
     let bytes = read_fixture("samples/ta-pic-001-r-쪽영역안제한.hwp");
     let mut core = DocumentCore::from_bytes(&bytes).expect("load restricted sample");
-    let negative = (-5000i32) as u32;
 
     core.set_cell_picture_properties_by_path_native(
         0,
         0,
         r#"[{"controlIdx":2,"cellIdx":2,"cellParaIdx":0}]"#,
         0,
-        &format!(r#"{{"horzOffset":{},"vertOffset":{}}}"#, negative, negative),
+        r#"{"horzOffset":-5000,"vertOffset":-5000}"#,
     )
     .expect("move restricted picture outside cell start");
 
@@ -236,14 +235,13 @@ fn issue_1282_turning_off_restrict_in_page_releases_picture_from_cell_flow() {
 fn issue_1282_unrestricted_cell_picture_move_offsets_are_not_clamped() {
     let bytes = read_fixture("samples/ta-pic-001-r-쪽영역안제한no.hwp");
     let mut core = DocumentCore::from_bytes(&bytes).expect("load unrestricted sample");
-    let negative = (-5000i32) as u32;
 
     core.set_cell_picture_properties_by_path_native(
         0,
         0,
         r#"[{"controlIdx":2,"cellIdx":2,"cellParaIdx":0}]"#,
         0,
-        &format!(r#"{{"horzOffset":{},"vertOffset":{}}}"#, negative, negative),
+        r#"{"horzOffset":-5000,"vertOffset":-5000}"#,
     )
     .expect("move unrestricted picture outside cell start");
 
@@ -256,6 +254,64 @@ fn issue_1282_unrestricted_cell_picture_move_offsets_are_not_clamped() {
     assert_eq!(
         pic.common.vertical_offset as i32, -5000,
         "쪽 영역 제한 off 셀 그림은 기존 자유 이동 의미를 유지해야 함"
+    );
+
+    let props_json = core
+        .get_cell_picture_properties_by_path_native(
+            0,
+            0,
+            r#"[{"controlIdx":2,"cellIdx":2,"cellParaIdx":0}]"#,
+            0,
+        )
+        .expect("query unrestricted picture props");
+    assert!(
+        props_json.contains(r#""horzOffset":-5000"#)
+            && props_json.contains(r#""vertOffset":-5000"#),
+        "속성창 JSON은 음수 offset을 u32 래핑값이 아니라 signed 값으로 노출해야 함: {props_json}"
+    );
+}
+
+#[test]
+fn issue_1282_unrestricted_take_place_negative_offset_pulls_table_up() {
+    let bytes = read_fixture("samples/ta-pic-001-r-쪽영역안제한.hwp");
+    let mut core = DocumentCore::from_bytes(&bytes).expect("load restricted sample");
+
+    core.set_cell_picture_properties_by_path_native(
+        0,
+        0,
+        r#"[{"controlIdx":2,"cellIdx":2,"cellParaIdx":0}]"#,
+        0,
+        r#"{"restrictInPage":false}"#,
+    )
+    .expect("turn off restrictInPage");
+    core.set_cell_picture_properties_by_path_native(
+        0,
+        0,
+        r#"[{"controlIdx":2,"cellIdx":2,"cellParaIdx":0}]"#,
+        0,
+        r#"{"vertOffset":-5890,"horzOffset":2030}"#,
+    )
+    .expect("move unrestricted take-place picture upward");
+
+    let doc = core.document();
+    let pic = target_picture(doc);
+    let line_seg = doc.sections[0].paragraphs[0]
+        .line_segs
+        .first()
+        .expect("outer paragraph line seg");
+    assert_eq!(
+        pic.common.vertical_offset as i32, -5890,
+        "제한 off 자리차지 그림은 상단 이동 음수 offset을 보존해야 함"
+    );
+    assert_eq!(
+        line_seg.vertical_pos,
+        pic.common.vertical_offset as i32 + pic.common.height as i32,
+        "자리차지 그림의 부모 line_seg는 vertOffset+height 기준으로 아래 표를 당겨야 함"
+    );
+    assert!(
+        line_seg.vertical_pos > 0,
+        "위로 이동해도 flow 높이는 양수 범위여야 함: {}",
+        line_seg.vertical_pos
     );
 }
 

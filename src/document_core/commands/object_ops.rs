@@ -518,7 +518,7 @@ impl DocumentCore {
             c.width, c.height, c.treat_as_char,
             vert_rel, vert_align,
             horz_rel, horz_align,
-            c.vertical_offset, c.horizontal_offset,
+            c.vertical_offset as i32, c.horizontal_offset as i32,
             text_wrap, c.flow_with_text, c.allow_overlap,
             pic.image_attr.brightness, pic.image_attr.contrast, effect,
             desc_escaped,
@@ -916,7 +916,7 @@ impl DocumentCore {
             .saturating_add(padding_bottom.max(0) as u32)
     }
 
-    fn take_place_picture_flow_offset(pic: &crate::model::image::Picture) -> Option<u32> {
+    fn take_place_picture_flow_offset(pic: &crate::model::image::Picture) -> Option<i32> {
         if pic.common.treat_as_char
             || !matches!(
                 pic.common.text_wrap,
@@ -940,7 +940,11 @@ impl DocumentCore {
             );
             height
         };
-        Some((pic.common.vertical_offset as i32).max(0) as u32 + visual_height)
+        Some(
+            (pic.common.vertical_offset as i32)
+                .saturating_add(visual_height.min(i32::MAX as u32) as i32)
+                .max(0),
+        )
     }
 
     fn sync_direct_owner_cell_for_picture(
@@ -986,7 +990,7 @@ impl DocumentCore {
                     let vertical_pos = if pic.common.flow_with_text {
                         0
                     } else {
-                        flow_offset.min(i32::MAX as u32) as i32
+                        flow_offset
                     };
                     line_seg_update = Some((vertical_pos, line_height_extra));
                 }
@@ -1240,11 +1244,11 @@ impl DocumentCore {
             pic.common.allow_overlap = false;
             pic.common.attr &= !(1 << 14);
         }
-        if let Some(v) = json_u32(props_json, "vertOffset") {
-            pic.common.vertical_offset = v;
+        if let Some(v) = json_i32(props_json, "vertOffset") {
+            pic.common.vertical_offset = v as u32;
         }
-        if let Some(v) = json_u32(props_json, "horzOffset") {
-            pic.common.horizontal_offset = v;
+        if let Some(v) = json_i32(props_json, "horzOffset") {
+            pic.common.horizontal_offset = v as u32;
         }
         if transform_changed {
             pic.shape_attr.raw_rendering.clear();
@@ -3715,15 +3719,15 @@ impl DocumentCore {
         inner_control_idx: usize,
         props_json: &str,
     ) -> Result<String, HwpError> {
-        use super::super::helpers::{json_bool, json_u32};
+        use super::super::helpers::{json_bool, json_i32};
 
         let path = Self::parse_cell_path_json(cell_path_json)?;
         let restrict_change = json_bool(props_json, "restrictInPage");
         let restrict_enabled_by_this_call = restrict_change.unwrap_or(false);
         let clamp_horz =
-            restrict_enabled_by_this_call || json_u32(props_json, "horzOffset").is_some();
+            restrict_enabled_by_this_call || json_i32(props_json, "horzOffset").is_some();
         let clamp_vert =
-            restrict_enabled_by_this_call || json_u32(props_json, "vertOffset").is_some();
+            restrict_enabled_by_this_call || json_i32(props_json, "vertOffset").is_some();
         {
             let section = self.document.sections.get_mut(section_idx).ok_or_else(|| {
                 HwpError::RenderError(format!("구역 인덱스 {} 범위 초과", section_idx))

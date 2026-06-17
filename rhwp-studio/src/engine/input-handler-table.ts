@@ -431,8 +431,8 @@ export function moveSelectedPicture(this: any, key: 'ArrowUp' | 'ArrowDown' | 'A
     for (const r of targets) {
       const props = getObjectProperties.call(this, r);
       if (props.treatAsChar) continue; // treat_as_char 개체는 이동 불가
-      const newHorzOffset = ((props.horzOffset + deltaH) >>> 0);
-      const newVertOffset = ((props.vertOffset + deltaV) >>> 0);
+      const newHorzOffset = props.horzOffset + deltaH;
+      const newVertOffset = props.vertOffset + deltaV;
       setObjectProperties.call(this, r, {
         horzOffset: newHorzOffset,
         vertOffset: newVertOffset,
