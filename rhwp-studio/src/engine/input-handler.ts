@@ -3066,6 +3066,62 @@ export class InputHandler {
     }
   }
 
+  /** 마우스로 누름틀 위치를 직접 클릭하면 키보드 경계 이탈 상태를 해제한다. */
+  prepareClickHerePointerEntry(): void {
+    const pos = this.cursor.getPosition();
+    try {
+      const fi = this.wasm.getFieldInfoAt(pos);
+      if (!fi.inField || fi.fieldType !== 'clickhere') {
+        const guidePos = this.findEmptyClickHereGuideHitPosition(pos);
+        if (!guidePos) return;
+
+        this.fieldStartExitKey = null;
+        this.fieldEndExitKey = null;
+        this.cursor.moveTo(guidePos);
+        this.wasm.setActiveField(guidePos);
+        return;
+      }
+
+      this.fieldStartExitKey = null;
+      this.fieldEndExitKey = null;
+
+      if (!fi.isGuide || fi.startCharIdx === undefined) return;
+
+      const normalized = { ...pos, charOffset: fi.startCharIdx };
+      if (pos.charOffset !== fi.startCharIdx) {
+        this.cursor.moveTo(normalized);
+      }
+      this.wasm.setActiveField(normalized);
+    } catch {
+      // 클릭 hit-test 직후 필드 조회 실패는 일반 클릭 처리로 흘려보낸다.
+    }
+  }
+
+  private findEmptyClickHereGuideHitPosition(pos: DocumentPosition): DocumentPosition | null {
+    try {
+      const fields = this.wasm.getFieldList()
+        .filter((field: any) =>
+          field.fieldType === 'clickhere'
+          && typeof field.startCharIdx === 'number'
+          && field.startCharIdx === field.endCharIdx)
+        .map((field: any) => {
+          const fieldPos = this.formFieldPosition(field);
+          if (!fieldPos || !this.isSameTextContainer(pos, fieldPos)) return null;
+          const guideLen = Array.from(field.guide ?? '').length;
+          if (guideLen <= 0) return null;
+          const start = field.startCharIdx;
+          const guideEnd = start + guideLen;
+          if (pos.charOffset <= start || pos.charOffset > guideEnd) return null;
+          return fieldPos;
+        })
+        .filter((fieldPos: DocumentPosition | null): fieldPos is DocumentPosition => fieldPos !== null)
+        .sort((a: DocumentPosition, b: DocumentPosition) => b.charOffset - a.charOffset);
+      return fields[0] ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   /** 현재 위치가 빈 누름틀 안내문 영역인지 확인한다. */
   isClickHereGuidePosition(pos: DocumentPosition): boolean {
     try {
