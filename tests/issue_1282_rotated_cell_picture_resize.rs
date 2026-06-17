@@ -31,7 +31,12 @@ fn target_picture(doc: &Document) -> &Picture {
 
 fn required_cell_height_for_picture(cell: &Cell, pic: &Picture) -> u32 {
     let angle = (pic.shape_attr.rotation_angle as f64).to_radians();
-    let visual_height = if pic.shape_attr.rotation_angle.rem_euclid(360) == 0 {
+    let visual_height = if pic.shape_attr.rotation_angle.rem_euclid(360) != 0
+        && pic.shape_attr.current_width > 0
+        && pic.shape_attr.current_height > 0
+    {
+        pic.common.height
+    } else if pic.shape_attr.rotation_angle.rem_euclid(360) == 0 {
         pic.common.height
     } else {
         let sin = angle.sin().abs();
@@ -45,6 +50,24 @@ fn required_cell_height_for_picture(cell: &Cell, pic: &Picture) -> u32 {
         .saturating_add(visual_height)
         .saturating_add(cell.padding.top as u32)
         .saturating_add(cell.padding.bottom as u32)
+}
+
+fn cell_inner_width_for_picture(table: &Table, cell: &Cell) -> u32 {
+    let pad_axis = |cell_pad: i16, table_pad: i16| -> u32 {
+        let use_cell = if cell.apply_inner_margin {
+            cell_pad != 0
+        } else {
+            cell_pad > table_pad
+        };
+        if use_cell {
+            cell_pad.max(0) as u32
+        } else {
+            table_pad.max(0) as u32
+        }
+    };
+    cell.width
+        .saturating_sub(pad_axis(cell.padding.left, table.padding.left))
+        .saturating_sub(pad_axis(cell.padding.right, table.padding.right))
 }
 
 fn picture_center(pic: &Picture) -> (i64, i64) {
@@ -179,6 +202,46 @@ fn issue_1282_resizing_rotated_cell_picture_grows_owner_cell_height() {
         "table common height must follow shrunken cell height: table.common.height={}, cell.height={}",
         table.common.height,
         cell.height
+    );
+
+    let oversized_width = cell_inner_width_for_picture(table, cell).saturating_mul(3);
+    core.set_cell_picture_properties_by_path_native(
+        0,
+        0,
+        r#"[{"controlIdx":2,"cellIdx":2,"cellParaIdx":0}]"#,
+        0,
+        &format!(
+            r#"{{"width":{},"height":36000,"rotationAngle":34}}"#,
+            oversized_width
+        ),
+    )
+    .expect("oversized resize must clamp to owner cell width");
+
+    let doc = core.document();
+    let table = target_table(doc);
+    let cell = target_cell(doc);
+    let pic = target_picture(doc);
+    let cell_inner_width = cell_inner_width_for_picture(table, cell);
+    let horz_offset = pic.common.horizontal_offset as i32;
+    let required_height = required_cell_height_for_picture(cell, pic);
+
+    assert!(
+        pic.common.width <= cell_inner_width,
+        "oversized picture frame width must be clamped to owner cell inner width: frame={}, inner={}",
+        pic.common.width,
+        cell_inner_width
+    );
+    assert!(
+        horz_offset >= 0 && (horz_offset as u32).saturating_add(pic.common.width) <= cell_inner_width,
+        "oversized picture horizontal range must stay inside owner cell: offset={}, width={}, inner={}",
+        horz_offset,
+        pic.common.width,
+        cell_inner_width
+    );
+    assert_eq!(
+        cell.height, required_height,
+        "owner cell height must sync after oversized clamp: cell.height={}, required={}",
+        cell.height, required_height
     );
 
     let exported = core.export_hwp_native().expect("export edited HWP");

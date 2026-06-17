@@ -50,6 +50,12 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
       const found = findTarget();
       return found?.ctrl ?? null;
     };
+    const getOwnerCellBbox = () => {
+      const found = findTarget();
+      if (!found) return null;
+      const cells = wasm.getTableCellBboxes(0, 0, 2, found.pageIndex);
+      return (cells || []).find((cell) => cell.cellIdx === 2) ?? null;
+    };
     const centerOf = (bbox) => bbox ? { x: bbox.x + bbox.w / 2, y: bbox.y + bbox.h / 2 } : null;
     const ratioOf = (props) => props?.height ? props.width / props.height : null;
     const signed32 = (value) => {
@@ -58,12 +64,7 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
     };
     const requiredCellHeight = (cell, pic) =>
       Math.max(0, signed32(pic.vertOffset))
-      + (Math.abs(pic.rotationAngle ?? 0) % 360 === 0
-        ? pic.height
-        : Math.round(
-          pic.width * Math.abs(Math.sin((pic.rotationAngle ?? 0) * Math.PI / 180))
-          + pic.height * Math.abs(Math.cos((pic.rotationAngle ?? 0) * Math.PI / 180)),
-        ))
+      + pic.height
       + cell.paddingTop
       + cell.paddingBottom;
 
@@ -120,6 +121,7 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
     const beforeProps = getProps();
     const beforeCell = getCellProps();
     const beforeBbox = getBbox();
+    const beforeCellBbox = getOwnerCellBbox();
     const beforeCenter = centerOf(beforeBbox);
 
     const drag = await dragResize();
@@ -128,6 +130,7 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
     const afterProps = getProps();
     const afterCell = getCellProps();
     const afterBbox = getBbox();
+    const afterCellBbox = getOwnerCellBbox();
     const afterCenter = centerOf(afterBbox);
     const midCenter = centerOf(drag.midBbox);
     const rotationInputValue = await new Promise((resolve) => {
@@ -148,6 +151,20 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
     const undoCell = getCellProps();
 
     wasm.setCellPicturePropertiesByPath(0, 0, cellPath, 0, {
+      width: Math.round(beforeProps.width * 3),
+      height: Math.round(beforeProps.height * 3),
+      rotationAngle: beforeProps.rotationAngle,
+    });
+    window.__canvasView?.loadDocument?.();
+    await nextFrame();
+    select();
+    await nextFrame();
+    const oversizedProps = getProps();
+    const oversizedCell = getCellProps();
+    const oversizedBbox = getBbox();
+    const oversizedCellBbox = getOwnerCellBbox();
+
+    wasm.setCellPicturePropertiesByPath(0, 0, cellPath, 0, {
       width: afterProps.width,
       height: afterProps.height,
       rotationAngle: afterProps.rotationAngle,
@@ -158,6 +175,7 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
     await nextFrame();
     const directGrownCell = getCellProps();
     const directGrownBbox = getBbox();
+    const directGrownCellBbox = getOwnerCellBbox();
     const directGrownCenter = centerOf(directGrownBbox);
 
     wasm.setCellPicturePropertiesByPath(0, 0, cellPath, 0, {
@@ -170,6 +188,7 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
     const rotationOnlyProps = getProps();
     const rotationOnlyCell = getCellProps();
     const rotationOnlyBbox = getBbox();
+    const rotationOnlyCellBbox = getOwnerCellBbox();
     const rotationOnlyCenter = centerOf(rotationOnlyBbox);
 
     const shrinkHeight = Math.max(200, Math.round(beforeProps.height * 0.66));
@@ -185,37 +204,48 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
     const shrinkProps = getProps();
     const shrinkCell = getCellProps();
     const shrinkBbox = getBbox();
+    const shrinkCellBbox = getOwnerCellBbox();
 
     return {
       stateCellPath: drag.stateCellPath,
       beforeProps,
       afterProps,
       undoProps,
+      oversizedProps,
       rotationOnlyProps,
       shrinkProps,
       beforeCell,
       afterCell,
       undoCell,
+      oversizedCell,
       directGrownCell,
       rotationOnlyCell,
       shrinkCell,
       requiredAfter: requiredCellHeight(afterCell, afterProps),
       requiredUndo: requiredCellHeight(undoCell, undoProps),
+      requiredOversized: requiredCellHeight(oversizedCell, oversizedProps),
       requiredRotationOnly: requiredCellHeight(rotationOnlyCell, rotationOnlyProps),
       requiredShrink: requiredCellHeight(shrinkCell, shrinkProps),
       rotationInputValue,
       beforeRatio: ratioOf(beforeProps),
       afterRatio: ratioOf(afterProps),
       beforeBbox,
+      beforeCellBbox,
       afterBbox,
+      afterCellBbox,
+      oversizedBbox,
+      oversizedCellBbox,
       directGrownBbox,
+      directGrownCellBbox,
       rotationOnlyBbox,
+      rotationOnlyCellBbox,
       beforeCenter,
       midCenter,
       afterCenter,
       directGrownCenter,
       rotationOnlyCenter,
       shrinkBbox,
+      shrinkCellBbox,
       centerJumpAfter: beforeCenter && afterCenter
         ? Math.hypot(afterCenter.x - beforeCenter.x, afterCenter.y - beforeCenter.y)
         : null,
@@ -231,6 +261,29 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
 
   assert(!result.error, `검증 실패: ${result.error}`);
   console.log('결과:', JSON.stringify(result, null, 2));
+
+  const fitsWithinCell = (bbox, cellBbox, tolerance = 1.0) => {
+    if (!bbox || !cellBbox) return false;
+    return bbox.x >= cellBbox.x - tolerance
+      && bbox.y >= cellBbox.y - tolerance
+      && bbox.x + bbox.w <= cellBbox.x + cellBbox.w + tolerance
+      && bbox.y + bbox.h <= cellBbox.y + cellBbox.h + tolerance;
+  };
+  const rotatedVisualBbox = (bbox, angleDeg) => {
+    if (!bbox) return null;
+    const angle = ((Number(angleDeg ?? 0) % 360) + 360) % 360;
+    if (angle === 0) return bbox;
+    const rad = angle * Math.PI / 180;
+    const cos = Math.abs(Math.cos(rad));
+    const sin = Math.abs(Math.sin(rad));
+    const w = bbox.w * cos + bbox.h * sin;
+    const h = bbox.w * sin + bbox.h * cos;
+    const cx = bbox.x + bbox.w / 2;
+    const cy = bbox.y + bbox.h / 2;
+    return { x: cx - w / 2, y: cy - h / 2, w, h };
+  };
+  const visualFitsWithinCell = (bbox, props, cellBbox, tolerance = 2.0) =>
+    fitsWithinCell(rotatedVisualBbox(bbox, props?.rotationAngle), cellBbox, tolerance);
 
   assert(Array.isArray(result.stateCellPath) && result.stateCellPath.length === 1,
     `드래그 상태 cellPath 보존 실패: ${JSON.stringify(result.stateCellPath)}`);
@@ -248,6 +301,10 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
     `owner cell height 부족: cell=${result.afterCell.height}, required=${result.requiredAfter}`);
   assert(result.afterBbox && result.afterBbox.h > result.beforeBbox.h,
     `표시 bbox 높이 증가 실패: ${result.beforeBbox?.h} → ${result.afterBbox?.h}`);
+  assert(visualFitsWithinCell(result.beforeBbox, result.beforeProps, result.beforeCellBbox),
+    `초기 picture visual bbox가 owner cell을 침범: visual=${JSON.stringify(rotatedVisualBbox(result.beforeBbox, result.beforeProps.rotationAngle))}, bbox=${JSON.stringify(result.beforeBbox)}, cell=${JSON.stringify(result.beforeCellBbox)}`);
+  assert(visualFitsWithinCell(result.afterBbox, result.afterProps, result.afterCellBbox),
+    `리사이즈 후 picture visual bbox가 owner cell을 침범: visual=${JSON.stringify(rotatedVisualBbox(result.afterBbox, result.afterProps.rotationAngle))}, bbox=${JSON.stringify(result.afterBbox)}, cell=${JSON.stringify(result.afterCellBbox)}`);
   assert(result.centerJumpMid != null && result.centerJumpMid < 60,
     `라이브 드래그 중 bbox 중심 과도 이동: ${result.centerJumpMid}`);
   assert(result.centerJumpAfter != null && result.centerJumpAfter < 60,
@@ -256,8 +313,14 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
     `Undo picture size 복구 실패: before=${result.beforeProps.width}x${result.beforeProps.height}, undo=${result.undoProps.width}x${result.undoProps.height}`);
   assert(result.undoCell.height >= result.requiredUndo,
     `Undo 후 owner cell height 부족: cell=${result.undoCell.height}, required=${result.requiredUndo}`);
+  assert(result.oversizedCell.height >= result.requiredOversized,
+    `과대 리사이즈 후 owner cell height 부족: cell=${result.oversizedCell.height}, required=${result.requiredOversized}`);
+  assert(visualFitsWithinCell(result.oversizedBbox, result.oversizedProps, result.oversizedCellBbox),
+    `과대 리사이즈 후 picture visual bbox가 owner cell을 침범: visual=${JSON.stringify(rotatedVisualBbox(result.oversizedBbox, result.oversizedProps.rotationAngle))}, bbox=${JSON.stringify(result.oversizedBbox)}, cell=${JSON.stringify(result.oversizedCellBbox)}, props=${JSON.stringify(result.oversizedProps)}`);
   assert(result.directGrownCell.height > result.undoCell.height,
     `직접 재확대 owner cell height 증가 실패: undo=${result.undoCell.height}, grown=${result.directGrownCell.height}`);
+  assert(visualFitsWithinCell(result.directGrownBbox, result.afterProps, result.directGrownCellBbox),
+    `직접 재확대 후 picture visual bbox가 owner cell을 침범: visual=${JSON.stringify(rotatedVisualBbox(result.directGrownBbox, result.afterProps.rotationAngle))}, bbox=${JSON.stringify(result.directGrownBbox)}, cell=${JSON.stringify(result.directGrownCellBbox)}`);
   assert(result.rotationOnlyProps.rotationAngle === 0,
     `회전각 단독 변경 반영 실패: rotationAngle=${result.rotationOnlyProps.rotationAngle}`);
   assert(result.rotationOnlyProps.width > 0 && result.rotationOnlyProps.height > 0,
@@ -268,6 +331,8 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
     `회전각 0도 단독 변경 후 owner cell height 감소 실패: grown=${result.directGrownCell.height}, rotationOnly=${result.rotationOnlyCell.height}`);
   assert(result.rotationOnlyCell.height >= result.requiredRotationOnly,
     `회전각 0도 단독 변경 후 owner cell height 부족: cell=${result.rotationOnlyCell.height}, required=${result.requiredRotationOnly}`);
+  assert(visualFitsWithinCell(result.rotationOnlyBbox, result.rotationOnlyProps, result.rotationOnlyCellBbox),
+    `회전각 0도 변경 후 picture visual bbox가 owner cell을 침범: visual=${JSON.stringify(rotatedVisualBbox(result.rotationOnlyBbox, result.rotationOnlyProps.rotationAngle))}, bbox=${JSON.stringify(result.rotationOnlyBbox)}, cell=${JSON.stringify(result.rotationOnlyCellBbox)}`);
   assert(result.shrinkProps.rotationAngle === 0,
     `축소/회전 0도 반영 실패: rotationAngle=${result.shrinkProps.rotationAngle}`);
   assert(result.shrinkCell.height < result.directGrownCell.height,
@@ -276,6 +341,8 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
     `축소/회전 0도 후 owner cell height 부족: cell=${result.shrinkCell.height}, required=${result.requiredShrink}`);
   assert(result.shrinkBbox && result.shrinkBbox.h < result.afterBbox.h,
     `축소/회전 0도 후 표시 bbox 높이 감소 실패: grown=${result.afterBbox?.h}, shrink=${result.shrinkBbox?.h}`);
+  assert(visualFitsWithinCell(result.shrinkBbox, result.shrinkProps, result.shrinkCellBbox),
+    `축소/회전 0도 후 picture visual bbox가 owner cell을 침범: visual=${JSON.stringify(rotatedVisualBbox(result.shrinkBbox, result.shrinkProps.rotationAngle))}, bbox=${JSON.stringify(result.shrinkBbox)}, cell=${JSON.stringify(result.shrinkCellBbox)}`);
 
   console.log('✅ #1282 회전 표 셀 picture: 드래그 리사이즈/축소 셀높이/bbox 안정성 통과');
 });

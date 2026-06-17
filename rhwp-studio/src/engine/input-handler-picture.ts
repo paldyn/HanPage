@@ -542,6 +542,51 @@ function isRotatedImageCornerResize(state: any, angleDeg: number): boolean {
   return state.ref?.type === 'image' && isCornerResizeDir(state.dir) && normalized !== 0;
 }
 
+function usesRotatedPictureFrame(state: any, angleDeg: number): boolean {
+  const normalized = ((angleDeg % 360) + 360) % 360;
+  return state.ref?.type === 'image' && normalized !== 0;
+}
+
+function frameFromActualPictureBbox(
+  bbox: { x: number; y: number; width: number; height: number },
+  angleDeg: number,
+  rotatedFrame: boolean,
+): { width: number; height: number; frameX: number; frameY: number } {
+  const actualW = Math.max(bbox.width, 1);
+  const actualH = Math.max(bbox.height, 1);
+  let frameW = actualW;
+  let frameH = actualH;
+
+  if (rotatedFrame) {
+    const rad = angleDeg * Math.PI / 180;
+    const cosA = Math.abs(Math.cos(rad));
+    const sinA = Math.abs(Math.sin(rad));
+    frameW = actualW * cosA + actualH * sinA;
+    frameH = actualW * sinA + actualH * cosA;
+  }
+
+  return {
+    width: Math.max(Math.round(frameW * PX_TO_HWP), MIN_SIZE_HWP),
+    height: Math.max(Math.round(frameH * PX_TO_HWP), MIN_SIZE_HWP),
+    frameX: bbox.x - Math.max(0, frameW - actualW) / 2,
+    frameY: bbox.y - Math.max(0, frameH - actualH) / 2,
+  };
+}
+
+function originalFrameTopLeftFromState(
+  state: any,
+  rotatedFrame: boolean,
+): { frameX: number; frameY: number } {
+  if (!rotatedFrame) return { frameX: state.bbox.x, frameY: state.bbox.y };
+
+  const frameW = Math.max((state.origWidth ?? 0) / PX_TO_HWP, state.bbox.w);
+  const frameH = Math.max((state.origHeight ?? 0) / PX_TO_HWP, state.bbox.h);
+  return {
+    frameX: state.bbox.x - Math.max(0, frameW - state.bbox.w) / 2,
+    frameY: state.bbox.y - Math.max(0, frameH - state.bbox.h) / 2,
+  };
+}
+
 /**
  * 회전각을 반영하여 리사이즈 후 새 bbox(비회전 기준)를 계산한다.
  * - 마우스 delta를 도형 로컬 좌표계로 역변환한다.
@@ -664,15 +709,18 @@ export function updatePictureResizeDrag(this: any, e: MouseEvent): void {
 
   // 단일 선택 (그룹/shape/image 등): 드래그 중 실시간 크기/위치 반영
   if (!state.multiRefs && state.ref.type !== 'line') {
-    const newW = Math.max(Math.round(newBbox.width * PX_TO_HWP), MIN_SIZE_HWP);
-    const newH = Math.max(Math.round(newBbox.height * PX_TO_HWP), MIN_SIZE_HWP);
+    const rotatedFrame = usesRotatedPictureFrame(state, rotAngle);
+    const resizedFrame = frameFromActualPictureBbox(newBbox, rotAngle, rotatedFrame);
+    const originalFrame = originalFrameTopLeftFromState(state, rotatedFrame);
+    const newW = resizedFrame.width;
+    const newH = resizedFrame.height;
     // offset 은 페이지 절대값이 아니라 "저장 offset + 페이지좌표 델타"로 적용한다.
     // (중첩 picture 의 offset 은 컨테이너 상대 — 페이지 절대값이면 라이브 드래그 중
     //  이미지가 예비 테두리에서 벗어나 어긋난다. finishPictureResizeDrag 와 동일 방식.)
-    const newHorzOffset = Math.round(newBbox.x * PX_TO_HWP);
-    const newVertOffset = Math.round(newBbox.y * PX_TO_HWP);
-    const origHorzOffset = Math.round(state.bbox.x * PX_TO_HWP);
-    const origVertOffset = Math.round(state.bbox.y * PX_TO_HWP);
+    const newHorzOffset = Math.round(resizedFrame.frameX * PX_TO_HWP);
+    const newVertOffset = Math.round(resizedFrame.frameY * PX_TO_HWP);
+    const origHorzOffset = Math.round(originalFrame.frameX * PX_TO_HWP);
+    const origVertOffset = Math.round(originalFrame.frameY * PX_TO_HWP);
     const beforeHorzOffset = state.origHorzOffset ?? origHorzOffset;
     const beforeVertOffset = state.origVertOffset ?? origVertOffset;
     try {
@@ -747,12 +795,16 @@ export function finishPictureResizeDrag(this: any, e: MouseEvent): void {
 
   // 단일 선택 리사이즈 (회전 반영: pivot 고정, 위치도 갱신)
   const newBbox = calcResizedBboxRotated(state, e, zoom);
-  const newW = Math.max(Math.round(newBbox.width * PX2HWP), MIN_SIZE_HWP);
-  const newH = Math.max(Math.round(newBbox.height * PX2HWP), MIN_SIZE_HWP);
-  const newHorzOffset = Math.round(newBbox.x * PX2HWP);
-  const newVertOffset = Math.round(newBbox.y * PX2HWP);
-  const origHorzOffset = Math.round(state.bbox.x * PX2HWP);
-  const origVertOffset = Math.round(state.bbox.y * PX2HWP);
+  const rotAngle = (state.rotationAngle ?? 0) as number;
+  const rotatedFrame = usesRotatedPictureFrame(state, rotAngle);
+  const resizedFrame = frameFromActualPictureBbox(newBbox, rotAngle, rotatedFrame);
+  const originalFrame = originalFrameTopLeftFromState(state, rotatedFrame);
+  const newW = resizedFrame.width;
+  const newH = resizedFrame.height;
+  const newHorzOffset = Math.round(resizedFrame.frameX * PX2HWP);
+  const newVertOffset = Math.round(resizedFrame.frameY * PX2HWP);
+  const origHorzOffset = Math.round(originalFrame.frameX * PX2HWP);
+  const origVertOffset = Math.round(originalFrame.frameY * PX2HWP);
 
   try {
     const updated: Record<string, unknown> = {};

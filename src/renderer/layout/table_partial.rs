@@ -503,7 +503,7 @@ impl LayoutEngine {
                     row_span: cell.row_span,
                     border_fill_id: cell.border_fill_id,
                     text_direction: cell.text_direction,
-                    clip: is_in_split_row,
+                    clip: true,
                     model_cell_index: Some(cell_idx as u32),
                 }),
                 BoundingBox::new(cell_x, cell_y, cell_w, cell_h),
@@ -999,26 +999,60 @@ impl LayoutEngine {
                                     } else {
                                         para_y
                                     };
-                                    let pic_area = LayoutRect {
+                                    let mut pic_w =
+                                        hwpunit_to_px(pic.common.width as i32, self.dpi);
+                                    let mut pic_h =
+                                        hwpunit_to_px(pic.common.height as i32, self.dpi);
+                                    // partial 표 렌더에서도 full 표와 동일하게 셀 가용 폭을
+                                    // 넘는 non-inline picture를 비율 유지 축소한다.
+                                    if inner_area.width > 0.0 && pic_w > inner_area.width {
+                                        let scale = inner_area.width / pic_w;
+                                        pic_w = inner_area.width;
+                                        pic_h *= scale;
+                                    }
+                                    let cell_area = LayoutRect {
                                         y: anchor_y,
                                         height: (inner_area.height - (anchor_y - inner_area.y))
                                             .max(0.0),
                                         ..inner_area
                                     };
+                                    let (pic_x, pic_y) = self.compute_object_position(
+                                        &pic.common,
+                                        pic_w,
+                                        pic_h,
+                                        &cell_area,
+                                        &inner_area,
+                                        &inner_area,
+                                        &inner_area,
+                                        anchor_y,
+                                        para_alignment,
+                                    );
+                                    let pic_area = LayoutRect {
+                                        x: pic_x,
+                                        y: pic_y,
+                                        width: pic_w,
+                                        height: pic_h,
+                                    };
+                                    let mut pic_for_layout = pic.clone();
+                                    pic_for_layout.common.horizontal_offset = 0;
+                                    pic_for_layout.common.vertical_offset = 0;
+                                    pic_for_layout.common.horz_align =
+                                        crate::model::shape::HorzAlign::Left;
+                                    pic_for_layout.common.vert_align =
+                                        crate::model::shape::VertAlign::Top;
                                     // [Task #1151 v4] 셀 안 non-inline picture (partial 표 path).
                                     self.layout_picture(
                                         tree,
                                         &mut cell_node,
-                                        pic,
+                                        &pic_for_layout,
                                         &pic_area,
                                         bin_data_content,
-                                        para_alignment,
+                                        Alignment::Left,
                                         Some(section_index),
                                         Some(cell_context.parent_para_index),
                                         Some(ctrl_idx),
                                         Some(&cell_context),
                                     );
-                                    let pic_h = hwpunit_to_px(pic.common.height as i32, self.dpi);
                                     para_y += pic_h;
                                 }
                                 has_preceding_text = true;
