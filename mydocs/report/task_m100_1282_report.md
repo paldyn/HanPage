@@ -15,20 +15,29 @@
 - `tests/issue_1282_rotated_cell_picture_resize.rs`를 추가해 리사이즈 후 cell/table height와 export/reparse 보존을 검증했다.
 - `rhwp-studio/e2e/table-picture-resize-1282.test.mjs`를 추가해 실제 Studio 마우스 드래그 경로에서 cellPath, 크기, cell height, bbox 안정성, rotationAngle 보존, 속성창 회전각 표시, undo, 회전각 0도 전환 중심 보존, 축소 후 cell height 감소를 검증했다.
 - picture 속성창의 회전각 표시/저장 단위를 도 단위로 정정해 한컴처럼 34도가 34도로 표시되게 했다.
+- picture offset 속성값은 signed 값으로 노출/입력되도록 정리해 음수 `horzOffset`/`vertOffset`이 u32 래핑값으로 표시되지 않게 했다.
 
 ## 검증
 
 통과:
 
 ```text
+cargo build --release
+cargo test --release --lib
+cargo test --profile release-test --tests
 cargo fmt --check
-cargo test --test issue_1282_rotated_cell_picture_resize -- --nocapture
+cargo clippy --all-targets -- -D warnings
+cargo test --test issue_1282_rotated_cell_picture_resize
 cargo test --test issue_1279_picture_rotation_save
 wasm-pack build --target web --out-dir pkg
 cd rhwp-studio && node e2e/table-picture-resize-1282.test.mjs --mode=headless
+cd rhwp-studio && npm run build
 ```
 
-PR 준비 중 `cargo clippy --all-targets -- -D warnings`는 실행 중 사용자 시각 검증 이슈가 추가 확인되어 중단했다. Stage6 시각 승인 후 PR용 전체 검증에서 다시 수행해야 한다.
+비고:
+
+- `cargo clippy --all-targets -- -D warnings`는 작업지시자가 로컬 터미널에서 직접 실행해 통과를 확인했다.
+- `issue_713_rowbreak_table_no_intra_row_split` 회귀는 Stage14에서 `TableCellNode.clip` 의미를 복원해 해소했다.
 
 ## 시각 검증 자료
 
@@ -48,6 +57,13 @@ Stage6 Headless Chrome 캡처:
 - object properties: `mydocs/report/assets/task_m100_1282_ta_pic_001_r_stage6_props.png`
 - rotationAngle=0: `mydocs/report/assets/task_m100_1282_ta_pic_001_r_stage6_rotation0.png`
 - rotationAngle=0 object properties: `mydocs/report/assets/task_m100_1282_ta_pic_001_r_stage6_rotation0_props.png`
+
+Stage11 한컴 PDF 기준 비교 자료:
+
+- restrict 비교: `mydocs/report/assets/task_m100_1282_stage11/comparison_restrict.png`
+- restrict 한컴 PDF raster: `mydocs/report/assets/task_m100_1282_stage11/pdf_restrict.png`
+- no restrict 비교: `mydocs/report/assets/task_m100_1282_stage11/comparison_no_restrict.png`
+- no restrict 한컴 PDF raster: `mydocs/report/assets/task_m100_1282_stage11/pdf_no_restrict.png`
 
 확인 수치:
 
@@ -84,6 +100,14 @@ RotationAngle 0 object properties:
 
 ![Task 1282 Stage6 rotation 0 properties](assets/task_m100_1282_ta_pic_001_r_stage6_rotation0_props.png)
 
+Restrict comparison:
+
+![Task 1282 Stage11 restrict comparison](assets/task_m100_1282_stage11/comparison_restrict.png)
+
+No restrict comparison:
+
+![Task 1282 Stage11 no restrict comparison](assets/task_m100_1282_stage11/comparison_no_restrict.png)
+
 판정:
 
 - 회전된 표 셀 picture의 드래그 리사이즈 전/후가 화면상으로 확인된다.
@@ -92,8 +116,9 @@ RotationAngle 0 object properties:
 - 리사이즈 후 picture의 `rotationAngle`은 34도로 유지되고, 속성창에도 34도로 표시된다.
 - 회전각 0도 속성창도 0도로 표시된다.
 - 화면 bbox와 실제 그림이 분리되거나 picture가 사라지는 증상은 재현되지 않았다.
+- `쪽 영역 안으로 제한` on/off 샘플이 한컴 PDF 기준 비교와 같은 배치로 렌더링된다.
+- 제한 on 상태에서는 셀 경계를 침범하지 않고, 제한 off 상태에서는 no 샘플과 같은 흐름으로 분리된다.
 
 ## 남은 사항
 
-- Stage6 시각 판단 승인 후 PR 준비 시 전체 로컬 필수 검증과 clippy를 별도로 수행해야 한다.
-- Studio offset 속성값의 signed 표시 정규화는 이번 이슈 범위 밖으로 남겼다.
+- 없음.
