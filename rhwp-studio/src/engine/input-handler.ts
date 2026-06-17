@@ -116,6 +116,8 @@ export class InputHandler {
   private fieldStartExitKey: string | null = null;
   /** 누름틀 끝 경계에서 오른쪽 이동으로 필드 밖에 머문 상태 */
   private fieldEndExitKey: string | null = null;
+  /** 누름틀을 포함한 붙여넣기 직후 마지막 필드 끝을 바깥 위치로 고정한다 */
+  private pastedFieldEndOutsidePending = false;
 
   // 마우스 드래그 선택 상태
   private isDragging = false;
@@ -1795,8 +1797,13 @@ export class InputHandler {
         const cursorBefore = this.cursor.getPosition();
         const cmd = new SnapshotCommand(desc.operationType, cursorBefore, cursorBefore, desc.operation);
         const newPos = this.history.execute(cmd, this.wasm);
+        const markPastedFieldEndOutside = this.pastedFieldEndOutsidePending;
+        this.pastedFieldEndOutsidePending = false;
         this.cursor.moveTo(newPos);
         this.cursor.resetPreferredX();
+        if (markPastedFieldEndOutside) {
+          this.markCurrentFieldEndOutside();
+        }
         this.refreshAfterOperation(desc.meta?.refresh, 'full', desc.operationType, cursorBefore, newPos);
         break;
       }
