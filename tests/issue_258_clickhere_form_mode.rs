@@ -405,6 +405,29 @@ fn adjacent_clickhere_input_prefers_new_empty_field_at_shared_boundary() {
         shared_info
     );
 
+    let guide_rect: Value = serde_json::from_str(
+        &core
+            .get_cursor_rect_native(0, 0, 6)
+            .expect("second guide cursor rect"),
+    )
+    .expect("parse second guide cursor rect");
+    let guide_x = guide_rect["x"].as_f64().expect("guide x");
+    let guide_y = guide_rect["y"].as_f64().expect("guide y");
+    let guide_h = guide_rect["height"].as_f64().expect("guide height");
+    let guide_hit = core
+        .hit_test_native(0, guide_x + 6.0, guide_y + guide_h / 2.0)
+        .expect("hit test second guide");
+    assert!(
+        guide_hit.contains(&format!(r#""fieldId":{}"#, second_id)),
+        "mouse hit on second guide should resolve to second clickhere: {}",
+        guide_hit
+    );
+    assert!(
+        guide_hit.contains(r#""charOffset":6"#),
+        "mouse hit on second guide should keep shared boundary offset: {}",
+        guide_hit
+    );
+
     assert!(
         core.set_active_field(0, 0, 6),
         "shared boundary guide click should activate second clickhere"
