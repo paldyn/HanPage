@@ -20,6 +20,10 @@ import { TestReporter } from './report-generator.mjs';
 const CHROME_CDP = process.env.CHROME_CDP || 'http://172.21.192.1:19222';
 const VITE_URL = process.env.VITE_URL || 'http://localhost:7700';
 const REPORT_DIR = '../output/e2e';
+const CHROME_EXTRA_ARGS = (process.env.CHROME_EXTRA_ARGS || '')
+  .split(/\s+/)
+  .map((arg) => arg.trim())
+  .filter(Boolean);
 
 function resolveChromePath() {
   const envPath = process.env.CHROME_PATH || process.env.PUPPETEER_EXECUTABLE_PATH;
@@ -115,7 +119,7 @@ export async function launchBrowser() {
     return await puppeteer.launch({
       headless: true,
       executablePath: CHROME_PATH,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'],
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', ...CHROME_EXTRA_ARGS],
     });
   }
   // 호스트 Chrome CDP에 연결

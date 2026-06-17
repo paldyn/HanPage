@@ -4,6 +4,7 @@ export type EffectiveTheme = 'light' | 'dark';
 
 const THEME_QUERY = '(prefers-color-scheme: dark)';
 const THEME_COLOR_META_SELECTOR = 'meta[name="theme-color"]';
+const COLOR_SCHEME_META_SELECTOR = 'meta[name="color-scheme"]';
 
 function prefersDark(): boolean {
   return window.matchMedia?.(THEME_QUERY).matches ?? false;
@@ -14,6 +15,13 @@ function syncThemeColorMeta(root: HTMLElement): void {
   if (!meta) return;
   const themeColor = getComputedStyle(root).getPropertyValue('--ui-bg-light').trim() || '#f5f5f5';
   meta.content = themeColor;
+}
+
+function syncBrowserColorScheme(root: HTMLElement, effective: EffectiveTheme): void {
+  const scheme = `only ${effective}`;
+  root.style.colorScheme = scheme;
+  const meta = document.querySelector<HTMLMetaElement>(COLOR_SCHEME_META_SELECTOR);
+  if (meta) meta.content = scheme;
 }
 
 export function getThemeMode(): ThemeMode {
@@ -31,7 +39,7 @@ export function applyTheme(mode: ThemeMode = getThemeMode()): EffectiveTheme {
   const root = document.documentElement;
   root.dataset.themeMode = mode;
   root.dataset.themeEffective = effective;
-  root.style.colorScheme = effective;
+  syncBrowserColorScheme(root, effective);
   syncThemeColorMeta(root);
   return effective;
 }

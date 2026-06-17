@@ -277,7 +277,7 @@ runTest('다이얼로그 다크 테마 색상 정책', async ({ page }) => {
   const root = await getRootThemeState(page);
   assert(root.mode === 'dark', 'TC1: 테스트 시작 전 명시적 dark 테마가 적용된다');
   assert(root.effective === 'dark', 'TC1: effective theme도 dark다');
-  assert(root.colorScheme === 'dark', 'TC1: color-scheme도 dark다');
+  assert(root.colorScheme === 'dark only', 'TC1: color-scheme도 dark only다');
 
   await openMenuCommand(page, 'view:grid-settings');
   const grid = await getGridDialogStyles(page);
