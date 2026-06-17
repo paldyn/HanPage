@@ -496,7 +496,7 @@ impl DocumentCore {
                 "\"vertRelTo\":\"{}\",\"vertAlign\":\"{}\",",
                 "\"horzRelTo\":\"{}\",\"horzAlign\":\"{}\",",
                 "\"vertOffset\":{},\"horzOffset\":{},",
-                "\"textWrap\":\"{}\",",
+                "\"textWrap\":\"{}\",\"restrictInPage\":{},\"allowOverlap\":{},",
                 "\"brightness\":{},\"contrast\":{},\"effect\":\"{}\",",
                 "\"description\":\"{}\",",
                 // 회전/대칭
@@ -519,7 +519,7 @@ impl DocumentCore {
             vert_rel, vert_align,
             horz_rel, horz_align,
             c.vertical_offset, c.horizontal_offset,
-            text_wrap,
+            text_wrap, c.flow_with_text, c.allow_overlap,
             pic.image_attr.brightness, pic.image_attr.contrast, effect,
             desc_escaped,
             // 회전/대칭
@@ -1099,6 +1099,28 @@ impl DocumentCore {
                 "InFrontOfText" => crate::model::shape::TextWrap::InFrontOfText,
                 _ => pic.common.text_wrap,
             };
+        }
+        if let Some(v) = json_bool(props_json, "restrictInPage") {
+            pic.common.flow_with_text = v;
+            if v {
+                pic.common.attr |= 1 << 13;
+                pic.common.allow_overlap = false;
+                pic.common.attr &= !(1 << 14);
+            } else {
+                pic.common.attr &= !(1 << 13);
+            }
+        }
+        if let Some(v) = json_bool(props_json, "allowOverlap") {
+            pic.common.allow_overlap = v;
+            if v {
+                pic.common.attr |= 1 << 14;
+            } else {
+                pic.common.attr &= !(1 << 14);
+            }
+        }
+        if pic.common.flow_with_text {
+            pic.common.allow_overlap = false;
+            pic.common.attr &= !(1 << 14);
         }
         if let Some(v) = json_u32(props_json, "vertOffset") {
             pic.common.vertical_offset = v;
@@ -2648,7 +2670,8 @@ impl DocumentCore {
              \"vertRelTo\":\"{}\",\"vertAlign\":\"{}\",\
              \"horzRelTo\":\"{}\",\"horzAlign\":\"{}\",\
              \"vertOffset\":{},\"horzOffset\":{},\
-             \"textWrap\":\"{}\",\"zOrder\":{},\"instanceId\":{},\
+             \"textWrap\":\"{}\",\"restrictInPage\":{},\"allowOverlap\":{},\
+             \"zOrder\":{},\"instanceId\":{},\
              \"outerMarginLeft\":{},\"outerMarginTop\":{},\
              \"outerMarginRight\":{},\"outerMarginBottom\":{},\
              \"description\":\"{}\"",
@@ -2662,6 +2685,8 @@ impl DocumentCore {
             c.vertical_offset,
             c.horizontal_offset,
             text_wrap,
+            c.flow_with_text,
+            c.allow_overlap,
             c.z_order,
             c.instance_id,
             c.margin.left,
@@ -2736,6 +2761,28 @@ impl DocumentCore {
                 "InFrontOfText" => crate::model::shape::TextWrap::InFrontOfText,
                 _ => c.text_wrap,
             };
+        }
+        if let Some(v) = json_bool(props_json, "restrictInPage") {
+            c.flow_with_text = v;
+            if v {
+                c.attr |= 1 << 13;
+                c.allow_overlap = false;
+                c.attr &= !(1 << 14);
+            } else {
+                c.attr &= !(1 << 13);
+            }
+        }
+        if let Some(v) = json_bool(props_json, "allowOverlap") {
+            c.allow_overlap = v;
+            if v {
+                c.attr |= 1 << 14;
+            } else {
+                c.attr &= !(1 << 14);
+            }
+        }
+        if c.flow_with_text {
+            c.allow_overlap = false;
+            c.attr &= !(1 << 14);
         }
         if let Some(v) = json_u32(props_json, "vertOffset") {
             c.vertical_offset = v;

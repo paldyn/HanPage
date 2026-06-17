@@ -4,6 +4,10 @@ use rhwp::model::document::Document;
 use rhwp::model::image::Picture;
 use rhwp::model::table::{Cell, Table};
 use rhwp::parser::parse_document;
+use rhwp::renderer::composer::compose_paragraph;
+use rhwp::renderer::height_measurer::HeightMeasurer;
+use rhwp::renderer::style_resolver::resolve_styles_with_variant;
+use rhwp::renderer::{hwpunit_to_px, DEFAULT_DPI};
 
 fn read_fixture(path: &str) -> Vec<u8> {
     std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(path))
@@ -29,6 +33,26 @@ fn target_picture(doc: &Document) -> &Picture {
     }
 }
 
+fn measured_target_row_heights(doc: &Document) -> Vec<f64> {
+    let section = &doc.sections[0];
+    let styles = resolve_styles_with_variant(&doc.doc_info, DEFAULT_DPI, doc.is_hwp3_variant);
+    let composed = section
+        .paragraphs
+        .iter()
+        .map(compose_paragraph)
+        .collect::<Vec<_>>();
+    let measured = HeightMeasurer::new(DEFAULT_DPI)
+        .with_hwp3_variant(doc.is_hwp3_variant)
+        .measure_section(&section.paragraphs, &composed, &styles, None);
+    measured
+        .tables
+        .iter()
+        .find(|t| t.para_index == 0 && t.control_index == 2)
+        .expect("measured target table")
+        .row_heights
+        .clone()
+}
+
 fn required_cell_height_for_picture(cell: &Cell, pic: &Picture) -> u32 {
     let angle = (pic.shape_attr.rotation_angle as f64).to_radians();
     let visual_height = if pic.shape_attr.rotation_angle.rem_euclid(360) != 0
@@ -50,6 +74,41 @@ fn required_cell_height_for_picture(cell: &Cell, pic: &Picture) -> u32 {
         .saturating_add(visual_height)
         .saturating_add(cell.padding.top as u32)
         .saturating_add(cell.padding.bottom as u32)
+}
+
+#[test]
+fn issue_1282_page_area_limit_samples_drive_table_height_only_when_enabled() {
+    let restricted = parse_document(&read_fixture("samples/ta-pic-001-r-쪽영역안제한.hwp"))
+        .expect("parse restricted sample");
+    let unrestricted = parse_document(&read_fixture("samples/ta-pic-001-r-쪽영역안제한no.hwp"))
+        .expect("parse unrestricted sample");
+
+    let restricted_pic = target_picture(&restricted);
+    let unrestricted_pic = target_picture(&unrestricted);
+    assert!(restricted_pic.common.flow_with_text);
+    assert!(!unrestricted_pic.common.flow_with_text);
+
+    let restricted_rows = measured_target_row_heights(&restricted);
+    let unrestricted_rows = measured_target_row_heights(&unrestricted);
+    let restricted_required = hwpunit_to_px(
+        (restricted_pic.common.vertical_offset + restricted_pic.common.height) as i32,
+        DEFAULT_DPI,
+    );
+    let unrestricted_saved_row =
+        hwpunit_to_px(target_cell(&unrestricted).height as i32, DEFAULT_DPI);
+
+    assert!(
+        restricted_rows[1] >= restricted_required,
+        "쪽 영역 제한 on은 문단 기준 그림의 vertOffset+height를 행 높이에 반영해야 함: row={:.1}, required={:.1}",
+        restricted_rows[1],
+        restricted_required
+    );
+    assert!(
+        unrestricted_rows[1] <= unrestricted_saved_row + 1.0,
+        "쪽 영역 제한 off는 문단 기준 그림으로 행 높이를 확장하지 않아야 함: row={:.1}, saved={:.1}",
+        unrestricted_rows[1],
+        unrestricted_saved_row
+    );
 }
 
 fn picture_center(pic: &Picture) -> (i64, i64) {

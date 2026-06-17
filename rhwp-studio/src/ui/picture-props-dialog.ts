@@ -538,12 +538,10 @@ export class PicturePropsDialog {
     optRow.classList.add('pp-pos-detail');
     const palLabel = this.checkboxLabel('쪽 영역 안으로 제한(B)');
     this.pageAreaLimitCheck = palLabel.querySelector('input') as HTMLInputElement;
-    this.pageAreaLimitCheck.disabled = true;
+    this.pageAreaLimitCheck.addEventListener('change', () => this.updateOverlapOption());
     optRow.appendChild(palLabel);
     const oaLabel = this.checkboxLabel('서로 겹침 허용(L)');
     this.overlapAllowCheck = oaLabel.querySelector('input') as HTMLInputElement;
-    this.overlapAllowCheck.checked = true;
-    this.overlapAllowCheck.disabled = true;
     optRow.appendChild(oaLabel);
     posFs.appendChild(optRow);
     this.posDetailEls.push(optRow);
@@ -1917,6 +1915,14 @@ export class PicturePropsDialog {
       if (va !== this.props.vertAlign) updated['vertAlign'] = va;
       const vo = mmToHwp(parseFloat(this.vertOffsetInput.value) || 0);
       if (vo !== this.props.vertOffset) updated['vertOffset'] = vo;
+      const restrictInPage = this.pageAreaLimitCheck.checked;
+      if (restrictInPage !== (this.props.restrictInPage ?? true)) {
+        updated['restrictInPage'] = restrictInPage;
+      }
+      const allowOverlap = this.overlapAllowCheck.checked;
+      if (allowOverlap !== (this.props.allowOverlap ?? false)) {
+        updated['allowOverlap'] = allowOverlap;
+      }
     }
 
     // 기타
@@ -2226,10 +2232,13 @@ export class PicturePropsDialog {
     this.vertRelSelect.value = this.props.vertRelTo;
     this.vertAlignSelect.value = this.props.vertAlign;
     this.vertOffsetInput.value = hwpToMm(this.props.vertOffset).toFixed(2);
+    this.pageAreaLimitCheck.checked = this.props.restrictInPage ?? true;
+    this.overlapAllowCheck.checked = this.props.allowOverlap ?? false;
     this.descInput.value = this.props.description;
     this.skewHInput.value = '0';
     this.skewVInput.value = '0';
     this.updatePositionVisibility();
+    this.updateOverlapOption();
 
     // Shape/Line 전용 필드
     if ((this.objectType === 'shape' || this.objectType === 'line' || this.objectType === 'group') && this.shapeProps) {
@@ -2452,6 +2461,16 @@ export class PicturePropsDialog {
     this.posDetailEls.forEach(el => {
       el.style.display = hidden ? 'none' : '';
     });
+    this.updateOverlapOption();
+  }
+
+  private updateOverlapOption(): void {
+    if (!this.overlapAllowCheck || !this.pageAreaLimitCheck) return;
+    const restricted = this.pageAreaLimitCheck.checked;
+    this.overlapAllowCheck.disabled = restricted || this.treatAsCharCheck.checked;
+    if (restricted) {
+      this.overlapAllowCheck.checked = false;
+    }
   }
 
   private selectWrap(idx: number): void {

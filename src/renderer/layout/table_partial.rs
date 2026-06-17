@@ -685,13 +685,17 @@ impl LayoutEngine {
                     );
                     let nested_bottom =
                         self.calc_nested_controls_bottom_height(&cell.paragraphs, styles);
-                    vpos_h.max(line_h).max(nested_bottom)
+                    vpos_h
+                        .max(line_h)
+                        .max(nested_bottom)
+                        .max(self.calc_non_inline_controls_flow_height(&cell.paragraphs))
                 } else {
                     self.calc_composed_paras_content_height(
                         &composed_paras,
                         &cell.paragraphs,
                         styles,
                     )
+                    .max(self.calc_non_inline_controls_flow_height(&cell.paragraphs))
                 }
             };
 
@@ -1044,7 +1048,7 @@ impl LayoutEngine {
                                         Some(ctrl_idx),
                                         Some(&cell_context),
                                     );
-                                    para_y += pic_h;
+                                    para_y += self.non_inline_control_flow_height(&pic.common);
                                 }
                                 has_preceding_text = true;
                             }
