@@ -290,6 +290,11 @@ backend contract.
 - Cross-scope variant vocabulary stays diagnostic-only. Variants still need a
   same-leaf default `TextRun` fallback before they can participate in schema-v1
   compatible export.
+- Font metrics data and font-name resolution remain compatibility diagnostics,
+  not portable replay proof. A resolver may use `font_metrics_data.rs` to compare
+  shaped advances against legacy `TextRun` layout, but strict glyph replay still
+  needs explicit `fontResources`/`ResourceArena` identity, resource bytes,
+  digest/`dataRef`, face index, variation axes, and shaping proof.
 
 Every overlay removal requires a Canvas2D-vs-CanvasKit fixture. Rasterizer
 output can use fuzzy PNG comparison, but semantic decisions must be exact:
