@@ -68,6 +68,7 @@ async function getThemeState(page) {
       canvasBg: canvas ? getComputedStyle(canvas).backgroundColor : '',
       hRulerAvg,
       themeColor: document.querySelector('meta[name="theme-color"]')?.getAttribute('content') ?? '',
+      colorSchemeMeta: document.querySelector('meta[name="color-scheme"]')?.getAttribute('content') ?? '',
       activeModes,
       storedMode: stored?.theme?.mode ?? '',
     };
@@ -104,7 +105,8 @@ runTest('보기 테마', async ({ page }) => {
   await screenshot(page, 'theme-mode-01-dark');
   assert(dark.mode === 'dark', 'TC2: dark 명령 후 theme mode가 dark다');
   assert(dark.effective === 'dark', 'TC2: dark 명령 후 effective theme도 dark다');
-  assert(dark.colorScheme === 'dark', 'TC2: color-scheme도 dark로 반영된다');
+  assert(dark.colorScheme === 'dark only', 'TC2: color-scheme도 dark only로 반영된다');
+  assert(dark.colorSchemeMeta === 'only dark', 'TC2: color-scheme meta도 only dark로 반영된다');
   assert(dark.activeModes.length === 1 && dark.activeModes[0] === 'dark', 'TC2: 어둡게 메뉴만 active다');
   assert(dark.storedMode === 'dark', 'TC2: localStorage에 dark가 저장된다');
   assert(dark.themeColor === '#2b3037', 'TC2: 브라우저 theme-color가 dark token으로 갱신된다');
@@ -120,6 +122,9 @@ runTest('보기 테마', async ({ page }) => {
   await createNewDocument(page);
   const persisted = await getThemeState(page);
   assert(persisted.mode === 'dark', 'TC3: 새로고침 후 dark 설정이 유지된다');
+  assert(persisted.effective === 'dark', 'TC3: 새로고침 후 effective theme도 dark다');
+  assert(persisted.colorScheme === 'dark only', 'TC3: 새로고침 후 color-scheme도 dark only다');
+  assert(persisted.colorSchemeMeta === 'only dark', 'TC3: 새로고침 후 color-scheme meta도 only dark다');
   assert(persisted.activeModes.length === 1 && persisted.activeModes[0] === 'dark', 'TC3: 새로고침 후에도 dark 메뉴가 active다');
   assert(persisted.canvasBg === 'rgb(255, 255, 255)', 'TC3: 새로고침 후에도 편집 용지는 흰색이다');
 
@@ -128,7 +133,8 @@ runTest('보기 테마', async ({ page }) => {
   await screenshot(page, 'theme-mode-02-light');
   assert(light.mode === 'light', 'TC4: light 명령 후 theme mode가 light다');
   assert(light.effective === 'light', 'TC4: light 명령 후 effective theme도 light다');
-  assert(light.colorScheme === 'light', 'TC4: color-scheme도 light로 반영된다');
+  assert(light.colorScheme === 'light only', 'TC4: color-scheme도 light only로 반영된다');
+  assert(light.colorSchemeMeta === 'only light', 'TC4: color-scheme meta도 only light로 반영된다');
   assert(light.activeModes.length === 1 && light.activeModes[0] === 'light', 'TC4: 밝게 메뉴만 active다');
   assert(light.storedMode === 'light', 'TC4: localStorage에 light가 저장된다');
   assert(light.themeColor === '#f5f5f5', 'TC4: 브라우저 theme-color가 light token으로 갱신된다');
