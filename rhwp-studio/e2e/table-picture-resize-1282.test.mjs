@@ -67,6 +67,64 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
       + pic.height
       + cell.paddingTop
       + cell.paddingBottom;
+    const mmToHwp = (mm) => Math.round(mm * 7200 / 25.4);
+    const sampleRenderedRightLeak = (cellBbox, pictureBbox) => {
+      if (!cellBbox || !pictureBbox) return { error: 'cell/picture bbox 없음' };
+      const pageInfo = wasm.getPageInfo(0);
+      const pageCanvas = Array.from(document.querySelectorAll('#scroll-container canvas'))
+        .find((canvas) => !canvas.dataset.rhwpOverlayPage
+          && !canvas.dataset.rhwpGridPage
+          && canvas.width > 0
+          && canvas.height > 0);
+      if (!pageCanvas) return { error: 'page canvas 없음' };
+      const ctx = pageCanvas.getContext('2d');
+      if (!ctx) return { error: '2d context 없음' };
+      const scale = pageCanvas.width / pageInfo.width;
+      const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+      const x0 = clamp(Math.floor((cellBbox.x + cellBbox.w + 1.5) * scale), 0, pageCanvas.width - 1);
+      const x1 = clamp(Math.ceil((cellBbox.x + cellBbox.w + 8.0) * scale), x0 + 1, pageCanvas.width);
+      const yStartPage = Math.max(cellBbox.y + 8, pictureBbox.y + pictureBbox.h * 0.58);
+      const yEndPage = Math.min(cellBbox.y + cellBbox.h - 8, pictureBbox.y + pictureBbox.h - 8);
+      const y0 = clamp(Math.floor(yStartPage * scale), 0, pageCanvas.height - 1);
+      const y1 = clamp(Math.ceil(yEndPage * scale), y0 + 1, pageCanvas.height);
+      const width = x1 - x0;
+      const height = y1 - y0;
+      if (width <= 0 || height <= 0) {
+        return { error: `샘플 영역 없음: ${JSON.stringify({ x0, x1, y0, y1 })}` };
+      }
+      let data;
+      try {
+        data = ctx.getImageData(x0, y0, width, height).data;
+      } catch (e) {
+        return { error: e?.message || String(e) };
+      }
+      let nonWhite = 0;
+      let dark = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const a = data[i + 3];
+        if (a > 12 && (r < 245 || g < 245 || b < 245)) {
+          nonWhite += 1;
+          if (r < 170 || g < 170 || b < 170) dark += 1;
+        }
+      }
+      const total = width * height;
+      return {
+        rect: {
+          x: x0 / scale,
+          y: y0 / scale,
+          w: width / scale,
+          h: height / scale,
+        },
+        nonWhite,
+        dark,
+        total,
+        nonWhiteRatio: total > 0 ? nonWhite / total : 1,
+        scale,
+      };
+    };
 
     const select = () => {
       cursor.enterPictureObjectSelectionDirect(
@@ -206,6 +264,22 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
     const shrinkBbox = getBbox();
     const shrinkCellBbox = getOwnerCellBbox();
 
+    const hancomExpected = {
+      width: mmToHwp(97.45),
+      height: mmToHwp(115.07),
+      vertOffset: mmToHwp(36.82),
+      horzOffset: 0,
+      rotationAngle: 0,
+    };
+    wasm.setCellPicturePropertiesByPath(0, 0, cellPath, 0, hancomExpected);
+    window.__canvasView?.loadDocument?.();
+    await nextFrame();
+    const hancomProps = getProps();
+    const hancomCell = getCellProps();
+    const hancomBbox = getBbox();
+    const hancomCellBbox = getOwnerCellBbox();
+    const hancomRightLeak = sampleRenderedRightLeak(hancomCellBbox, hancomBbox);
+
     return {
       stateCellPath: drag.stateCellPath,
       beforeProps,
@@ -214,6 +288,8 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
       oversizedProps,
       rotationOnlyProps,
       shrinkProps,
+      hancomExpected,
+      hancomProps,
       beforeCell,
       afterCell,
       undoCell,
@@ -221,11 +297,13 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
       directGrownCell,
       rotationOnlyCell,
       shrinkCell,
+      hancomCell,
       requiredAfter: requiredCellHeight(afterCell, afterProps),
       requiredUndo: requiredCellHeight(undoCell, undoProps),
       requiredOversized: requiredCellHeight(oversizedCell, oversizedProps),
       requiredRotationOnly: requiredCellHeight(rotationOnlyCell, rotationOnlyProps),
       requiredShrink: requiredCellHeight(shrinkCell, shrinkProps),
+      requiredHancom: requiredCellHeight(hancomCell, hancomProps),
       rotationInputValue,
       beforeRatio: ratioOf(beforeProps),
       afterRatio: ratioOf(afterProps),
@@ -239,6 +317,9 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
       directGrownCellBbox,
       rotationOnlyBbox,
       rotationOnlyCellBbox,
+      hancomBbox,
+      hancomCellBbox,
+      hancomRightLeak,
       beforeCenter,
       midCenter,
       afterCenter,
@@ -262,29 +343,6 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
   assert(!result.error, `검증 실패: ${result.error}`);
   console.log('결과:', JSON.stringify(result, null, 2));
 
-  const fitsWithinCell = (bbox, cellBbox, tolerance = 1.0) => {
-    if (!bbox || !cellBbox) return false;
-    return bbox.x >= cellBbox.x - tolerance
-      && bbox.y >= cellBbox.y - tolerance
-      && bbox.x + bbox.w <= cellBbox.x + cellBbox.w + tolerance
-      && bbox.y + bbox.h <= cellBbox.y + cellBbox.h + tolerance;
-  };
-  const rotatedVisualBbox = (bbox, angleDeg) => {
-    if (!bbox) return null;
-    const angle = ((Number(angleDeg ?? 0) % 360) + 360) % 360;
-    if (angle === 0) return bbox;
-    const rad = angle * Math.PI / 180;
-    const cos = Math.abs(Math.cos(rad));
-    const sin = Math.abs(Math.sin(rad));
-    const w = bbox.w * cos + bbox.h * sin;
-    const h = bbox.w * sin + bbox.h * cos;
-    const cx = bbox.x + bbox.w / 2;
-    const cy = bbox.y + bbox.h / 2;
-    return { x: cx - w / 2, y: cy - h / 2, w, h };
-  };
-  const visualFitsWithinCell = (bbox, props, cellBbox, tolerance = 2.0) =>
-    fitsWithinCell(rotatedVisualBbox(bbox, props?.rotationAngle), cellBbox, tolerance);
-
   assert(Array.isArray(result.stateCellPath) && result.stateCellPath.length === 1,
     `드래그 상태 cellPath 보존 실패: ${JSON.stringify(result.stateCellPath)}`);
   assert(result.afterProps.height > result.beforeProps.height,
@@ -301,10 +359,6 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
     `owner cell height 부족: cell=${result.afterCell.height}, required=${result.requiredAfter}`);
   assert(result.afterBbox && result.afterBbox.h > result.beforeBbox.h,
     `표시 bbox 높이 증가 실패: ${result.beforeBbox?.h} → ${result.afterBbox?.h}`);
-  assert(visualFitsWithinCell(result.beforeBbox, result.beforeProps, result.beforeCellBbox),
-    `초기 picture visual bbox가 owner cell을 침범: visual=${JSON.stringify(rotatedVisualBbox(result.beforeBbox, result.beforeProps.rotationAngle))}, bbox=${JSON.stringify(result.beforeBbox)}, cell=${JSON.stringify(result.beforeCellBbox)}`);
-  assert(visualFitsWithinCell(result.afterBbox, result.afterProps, result.afterCellBbox),
-    `리사이즈 후 picture visual bbox가 owner cell을 침범: visual=${JSON.stringify(rotatedVisualBbox(result.afterBbox, result.afterProps.rotationAngle))}, bbox=${JSON.stringify(result.afterBbox)}, cell=${JSON.stringify(result.afterCellBbox)}`);
   assert(result.centerJumpMid != null && result.centerJumpMid < 60,
     `라이브 드래그 중 bbox 중심 과도 이동: ${result.centerJumpMid}`);
   assert(result.centerJumpAfter != null && result.centerJumpAfter < 60,
@@ -315,12 +369,14 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
     `Undo 후 owner cell height 부족: cell=${result.undoCell.height}, required=${result.requiredUndo}`);
   assert(result.oversizedCell.height >= result.requiredOversized,
     `과대 리사이즈 후 owner cell height 부족: cell=${result.oversizedCell.height}, required=${result.requiredOversized}`);
-  assert(visualFitsWithinCell(result.oversizedBbox, result.oversizedProps, result.oversizedCellBbox),
-    `과대 리사이즈 후 picture visual bbox가 owner cell을 침범: visual=${JSON.stringify(rotatedVisualBbox(result.oversizedBbox, result.oversizedProps.rotationAngle))}, bbox=${JSON.stringify(result.oversizedBbox)}, cell=${JSON.stringify(result.oversizedCellBbox)}, props=${JSON.stringify(result.oversizedProps)}`);
+  assert(result.oversizedProps.width > result.beforeCell.width,
+    `과대 리사이즈 picture width가 기존 셀 폭보다 커지지 않음: pic=${result.oversizedProps.width}, beforeCell=${result.beforeCell.width}`);
+  assert(result.oversizedCell.width === result.beforeCell.width,
+    `과대 리사이즈 후 owner cell width가 바뀜: before=${result.beforeCell.width}, current=${result.oversizedCell.width}`);
+  assert(result.oversizedCellBbox && result.beforeCellBbox && Math.abs(result.oversizedCellBbox.w - result.beforeCellBbox.w) < 1.5,
+    `과대 리사이즈 후 owner cell 화면 폭이 바뀜: before=${JSON.stringify(result.beforeCellBbox)}, current=${JSON.stringify(result.oversizedCellBbox)}`);
   assert(result.directGrownCell.height > result.undoCell.height,
     `직접 재확대 owner cell height 증가 실패: undo=${result.undoCell.height}, grown=${result.directGrownCell.height}`);
-  assert(visualFitsWithinCell(result.directGrownBbox, result.afterProps, result.directGrownCellBbox),
-    `직접 재확대 후 picture visual bbox가 owner cell을 침범: visual=${JSON.stringify(rotatedVisualBbox(result.directGrownBbox, result.afterProps.rotationAngle))}, bbox=${JSON.stringify(result.directGrownBbox)}, cell=${JSON.stringify(result.directGrownCellBbox)}`);
   assert(result.rotationOnlyProps.rotationAngle === 0,
     `회전각 단독 변경 반영 실패: rotationAngle=${result.rotationOnlyProps.rotationAngle}`);
   assert(result.rotationOnlyProps.width > 0 && result.rotationOnlyProps.height > 0,
@@ -331,8 +387,6 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
     `회전각 0도 단독 변경 후 owner cell height 감소 실패: grown=${result.directGrownCell.height}, rotationOnly=${result.rotationOnlyCell.height}`);
   assert(result.rotationOnlyCell.height >= result.requiredRotationOnly,
     `회전각 0도 단독 변경 후 owner cell height 부족: cell=${result.rotationOnlyCell.height}, required=${result.requiredRotationOnly}`);
-  assert(visualFitsWithinCell(result.rotationOnlyBbox, result.rotationOnlyProps, result.rotationOnlyCellBbox),
-    `회전각 0도 변경 후 picture visual bbox가 owner cell을 침범: visual=${JSON.stringify(rotatedVisualBbox(result.rotationOnlyBbox, result.rotationOnlyProps.rotationAngle))}, bbox=${JSON.stringify(result.rotationOnlyBbox)}, cell=${JSON.stringify(result.rotationOnlyCellBbox)}`);
   assert(result.shrinkProps.rotationAngle === 0,
     `축소/회전 0도 반영 실패: rotationAngle=${result.shrinkProps.rotationAngle}`);
   assert(result.shrinkCell.height < result.directGrownCell.height,
@@ -341,8 +395,21 @@ runTest('회전 표 셀 picture 리사이즈 드래그 안정성 (#1282)', async
     `축소/회전 0도 후 owner cell height 부족: cell=${result.shrinkCell.height}, required=${result.requiredShrink}`);
   assert(result.shrinkBbox && result.shrinkBbox.h < result.afterBbox.h,
     `축소/회전 0도 후 표시 bbox 높이 감소 실패: grown=${result.afterBbox?.h}, shrink=${result.shrinkBbox?.h}`);
-  assert(visualFitsWithinCell(result.shrinkBbox, result.shrinkProps, result.shrinkCellBbox),
-    `축소/회전 0도 후 picture visual bbox가 owner cell을 침범: visual=${JSON.stringify(rotatedVisualBbox(result.shrinkBbox, result.shrinkProps.rotationAngle))}, bbox=${JSON.stringify(result.shrinkBbox)}, cell=${JSON.stringify(result.shrinkCellBbox)}`);
+  assert(Math.abs(result.hancomProps.width - result.hancomExpected.width) <= 1
+    && Math.abs(result.hancomProps.height - result.hancomExpected.height) <= 1
+    && Math.abs(result.hancomProps.vertOffset - result.hancomExpected.vertOffset) <= 1
+    && result.hancomProps.rotationAngle === 0,
+    `한컴 비교 속성값 반영 실패: expected=${JSON.stringify(result.hancomExpected)}, current=${JSON.stringify(result.hancomProps)}`);
+  assert(result.hancomCell.width === result.beforeCell.width,
+    `한컴 비교 상태에서 owner cell width가 바뀜: before=${result.beforeCell.width}, current=${result.hancomCell.width}`);
+  assert(result.hancomCell.height >= result.requiredHancom,
+    `한컴 비교 상태에서 owner cell height 부족: cell=${result.hancomCell.height}, required=${result.requiredHancom}`);
+  assert(result.hancomCellBbox && result.beforeCellBbox && Math.abs(result.hancomCellBbox.w - result.beforeCellBbox.w) < 1.5,
+    `한컴 비교 상태에서 owner cell 화면 폭이 바뀜: before=${JSON.stringify(result.beforeCellBbox)}, current=${JSON.stringify(result.hancomCellBbox)}`);
+  assert(result.hancomRightLeak && !result.hancomRightLeak.error,
+    `한컴 비교 상태 렌더 픽셀 샘플 실패: ${JSON.stringify(result.hancomRightLeak)}`);
+  assert(result.hancomRightLeak.nonWhiteRatio < 0.002 && result.hancomRightLeak.dark <= 2,
+    `한컴 비교 상태에서 오른쪽 셀로 렌더 픽셀이 침범: ${JSON.stringify(result.hancomRightLeak)}`);
 
-  console.log('✅ #1282 회전 표 셀 picture: 드래그 리사이즈/축소 셀높이/bbox 안정성 통과');
+  console.log('✅ #1282 회전 표 셀 picture: 드래그 리사이즈/셀폭 유지/렌더 클립 안정성 통과');
 });

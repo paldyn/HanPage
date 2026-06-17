@@ -999,17 +999,8 @@ impl LayoutEngine {
                                     } else {
                                         para_y
                                     };
-                                    let mut pic_w =
-                                        hwpunit_to_px(pic.common.width as i32, self.dpi);
-                                    let mut pic_h =
-                                        hwpunit_to_px(pic.common.height as i32, self.dpi);
-                                    // partial 표 렌더에서도 full 표와 동일하게 셀 가용 폭을
-                                    // 넘는 non-inline picture를 비율 유지 축소한다.
-                                    if inner_area.width > 0.0 && pic_w > inner_area.width {
-                                        let scale = inner_area.width / pic_w;
-                                        pic_w = inner_area.width;
-                                        pic_h *= scale;
-                                    }
+                                    let pic_w = hwpunit_to_px(pic.common.width as i32, self.dpi);
+                                    let pic_h = hwpunit_to_px(pic.common.height as i32, self.dpi);
                                     let cell_area = LayoutRect {
                                         y: anchor_y,
                                         height: (inner_area.height - (anchor_y - inner_area.y))

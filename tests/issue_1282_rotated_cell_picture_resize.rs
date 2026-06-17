@@ -52,24 +52,6 @@ fn required_cell_height_for_picture(cell: &Cell, pic: &Picture) -> u32 {
         .saturating_add(cell.padding.bottom as u32)
 }
 
-fn cell_inner_width_for_picture(table: &Table, cell: &Cell) -> u32 {
-    let pad_axis = |cell_pad: i16, table_pad: i16| -> u32 {
-        let use_cell = if cell.apply_inner_margin {
-            cell_pad != 0
-        } else {
-            cell_pad > table_pad
-        };
-        if use_cell {
-            cell_pad.max(0) as u32
-        } else {
-            table_pad.max(0) as u32
-        }
-    };
-    cell.width
-        .saturating_sub(pad_axis(cell.padding.left, table.padding.left))
-        .saturating_sub(pad_axis(cell.padding.right, table.padding.right))
-}
-
 fn picture_center(pic: &Picture) -> (i64, i64) {
     (
         pic.common.horizontal_offset as i32 as i64 + pic.common.width as i64 / 2,
@@ -82,6 +64,7 @@ fn issue_1282_resizing_rotated_cell_picture_grows_owner_cell_height() {
     let bytes = read_fixture("samples/ta-pic-001-r.hwp");
     let mut core = DocumentCore::from_bytes(&bytes).expect("load HWP fixture");
     let original_width = target_picture(core.document()).common.width;
+    let original_cell_width = target_cell(core.document()).width;
 
     core.set_cell_picture_properties_by_path_native(
         0,
@@ -204,7 +187,8 @@ fn issue_1282_resizing_rotated_cell_picture_grows_owner_cell_height() {
         cell.height
     );
 
-    let oversized_width = cell_inner_width_for_picture(table, cell).saturating_mul(3);
+    let original_table_width = table.common.width;
+    let oversized_width = cell.width.saturating_mul(3);
     core.set_cell_picture_properties_by_path_native(
         0,
         0,
@@ -215,32 +199,31 @@ fn issue_1282_resizing_rotated_cell_picture_grows_owner_cell_height() {
             oversized_width
         ),
     )
-    .expect("oversized resize must clamp to owner cell width");
+    .expect("oversized resize must preserve picture width and sync owner cell height");
 
     let doc = core.document();
     let table = target_table(doc);
     let cell = target_cell(doc);
     let pic = target_picture(doc);
-    let cell_inner_width = cell_inner_width_for_picture(table, cell);
-    let horz_offset = pic.common.horizontal_offset as i32;
     let required_height = required_cell_height_for_picture(cell, pic);
 
     assert!(
-        pic.common.width <= cell_inner_width,
-        "oversized picture frame width must be clamped to owner cell inner width: frame={}, inner={}",
+        pic.common.width > original_cell_width,
+        "oversized picture frame must remain larger than the original owner cell width: frame={}, original_cell={}",
         pic.common.width,
-        cell_inner_width
+        original_cell_width
     );
-    assert!(
-        horz_offset >= 0 && (horz_offset as u32).saturating_add(pic.common.width) <= cell_inner_width,
-        "oversized picture horizontal range must stay inside owner cell: offset={}, width={}, inner={}",
-        horz_offset,
-        pic.common.width,
-        cell_inner_width
+    assert_eq!(
+        cell.width, original_cell_width,
+        "horizontal resize must not change owner cell width"
+    );
+    assert_eq!(
+        table.common.width, original_table_width,
+        "horizontal resize must not change table width"
     );
     assert_eq!(
         cell.height, required_height,
-        "owner cell height must sync after oversized clamp: cell.height={}, required={}",
+        "owner cell height must sync after oversized resize: cell.height={}, required={}",
         cell.height, required_height
     );
 

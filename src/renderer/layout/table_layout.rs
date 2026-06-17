@@ -2277,17 +2277,8 @@ impl LayoutEngine {
                                 } else {
                                     // 비-인라인(자리차지/글뒤로/글앞으로) 이미지:
                                     // 본문배치 속성(가로/세로 기준, 정렬, 오프셋) 적용
-                                    let mut pic_w =
-                                        hwpunit_to_px(pic.common.width as i32, self.dpi);
-                                    let mut pic_h =
-                                        hwpunit_to_px(pic.common.height as i32, self.dpi);
-                                    // 셀 내부 non-inline picture도 TAC picture와 동일하게
-                                    // 소유 셀의 가용 폭을 넘지 않도록 비율 유지 축소한다.
-                                    if inner_area.width > 0.0 && pic_w > inner_area.width {
-                                        let scale = inner_area.width / pic_w;
-                                        pic_w = inner_area.width;
-                                        pic_h *= scale;
-                                    }
+                                    let pic_w = hwpunit_to_px(pic.common.width as i32, self.dpi);
+                                    let pic_h = hwpunit_to_px(pic.common.height as i32, self.dpi);
                                     // [Task #577] TopAndBottom + vert_rel_to=Para 인 셀 내부 이미지는
                                     // anchor 라인이 이미지에 의해 displaced 되므로, layout_composed_paragraph
                                     // 가 advance 시킨 para_y 가 아닌 anchor 시점(para_y_before_compose)을 기준

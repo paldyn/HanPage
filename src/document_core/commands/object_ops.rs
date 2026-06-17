@@ -916,83 +916,6 @@ impl DocumentCore {
             .saturating_add(padding_bottom.max(0) as u32)
     }
 
-    fn resolved_cell_padding_axis_hu(
-        cell_pad: i16,
-        table_pad: i16,
-        apply_inner_margin: bool,
-    ) -> u32 {
-        let use_cell = if apply_inner_margin {
-            cell_pad != 0
-        } else {
-            cell_pad > table_pad
-        };
-        if use_cell {
-            cell_pad.max(0) as u32
-        } else {
-            table_pad.max(0) as u32
-        }
-    }
-
-    fn owner_cell_inner_width_for_picture(
-        cell: &crate::model::table::Cell,
-        table: &crate::model::table::Table,
-    ) -> u32 {
-        let pad_left = Self::resolved_cell_padding_axis_hu(
-            cell.padding.left,
-            table.padding.left,
-            cell.apply_inner_margin,
-        );
-        let pad_right = Self::resolved_cell_padding_axis_hu(
-            cell.padding.right,
-            table.padding.right,
-            cell.apply_inner_margin,
-        );
-        cell.width
-            .saturating_sub(pad_left)
-            .saturating_sub(pad_right)
-    }
-
-    fn clamp_picture_frame_to_cell_width(
-        pic: &mut crate::model::image::Picture,
-        max_frame_width: u32,
-    ) -> bool {
-        if max_frame_width == 0 {
-            return false;
-        }
-
-        let mut changed = false;
-        if pic.common.width > max_frame_width {
-            let old_width = pic.common.width.max(1);
-            let scale = max_frame_width as f64 / old_width as f64;
-            pic.common.width = max_frame_width.max(1);
-            pic.common.height = ((pic.common.height as f64 * scale).round()).max(1.0) as u32;
-            if pic.shape_attr.current_width > 0 {
-                pic.shape_attr.current_width =
-                    ((pic.shape_attr.current_width as f64 * scale).round()).max(1.0) as u32;
-            } else {
-                pic.shape_attr.current_width = pic.common.width;
-            }
-            if pic.shape_attr.current_height > 0 {
-                pic.shape_attr.current_height =
-                    ((pic.shape_attr.current_height as f64 * scale).round()).max(1.0) as u32;
-            } else {
-                pic.shape_attr.current_height = pic.common.height;
-            }
-            pic.shape_attr.rotation_center.x = (pic.common.width / 2) as i32;
-            pic.shape_attr.rotation_center.y = (pic.common.height / 2) as i32;
-            changed = true;
-        }
-
-        let horz_offset = pic.common.horizontal_offset as i32;
-        let max_offset = max_frame_width.saturating_sub(pic.common.width) as i32;
-        let clamped_offset = horz_offset.clamp(0, max_offset);
-        if clamped_offset != horz_offset {
-            pic.common.horizontal_offset = clamped_offset as u32;
-            changed = true;
-        }
-        changed
-    }
-
     fn sync_direct_owner_cell_for_picture(
         section: &mut crate::model::document::Section,
         parent_para_idx: usize,
@@ -1012,19 +935,10 @@ impl DocumentCore {
             _ => return Ok(()),
         };
 
-        let max_frame_width = {
+        let required_height = {
             let cell = table.cells.get(cell_idx).ok_or_else(|| {
                 HwpError::RenderError(format!("경로[0]: cells[{}] 범위 초과", cell_idx))
             })?;
-            Self::owner_cell_inner_width_for_picture(cell, table)
-        };
-
-        let (required_height, picture_changed) = {
-            let cell = table.cells.get_mut(cell_idx).ok_or_else(|| {
-                HwpError::RenderError(format!("경로[0]: cells[{}] 범위 초과", cell_idx))
-            })?;
-            let pad_top = cell.padding.top;
-            let pad_bottom = cell.padding.bottom;
             let cell_para = cell.paragraphs.get(cell_para_idx).ok_or_else(|| {
                 HwpError::RenderError(format!("경로[0]: paragraphs[{}] 범위 초과", cell_para_idx))
             })?;
@@ -1032,26 +946,7 @@ impl DocumentCore {
                 Some(Control::Picture(pic)) => pic,
                 _ => return Ok(()),
             };
-            let mut pic = pic.clone();
-            let picture_changed = {
-                let cell_para = cell.paragraphs.get_mut(cell_para_idx).ok_or_else(|| {
-                    HwpError::RenderError(format!(
-                        "경로[0]: paragraphs[{}] 범위 초과",
-                        cell_para_idx
-                    ))
-                })?;
-                let pic_mut = match cell_para.controls.get_mut(inner_control_idx) {
-                    Some(Control::Picture(pic_mut)) => pic_mut,
-                    _ => return Ok(()),
-                };
-                let changed = Self::clamp_picture_frame_to_cell_width(pic_mut, max_frame_width);
-                pic = pic_mut.clone();
-                changed
-            };
-            (
-                Self::required_cell_height_for_picture_padding(pad_top, pad_bottom, &pic),
-                picture_changed,
-            )
+            Self::required_cell_height_for_picture(cell, pic)
         };
 
         if let Some(cell) = table.cells.get_mut(cell_idx) {
@@ -1061,9 +956,6 @@ impl DocumentCore {
                 table.update_ctrl_dimensions();
                 table.dirty = true;
             }
-        }
-        if picture_changed {
-            table.dirty = true;
         }
         Ok(())
     }
