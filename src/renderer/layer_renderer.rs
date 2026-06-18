@@ -147,6 +147,9 @@ pub enum VariantRejectReason {
     UnsupportedBitmapGlyph,
     UnsupportedSvgGlyph,
     MissingGlyphPayloadResource,
+    MixedPerGlyphAuthorityPending,
+    GlyphTransformAuthorityPending,
+    VerticalGlyphOrientationAuthorityPending,
     PositionAdjustedNotAllowed,
     PositionAdjustedResidualTooLarge,
 }
@@ -176,6 +179,11 @@ impl VariantRejectReason {
             Self::UnsupportedBitmapGlyph => "unsupportedBitmapGlyph",
             Self::UnsupportedSvgGlyph => "unsupportedSvgGlyph",
             Self::MissingGlyphPayloadResource => "missingGlyphPayloadResource",
+            Self::MixedPerGlyphAuthorityPending => "mixedPerGlyphAuthorityPending",
+            Self::GlyphTransformAuthorityPending => "glyphTransformAuthorityPending",
+            Self::VerticalGlyphOrientationAuthorityPending => {
+                "verticalGlyphOrientationAuthorityPending"
+            }
             Self::PositionAdjustedNotAllowed => "positionAdjustedNotAllowed",
             Self::PositionAdjustedResidualTooLarge => "positionAdjustedResidualTooLarge",
         }
@@ -520,8 +528,17 @@ fn collect_glyph_run_reject_reasons(
     if !run.paint_style.is_fill_only_glyph_replay() {
         reasons.insert(VariantRejectReason::UnsupportedPaintEffect);
     }
-    if !matches!(run.orientation, GlyphRunOrientation::Horizontal) {
-        reasons.insert(VariantRejectReason::UnsupportedPaintEffect);
+    if run.glyph_transforms.is_some() {
+        reasons.insert(VariantRejectReason::GlyphTransformAuthorityPending);
+    }
+    match run.orientation {
+        GlyphRunOrientation::Horizontal => {}
+        GlyphRunOrientation::MixedPerGlyph => {
+            reasons.insert(VariantRejectReason::MixedPerGlyphAuthorityPending);
+        }
+        GlyphRunOrientation::VerticalUpright | GlyphRunOrientation::VerticalSideways => {
+            reasons.insert(VariantRejectReason::VerticalGlyphOrientationAuthorityPending);
+        }
     }
     if matches!(
         options.backend,
@@ -684,11 +701,11 @@ mod tests {
         FontFaceResource, FontFallbackPolicyId, FontInstanceKey, GlyphCluster,
         GlyphOutlineFillRule, GlyphOutlinePaintOrder, GlyphOutlinePayloadKind,
         GlyphOutlineStrokeCap, GlyphOutlineStrokeJoin, GlyphOutlineStrokeStyle, GlyphRange,
-        GlyphRunDiagnostics, GlyphRunOrientation, ImageResourceId, LayerAffineTransform,
-        LayerGlyphOutlinePath, LayerNode, LayerPoint, LayerVector, PaintTextStyle,
-        PaintVariantMeta, ResolvedColor, ResourceArena, ScriptTag, ShapeKey, ShapingEngineId,
-        SvgGlyphPayload, SvgResourceId, TextDirection, TextRunPlacement, TextSourceId,
-        TextSourceRange, TextSourceSpan, VariationAxisValue, WritingMode,
+        GlyphRunDiagnostics, GlyphRunOrientation, GlyphTransform, ImageResourceId,
+        LayerAffineTransform, LayerGlyphOutlinePath, LayerNode, LayerPoint, LayerVector,
+        PaintTextStyle, PaintVariantMeta, ResolvedColor, ResourceArena, ScriptTag, ShapeKey,
+        ShapingEngineId, SvgGlyphPayload, SvgResourceId, TextDirection, TextRunPlacement,
+        TextSourceId, TextSourceRange, TextSourceSpan, VariationAxisValue, WritingMode,
     };
     use crate::renderer::render_tree::{BoundingBox, FieldMarkerType, TextRunNode};
     use crate::renderer::{PathCommand, TextStyle};
@@ -1303,6 +1320,94 @@ mod tests {
         assert!(report.rejected_variants[0]
             .reasons
             .contains(&VariantRejectReason::UnsupportedPaintEffect));
+    }
+
+    #[test]
+    fn mixed_per_glyph_runs_keep_text_fallback_until_orientation_authority_exists() {
+        let mut op = glyph_run(diagnostics(), 42);
+        if let PaintOp::GlyphRun { run, .. } = &mut op {
+            run.orientation = GlyphRunOrientation::MixedPerGlyph;
+            run.glyph_transforms = Some(vec![GlyphTransform {
+                xx: 1.0,
+                xy: 0.0,
+                yx: 0.0,
+                yy: 1.0,
+                tx: 0.0,
+                ty: 0.0,
+            }]);
+        }
+        let report = first_report(
+            vec![text_op(), op],
+            TextVariantSelectionOptions::canvaskit(),
+        );
+
+        assert_eq!(report.selected_variant_kind, Some(TextVariantKind::TextRun));
+        assert!(report.fallback_required);
+        assert!(report.rejected_variants[0]
+            .reasons
+            .contains(&VariantRejectReason::MixedPerGlyphAuthorityPending));
+        assert!(!report.rejected_variants[0]
+            .reasons
+            .contains(&VariantRejectReason::UnsupportedPaintEffect));
+        assert_eq!(
+            VariantRejectReason::MixedPerGlyphAuthorityPending.as_str(),
+            "mixedPerGlyphAuthorityPending"
+        );
+    }
+
+    #[test]
+    fn glyph_transform_runs_keep_text_fallback_until_transform_authority_exists() {
+        let mut op = glyph_run(diagnostics(), 42);
+        if let PaintOp::GlyphRun { run, .. } = &mut op {
+            run.glyph_transforms = Some(vec![GlyphTransform {
+                xx: 1.0,
+                xy: 0.0,
+                yx: 0.0,
+                yy: 1.0,
+                tx: 0.0,
+                ty: 0.0,
+            }]);
+        }
+        let report = first_report(
+            vec![text_op(), op],
+            TextVariantSelectionOptions::canvaskit(),
+        );
+
+        assert_eq!(report.selected_variant_kind, Some(TextVariantKind::TextRun));
+        assert!(report.fallback_required);
+        assert_eq!(
+            report.rejected_variants[0].reasons,
+            vec![VariantRejectReason::GlyphTransformAuthorityPending]
+        );
+        assert_eq!(
+            VariantRejectReason::GlyphTransformAuthorityPending.as_str(),
+            "glyphTransformAuthorityPending"
+        );
+    }
+
+    #[test]
+    fn vertical_glyph_runs_keep_text_fallback_until_orientation_authority_exists() {
+        let mut op = glyph_run(diagnostics(), 42);
+        if let PaintOp::GlyphRun { run, .. } = &mut op {
+            run.orientation = GlyphRunOrientation::VerticalUpright;
+        }
+        let report = first_report(
+            vec![text_op(), op],
+            TextVariantSelectionOptions::canvaskit(),
+        );
+
+        assert_eq!(report.selected_variant_kind, Some(TextVariantKind::TextRun));
+        assert!(report.fallback_required);
+        assert!(report.rejected_variants[0]
+            .reasons
+            .contains(&VariantRejectReason::VerticalGlyphOrientationAuthorityPending));
+        assert!(!report.rejected_variants[0]
+            .reasons
+            .contains(&VariantRejectReason::UnsupportedPaintEffect));
+        assert_eq!(
+            VariantRejectReason::VerticalGlyphOrientationAuthorityPending.as_str(),
+            "verticalGlyphOrientationAuthorityPending"
+        );
     }
 
     #[test]
