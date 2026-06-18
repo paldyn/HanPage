@@ -284,9 +284,12 @@ export function renderPictureObjectSelection(this: any): void {
         }
       }
       if (minX < Infinity) {
+        const locked = refs.some((r: PictureObjectRef) => isObjectSizeProtected.call(this, r));
         this.pictureObjectRenderer.render(
           { pageIndex, x: minX, y: minY, width: maxX - minX, height: maxY - minY },
           zoom,
+          0,
+          locked,
         );
       } else {
         this.pictureObjectRenderer.clear();
@@ -358,15 +361,12 @@ export function renderPictureObjectSelection(this: any): void {
 
           // 회전각 조회 (shape + image)
           let rotAngle = 0;
-          if (ref.type === 'shape') {
-            try {
-              const props = this.wasm.getShapeProperties(ref.sec, ref.ppi, ref.ci);
-              rotAngle = (props.rotationAngle as number) ?? 0;
-            } catch { /* ignore */ }
-          } else if (ref.type === 'image') {
+          let locked = false;
+          if (ref.type !== 'equation') {
             try {
               const props = getObjectProperties.call(this, ref);
               rotAngle = (props.rotationAngle as number) ?? 0;
+              locked = !!props.sizeProtect;
             } catch { /* ignore */ }
           }
 
@@ -374,6 +374,7 @@ export function renderPictureObjectSelection(this: any): void {
             { pageIndex: p, x: bx, y: by, width: bw, height: bh },
             zoom,
             rotAngle,
+            locked,
           );
           return;
         }
@@ -460,6 +461,17 @@ export function setObjectProperties(this: any, ref: PictureObjectRef, props: Rec
   }
 }
 
+/** 크기 고정 개체인지 조회한다. 조회 실패 시 기존 조작 흐름을 막지 않는다. */
+export function isObjectSizeProtected(this: any, ref: PictureObjectRef | null | undefined): boolean {
+  if (!ref) return false;
+  try {
+    const props = getObjectProperties.call(this, ref);
+    return !!props?.sizeProtect;
+  } catch {
+    return false;
+  }
+}
+
 /** 개체를 타입에 따라 삭제한다. */
 export function deleteObjectControl(this: any, ref: PictureObjectRef): void {
   if (ref.type === 'shape' || ref.type === 'group' || ref.type === 'line') {
@@ -495,6 +507,7 @@ export function resizeSelectedPicture(this: any, key: ArrowKey): void {
     const pending: { r: PictureObjectRef; target: ObjectResizeTarget }[] = [];
     for (const r of targets) {
       const props = getObjectProperties.call(this, r);
+      if (props.sizeProtect) continue;
       const resized = computeArrowResize(key, props.width, props.height, step);
       if (!resized) continue;
       pending.push({
@@ -661,6 +674,11 @@ export function updatePictureResizeDrag(this: any, e: MouseEvent): void {
   if (!this.pictureResizeState || !this.pictureObjectRenderer) return;
   const zoom = this.viewportManager.getZoom();
   const state = this.pictureResizeState;
+  if (isObjectSizeProtected.call(this, state.ref)) {
+    this.cleanupPictureResizeDrag();
+    this.renderPictureObjectSelection();
+    return;
+  }
 
   // 핸들은 고정, 예비 테두리만 갱신
   const rotAngle = (state.rotationAngle ?? 0) as number;
@@ -677,6 +695,11 @@ export function updatePictureResizeDrag(this: any, e: MouseEvent): void {
 
   // 다중 선택: 드래그 중 실시간으로 개체 크기/위치 반영
   if (state.multiRefs && state.multiRefs.length > 0) {
+    if (state.multiRefs.some((r: PictureObjectRef) => isObjectSizeProtected.call(this, r))) {
+      this.cleanupPictureResizeDrag();
+      this.renderPictureObjectSelection();
+      return;
+    }
     const scaleX = newBbox.width / state.bbox.w;
     const scaleY = newBbox.height / state.bbox.h;
     const origX = state.bbox.x;
@@ -738,6 +761,12 @@ export function updatePictureResizeDrag(this: any, e: MouseEvent): void {
 export function finishPictureResizeDrag(this: any, e: MouseEvent): void {
   const state = this.pictureResizeState;
   if (!state) { this.cleanupPictureResizeDrag(); return; }
+  if (isObjectSizeProtected.call(this, state.ref) ||
+      state.multiRefs?.some((r: PictureObjectRef) => isObjectSizeProtected.call(this, r))) {
+    this.cleanupPictureResizeDrag();
+    this.renderPictureObjectSelection();
+    return;
+  }
 
   const zoom = this.viewportManager.getZoom();
   const PX2HWP = PX_TO_HWP;
@@ -973,6 +1002,13 @@ export function finishPictureMoveDrag(this: any): void {
 /** 회전 드래그 중: 마우스 각도에 따라 실시간 회전 적용 */
 export function updatePictureRotateDrag(this: any, e: MouseEvent): void {
   if (!this.pictureRotateState) return;
+  if (isObjectSizeProtected.call(this, this.pictureRotateState.ref)) {
+    this.isPictureRotateDragging = false;
+    this.pictureRotateState = null;
+    this.container.style.cursor = '';
+    this.renderPictureObjectSelection();
+    return;
+  }
   const sc = this.container.querySelector('#scroll-content');
   if (!sc) return;
   const cr = sc.getBoundingClientRect();
