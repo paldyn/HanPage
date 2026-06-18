@@ -540,9 +540,6 @@ fn collect_glyph_run_reject_reasons(
             reasons.insert(VariantRejectReason::VerticalGlyphOrientationAuthorityPending);
         }
     }
-    if !matches!(run.orientation, GlyphRunOrientation::Horizontal) {
-        reasons.insert(VariantRejectReason::UnsupportedPaintEffect);
-    }
     if matches!(
         options.backend,
         VariantSelectionBackend::CanvasKit | VariantSelectionBackend::NativeSkia
@@ -1326,7 +1323,7 @@ mod tests {
     }
 
     #[test]
-    fn mixed_per_glyph_runs_keep_text_fallback_until_transform_authority_exists() {
+    fn mixed_per_glyph_runs_keep_text_fallback_until_orientation_authority_exists() {
         let mut op = glyph_run(diagnostics(), 42);
         if let PaintOp::GlyphRun { run, .. } = &mut op {
             run.orientation = GlyphRunOrientation::MixedPerGlyph;
@@ -1349,6 +1346,9 @@ mod tests {
         assert!(report.rejected_variants[0]
             .reasons
             .contains(&VariantRejectReason::MixedPerGlyphAuthorityPending));
+        assert!(!report.rejected_variants[0]
+            .reasons
+            .contains(&VariantRejectReason::UnsupportedPaintEffect));
         assert_eq!(
             VariantRejectReason::MixedPerGlyphAuthorityPending.as_str(),
             "mixedPerGlyphAuthorityPending"
@@ -1401,6 +1401,9 @@ mod tests {
         assert!(report.rejected_variants[0]
             .reasons
             .contains(&VariantRejectReason::VerticalGlyphOrientationAuthorityPending));
+        assert!(!report.rejected_variants[0]
+            .reasons
+            .contains(&VariantRejectReason::UnsupportedPaintEffect));
         assert_eq!(
             VariantRejectReason::VerticalGlyphOrientationAuthorityPending.as_str(),
             "verticalGlyphOrientationAuthorityPending"
