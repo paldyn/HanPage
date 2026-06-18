@@ -496,7 +496,7 @@ impl DocumentCore {
                 "\"vertRelTo\":\"{}\",\"vertAlign\":\"{}\",",
                 "\"horzRelTo\":\"{}\",\"horzAlign\":\"{}\",",
                 "\"vertOffset\":{},\"horzOffset\":{},",
-                "\"textWrap\":\"{}\",\"restrictInPage\":{},\"allowOverlap\":{},",
+                "\"textWrap\":\"{}\",\"restrictInPage\":{},\"allowOverlap\":{},\"sizeProtect\":{},",
                 "\"brightness\":{},\"contrast\":{},\"effect\":\"{}\",",
                 "\"description\":\"{}\",",
                 // 회전/대칭
@@ -519,7 +519,7 @@ impl DocumentCore {
             vert_rel, vert_align,
             horz_rel, horz_align,
             c.vertical_offset as i32, c.horizontal_offset as i32,
-            text_wrap, c.flow_with_text, c.allow_overlap,
+            text_wrap, c.flow_with_text, c.allow_overlap, c.size_protect,
             pic.image_attr.brightness, pic.image_attr.contrast, effect,
             desc_escaped,
             // 회전/대칭
@@ -1238,6 +1238,14 @@ impl DocumentCore {
                 pic.common.attr |= 1 << 14;
             } else {
                 pic.common.attr &= !(1 << 14);
+            }
+        }
+        if let Some(v) = json_bool(props_json, "sizeProtect") {
+            pic.common.size_protect = v;
+            if v {
+                pic.common.attr |= 1 << 20;
+            } else {
+                pic.common.attr &= !(1 << 20);
             }
         }
         if pic.common.flow_with_text {
@@ -2792,7 +2800,7 @@ impl DocumentCore {
              \"vertRelTo\":\"{}\",\"vertAlign\":\"{}\",\
              \"horzRelTo\":\"{}\",\"horzAlign\":\"{}\",\
              \"vertOffset\":{},\"horzOffset\":{},\
-             \"textWrap\":\"{}\",\"restrictInPage\":{},\"allowOverlap\":{},\
+             \"textWrap\":\"{}\",\"restrictInPage\":{},\"allowOverlap\":{},\"sizeProtect\":{},\
              \"zOrder\":{},\"instanceId\":{},\
              \"outerMarginLeft\":{},\"outerMarginTop\":{},\
              \"outerMarginRight\":{},\"outerMarginBottom\":{},\
@@ -2809,6 +2817,7 @@ impl DocumentCore {
             text_wrap,
             c.flow_with_text,
             c.allow_overlap,
+            c.size_protect,
             c.z_order,
             c.instance_id,
             c.margin.left,
@@ -2900,6 +2909,14 @@ impl DocumentCore {
                 c.attr |= 1 << 14;
             } else {
                 c.attr &= !(1 << 14);
+            }
+        }
+        if let Some(v) = json_bool(props_json, "sizeProtect") {
+            c.size_protect = v;
+            if v {
+                c.attr |= 1 << 20;
+            } else {
+                c.attr &= !(1 << 20);
             }
         }
         if c.flow_with_text {

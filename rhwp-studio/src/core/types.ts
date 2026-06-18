@@ -574,6 +574,8 @@ export interface ShapeProperties {
   vertOffset: number;
   horzOffset: number;
   textWrap: string;
+  /** 크기 고정 */
+  sizeProtect?: boolean;
   tbMarginLeft?: number;
   tbMarginRight?: number;
   tbMarginTop?: number;
@@ -618,6 +620,8 @@ export interface EquationProperties {
   vertOffset?: number;
   horzOffset?: number;
   textWrap?: string;
+  /** 크기 고정 */
+  sizeProtect?: boolean;
   zOrder?: number;
   instanceId?: number;
   outerMarginLeft?: number;
@@ -652,6 +656,8 @@ export interface PictureProperties {
   restrictInPage?: boolean;
   /** 서로 겹침 허용 */
   allowOverlap?: boolean;
+  /** 크기 고정 */
+  sizeProtect?: boolean;
   brightness: number;
   contrast: number;
   effect: string;
