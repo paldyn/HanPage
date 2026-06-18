@@ -284,9 +284,12 @@ export function renderPictureObjectSelection(this: any): void {
         }
       }
       if (minX < Infinity) {
+        const locked = refs.some((r: PictureObjectRef) => isObjectSizeProtected.call(this, r));
         this.pictureObjectRenderer.render(
           { pageIndex, x: minX, y: minY, width: maxX - minX, height: maxY - minY },
           zoom,
+          0,
+          locked,
         );
       } else {
         this.pictureObjectRenderer.clear();
@@ -358,15 +361,12 @@ export function renderPictureObjectSelection(this: any): void {
 
           // 회전각 조회 (shape + image)
           let rotAngle = 0;
-          if (ref.type === 'shape') {
-            try {
-              const props = this.wasm.getShapeProperties(ref.sec, ref.ppi, ref.ci);
-              rotAngle = (props.rotationAngle as number) ?? 0;
-            } catch { /* ignore */ }
-          } else if (ref.type === 'image') {
+          let locked = false;
+          if (ref.type !== 'equation') {
             try {
               const props = getObjectProperties.call(this, ref);
               rotAngle = (props.rotationAngle as number) ?? 0;
+              locked = !!props.sizeProtect;
             } catch { /* ignore */ }
           }
 
@@ -374,6 +374,7 @@ export function renderPictureObjectSelection(this: any): void {
             { pageIndex: p, x: bx, y: by, width: bw, height: bh },
             zoom,
             rotAngle,
+            locked,
           );
           return;
         }
