@@ -478,14 +478,13 @@ impl DocumentCore {
 
         let bf_json = self.build_border_fill_json_by_id(cell.border_fill_id);
 
-        // 셀 보호 (list_header_width_ref bit 1)
-        let cell_protect = (cell.list_header_width_ref & 0x02) != 0;
-
         Ok(format!(
-            "{{\"width\":{},\"height\":{},\"paddingLeft\":{},\"paddingRight\":{},\"paddingTop\":{},\"paddingBottom\":{},\"verticalAlign\":{},\"textDirection\":{},\"isHeader\":{},\"cellProtect\":{},{}}}",
+            "{{\"width\":{},\"height\":{},\"paddingLeft\":{},\"paddingRight\":{},\"paddingTop\":{},\"paddingBottom\":{},\"verticalAlign\":{},\"textDirection\":{},\"isHeader\":{},\"cellProtect\":{},\"fieldName\":{},\"editableInForm\":{},{}}}",
             cell.width, cell.height,
             cell.padding.left, cell.padding.right, cell.padding.top, cell.padding.bottom,
-            va, cell.text_direction, cell.is_header, cell_protect,
+            va, cell.text_direction, cell.is_header, cell.cell_protect(),
+            json_escape(cell.field_name.as_deref().unwrap_or("")),
+            cell.editable_in_form(),
             bf_json,
         ))
     }
@@ -499,7 +498,7 @@ impl DocumentCore {
         cell_idx: usize,
         json: &str,
     ) -> Result<String, HwpError> {
-        use super::super::helpers::{json_bool, json_i16, json_u32, json_u8};
+        use super::super::helpers::{json_bool, json_i16, json_str, json_u32, json_u8};
 
         let table = self.get_table_mut(section_idx, parent_para_idx, control_idx)?;
         let cell = table
@@ -536,19 +535,16 @@ impl DocumentCore {
             cell.text_direction = v;
         }
         if let Some(v) = json_bool(json, "isHeader") {
-            cell.is_header = v;
-            if v {
-                cell.list_header_width_ref |= 0x04;
-            } else {
-                cell.list_header_width_ref &= !0x04;
-            }
+            cell.set_header(v);
         }
         if let Some(v) = json_bool(json, "cellProtect") {
-            if v {
-                cell.list_header_width_ref |= 0x02;
-            } else {
-                cell.list_header_width_ref &= !0x02;
-            }
+            cell.set_cell_protect(v);
+        }
+        if let Some(v) = json_bool(json, "editableInForm") {
+            cell.set_editable_in_form(v);
+        }
+        if let Some(v) = json_str(json, "fieldName") {
+            cell.field_name = if v.is_empty() { None } else { Some(v) };
         }
 
         // BorderFill 변경: borderLeft 등이 포함된 경우 create_border_fill_from_json으로 처리

@@ -440,6 +440,10 @@ export interface CellProperties {
   isHeader: boolean;
   /** 셀 보호 */
   cellProtect?: boolean;
+  /** 셀 필드 이름 */
+  fieldName?: string;
+  /** 양식 모드에서 편집 가능 */
+  editableInForm?: boolean;
   /** 테두리/배경 */
   borderFillId?: number;
   borderLeft?: BorderLineInfo;

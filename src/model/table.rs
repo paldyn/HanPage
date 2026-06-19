@@ -4,6 +4,11 @@ use super::paragraph::Paragraph;
 use super::shape::{common_obj_offsets, Caption};
 use super::*;
 
+pub const CELL_FLAG_HAS_MARGIN: u16 = 0x0001;
+pub const CELL_FLAG_PROTECT: u16 = 0x0002;
+pub const CELL_FLAG_HEADER: u16 = 0x0004;
+pub const CELL_FLAG_EDITABLE_IN_FORM: u16 = 0x0008;
+
 /// 표 개체 (HWPTAG_TABLE)
 #[derive(Debug, Default, Clone)]
 pub struct Table {
@@ -129,6 +134,40 @@ pub enum VerticalAlign {
 }
 
 impl Cell {
+    pub fn set_apply_inner_margin(&mut self, value: bool) {
+        self.apply_inner_margin = value;
+        self.set_list_header_flag(CELL_FLAG_HAS_MARGIN, value);
+    }
+
+    pub fn cell_protect(&self) -> bool {
+        self.list_header_width_ref & CELL_FLAG_PROTECT != 0
+    }
+
+    pub fn set_cell_protect(&mut self, value: bool) {
+        self.set_list_header_flag(CELL_FLAG_PROTECT, value);
+    }
+
+    pub fn set_header(&mut self, value: bool) {
+        self.is_header = value;
+        self.set_list_header_flag(CELL_FLAG_HEADER, value);
+    }
+
+    pub fn editable_in_form(&self) -> bool {
+        self.list_header_width_ref & CELL_FLAG_EDITABLE_IN_FORM != 0
+    }
+
+    pub fn set_editable_in_form(&mut self, value: bool) {
+        self.set_list_header_flag(CELL_FLAG_EDITABLE_IN_FORM, value);
+    }
+
+    fn set_list_header_flag(&mut self, flag: u16, value: bool) {
+        if value {
+            self.list_header_width_ref |= flag;
+        } else {
+            self.list_header_width_ref &= !flag;
+        }
+    }
+
     /// 빈 셀을 생성한다 (빈 문단 1개 포함).
     pub fn new_empty(
         col: u16,

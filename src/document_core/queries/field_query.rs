@@ -997,7 +997,7 @@ fn collect_fields_from_paragraph(
                                 field_id: (ci as u32) << 16 | cell_i as u32,
                                 field_type: FieldType::ClickHere,
                                 command: String::new(),
-                                properties: 0,
+                                properties: if cell.editable_in_form() { 1 } else { 0 },
                                 extra_properties: 0,
                                 ctrl_data_name: Some(fname.clone()),
                                 memo_index: 0,
