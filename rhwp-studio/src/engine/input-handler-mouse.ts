@@ -161,10 +161,36 @@ function updateCellSelectionDrag(this: any, e: MouseEvent): void {
   this.updateCellSelection();
 }
 
-function finishCellSelectionDrag(this: any): void {
-  if (!this.cellSelectionDragState) return;
+function finishCellSelectionDrag(this: any, e: MouseEvent): void {
+  const state = this.cellSelectionDragState;
+  if (!state) return;
   this.cellSelectionDragState = null;
   document.removeEventListener('mousemove', this.onMouseMoveBound);
+
+  if (!state.isDragging) {
+    const hit = this.hitTestFromClientPoint?.(e.clientX, e.clientY);
+    if (hit) {
+      if (this.cursor.isProtectedCellSelectionMode?.() && isProtectedCellHit(this, hit)) {
+        this.updateCellSelection();
+        this.textarea.focus();
+        return;
+      }
+      this.cursor.exitCellSelectionMode();
+      this.cellSelectionRenderer?.clear();
+      this.cursor.clearSelection();
+      this.cursor.moveTo(hit);
+      this.cursor.resetPreferredX();
+      this.cursor.setAnchor();
+      this.active = true;
+      this.selectionRenderer.clear();
+      this.updateCaret();
+      this.updateFieldMarkers?.();
+      this.eventBus.emit('command-state-changed');
+      this.textarea.focus();
+      return;
+    }
+  }
+
   this.updateCellSelection();
   this.textarea.focus();
 }
@@ -1794,7 +1820,7 @@ export function onMouseUp(this: any, _e: MouseEvent): void {
 
   // 셀 블록 선택 드래그 종료
   if (this.cellSelectionDragState) {
-    finishCellSelectionDrag.call(this);
+    finishCellSelectionDrag.call(this, _e);
     return;
   }
 
