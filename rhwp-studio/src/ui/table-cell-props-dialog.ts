@@ -336,19 +336,16 @@ export class TableCellPropsDialog extends ModalDialog {
 
     // 필드
     const fieldSection = this.createSection('필드');
-    fieldSection.classList.add('disabled');
     const fieldRow = this.row();
     fieldRow.appendChild(this.label('필드 이름'));
     this.cellFieldNameInput = document.createElement('input');
     this.cellFieldNameInput.type = 'text';
     this.cellFieldNameInput.className = 'dialog-text-input';
-    this.cellFieldNameInput.disabled = true;
     fieldRow.appendChild(this.cellFieldNameInput);
     fieldSection.appendChild(fieldRow);
 
     const fieldRow2 = this.row();
     this.cellEditableCheck = this.checkbox('양식 모드에서 편집 가능');
-    this.cellEditableCheck.disabled = true;
     fieldRow2.appendChild(this.cellEditableCheck.parentElement!);
     fieldSection.appendChild(fieldRow2);
 
@@ -1239,6 +1236,8 @@ export class TableCellPropsDialog extends ModalDialog {
     this.setButtonGroupActive(this.cellTextDirBtns, cp.textDirection);
     this.cellHeaderCheck.checked = cp.isHeader;
     this.cellProtectCheck.checked = cp.cellProtect ?? false;
+    this.cellFieldNameInput.value = cp.fieldName ?? '';
+    this.cellEditableCheck.checked = cp.editableInForm ?? false;
 
     // 표 탭
     this.tablePageBreakSelect.value = String(tp.pageBreak ?? 0);
@@ -1334,6 +1333,8 @@ export class TableCellPropsDialog extends ModalDialog {
     if (activeTextDir >= 0) newCellProps.textDirection = activeTextDir;
     newCellProps.isHeader = this.cellHeaderCheck.checked;
     newCellProps.cellProtect = this.cellProtectCheck.checked;
+    newCellProps.fieldName = this.cellFieldNameInput.value;
+    newCellProps.editableInForm = this.cellEditableCheck.checked;
 
     // 셀 테두리/배경 (cell 모드에서는 테두리/배경 탭이 없으므로 스킵)
     if (this.mode === 'table' && this.borderTarget === 'cell' && this.borderEdits) {

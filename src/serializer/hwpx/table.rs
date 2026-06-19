@@ -227,6 +227,8 @@ fn write_cell<W: Write>(
     let name = cell.field_name.as_deref().unwrap_or("");
     let header = bool01(cell.is_header);
     let has_margin = bool01(cell.apply_inner_margin);
+    let protect = bool01(cell.cell_protect());
+    let editable = bool01(cell.editable_in_form());
     let border_ref = cell.border_fill_id.to_string();
 
     start_tag_attrs(
@@ -236,8 +238,8 @@ fn write_cell<W: Write>(
             ("name", name),
             ("header", header),
             ("hasMargin", has_margin),
-            ("protect", "0"),
-            ("editable", "0"),
+            ("protect", protect),
+            ("editable", editable),
             ("dirty", "0"),
             ("borderFillIDRef", &border_ref),
         ],
