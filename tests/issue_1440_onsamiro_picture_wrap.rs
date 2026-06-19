@@ -3,7 +3,9 @@
 use rhwp::model::control::Control;
 use rhwp::model::paragraph::Paragraph;
 use rhwp::model::shape::{ShapeObject, TextWrap};
+use rhwp::model::style::BorderLineType;
 use rhwp::renderer::render_tree::{BoundingBox, RenderNode, RenderNodeType};
+use rhwp::renderer::StrokeDash;
 use std::fs;
 use std::path::Path;
 
@@ -13,6 +15,8 @@ const SAMPLES: &[&str] = &[
 ];
 const TARGET_PAGE: u32 = 34; // 35쪽, 0-based
 const TARGET_PARA: usize = 8;
+const BOX_PAGE: u32 = 5; // 6쪽, 0-based
+const BOX_PARA: usize = 32;
 
 fn read_fixture(path: &str) -> Vec<u8> {
     fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join(path))
@@ -32,6 +36,16 @@ fn vertically_overlaps(a: &BoundingBox, b: &BoundingBox) -> bool {
 
 fn horizontally_overlaps(a: &BoundingBox, b: &BoundingBox) -> bool {
     a.x < b.x + b.width && a.x + a.width > b.x
+}
+
+fn expected_dash(line_type: BorderLineType) -> StrokeDash {
+    match line_type {
+        BorderLineType::Dash | BorderLineType::LongDash => StrokeDash::Dash,
+        BorderLineType::Dot | BorderLineType::Circle => StrokeDash::Dot,
+        BorderLineType::DashDot => StrokeDash::DashDot,
+        BorderLineType::DashDotDot => StrokeDash::DashDotDot,
+        _ => StrokeDash::Solid,
+    }
 }
 
 fn control_is_square_picture(ctrl: &Control) -> bool {
@@ -262,6 +276,139 @@ fn issue_1440_source_linesegs_encode_wrap_zone_for_target_paragraph() {
                 .take(7)
                 .all(|seg| seg.column_start == 850 && seg.segment_width == 20_999),
             "{sample}: 35쪽 대상 본문 첫 7줄은 그림 왼쪽 wrap-zone LineSeg여야 함"
+        );
+    }
+}
+
+#[test]
+fn issue_1440_page6_box_paragraph_does_not_double_apply_lineseg_column_start() {
+    for sample in SAMPLES {
+        let bytes = read_fixture(sample);
+        let doc = rhwp::wasm_api::HwpDocument::from_bytes(&bytes)
+            .unwrap_or_else(|e| panic!("parse {sample}: {e}"));
+        let tree = doc
+            .build_page_render_tree(BOX_PAGE)
+            .expect("build page 6 render tree");
+
+        let mut nodes = Vec::new();
+        collect_nodes(&tree.root, &mut nodes);
+        let mut box_lines: Vec<_> = nodes
+            .into_iter()
+            .filter_map(|node| {
+                let RenderNodeType::TextLine(line) = &node.node_type else {
+                    return None;
+                };
+                if line.para_index == Some(BOX_PARA) {
+                    Some((line.line_index.unwrap_or(u32::MAX), node.bbox.x))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        box_lines.sort_by_key(|(line_index, _)| *line_index);
+
+        assert!(
+            box_lines.len() >= 2,
+            "{sample}: 6쪽 지문 박스 문단 pi={BOX_PARA}의 줄을 찾지 못함: {box_lines:?}"
+        );
+
+        let first_x = box_lines[0].1;
+        let second_x = box_lines[1].1;
+        assert!(
+            first_x < 235.0 && second_x < 222.0,
+            "{sample}: 6쪽 지문 박스에 LineSeg.column_start가 이중 적용됨: first_x={first_x:.1}, second_x={second_x:.1}, lines={box_lines:?}"
+        );
+    }
+}
+
+#[test]
+fn issue_1440_page6_box_border_connect_and_dash_line_are_preserved() {
+    for sample in SAMPLES {
+        let bytes = read_fixture(sample);
+        let doc = rhwp::wasm_api::HwpDocument::from_bytes(&bytes)
+            .unwrap_or_else(|e| panic!("parse {sample}: {e}"));
+        let paragraphs = all_source_paragraphs(&doc);
+        let (_, box_para) = paragraphs
+            .iter()
+            .find(|(_, para)| para.text.starts_with("수많은 SF 영화나 소설이 유토피아"))
+            .unwrap_or_else(|| panic!("{sample}: 6쪽 지문 박스 문단을 찾지 못함"));
+        let ps = doc
+            .document()
+            .doc_info
+            .para_shapes
+            .get(box_para.para_shape_id as usize)
+            .unwrap_or_else(|| panic!("{sample}: 지문 박스 ParaShape 없음"));
+        assert!(
+            (ps.attr1 >> 28) & 1 != 0,
+            "{sample}: 문단 테두리 연결(bit 28)이 보존되어야 함"
+        );
+
+        let border_fill = doc
+            .document()
+            .doc_info
+            .border_fills
+            .get(ps.border_fill_id.saturating_sub(1) as usize)
+            .unwrap_or_else(|| panic!("{sample}: 지문 박스 BorderFill 없음"));
+        let expected_line_dash = expected_dash(border_fill.borders[0].line_type);
+        assert!(
+            border_fill
+                .borders
+                .iter()
+                .all(|border| expected_dash(border.line_type) == expected_line_dash),
+            "{sample}: 지문 박스 테두리는 네 면의 선 모양이 같아야 함"
+        );
+        assert!(
+            expected_line_dash != StrokeDash::Solid,
+            "{sample}: 지문 박스 테두리는 실선 최적화 대상이 아니어야 함"
+        );
+
+        let tree = doc
+            .build_page_render_tree(BOX_PAGE)
+            .expect("build page 6 render tree");
+        let mut nodes = Vec::new();
+        collect_nodes(&tree.root, &mut nodes);
+        let box_text_bounds: Vec<_> = nodes
+            .iter()
+            .filter_map(|node| {
+                let RenderNodeType::TextLine(line) = &node.node_type else {
+                    return None;
+                };
+                (line.para_index == Some(BOX_PARA)).then_some(node.bbox.clone())
+            })
+            .collect();
+        assert!(
+            !box_text_bounds.is_empty(),
+            "{sample}: 6쪽 지문 박스 TextLine bbox 없음"
+        );
+        let min_x = box_text_bounds
+            .iter()
+            .map(|b| b.x)
+            .fold(f64::INFINITY, f64::min);
+        let max_x = box_text_bounds
+            .iter()
+            .map(|b| b.x + b.width)
+            .fold(0.0, f64::max);
+        let min_y = box_text_bounds
+            .iter()
+            .map(|b| b.y)
+            .fold(f64::INFINITY, f64::min);
+        let max_y = box_text_bounds
+            .iter()
+            .map(|b| b.y + b.height)
+            .fold(0.0, f64::max);
+        let dotted_near_box = nodes.iter().any(|node| {
+            let RenderNodeType::Line(line) = &node.node_type else {
+                return false;
+            };
+            line.style.dash == expected_line_dash
+                && node.bbox.x >= min_x - 80.0
+                && node.bbox.x <= max_x + 80.0
+                && node.bbox.y >= min_y - 80.0
+                && node.bbox.y <= max_y + 80.0
+        });
+        assert!(
+            dotted_near_box,
+            "{sample}: 6쪽 지문 박스 주변에 원본 선 모양 LineNode가 렌더되어야 함"
         );
     }
 }

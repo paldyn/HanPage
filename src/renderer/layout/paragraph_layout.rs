@@ -1917,7 +1917,15 @@ impl LayoutEngine {
             // [Task #1440] anchor 매칭이 없는 후속 body 문단이라도 LINE_SEG 자체가
             // 단 폭보다 확연히 좁은 wrap zone 을 보존하면 그 저장 폭을 따른다.
             // 정상 들여쓰기 계열은 cs+sw ~= col_w 이므로 제외한다.
+            //
+            // 문단 테두리 안쪽 간격이 있는 박스 문단은 LineSeg.cs 가 텍스트 inset 과
+            // 함께 이미 문단 내부 흐름 계산에 반영되는 값이다. 여기서 effective_col_x 에
+            // 다시 더하면 6쪽 지문 박스처럼 본문이 오른쪽으로 한 번 더 밀린다.
+            let para_has_border_inner_spacing = para_style
+                .map(|s| s.border_spacing.iter().any(|v| v.abs() > 0.01))
+                .unwrap_or(false);
             let precomputed_body_wrap_line = cell_ctx.is_none()
+                && !para_has_border_inner_spacing
                 && comp_line.segment_width > 0
                 && line_avail_hu < col_area_w_hu - 200
                 && para
