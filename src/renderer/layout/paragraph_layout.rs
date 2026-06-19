@@ -1914,8 +1914,19 @@ impl LayoutEngine {
             let cs_significant = comp_line.column_start > 0
                 && comp_line.segment_width > 0
                 && comp_line.segment_width < col_area_w_hu;
+            // [Task #1440] anchor 매칭이 없는 후속 body 문단이라도 LINE_SEG 자체가
+            // 단 폭보다 확연히 좁은 wrap zone 을 보존하면 그 저장 폭을 따른다.
+            // 정상 들여쓰기 계열은 cs+sw ~= col_w 이므로 제외한다.
+            let precomputed_body_wrap_line = cell_ctx.is_none()
+                && comp_line.segment_width > 0
+                && line_avail_hu < col_area_w_hu - 200
+                && para
+                    .and_then(|p| p.line_segs.get(line_idx))
+                    .map(|seg| seg.is_in_wrap_zone(col_area_w_hu))
+                    .unwrap_or(false);
             let (effective_col_x, effective_col_w) = if (has_picture_shape_square_wrap
-                || line_has_inline_tac_table)
+                || line_has_inline_tac_table
+                || precomputed_body_wrap_line)
                 && comp_line.segment_width > 0
                 && (line_avail_hu < col_area_w_hu - 200 || cs_significant)
             {
