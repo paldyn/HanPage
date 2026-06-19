@@ -14,6 +14,7 @@ import type {
   CharProperties,
   ParaProperties,
   CursorRect,
+  CellProperties,
   FormObjectHitResult,
   LayerNode,
   LayerTextRunOp,
@@ -44,6 +45,7 @@ const PX_TO_RAW_2X = 150;
 type FormatCopyState = {
   charProps: Partial<CharProperties>;
   paraProps: Partial<ParaProperties>;
+  cellProps?: Partial<CellProperties>;
 };
 
 const FORMAT_COPY_CHAR_KEYS: Array<keyof CharProperties> = [
@@ -103,6 +105,20 @@ const FORMAT_COPY_PARA_KEYS: Array<keyof ParaProperties> = [
   'koreanBreakUnit',
   'borderConnect',
   'borderIgnoreMargin',
+];
+
+const FORMAT_COPY_CELL_KEYS: Array<keyof CellProperties> = [
+  'paddingLeft',
+  'paddingRight',
+  'paddingTop',
+  'paddingBottom',
+  'verticalAlign',
+  'textDirection',
+  'isHeader',
+  'cellProtect',
+  'fieldName',
+  'editableInForm',
+  'borderFillId',
 ];
 
 function pickDefined<T extends object, K extends keyof T>(source: T, keys: K[]): Partial<T> {
@@ -3651,6 +3667,15 @@ export class InputHandler {
 
   /** 모양 복사/붙여넣기 (커맨드 시스템용) */
   performFormatCopy(): void {
+    if (this.cursor.isInCellSelectionMode()) {
+      if (this.formatCopyState?.cellProps && Object.keys(this.formatCopyState.cellProps).length > 0) {
+        this.applyCopiedCellPropsToSelection(this.formatCopyState.cellProps);
+      } else {
+        this.copyFormatAtCursor();
+      }
+      return;
+    }
+
     const sel = this.getSelection();
     if (!sel) {
       this.copyFormatAtCursor();
@@ -3685,10 +3710,53 @@ export class InputHandler {
     const paraProps = normalizeFormatCopyParaProps(
       pickDefined(this.getParaProperties(), FORMAT_COPY_PARA_KEYS) as Partial<ParaProperties>,
     );
+    const pos = this.cursor.getPosition();
+    const cellProps = pos.parentParaIndex !== undefined
+      ? pickDefined(
+          this.wasm.getCellProperties(pos.sectionIndex, pos.parentParaIndex, pos.controlIndex!, pos.cellIndex!),
+          FORMAT_COPY_CELL_KEYS,
+        ) as Partial<CellProperties>
+      : undefined;
     this.formatCopyState = {
       charProps: JSON.parse(JSON.stringify(charProps)),
       paraProps: JSON.parse(JSON.stringify(paraProps)),
+      cellProps: cellProps ? JSON.parse(JSON.stringify(cellProps)) : undefined,
     };
+    this.focusTextarea();
+  }
+
+  private applyCopiedCellPropsToSelection(cellProps: Partial<CellProperties>): void {
+    const ctx = this.cursor.getCellTableContext();
+    const range = this.cursor.getSelectedCellRange();
+    if (!ctx || !range) {
+      this.focusTextarea();
+      return;
+    }
+    if (ctx.cellPath && ctx.cellPath.length > 1) {
+      console.info('[InputHandler] 중첩 표 셀 모양복사는 아직 지원하지 않습니다');
+      this.focusTextarea();
+      return;
+    }
+
+    const props = JSON.parse(JSON.stringify(cellProps)) as Partial<CellProperties>;
+    this.executeOperation({
+      kind: 'snapshot',
+      operationType: 'formatCopyCellProps',
+      operation: (wasm) => {
+        const dims = wasm.getTableDimensions(ctx.sec, ctx.ppi, ctx.ci);
+        const excluded = this.cursor.getExcludedCells();
+        for (let cellIdx = 0; cellIdx < dims.cellCount; cellIdx++) {
+          const info = wasm.getCellInfo(ctx.sec, ctx.ppi, ctx.ci, cellIdx);
+          if (info.row < range.startRow || info.row > range.endRow ||
+              info.col < range.startCol || info.col > range.endCol) {
+            continue;
+          }
+          if (excluded.has(`${info.row},${info.col}`)) continue;
+          wasm.setCellProperties(ctx.sec, ctx.ppi, ctx.ci, cellIdx, props);
+        }
+        return this.cursor.getPosition();
+      },
+    });
     this.focusTextarea();
   }
 

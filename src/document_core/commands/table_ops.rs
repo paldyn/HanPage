@@ -498,7 +498,27 @@ impl DocumentCore {
         cell_idx: usize,
         json: &str,
     ) -> Result<String, HwpError> {
-        use super::super::helpers::{json_bool, json_i16, json_str, json_u32, json_u8};
+        let parsed: serde_json::Value =
+            serde_json::from_str(json).unwrap_or(serde_json::Value::Null);
+        let obj = parsed.as_object();
+        let top_u32 = |key: &str| -> Option<u32> {
+            obj.and_then(|m| m.get(key))
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32)
+        };
+        let top_u8 = |key: &str| -> Option<u8> { top_u32(key).map(|v| v as u8) };
+        let top_i16 = |key: &str| -> Option<i16> {
+            obj.and_then(|m| m.get(key))
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i16)
+        };
+        let top_bool =
+            |key: &str| -> Option<bool> { obj.and_then(|m| m.get(key)).and_then(|v| v.as_bool()) };
+        let top_str = |key: &str| -> Option<String> {
+            obj.and_then(|m| m.get(key))
+                .and_then(|v| v.as_str())
+                .map(ToOwned::to_owned)
+        };
 
         let table = self.get_table_mut(section_idx, parent_para_idx, control_idx)?;
         let cell = table
@@ -506,45 +526,48 @@ impl DocumentCore {
             .get_mut(cell_idx)
             .ok_or_else(|| HwpError::RenderError(format!("셀 인덱스 {} 범위 초과", cell_idx)))?;
 
-        if let Some(v) = json_u32(json, "width") {
+        if let Some(v) = top_u32("width") {
             cell.width = v;
         }
-        if let Some(v) = json_u32(json, "height") {
+        if let Some(v) = top_u32("height") {
             cell.height = v;
         }
-        if let Some(v) = json_i16(json, "paddingLeft") {
+        if let Some(v) = top_i16("paddingLeft") {
             cell.padding.left = v;
         }
-        if let Some(v) = json_i16(json, "paddingRight") {
+        if let Some(v) = top_i16("paddingRight") {
             cell.padding.right = v;
         }
-        if let Some(v) = json_i16(json, "paddingTop") {
+        if let Some(v) = top_i16("paddingTop") {
             cell.padding.top = v;
         }
-        if let Some(v) = json_i16(json, "paddingBottom") {
+        if let Some(v) = top_i16("paddingBottom") {
             cell.padding.bottom = v;
         }
-        if let Some(v) = json_u8(json, "verticalAlign") {
+        if let Some(v) = top_u8("verticalAlign") {
             cell.vertical_align = match v {
                 1 => crate::model::table::VerticalAlign::Center,
                 2 => crate::model::table::VerticalAlign::Bottom,
                 _ => crate::model::table::VerticalAlign::Top,
             };
         }
-        if let Some(v) = json_u8(json, "textDirection") {
+        if let Some(v) = top_u8("textDirection") {
             cell.text_direction = v;
         }
-        if let Some(v) = json_bool(json, "isHeader") {
+        if let Some(v) = top_bool("isHeader") {
             cell.set_header(v);
         }
-        if let Some(v) = json_bool(json, "cellProtect") {
+        if let Some(v) = top_bool("cellProtect") {
             cell.set_cell_protect(v);
         }
-        if let Some(v) = json_bool(json, "editableInForm") {
+        if let Some(v) = top_bool("editableInForm") {
             cell.set_editable_in_form(v);
         }
-        if let Some(v) = json_str(json, "fieldName") {
+        if let Some(v) = top_str("fieldName") {
             cell.field_name = if v.is_empty() { None } else { Some(v) };
+        }
+        if let Some(v) = top_u32("borderFillId") {
+            cell.border_fill_id = v as u16;
         }
 
         // BorderFill 변경: borderLeft 등이 포함된 경우 create_border_fill_from_json으로 처리

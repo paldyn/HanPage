@@ -142,3 +142,60 @@ fn cell_protect_and_form_editable_survive_hwpx_roundtrip() {
     let pos2 = find_first_table(&reparsed);
     assert_cell_attrs(&reparsed, pos2);
 }
+
+#[test]
+fn set_cell_border_properties_do_not_overwrite_cell_size() {
+    let bytes = sample_bytes("samples/셀보호.hwp");
+    let parsed = parse_document(&bytes).expect("parse 셀보호.hwp");
+    let pos = find_first_table(&parsed);
+    let mut doc = HwpDocument::from_bytes(&bytes).expect("load HwpDocument");
+
+    let before_json = doc
+        .get_cell_properties(pos.section as u32, pos.para as u32, pos.control as u32, 0)
+        .expect("get before cell properties");
+    let before: Value = serde_json::from_str(&before_json).expect("parse before properties");
+    let before_width = before["width"].as_u64().expect("before width");
+    let before_height = before["height"].as_u64().expect("before height");
+
+    doc.set_cell_properties(
+        pos.section as u32,
+        pos.para as u32,
+        pos.control as u32,
+        0,
+        r##"{
+          "borderLeft":{"type":1,"width":3,"color":"#ff0000"},
+          "borderRight":{"type":2,"width":4,"color":"#00ff00"},
+          "borderTop":{"type":3,"width":5,"color":"#0000ff"},
+          "borderBottom":{"type":4,"width":6,"color":"#112233"},
+          "fillType":"solid",
+          "fillColor":"#ddeeff",
+          "patternColor":"#445566",
+          "patternType":1
+        }"##,
+    )
+    .expect("set cell border/fill properties");
+
+    let after_json = doc
+        .get_cell_properties(pos.section as u32, pos.para as u32, pos.control as u32, 0)
+        .expect("get after cell properties");
+    let after: Value = serde_json::from_str(&after_json).expect("parse after properties");
+
+    assert_eq!(after["width"].as_u64(), Some(before_width), "{after_json}");
+    assert_eq!(
+        after["height"].as_u64(),
+        Some(before_height),
+        "{after_json}"
+    );
+    assert_eq!(
+        after["borderLeft"]["width"].as_u64(),
+        Some(3),
+        "{after_json}"
+    );
+    assert_eq!(
+        after["borderRight"]["width"].as_u64(),
+        Some(4),
+        "{after_json}"
+    );
+    assert_eq!(after["fillType"].as_str(), Some("solid"), "{after_json}");
+    assert_eq!(after["fillColor"].as_str(), Some("#ddeeff"), "{after_json}");
+}

@@ -939,6 +939,14 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
       this.dispatcher?.dispatch('table:cell-split');
       return;
     }
+    if (e.altKey && !e.ctrlKey && !e.metaKey) {
+      const cmdId = matchShortcut(e, defaultShortcuts);
+      if (cmdId === 'edit:format-copy') {
+        e.preventDefault();
+        this.dispatcher?.dispatch(cmdId);
+        return;
+      }
+    }
     if (this.cursor.isProtectedCellSelectionMode()) {
       e.preventDefault();
       this.textarea.focus();
