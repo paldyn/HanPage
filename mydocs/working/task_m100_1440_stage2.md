@@ -21,10 +21,11 @@
 ## 분석 결과
 
 - 6쪽 지문은 별도 표/도형이 아니라 문단 테두리 문단이다.
-- HWP/HWPX 모두 문단 1.32의 ParaShape가 `margin_left=4000`, `indent=2000`, `border_spacing=[850,850,850,850]`이고, LineSeg는 `cs=2000`, `sw=35468`이다.
+- HWP/HWPX 모두 문단 1.32의 ParaShape가 `margin_left=4000`, `indent=2000`, `border_fill_id=25`, `border_spacing=[850,850,850,850]`이고, LineSeg는 `cs=2000`, `sw=35468`이다.
 - Stage 1에서 추가한 `precomputed_body_wrap_line`이 이 문단에도 적용되어 `effective_col_x += LineSeg.cs`가 한 번 더 들어갔다.
 - 그 결과 첫 줄 x가 약 `255.6px`, 둘째 줄 x가 약 `242.3px`로 밀렸고, PDF bbox 기준 기대 위치인 약 `229px`/`216px`보다 오른쪽에 그려졌다.
-- 35쪽 대상 문단 3.8은 `border_spacing=[0,0,0,0]`, `cs=850`, `sw=20999`로 실제 그림 어울림 wrap zone을 저장하고 있어 계속 Stage 1 보정 대상이어야 한다.
+- 35쪽 대상 문단 3.8은 앞 7줄이 `cs=850`, `sw=20999`, 뒤쪽 줄이 `cs=850`, `sw=36568`로 실제 그림 어울림 wrap zone과 일반 흐름 폭이 섞여 있어 계속 Stage 1 보정 대상이어야 한다.
+- #604 문서의 기존 분석처럼 LineSeg `cs/sw` 단독 판정은 #547 passage box도 wrap zone으로 오인할 수 있으므로, anchor 메타데이터가 없는 fallback 보정은 같은 문단 안에서 좁은 줄과 넓은 줄이 섞인 precomputed picture-wrap 흐름으로 제한해야 한다.
 - 한컴 설명서 기준 `문단 테두리 연결`은 두 개 이상의 문단에 대해 현재 문단과 이어지는 다음 문단들을 하나의 문단 테두리로 연결하는 설정이다.
 - 파일 형식 표 44의 `ParaShape.attr1 bit 28`은 `문단 테두리 연결`, `bit 29`는 `문단 여백 무시`로 확인된다.
 - HWPX 원본의 6쪽 지문 박스 ParaShape는 `<hh:border connect="1" ignoreMargin="1">`를 가진다. 기존 rhwp는 내부 attr1 값은 보존했지만 Studio 문단 모양 JSON/다이얼로그/수정 명령에서 이 값을 노출하지 않았고, HWPX 저장 시 `connect="0" ignoreMargin="0"`으로 고정 출력했다.
@@ -33,8 +34,9 @@
 ## 수정
 
 - `src/renderer/layout/paragraph_layout.rs`
-  - `precomputed_body_wrap_line` 적용 조건에 `para_style.border_spacing` 검사를 추가했다.
-  - 문단 테두리 안쪽 간격이 있는 박스 문단은 LineSeg `column_start`가 문단 내부 위치 계산에 이미 포함된 것으로 보고, body wrap 보정에서 제외했다.
+  - `precomputed_body_wrap_line` 적용 조건에 문단 내부 LineSeg 폭 혼합 검사를 추가했다.
+  - 모든 줄이 동일한 `column_start/segment_width` 패턴인 문단 테두리 박스는 anchor 없는 body wrap fallback 보정에서 제외했다.
+  - 기존 #547 passage 박스 역시 LineSeg `cs/sw`만 보면 wrap zone으로 보이는 false-positive 케이스라 함께 회귀 차단 대상에 포함했다.
 - `src/renderer/layout.rs`
   - 문단 테두리가 모두 실선일 때만 `Rectangle` stroke 최적화를 사용하도록 제한했다.
   - 점선/파선 문단 테두리는 면별 `LineNode`로 렌더해 `stroke-dasharray`가 SVG에 남도록 했다.
