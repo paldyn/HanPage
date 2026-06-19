@@ -1212,9 +1212,33 @@ export class CursorState {
 
   /** Shift+클릭: anchor 고정, focus를 클릭 셀로 이동 (범위 선택). */
   shiftSelectCell(row: number, col: number): void {
-    if (!this._cellSelectionMode) return;
-    this.cellFocus = { row, col };
+    this.setCellSelectionFocus(row, col);
+  }
+
+  /** 마우스 드래그 시작 셀을 anchor/focus로 지정한다. */
+  setCellSelectionAnchor(row: number, col: number): void {
+    if (!this._cellSelectionMode || !this.cellTableCtx) return;
+    const clamped = this.clampCellSelectionPoint(row, col);
+    this.cellAnchor = clamped;
+    this.cellFocus = clamped;
     this.excludedCells.clear();
+    this._cellSelectionPhase = 1;
+  }
+
+  /** 셀 선택 anchor를 유지하고 focus만 갱신한다. */
+  setCellSelectionFocus(row: number, col: number): void {
+    if (!this._cellSelectionMode || !this.cellTableCtx) return;
+    this.cellFocus = this.clampCellSelectionPoint(row, col);
+    this.excludedCells.clear();
+  }
+
+  private clampCellSelectionPoint(row: number, col: number): { row: number; col: number } {
+    if (!this.cellTableCtx) return { row, col };
+    const { rowCount, colCount } = this.cellTableCtx;
+    return {
+      row: Math.max(0, Math.min(rowCount - 1, row)),
+      col: Math.max(0, Math.min(colCount - 1, col)),
+    };
   }
 
   /** Ctrl+클릭: 해당 셀을 선택에서 제외/복원 토글. */

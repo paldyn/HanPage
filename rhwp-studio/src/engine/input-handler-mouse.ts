@@ -110,6 +110,56 @@ function selectProtectedCell(this: any, hit: any): void {
   this.textarea.focus();
 }
 
+function startCellSelectionDrag(this: any, e: MouseEvent, cellRC: { row: number; col: number }): void {
+  hideProtectedCellHover(this);
+  this.active = true;
+  this.cursor.setCellSelectionAnchor?.(cellRC.row, cellRC.col);
+  this.updateCellSelection();
+  this.cellSelectionDragState = {
+    startClientX: e.clientX,
+    startClientY: e.clientY,
+    lastClientX: e.clientX,
+    lastClientY: e.clientY,
+    startRow: cellRC.row,
+    startCol: cellRC.col,
+    lastRow: cellRC.row,
+    lastCol: cellRC.col,
+    isDragging: false,
+  };
+  document.addEventListener('mousemove', this.onMouseMoveBound);
+  document.addEventListener('mouseup', this.onMouseUpBound, { once: true });
+  this.textarea.focus();
+}
+
+function updateCellSelectionDrag(this: any, e: MouseEvent): void {
+  const state = this.cellSelectionDragState;
+  if (!state) return;
+  state.lastClientX = e.clientX;
+  state.lastClientY = e.clientY;
+
+  const dx = e.clientX - state.startClientX;
+  const dy = e.clientY - state.startClientY;
+  if (!state.isDragging && Math.hypot(dx, dy) < 3) return;
+  state.isDragging = true;
+
+  const cellRC = this.hitTestCellRowCol(e);
+  if (!cellRC) return;
+  if (cellRC.row === state.lastRow && cellRC.col === state.lastCol) return;
+
+  state.lastRow = cellRC.row;
+  state.lastCol = cellRC.col;
+  this.cursor.setCellSelectionFocus?.(cellRC.row, cellRC.col);
+  this.updateCellSelection();
+}
+
+function finishCellSelectionDrag(this: any): void {
+  if (!this.cellSelectionDragState) return;
+  this.cellSelectionDragState = null;
+  document.removeEventListener('mousemove', this.onMouseMoveBound);
+  this.updateCellSelection();
+  this.textarea.focus();
+}
+
 export function onClick(this: any, e: MouseEvent): void {
   // 연결선 드로잉 모드: 연결점 클릭으로 시작/끝
   if (this.connectorDrawingMode && e.button === 0) {
@@ -559,7 +609,15 @@ export function onClick(this: any, e: MouseEvent): void {
         } catch { /* bboxes 조회 실패 시 무시 */ }
       }
     }
-    // 일반 좌클릭 → 셀 선택 모드 종료
+    if (e.button === 0) {
+      const cellRC = this.hitTestCellRowCol(e);
+      if (cellRC) {
+        e.preventDefault();
+        startCellSelectionDrag.call(this, e, cellRC);
+        return;
+      }
+    }
+    // 셀 밖 일반 좌클릭 → 셀 선택 모드 종료
     this.cursor.exitCellSelectionMode();
     this.cellSelectionRenderer?.clear();
   }
@@ -794,6 +852,10 @@ export function onClick(this: any, e: MouseEvent): void {
     // 보호 셀은 텍스트 커서를 넣지 않고 셀 선택 상태로 전환한다.
     if (isProtectedCellHit(this, hit)) {
       selectProtectedCell.call(this, hit);
+      if (e.button === 0) {
+        const cellRC = this.hitTestCellRowCol(e);
+        if (cellRC) startCellSelectionDrag.call(this, e, cellRC);
+      }
       return;
     }
 
@@ -1386,6 +1448,12 @@ export function onMouseMove(this: any, e: MouseEvent): void {
     return;
   }
 
+  // 셀 블록 선택 드래그 중
+  if (this.cellSelectionDragState) {
+    updateCellSelectionDrag.call(this, e);
+    return;
+  }
+
   // 드래그 중: requestAnimationFrame으로 throttle하여 성능 확보
   if (this.isDragging) {
     this.updateTextSelectionDragPointer(e);
@@ -1669,6 +1737,12 @@ export function onMouseUp(this: any, _e: MouseEvent): void {
   // 리사이즈 드래그 종료
   if (this.isResizeDragging) {
     this.finishResizeDrag(_e);
+    return;
+  }
+
+  // 셀 블록 선택 드래그 종료
+  if (this.cellSelectionDragState) {
+    finishCellSelectionDrag.call(this);
     return;
   }
 

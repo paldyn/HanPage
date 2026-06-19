@@ -125,6 +125,17 @@ export class InputHandler {
   private dragAutoScrollRafId = 0;
   private dragLastClientX = 0;
   private dragLastClientY = 0;
+  private cellSelectionDragState: {
+    startClientX: number;
+    startClientY: number;
+    lastClientX: number;
+    lastClientY: number;
+    startRow: number;
+    startCol: number;
+    lastRow: number;
+    lastCol: number;
+    isDragging: boolean;
+  } | null = null;
 
   // 표 경계선 hover 상태
   private resizeHoverRafId = 0;
@@ -2523,6 +2534,7 @@ export class InputHandler {
       cancelAnimationFrame(this.dragRafId);
       this.dragRafId = 0;
     }
+    this.cellSelectionDragState = null;
     this.stopTextSelectionDragAutoScroll();
     if (this.resizeHoverRafId) {
       cancelAnimationFrame(this.resizeHoverRafId);
