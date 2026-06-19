@@ -533,30 +533,19 @@ export function resizeCellByKeyboard(this: any, key: 'ArrowUp' | 'ArrowDown' | '
   if (selectedBboxes.length === 0) return;
 
   const updates: Array<{ cellIdx: number; widthDelta?: number; heightDelta?: number }> = [];
-  const addedNeighbors = new Set<number>(); // 이웃 셀 중복 방지
+  const updatedCells = new Set<number>();
+  const isHoriz = (key === 'ArrowLeft' || key === 'ArrowRight');
+  const delta = (key === 'ArrowRight' || key === 'ArrowDown') ? DELTA : -DELTA;
 
+  // 선택 블록 내부 이웃에 반대 delta를 넣으면 전체 선택에서 첫 행/열만 변한다.
+  // 한컴처럼 선택된 셀들은 모두 같은 방향으로 크기를 조정한다.
   for (const bbox of selectedBboxes) {
-    const isHoriz = (key === 'ArrowLeft' || key === 'ArrowRight');
-    const delta = (key === 'ArrowRight' || key === 'ArrowDown') ? DELTA : -DELTA;
-
+    if (updatedCells.has(bbox.cellIdx)) continue;
+    updatedCells.add(bbox.cellIdx);
     if (isHoriz) {
       updates.push({ cellIdx: bbox.cellIdx, widthDelta: delta });
-      // 같은 행의 오른쪽 이웃 셀에 반대 delta (행 전체 너비 유지)
-      const neighbor = bboxes.find(b =>
-        b.row === bbox.row && b.col === bbox.col + bbox.colSpan);
-      if (neighbor && !addedNeighbors.has(neighbor.cellIdx)) {
-        updates.push({ cellIdx: neighbor.cellIdx, widthDelta: -delta });
-        addedNeighbors.add(neighbor.cellIdx);
-      }
     } else {
       updates.push({ cellIdx: bbox.cellIdx, heightDelta: delta });
-      // 같은 열의 아래쪽 이웃 셀에 반대 delta (열 전체 높이 유지)
-      const neighbor = bboxes.find(b =>
-        b.col === bbox.col && b.row === bbox.row + bbox.rowSpan);
-      if (neighbor && !addedNeighbors.has(neighbor.cellIdx)) {
-        updates.push({ cellIdx: neighbor.cellIdx, heightDelta: -delta });
-        addedNeighbors.add(neighbor.cellIdx);
-      }
     }
   }
 
