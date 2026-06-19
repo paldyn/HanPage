@@ -7,6 +7,9 @@
 //! - `samples/3-09월_교육_통합_2022.hwp` (277 → 26)
 //! - `samples/3-10월_교육_통합_2022.hwp` (159 → 17)
 //! - `samples/3-11월_실전_통합_2022.hwp` (561 → 9)
+//! - `samples/3-09월_교육_통합_2024-구분선아래20구분선위20.hwp` (#1336/#1293:
+//!   구분선 상/하 20mm 변형. Task #1293 Stage 113/122에서 p19/p20/p22 잔여를
+//!   공식 미주 간격식 불일치가 아닌 문28 continuation tail/cascade로 분류했다.
 //!
 //! 정정 (typeset.rs): 다단 미주 누적을 렌더 vpos 정규화와 정합 — 직전 배치 아이템 bottom 기준
 //! vpos delta(px) 로 누적. 시드 = 본문 last bottom(body→endnote 전환 정합); 단 advance 시 None.
@@ -99,5 +102,20 @@ fn exam_3_11_2022_hwp_endnote_drift_capped() {
     assert!(
         t <= REG_LIMIT_PX,
         "3-11'22 hwp endnote drift {t:.1}px > {REG_LIMIT_PX}"
+    );
+}
+
+/// #1336/#1363/#1293: 2024 구분선 상/하 20mm 변형.
+/// Task #1363에서는 TAC 그림 미주 누적 보정 뒤 0px급 타이트 가드로 전환했지만,
+/// Task #1293 공식 미주 모양 정규화 뒤 남은 p19/p20/p22 후보는 separator 계산식이
+/// 아니라 문28 본문/그림/수식 continuation 높이 차이의 tail/cascade로 재분류했다.
+/// 옛 수백 px 회귀와 종전 ~50px 과충전은 막되 현재 잔여 29.3px에는 여유를 둔다.
+const SEP2020_RESIDUAL_LIMIT_PX: f64 = 40.0;
+#[test]
+fn exam_3_09_2024_sep2020_hwp_endnote_drift_capped() {
+    let t = doc_total_overflow_px("samples/3-09월_교육_통합_2024-구분선아래20구분선위20.hwp");
+    assert!(
+        t <= SEP2020_RESIDUAL_LIMIT_PX,
+        "3-09'24 sep20/20 hwp endnote drift {t:.1}px > {SEP2020_RESIDUAL_LIMIT_PX} (Task #1293 잔여 상한)"
     );
 }

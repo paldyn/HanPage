@@ -108,9 +108,11 @@ function executeNavigationAction(this: any, action: NavigationAction, shiftKey: 
       break;
     case 'lineStart':
       this.cursor.moveToLineStart();
+      this.markCurrentFieldStartOutside?.();
       break;
     case 'lineEnd':
       this.cursor.moveToLineEnd();
+      this.markCurrentFieldEndOutside?.();
       break;
     case 'paragraphBackward':
       this.cursor.moveToParagraphBoundary(-1);
@@ -733,11 +735,16 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
       // paste 이벤트에서 처리되도록 폴스루 (preventDefault 하지 않음)
       return;
     }
-    // 방향키 → 개체 위치 이동
+    // 방향키 → 개체 위치 이동, Shift+방향키 → 개체 크기 조절 (#1231 한컴 정합)
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
         e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
-      this.moveSelectedPicture(e.key as 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight');
+      const arrow = e.key as 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight';
+      if (e.shiftKey) {
+        this.resizeSelectedPicture(arrow);
+      } else {
+        this.moveSelectedPicture(arrow);
+      }
       return;
     }
     // Shift/Ctrl/Alt/Meta 키만 누름 → 무시
@@ -1033,6 +1040,7 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
     case 'Backspace':
     case 'Delete': {
       e.preventDefault();
+      if (this.isFormMode?.() && e.altKey) return;
       if (this.cursor.hasSelection()) {
         this.deleteSelection();
       } else if (e.altKey) {
@@ -1049,6 +1057,7 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
     }
     case 'Enter': {
       e.preventDefault();
+      if (this.isFormMode?.()) return;
       if (this.cursor.hasSelection()) this.deleteSelection();
       if (e.shiftKey) {
         // Shift+Enter: 강제 줄바꿈 (문단 유지, 줄만 바꿈)
@@ -1084,6 +1093,22 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
       } else {
         this.cursor.clearSelection();
       }
+      if (!e.shiftKey && moveH === 1 && this.tryEnterExitedFieldStart?.()) {
+        this.updateCaret();
+        break;
+      }
+      if (!e.shiftKey && moveH === -1 && this.tryEnterExitedFieldEnd?.()) {
+        this.updateCaret();
+        break;
+      }
+      if (!e.shiftKey && moveH === -1 && this.tryExitCurrentFieldStart?.()) {
+        this.updateCaret();
+        break;
+      }
+      if (!e.shiftKey && moveH === 1 && this.tryExitCurrentFieldEnd?.()) {
+        this.updateCaret();
+        break;
+      }
       if (moveH !== null) this.cursor.moveHorizontal(moveH);
       if (moveV !== null) this.cursor.moveVertical(moveV);
       this.updateCaret();
@@ -1115,6 +1140,7 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
         this.cursor.clearSelection();
         this.cursor.moveToLineStart();
       }
+      this.markCurrentFieldStartOutside?.();
       this.updateCaret();
       if (e.shiftKey) this.updateSelection();
       break;
@@ -1128,12 +1154,21 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
         this.cursor.clearSelection();
         this.cursor.moveToLineEnd();
       }
+      this.markCurrentFieldEndOutside?.();
       this.updateCaret();
       if (e.shiftKey) this.updateSelection();
       break;
     }
     case 'Tab': {
       e.preventDefault();
+      if (this.isFormMode?.()) {
+        this.moveToAdjacentFormField?.(e.shiftKey ? -1 : 1);
+        return;
+      }
+      if (e.shiftKey) {
+        this.applyHangingIndentAtCursor();
+        break;
+      }
       // 탭 문자 삽입 (본문·표 셀·글상자 공통)
       this.executeOperation({ kind: 'command', command: new InsertTabCommand(this.cursor.getPosition()) });
       break;
@@ -1199,6 +1234,7 @@ export function handleCtrlKey(this: any, e: KeyboardEvent): void {
   switch (e.key.toLowerCase()) {
     case 'backspace': {
       e.preventDefault();
+      if (this.isFormMode?.()) return;
       if (this.cursor.hasSelection()) {
         this.deleteSelection();
       } else if (e.metaKey && !e.ctrlKey) {
@@ -1217,6 +1253,7 @@ export function handleCtrlKey(this: any, e: KeyboardEvent): void {
     case 'delete': {
       if (!e.ctrlKey) break;
       e.preventDefault();
+      if (this.isFormMode?.()) return;
       if (this.cursor.hasSelection()) {
         this.deleteSelection();
       } else {
@@ -1392,6 +1429,10 @@ export function onCopy(this: any, e: ClipboardEvent): void {
 
 export function onCut(this: any, e: ClipboardEvent): void {
   if (!this.active) return;
+  if (this.isFormMode?.()) {
+    e.preventDefault();
+    return;
+  }
 
   // 개체 선택 모드 → 개체 잘라내기 (복사 후 삭제)
   if (this.cursor.isInPictureObjectSelection()) {
@@ -1419,6 +1460,7 @@ export function onCut(this: any, e: ClipboardEvent): void {
 export function onPaste(this: any, e: ClipboardEvent): void {
   if (!this.active) return;
   e.preventDefault();
+  if (this.isFormMode?.()) return;
 
   // 개체/표 선택 모드 해제 후 붙여넣기 진행
   if (this.cursor.isInPictureObjectSelection()) {
@@ -1464,6 +1506,7 @@ export function onPaste(this: any, e: ClipboardEvent): void {
 
     // 내부 클립보드 텍스트 붙여넣기 (서식 보존)
     this.executeOperation({ kind: 'snapshot', operationType: 'pasteInternal', operation: (wasm: WasmBridge) => {
+      this.pastedFieldEndOutsidePending = false;
       if (hasSelection) this.deleteSelection();
       const p = this.cursor.getPosition();
       let result: string;
@@ -1481,6 +1524,9 @@ export function onPaste(this: any, e: ClipboardEvent): void {
       }
       const parsed = JSON.parse(result);
       if (parsed.ok) {
+        if (parsed.containsField === true) {
+          this.pastedFieldEndOutsidePending = true;
+        }
         return positionAfterPasteResult(p, parsed);
       }
       return p;

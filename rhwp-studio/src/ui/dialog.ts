@@ -10,12 +10,14 @@ export abstract class ModalDialog {
   protected dialog!: HTMLDivElement;
   private title: string;
   private width: number;
+  private closeOnOverlayClick: boolean;
   private built = false;
   private captureHandler: ((e: KeyboardEvent) => void) | null = null;
 
-  constructor(title: string, width: number) {
+  constructor(title: string, width: number, closeOnOverlayClick = false) {
     this.title = title;
     this.width = width;
+    this.closeOnOverlayClick = closeOnOverlayClick;
   }
 
   private build(): void {
@@ -70,9 +72,9 @@ export abstract class ModalDialog {
 
     this.overlay.appendChild(this.dialog);
 
-    // 오버레이 클릭 시 닫기 (다이얼로그 외부)
+    // 모달은 기본적으로 명시적 버튼/Escape로만 닫는다.
     this.overlay.addEventListener('click', (e) => {
-      if (e.target === this.overlay) this.hide();
+      if (e.target === this.overlay && this.closeOnOverlayClick) this.hide();
     });
 
     enableDialogDrag(this.dialog, titleBar);

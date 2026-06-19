@@ -46,7 +46,7 @@ use super::utils::find_bin_data;
 use super::{CellContext, CellPathEntry, LayoutEngine};
 
 // 표 수평 정렬: model::shape 타입 사용
-use crate::model::shape::{HorzAlign, HorzRelTo};
+use crate::model::shape::{CommonObjAttr, HorzAlign, HorzRelTo, TextWrap, VertRelTo};
 
 /// [Task #993] 분할 표 행 컷 — 행에 속한 셀(col 오름차순)별 "소비한 콘텐츠 유닛 수".
 /// 빈 Vec = 처음부터(아무것도 소비 안 함).
@@ -177,6 +177,39 @@ pub(crate) fn calc_nested_split_rows(
 }
 
 impl LayoutEngine {
+    /// 셀 안 비-TAC 자리차지 개체가 표 흐름에 요구하는 세로 범위.
+    ///
+    /// 한컴의 `쪽 영역 안으로 제한`은 세로 기준이 문단일 때 개체를 쪽 영역 안에
+    /// 남기도록 흐름 높이에 반영된다. 반대로 제한이 꺼진 문단 기준 floating
+    /// 개체는 표 행 높이를 밀지 않는다.
+    pub(crate) fn non_inline_control_flow_height(&self, common: &CommonObjAttr) -> f64 {
+        if common.treat_as_char || !matches!(common.text_wrap, TextWrap::TopAndBottom) {
+            return 0.0;
+        }
+        let object_height = hwpunit_to_px(common.height as i32, self.dpi);
+        if matches!(common.vert_rel_to, VertRelTo::Para) {
+            if common.flow_with_text {
+                hwpunit_to_px((common.vertical_offset as i32).max(0), self.dpi) + object_height
+            } else {
+                0.0
+            }
+        } else {
+            object_height
+        }
+    }
+
+    pub(crate) fn calc_non_inline_controls_flow_height(&self, paragraphs: &[Paragraph]) -> f64 {
+        paragraphs
+            .iter()
+            .flat_map(|p| p.controls.iter())
+            .map(|ctrl| match ctrl {
+                Control::Picture(pic) => self.non_inline_control_flow_height(&pic.common),
+                Control::Shape(shape) => self.non_inline_control_flow_height(shape.common()),
+                _ => 0.0,
+            })
+            .sum()
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn layout_table(
         &self,
@@ -493,6 +526,13 @@ impl LayoutEngine {
                 para_y,
             ) - split_y_offset
         };
+        let inline_table_flow_y_shift = if inline_x_override.is_some() {
+            para_y
+                .map(|anchor_y| (table_y - anchor_y).max(0.0))
+                .unwrap_or(0.0)
+        } else {
+            0.0
+        };
 
         // ── 4. 표 노드 생성 ──
         let table_id = tree.next_id();
@@ -625,6 +665,7 @@ impl LayoutEngine {
             split_row_range,
             row_y_shift,
             clamp_header_negative_para_offset,
+            inline_table_flow_y_shift,
         );
 
         // ── 5-1. 표 전체 외곽 테두리 보충 ──
@@ -1036,7 +1077,7 @@ impl LayoutEngine {
         cell_inner_width_px: f64,
     ) -> f64 {
         let cell_para_count = paragraphs.len();
-        paragraphs
+        let line_based_height: f64 = paragraphs
             .iter()
             .enumerate()
             .map(|(pidx, p)| {
@@ -1059,7 +1100,10 @@ impl LayoutEngine {
                     styles,
                 )
             })
-            .sum()
+            .sum();
+        line_based_height
+            .max(self.calc_nested_controls_bottom_height(paragraphs, styles))
+            .max(self.calc_non_inline_controls_flow_height(paragraphs))
     }
 
     /// pre-composed 문단들의 콘텐츠 높이 합산 (compose 생략)
@@ -1629,6 +1673,7 @@ impl LayoutEngine {
         row_filter: Option<(usize, usize)>,
         row_y_shift: f64,
         clamp_header_negative_para_offset: bool,
+        inline_table_flow_y_shift: f64,
     ) {
         for (cell_idx, cell) in table.cells.iter().enumerate() {
             let c = cell.col as usize;
@@ -1788,7 +1833,7 @@ impl LayoutEngine {
                                         max_inline_height = pic_h;
                                     }
                                 } else {
-                                    text_height += pic_h;
+                                    text_height += self.non_inline_control_flow_height(&pic.common);
                                 }
                             }
                             Control::Shape(shape) => {
@@ -1798,7 +1843,8 @@ impl LayoutEngine {
                                         max_inline_height = shape_h;
                                     }
                                 } else {
-                                    text_height += shape_h;
+                                    text_height +=
+                                        self.non_inline_control_flow_height(shape.common());
                                 }
                             }
                             Control::Equation(eq) => {
@@ -1845,7 +1891,9 @@ impl LayoutEngine {
                     0.0
                 };
 
-                composed_height.max(vpos_height)
+                let nested_bottom =
+                    self.calc_nested_controls_bottom_height(&cell.paragraphs, styles);
+                composed_height.max(vpos_height).max(nested_bottom)
             };
 
             // 수직 정렬 (분할 표에서는 Top 강제 — 보이는 영역이 전체 셀보다 작음)
@@ -2081,7 +2129,7 @@ impl LayoutEngine {
                             section_index,
                             cp_idx,
                             cell_context.clone(),
-                            false,
+                            !use_top_vpos_anchor,
                             is_last_para,
                             0.0,
                             None,
@@ -2288,13 +2336,46 @@ impl LayoutEngine {
                                         pic.common.vert_rel_to,
                                         crate::model::shape::VertRelTo::Para
                                     ) {
-                                        para_y_before_compose
+                                        para.line_segs
+                                            .first()
+                                            .filter(|seg| seg.vertical_pos >= 0)
+                                            .map(|seg| {
+                                                cell_y
+                                                    + pad_top
+                                                    + hwpunit_to_px(seg.vertical_pos, self.dpi)
+                                            })
+                                            .unwrap_or(para_y_before_compose)
                                     } else {
                                         para_y
                                     };
+                                    let unrestricted_take_place_cell_float = !pic
+                                        .common
+                                        .flow_with_text
+                                        && matches!(pic.common.text_wrap, TextWrap::TopAndBottom)
+                                        && matches!(pic.common.vert_rel_to, VertRelTo::Para);
+                                    let detached_from_inline_table_flow = inline_table_flow_y_shift
+                                        > 0.0
+                                        && unrestricted_take_place_cell_float;
+                                    let picture_anchor_y = if detached_from_inline_table_flow {
+                                        anchor_y - inline_table_flow_y_shift - row_y[r].max(0.0)
+                                    } else if unrestricted_take_place_cell_float {
+                                        // 한컴의 셀 내부 자리차지 그림은 제한이 꺼지면
+                                        // offset 지점에 그림 하단이 걸리도록 위로 빠진다.
+                                        // compute_object_position 이 아래에서 vOffset 을
+                                        // 다시 더하므로 여기서는 미리 vOffset+높이를 뺀다.
+                                        anchor_y
+                                            - pic_h
+                                            - hwpunit_to_px(
+                                                pic.common.vertical_offset as i32,
+                                                self.dpi,
+                                            )
+                                    } else {
+                                        anchor_y
+                                    };
                                     let cell_area = LayoutRect {
-                                        y: anchor_y,
-                                        height: (inner_area.height - (anchor_y - inner_area.y))
+                                        y: picture_anchor_y,
+                                        height: (inner_area.height
+                                            - (picture_anchor_y - inner_area.y))
                                             .max(0.0),
                                         ..inner_area
                                     };
@@ -2306,7 +2387,7 @@ impl LayoutEngine {
                                         &inner_area,
                                         &inner_area,
                                         &inner_area,
-                                        anchor_y,
+                                        picture_anchor_y,
                                         para_alignment,
                                     );
                                     let pic_area = LayoutRect {
@@ -2315,22 +2396,46 @@ impl LayoutEngine {
                                         width: pic_w,
                                         height: pic_h,
                                     };
+                                    let mut pic_for_layout = pic.clone();
+                                    pic_for_layout.common.horizontal_offset = 0;
+                                    pic_for_layout.common.vertical_offset = 0;
+                                    pic_for_layout.common.horz_align =
+                                        crate::model::shape::HorzAlign::Left;
+                                    pic_for_layout.common.vert_align =
+                                        crate::model::shape::VertAlign::Top;
                                     // [Task #1151 v4] 셀 안 non-inline picture (tac=false 자리차지 등):
                                     // outer paragraph idx + inner picture ctrl idx +
                                     // cell_ctx 전달.
-                                    self.layout_picture(
-                                        tree,
-                                        &mut cell_node,
-                                        pic,
-                                        &pic_area,
-                                        bin_data_content,
-                                        Alignment::Left,
-                                        Some(section_index),
-                                        cell_context.as_ref().map(|c| c.parent_para_index),
-                                        Some(ctrl_idx),
-                                        cell_context.as_ref(),
-                                    );
-                                    para_y += pic_h;
+                                    if detached_from_inline_table_flow
+                                        || unrestricted_take_place_cell_float
+                                    {
+                                        self.layout_picture(
+                                            tree,
+                                            table_node,
+                                            &pic_for_layout,
+                                            &pic_area,
+                                            bin_data_content,
+                                            Alignment::Left,
+                                            Some(section_index),
+                                            cell_context.as_ref().map(|c| c.parent_para_index),
+                                            Some(ctrl_idx),
+                                            cell_context.as_ref(),
+                                        );
+                                    } else {
+                                        self.layout_picture(
+                                            tree,
+                                            &mut cell_node,
+                                            &pic_for_layout,
+                                            &pic_area,
+                                            bin_data_content,
+                                            Alignment::Left,
+                                            Some(section_index),
+                                            cell_context.as_ref().map(|c| c.parent_para_index),
+                                            Some(ctrl_idx),
+                                            cell_context.as_ref(),
+                                        );
+                                    }
+                                    para_y += self.non_inline_control_flow_height(&pic.common);
                                 }
                                 has_preceding_text = true;
                             }
@@ -3125,6 +3230,44 @@ impl LayoutEngine {
             + om_bottom
     }
 
+    /// 셀 내 중첩 표가 실제로 차지하는 하단 위치를 계산한다.
+    ///
+    /// 일부 HWP/HWPX는 중첩 표 문단의 LINE_SEG.line_height에 내부 표의 실제
+    /// 높이를 반영하지 않는다. 렌더링/측정은 해당 문단의 vertical_pos에 중첩 표
+    /// 측정 높이를 더한 값을 셀 콘텐츠 끝점 후보로 사용한다.
+    pub(crate) fn calc_nested_controls_bottom_height(
+        &self,
+        paragraphs: &[Paragraph],
+        styles: &ResolvedStyleSet,
+    ) -> f64 {
+        paragraphs
+            .iter()
+            .map(|p| {
+                let nested_h: f64 = p
+                    .controls
+                    .iter()
+                    .map(|ctrl| {
+                        if let Control::Table(t) = ctrl {
+                            self.calc_nested_table_height(t, styles)
+                        } else {
+                            0.0
+                        }
+                    })
+                    .sum();
+                if nested_h <= 0.0 {
+                    0.0
+                } else {
+                    let para_top = p
+                        .line_segs
+                        .first()
+                        .map(|s| hwpunit_to_px(s.vertical_pos, self.dpi))
+                        .unwrap_or(0.0);
+                    para_top + nested_h
+                }
+            })
+            .fold(0.0f64, f64::max)
+    }
+
     /// 셀의 content_offset 이후 실제 남은 콘텐츠 높이를 계산한다.
     /// MeasuredCell과 동일한 높이 로직을 사용한다 (pagination 엔진이 MeasuredCell 기준으로
     /// content_offset을 산출하므로 동일 기준이어야 함).
@@ -3773,22 +3916,15 @@ impl LayoutEngine {
         // 미포함이므로 HeightMeasurer 와 동일하게 cell_units 끝에 별도 가산.
         // 분할 가능하도록 ~16px 단위로 쪼개되, 가시 줄은 없다(filler).
         {
-            use crate::model::shape::TextWrap;
             let mut non_inline_h = 0.0f64;
             for para in &cell.paragraphs {
                 for ctrl in &para.controls {
                     match ctrl {
-                        Control::Picture(pic)
-                            if !pic.common.treat_as_char
-                                && matches!(pic.common.text_wrap, TextWrap::TopAndBottom) =>
-                        {
-                            non_inline_h += hwpunit_to_px(pic.common.height as i32, self.dpi);
+                        Control::Picture(pic) => {
+                            non_inline_h += self.non_inline_control_flow_height(&pic.common);
                         }
-                        crate::model::control::Control::Shape(shape)
-                            if !shape.common().treat_as_char
-                                && matches!(shape.common().text_wrap, TextWrap::TopAndBottom) =>
-                        {
-                            non_inline_h += hwpunit_to_px(shape.common().height as i32, self.dpi);
+                        crate::model::control::Control::Shape(shape) => {
+                            non_inline_h += self.non_inline_control_flow_height(shape.common());
                         }
                         _ => {}
                     }

@@ -8,7 +8,7 @@ import { MenuBar } from '@/ui/menu-bar';
 import { loadWebFonts } from '@/core/font-loader';
 import { CommandRegistry } from '@/command/registry';
 import { CommandDispatcher } from '@/command/dispatcher';
-import type { EditorContext, CommandServices } from '@/command/types';
+import type { EditorContext, CommandServices, EditorEditMode } from '@/command/types';
 import { confirmSaveBeforeReplacingDocument, fileCommands } from '@/command/commands/file';
 import { editCommands } from '@/command/commands/edit';
 import { viewCommands } from '@/command/commands/view';
@@ -17,12 +17,15 @@ import { insertCommands } from '@/command/commands/insert';
 import { tableCommands } from '@/command/commands/table';
 import { pageCommands } from '@/command/commands/page';
 import { toolCommands } from '@/command/commands/tool';
+import { installPwaFileHandling, type FileHandlingWindowLike } from '@/command/pwa-file-handling';
 import { ContextMenu } from '@/ui/context-menu';
 import { CommandPalette } from '@/ui/command-palette';
 import { showValidationModalIfNeeded } from '@/ui/validation-modal';
 import { showToast } from '@/ui/toast';
+import { showDropConfirmDialog } from '@/ui/drop-confirm-dialog';
 import { initRhwpDev } from '@/core/rhwp-dev';
 import { DocumentDirtyState } from '@/core/document-dirty-state';
+import { initThemeSync, setThemeMode, getThemeMode, getEffectiveTheme } from '@/core/theme';
 import { CellSelectionRenderer } from '@/engine/cell-selection-renderer';
 import { TableObjectRenderer } from '@/engine/table-object-renderer';
 import { TableResizeRenderer } from '@/engine/table-resize-renderer';
@@ -39,18 +42,24 @@ const wasm = new WasmBridge();
 const eventBus = new EventBus();
 const documentState = new DocumentDirtyState(eventBus);
 documentState.installBeforeUnload(window);
+initThemeSync((effective, mode) => {
+  eventBus.emit('theme-changed', { mode, effective });
+  eventBus.emit('command-state-changed');
+});
 
 // E2E 테스트용 전역 노출 (개발 모드 전용)
 if (import.meta.env.DEV) {
   (window as any).__wasm = wasm;
   (window as any).__eventBus = eventBus;
   (window as any).__documentState = documentState;
+  (window as any).__theme = { getThemeMode, getEffectiveTheme, setThemeMode };
   initRhwpDev(wasm);
 }
 let canvasView: CanvasView | null = null;
 let inputHandler: InputHandler | null = null;
 let toolbar: Toolbar | null = null;
 let ruler: Ruler | null = null;
+let editMode: EditorEditMode = 'normal';
 
 
 // ─── 커맨드 시스템 ─────────────────────────────
@@ -58,6 +67,8 @@ const registry = new CommandRegistry();
 
 function getContext(): EditorContext {
   const hasDoc = wasm.pageCount > 0;
+  const canEditFormField = inputHandler?.canEditCurrentFormField() ?? false;
+  const isFormMode = editMode === 'form';
   return {
     hasDocument: hasDoc,
     hasSelection: inputHandler?.hasSelection() ?? false,
@@ -66,7 +77,10 @@ function getContext(): EditorContext {
     inTableObjectSelection: inputHandler?.isInTableObjectSelection() ?? false,
     inPictureObjectSelection: inputHandler?.isInPictureObjectSelection() ?? false,
     inField: inputHandler?.isInField() ?? false,
-    isEditable: true,
+    isEditable: !isFormMode || canEditFormField,
+    editMode,
+    isFormMode,
+    canEditFormField,
     canUndo: inputHandler?.canUndo() ?? false,
     canRedo: inputHandler?.canRedo() ?? false,
     zoom: canvasView?.getViewportManager().getZoom() ?? 1.0,
@@ -76,6 +90,18 @@ function getContext(): EditorContext {
   };
 }
 
+function setEditMode(mode: EditorEditMode): void {
+  editMode = mode;
+  inputHandler?.setEditMode(mode);
+  document.documentElement.dataset.editMode = mode;
+  document.querySelectorAll('[data-cmd="view:form-mode"]').forEach(el => {
+    el.classList.toggle('active', mode === 'form');
+  });
+  sbMessage().textContent = mode === 'form' ? '양식 모드' : '기본 편집 모드';
+  eventBus.emit('edit-mode-changed', mode);
+  eventBus.emit('command-state-changed');
+}
+
 const commandServices: CommandServices = {
   eventBus,
   wasm,
@@ -83,6 +109,7 @@ const commandServices: CommandServices = {
   getContext,
   getInputHandler: () => inputHandler,
   getViewportManager: () => canvasView?.getViewportManager() ?? null,
+  setEditMode,
 };
 
 const dispatcher = new CommandDispatcher(registry, commandServices, eventBus);
@@ -163,6 +190,7 @@ async function initialize(): Promise<void> {
       canvasView.getVirtualScroll(),
       canvasView.getViewportManager(),
     );
+    inputHandler.setEditMode(editMode);
 
     toolbar = new Toolbar(document.getElementById('style-bar')!, wasm, eventBus, dispatcher);
     toolbar.setEnabled(false);
@@ -239,6 +267,20 @@ async function initialize(): Promise<void> {
     setupEventListeners();
     setupGlobalShortcuts();
     loadFromUrlParam();
+    installPwaFileHandling(window as FileHandlingWindowLike, {
+      openDocumentBytes(payload) {
+        eventBus.emit('open-document-bytes', payload);
+      },
+      notifyUnsupportedFile(fileName) {
+        showLoadError(new Error(`지원하지 않는 파일 형식입니다: ${fileName}. HWP/HWPX 파일만 지원합니다.`));
+      },
+      notifyError(error) {
+        showLoadError(error);
+      },
+      notifyMultipleFiles(count) {
+        console.warn(`[pwa-file-handling] 여러 파일(${count}개)이 전달되어 첫 번째 파일만 엽니다.`);
+      },
+    });
 
     // E2E 테스트용 전역 노출 (개발 모드 전용)
     if (import.meta.env.DEV) {
@@ -327,7 +369,19 @@ function setupFileInput(): void {
     if (!file) return;
     const dropName = file.name.toLowerCase();
     const imageExts = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
-    if (imageExts.some(ext => dropName.endsWith(ext))) {
+    const isImage = imageExts.some(ext => dropName.endsWith(ext));
+    const isDoc = dropName.endsWith('.hwp') || dropName.endsWith('.hwpx');
+    if (!isImage && !isDoc) {
+      alert('HWP/HWPX 파일 또는 이미지 파일만 지원합니다.');
+      return;
+    }
+
+    // [#1439] 보안: 드롭으로 로컬 파일을 읽는 동작은 기본에서 제외하고, 사용자가
+    // 명시적으로 [열기]를 눌러 동의한 경우에만 진행한다 (확장/웹 공통).
+    const confirmed = await showDropConfirmDialog(file.name);
+    if (!confirmed) return;
+
+    if (isImage) {
       if (!inputHandler || wasm.pageCount === 0) return;
       const data = new Uint8Array(await file.arrayBuffer());
       const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
@@ -344,10 +398,8 @@ function setupFileInput(): void {
       }
       return;
     }
-    if (!dropName.endsWith('.hwp') && !dropName.endsWith('.hwpx')) {
-      alert('HWP/HWPX 파일 또는 이미지 파일만 지원합니다.');
-      return;
-    }
+
+    // HWP/HWPX — loadFile 내부 unsaved 가드는 드롭 확인 이후에 동작한다.
     await loadFile(file);
   });
 }

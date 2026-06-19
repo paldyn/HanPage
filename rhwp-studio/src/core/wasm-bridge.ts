@@ -345,7 +345,7 @@ export class WasmBridge {
     if (typeof d.getPageLayerTree === 'function') {
       return d.getPageLayerTree(pageNum);
     }
-    return '{"pageWidth":0,"pageHeight":0,"profile":"screen","root":{"kind":"leaf","bounds":{"x":0,"y":0,"width":0,"height":0},"ops":[]}}';
+    return '{"pageWidth":0,"pageHeight":0,"profile":"screen","buildOptions":{"showTransparentBorders":false,"clipEnabled":true},"debugOptions":{"debugOverlay":false},"outputOptions":{"showParagraphMarks":false,"showControlCodes":false,"showTransparentBorders":false,"clipEnabled":true,"debugOverlay":false},"root":{"kind":"leaf","bounds":{"x":0,"y":0,"width":0,"height":0},"ops":[]}}';
   }
 
   getPageLayerTreeObject(pageNum: number, profile: LayerRenderProfile = 'screen'): PageLayerTree {
@@ -374,6 +374,20 @@ export class WasmBridge {
           pageWidth: pageInfo.width,
           pageHeight: pageInfo.height,
           profile,
+          buildOptions: {
+            showTransparentBorders: false,
+            clipEnabled: true,
+          },
+          debugOptions: {
+            debugOverlay: false,
+          },
+          outputOptions: {
+            showParagraphMarks: false,
+            showControlCodes: false,
+            showTransparentBorders: false,
+            clipEnabled: true,
+            debugOverlay: false,
+          },
           root: {
             kind: 'leaf',
             bounds: { x: 0, y: 0, width: pageInfo.width, height: pageInfo.height },
@@ -390,6 +404,20 @@ export class WasmBridge {
     if (!tree.profile) {
       tree.profile = profile;
     }
+    const outputOptions = tree.outputOptions ?? {};
+    const buildOptions = tree.buildOptions ?? {};
+    buildOptions.showTransparentBorders ??= outputOptions.showTransparentBorders ?? false;
+    buildOptions.clipEnabled ??= outputOptions.clipEnabled ?? true;
+    const debugOptions = tree.debugOptions ?? {};
+    debugOptions.debugOverlay ??= outputOptions.debugOverlay ?? false;
+    outputOptions.showParagraphMarks ??= false;
+    outputOptions.showControlCodes ??= false;
+    outputOptions.showTransparentBorders ??= buildOptions.showTransparentBorders;
+    outputOptions.clipEnabled ??= buildOptions.clipEnabled;
+    outputOptions.debugOverlay ??= debugOptions.debugOverlay;
+    tree.outputOptions = outputOptions;
+    tree.buildOptions = buildOptions;
+    tree.debugOptions = debugOptions;
     return tree as PageLayerTree;
   }
 
@@ -1368,9 +1396,19 @@ export class WasmBridge {
     return this.doc.applyCharFormat(sec, para, startOffset, endOffset, propsJson);
   }
 
+  setCharShapeId(sec: number, para: number, startOffset: number, endOffset: number, charShapeId: number): string {
+    if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
+    return (this.doc as any).setCharShapeId(sec, para, startOffset, endOffset, charShapeId);
+  }
+
   applyCharFormatInCell(sec: number, parentPara: number, controlIdx: number, cellIdx: number, cellParaIdx: number, startOffset: number, endOffset: number, propsJson: string): string {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
     return this.doc.applyCharFormatInCell(sec, parentPara, controlIdx, cellIdx, cellParaIdx, startOffset, endOffset, propsJson);
+  }
+
+  setCharShapeIdInCell(sec: number, parentPara: number, controlIdx: number, cellIdx: number, cellParaIdx: number, startOffset: number, endOffset: number, charShapeId: number): string {
+    if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
+    return (this.doc as any).setCharShapeIdInCell(sec, parentPara, controlIdx, cellIdx, cellParaIdx, startOffset, endOffset, charShapeId);
   }
 
   findOrCreateFontId(name: string): number {
@@ -1405,9 +1443,19 @@ export class WasmBridge {
     return this.doc.applyParaFormat(sec, para, propsJson);
   }
 
+  setParaShapeId(sec: number, para: number, paraShapeId: number): string {
+    if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
+    return (this.doc as any).setParaShapeId(sec, para, paraShapeId);
+  }
+
   applyParaFormatInCell(sec: number, parentPara: number, controlIdx: number, cellIdx: number, cellParaIdx: number, propsJson: string): string {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
     return this.doc.applyParaFormatInCell(sec, parentPara, controlIdx, cellIdx, cellParaIdx, propsJson);
+  }
+
+  setCellParaShapeId(sec: number, parentPara: number, controlIdx: number, cellIdx: number, cellParaIdx: number, paraShapeId: number): string {
+    if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
+    return (this.doc as any).setCellParaShapeId(sec, parentPara, controlIdx, cellIdx, cellParaIdx, paraShapeId);
   }
 
   /** 머리말/꼬리말 문단의 문단 속성을 조회한다 */
@@ -1660,6 +1708,9 @@ export class WasmBridge {
     command: string;
     value: string;
     location: { sectionIndex: number; paraIndex: number; path?: Array<any> };
+    startCharIdx?: number;
+    endCharIdx?: number;
+    editableInForm?: boolean;
   }> {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
     return JSON.parse((this.doc as any).getFieldList());
@@ -1710,7 +1761,7 @@ export class WasmBridge {
     ));
   }
 
-  /** 커서 위치의 누름틀 필드를 제거한다 (텍스트 유지). */
+  /** 커서 위치의 누름틀 필드와 내용을 제거한다. */
   removeFieldAt(pos: DocumentPosition): { ok: boolean } {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
     if (pos.parentParaIndex !== undefined && pos.controlIndex !== undefined) {
@@ -1763,6 +1814,54 @@ export class WasmBridge {
   updateClickHereProps(fieldId: number, guide: string, memo: string, name: string, editable: boolean): { ok: boolean } {
     if (!this.doc) return { ok: false };
     return JSON.parse((this.doc as any).updateClickHereProps(fieldId, guide, memo, name, editable));
+  }
+
+  /** 현재 커서 위치에 누름틀 필드를 삽입한다. */
+  insertClickHereField(
+    pos: DocumentPosition,
+    guide: string,
+    memo: string,
+    name: string,
+    editable: boolean,
+  ): { ok: boolean; fieldId?: number; charOffset?: number } {
+    if (!this.doc) return { ok: false };
+    const doc = this.doc as any;
+    if ((pos.cellPath?.length ?? 0) > 1 && pos.parentParaIndex !== undefined) {
+      return JSON.parse(doc.insertClickHereFieldByPath(
+        pos.sectionIndex,
+        pos.parentParaIndex,
+        JSON.stringify(pos.cellPath),
+        pos.charOffset,
+        guide,
+        memo,
+        name,
+        editable,
+      ));
+    }
+    if (pos.parentParaIndex !== undefined && pos.controlIndex !== undefined) {
+      return JSON.parse(doc.insertClickHereFieldInCell(
+        pos.sectionIndex,
+        pos.parentParaIndex,
+        pos.controlIndex,
+        pos.cellIndex ?? 0,
+        pos.cellParaIndex ?? 0,
+        pos.charOffset,
+        pos.isTextBox ?? false,
+        guide,
+        memo,
+        name,
+        editable,
+      ));
+    }
+    return JSON.parse(doc.insertClickHereField(
+      pos.sectionIndex,
+      pos.paragraphIndex,
+      pos.charOffset,
+      guide,
+      memo,
+      name,
+      editable,
+    ));
   }
 
   // ─────────────────────────────────────────────

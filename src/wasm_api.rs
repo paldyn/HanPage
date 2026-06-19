@@ -257,10 +257,20 @@ impl HwpDocument {
     }
 
     /// 빈 문서 생성 (테스트/미리보기용)
+    ///
+    /// 기본 A4 구역 1개 + 빈 문단 1개를 포함한다. 구역 0개 문서는 모든
+    /// 편집/조회 API가 "구역 인덱스 0 범위 초과"로 실패해 사용 불가하므로
+    /// 생성 직후 바로 편집 가능한 최소 구조를 보장한다 (#1386).
     #[wasm_bindgen(js_name = createEmpty)]
     pub fn create_empty() -> HwpDocument {
         let mut core = DocumentCore::new_empty();
-        core.paginate();
+        let mut section = Section::default();
+        // set_document가 styles/composed 재구성 + paginate까지 수행한다.
+        section.section_def.page_def = crate::model::page::PageDef::a4_default();
+        section.paragraphs.push(Paragraph::new_empty());
+        let mut document = Document::default();
+        document.sections.push(section);
+        core.set_document(document);
         HwpDocument { core }
     }
 
@@ -3489,6 +3499,89 @@ impl HwpDocument {
             .map_err(|e| e.into())
     }
 
+    /// 현재 본문 위치에 ClickHere 누름틀 필드를 삽입한다.
+    #[wasm_bindgen(js_name = insertClickHereField)]
+    pub fn insert_click_here_field_api(
+        &mut self,
+        section_idx: u32,
+        para_idx: u32,
+        char_offset: u32,
+        guide: &str,
+        memo: &str,
+        name: &str,
+        editable: bool,
+    ) -> Result<String, JsValue> {
+        self.insert_click_here_field_at(
+            section_idx as usize,
+            para_idx as usize,
+            char_offset as usize,
+            guide,
+            memo,
+            name,
+            editable,
+        )
+        .map_err(|e| e.into())
+    }
+
+    /// 현재 셀/글상자 위치에 ClickHere 누름틀 필드를 삽입한다.
+    #[wasm_bindgen(js_name = insertClickHereFieldInCell)]
+    pub fn insert_click_here_field_in_cell_api(
+        &mut self,
+        section_idx: u32,
+        parent_para_idx: u32,
+        control_idx: u32,
+        cell_idx: u32,
+        cell_para_idx: u32,
+        char_offset: u32,
+        is_textbox: bool,
+        guide: &str,
+        memo: &str,
+        name: &str,
+        editable: bool,
+    ) -> Result<String, JsValue> {
+        self.insert_click_here_field_at_in_cell(
+            section_idx as usize,
+            parent_para_idx as usize,
+            control_idx as usize,
+            cell_idx as usize,
+            cell_para_idx as usize,
+            char_offset as usize,
+            is_textbox,
+            guide,
+            memo,
+            name,
+            editable,
+        )
+        .map_err(|e| e.into())
+    }
+
+    /// 현재 중첩 표 cellPath 위치에 ClickHere 누름틀 필드를 삽입한다.
+    #[wasm_bindgen(js_name = insertClickHereFieldByPath)]
+    pub fn insert_click_here_field_by_path_api(
+        &mut self,
+        section_idx: u32,
+        parent_para_idx: u32,
+        path_json: &str,
+        char_offset: u32,
+        guide: &str,
+        memo: &str,
+        name: &str,
+        editable: bool,
+    ) -> Result<String, JsValue> {
+        let path = DocumentCore::parse_cell_path(path_json)?;
+        self.insert_click_here_field_at_by_path(
+            section_idx as usize,
+            parent_para_idx as usize,
+            &path,
+            char_offset as usize,
+            guide,
+            memo,
+            name,
+            editable,
+        )
+        .map_err(|e| e.into())
+    }
+
     // ─────────────────────────────────────────────
     // 양식 개체(Form Object) API
     // ─────────────────────────────────────────────
@@ -3676,7 +3769,7 @@ impl HwpDocument {
 
     /// 커서 위치의 필드 범위 정보를 조회한다 (본문 문단).
     ///
-    /// 반환: `{inField, fieldId?, startCharIdx?, endCharIdx?, isGuide?, guideName?}`
+    /// 반환: `{inField, fieldId?, startCharIdx?, endCharIdx?, isGuide?, guideName?, editableInForm?}`
     #[wasm_bindgen(js_name = getFieldInfoAt)]
     pub fn get_field_info_at_api(
         &self,
@@ -3949,7 +4042,7 @@ impl HwpDocument {
                         let orig_memo = f.memo_text().unwrap_or("").to_string();
                         if guide != orig_guide || memo != orig_memo {
                             // guide 또는 memo가 변경되었으므로 command 재구축
-                            let new_command = Field::build_clickhere_command(guide, memo, "");
+                            let new_command = Field::build_clickhere_command(guide, memo);
                             f.command = new_command;
                         }
                         // command가 변경되지 않았으면 원본 보존
@@ -5177,6 +5270,20 @@ impl HwpDocument {
             .map_err(|e| e.into())
     }
 
+    /// 글자 서식 ID를 직접 복원한다 (본문 문단).
+    #[wasm_bindgen(js_name = setCharShapeId)]
+    pub fn set_char_shape_id(
+        &mut self,
+        sec_idx: usize,
+        para_idx: usize,
+        start_offset: usize,
+        end_offset: usize,
+        char_shape_id: u32,
+    ) -> Result<String, JsValue> {
+        self.set_char_shape_id_native(sec_idx, para_idx, start_offset, end_offset, char_shape_id)
+            .map_err(|e| e.into())
+    }
+
     /// 글자 서식을 적용한다 (셀 내 문단).
     #[wasm_bindgen(js_name = applyCharFormatInCell)]
     pub fn apply_char_format_in_cell(
@@ -5199,6 +5306,32 @@ impl HwpDocument {
             start_offset,
             end_offset,
             props_json,
+        )
+        .map_err(|e| e.into())
+    }
+
+    /// 글자 서식 ID를 직접 복원한다 (셀 내 문단).
+    #[wasm_bindgen(js_name = setCharShapeIdInCell)]
+    pub fn set_char_shape_id_in_cell(
+        &mut self,
+        sec_idx: usize,
+        parent_para_idx: usize,
+        control_idx: usize,
+        cell_idx: usize,
+        cell_para_idx: usize,
+        start_offset: usize,
+        end_offset: usize,
+        char_shape_id: u32,
+    ) -> Result<String, JsValue> {
+        self.set_char_shape_id_in_cell_native(
+            sec_idx,
+            parent_para_idx,
+            control_idx,
+            cell_idx,
+            cell_para_idx,
+            start_offset,
+            end_offset,
+            char_shape_id,
         )
         .map_err(|e| e.into())
     }
@@ -5261,6 +5394,18 @@ impl HwpDocument {
             .map_err(|e| e.into())
     }
 
+    /// 문단의 paraShapeId를 직접 설정한다.
+    #[wasm_bindgen(js_name = setParaShapeId)]
+    pub fn set_para_shape_id(
+        &mut self,
+        sec_idx: usize,
+        para_idx: usize,
+        para_shape_id: u16,
+    ) -> Result<String, JsValue> {
+        self.set_para_shape_id_native(sec_idx, para_idx, para_shape_id)
+            .map_err(|e| e.into())
+    }
+
     /// 문단 서식을 적용한다 (셀 내 문단).
     #[wasm_bindgen(js_name = applyParaFormatInCell)]
     pub fn apply_para_format_in_cell(
@@ -5279,6 +5424,28 @@ impl HwpDocument {
             cell_idx,
             cell_para_idx,
             props_json,
+        )
+        .map_err(|e| e.into())
+    }
+
+    /// 셀 내 문단의 paraShapeId를 직접 설정한다.
+    #[wasm_bindgen(js_name = setCellParaShapeId)]
+    pub fn set_cell_para_shape_id(
+        &mut self,
+        sec_idx: usize,
+        parent_para_idx: usize,
+        control_idx: usize,
+        cell_idx: usize,
+        cell_para_idx: usize,
+        para_shape_id: u16,
+    ) -> Result<String, JsValue> {
+        self.set_cell_para_shape_id_native(
+            sec_idx,
+            parent_para_idx,
+            control_idx,
+            cell_idx,
+            cell_para_idx,
+            para_shape_id,
         )
         .map_err(|e| e.into())
     }

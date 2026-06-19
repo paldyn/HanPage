@@ -770,6 +770,8 @@ impl DocumentCore {
                 };
                 let english_break_unit = (a1 >> 5) & 0x03;
                 let korean_break_unit = (a1 >> 7) & 0x01;
+                let border_connect = (a1 >> 28) & 1 != 0;
+                let border_ignore_margin = (a1 >> 29) & 1 != 0;
                 format!(
                     concat!(
                         "{{\"alignment\":\"{}\",\"lineSpacing\":{:.1},\"lineSpacingType\":\"{:?}\",",
@@ -781,7 +783,8 @@ impl DocumentCore {
                         "\"autoSpaceKrEn\":{},\"autoSpaceKrNum\":{},\"verticalAlign\":{},",
                         "\"englishBreakUnit\":{},\"koreanBreakUnit\":{},",
                         "\"tabAutoLeft\":{},\"tabAutoRight\":{},\"tabStops\":[{}],\"defaultTabSpacing\":{},",
-                        "{},\"borderSpacing\":[{},{},{},{}]}}"
+                        "{},\"borderSpacing\":[{},{},{},{}],",
+                        "\"borderConnect\":{},\"borderIgnoreMargin\":{}}}"
                     ),
                     align_str,
                     ps.line_spacing, ps.line_spacing_type,
@@ -799,6 +802,7 @@ impl DocumentCore {
                     tab_auto_left, tab_auto_right, tab_stops_json, default_tab_spacing,
                     border_fill_json,
                     border_spacing[0], border_spacing[1], border_spacing[2], border_spacing[3],
+                    border_connect, border_ignore_margin,
                 )
             }
             None => {
@@ -819,7 +823,8 @@ impl DocumentCore {
                         "\"borderTop\":{{\"type\":0,\"width\":0,\"color\":\"#000000\"}},",
                         "\"borderBottom\":{{\"type\":0,\"width\":0,\"color\":\"#000000\"}},",
                         "\"fillType\":\"none\",\"fillColor\":\"#ffffff\",\"patternColor\":\"#000000\",\"patternType\":0,",
-                        "\"borderSpacing\":[0,0,0,0]}}"
+                        "\"borderSpacing\":[0,0,0,0],",
+                        "\"borderConnect\":false,\"borderIgnoreMargin\":false}}"
                     ),
                     para_shape_id, default_tab_spacing
                 )
@@ -848,6 +853,7 @@ impl DocumentCore {
             alt_name: None,
             type_info: None,
             default_name: None,
+            subst_font: None,
         };
 
         let font_faces = &mut self.document.doc_info.font_faces;
@@ -894,6 +900,7 @@ impl DocumentCore {
             alt_name: None,
             type_info: None,
             default_name: None,
+            subst_font: None,
         };
 
         let font_faces = &mut self.document.doc_info.font_faces;
@@ -981,6 +988,71 @@ impl DocumentCore {
                 &styles,
                 self.dpi,
             );
+        }
+
+        self.document.sections[sec_idx].raw_stream = None;
+        self.rebuild_section(sec_idx);
+        self.event_log.push(DocumentEvent::CharFormatChanged {
+            section: sec_idx,
+            para: para_idx,
+            start: start_offset,
+            end: end_offset,
+        });
+        Ok("{\"ok\":true}".to_string())
+    }
+
+    /// 글자 서식 ID 직접 복원 (네이티브) — 본문 문단.
+    ///
+    /// Undo/Redo에서는 `CharProperties` JSON을 다시 적용하지 않고, 적용 전/후
+    /// `char_shape_id`를 직접 복원한다. 조회 JSON은 UI 상태 표현용 값이 섞여
+    /// 있으므로 history 복원 payload로 재해석하지 않는다.
+    pub fn set_char_shape_id_native(
+        &mut self,
+        sec_idx: usize,
+        para_idx: usize,
+        start_offset: usize,
+        end_offset: usize,
+        char_shape_id: u32,
+    ) -> Result<String, HwpError> {
+        if sec_idx >= self.document.sections.len() {
+            return Err(HwpError::RenderError(format!("구역 {} 범위 초과", sec_idx)));
+        }
+        if para_idx >= self.document.sections[sec_idx].paragraphs.len() {
+            return Err(HwpError::RenderError(format!(
+                "문단 {} 범위 초과",
+                para_idx
+            )));
+        }
+        if char_shape_id as usize >= self.document.doc_info.char_shapes.len() {
+            return Err(HwpError::RenderError(format!(
+                "글자 모양 ID {} 범위 초과 (총 {}개)",
+                char_shape_id,
+                self.document.doc_info.char_shapes.len()
+            )));
+        }
+
+        let styles = resolve_styles(&self.document.doc_info, self.dpi);
+        let available_width = {
+            let section = &self.document.sections[sec_idx];
+            let page_def = &section.section_def.page_def;
+            let column_def = DocumentCore::find_initial_column_def(&section.paragraphs);
+            let layout = PageLayoutInfo::from_page_def(page_def, &column_def, self.dpi);
+            let col_width = layout
+                .column_areas
+                .first()
+                .map(|a| a.width)
+                .unwrap_or(layout.body_area.width);
+            let para_shape_id = section.paragraphs[para_idx].para_shape_id;
+            let para_style = styles.para_styles.get(para_shape_id as usize);
+            let margin_left = para_style.map(|s| s.margin_left).unwrap_or(0.0);
+            let margin_right = para_style.map(|s| s.margin_right).unwrap_or(0.0);
+            (col_width - margin_left - margin_right).max(1.0)
+        };
+
+        {
+            let para = &mut self.document.sections[sec_idx].paragraphs[para_idx];
+            para.apply_char_shape_range(start_offset, end_offset, char_shape_id);
+            reflow_line_segs(para, available_width, &styles, self.dpi);
         }
 
         self.document.sections[sec_idx].raw_stream = None;
@@ -1084,6 +1156,56 @@ impl DocumentCore {
         Ok("{\"ok\":true}".to_string())
     }
 
+    /// 글자 서식 ID 직접 복원 (네이티브) — 셀 내 문단.
+    pub fn set_char_shape_id_in_cell_native(
+        &mut self,
+        sec_idx: usize,
+        parent_para_idx: usize,
+        control_idx: usize,
+        cell_idx: usize,
+        cell_para_idx: usize,
+        start_offset: usize,
+        end_offset: usize,
+        char_shape_id: u32,
+    ) -> Result<String, HwpError> {
+        if char_shape_id as usize >= self.document.doc_info.char_shapes.len() {
+            return Err(HwpError::RenderError(format!(
+                "글자 모양 ID {} 범위 초과 (총 {}개)",
+                char_shape_id,
+                self.document.doc_info.char_shapes.len()
+            )));
+        }
+
+        {
+            let cell_para = self.get_cell_paragraph_mut(
+                sec_idx,
+                parent_para_idx,
+                control_idx,
+                cell_idx,
+                cell_para_idx,
+            )?;
+            cell_para.apply_char_shape_range(start_offset, end_offset, char_shape_id);
+        }
+
+        self.reflow_cell_paragraph(
+            sec_idx,
+            parent_para_idx,
+            control_idx,
+            cell_idx,
+            cell_para_idx,
+        );
+        self.mark_cell_control_dirty(sec_idx, parent_para_idx, control_idx);
+        self.document.sections[sec_idx].raw_stream = None;
+        self.rebuild_section(sec_idx);
+        self.event_log.push(DocumentEvent::CharFormatChanged {
+            section: sec_idx,
+            para: parent_para_idx,
+            start: start_offset,
+            end: end_offset,
+        });
+        Ok("{\"ok\":true}".to_string())
+    }
+
     /// 문단 서식 적용 (네이티브) — 본문 문단
     pub fn apply_para_format_native(
         &mut self,
@@ -1166,6 +1288,66 @@ impl DocumentCore {
                 &styles,
                 self.dpi,
             );
+        }
+
+        self.document.sections[sec_idx].raw_stream = None;
+        self.rebuild_section(sec_idx);
+        self.event_log.push(DocumentEvent::ParaFormatChanged {
+            section: sec_idx,
+            para: para_idx,
+        });
+        Ok("{\"ok\":true}".to_string())
+    }
+
+    /// 문단 서식 ID 직접 복원 (네이티브) — 본문 문단.
+    ///
+    /// Undo/Redo에서는 `ParaProperties` JSON을 다시 적용하지 않고, 적용 전/후
+    /// `para_shape_id`를 직접 복원한다. 조회 JSON은 UI용 px 단위가 섞여 있어
+    /// raw 값을 기대하는 apply parser에 재투입하면 단위가 깨질 수 있다.
+    pub fn set_para_shape_id_native(
+        &mut self,
+        sec_idx: usize,
+        para_idx: usize,
+        para_shape_id: u16,
+    ) -> Result<String, HwpError> {
+        if sec_idx >= self.document.sections.len() {
+            return Err(HwpError::RenderError(format!("구역 {} 범위 초과", sec_idx)));
+        }
+        if para_idx >= self.document.sections[sec_idx].paragraphs.len() {
+            return Err(HwpError::RenderError(format!(
+                "문단 {} 범위 초과",
+                para_idx
+            )));
+        }
+        if para_shape_id as usize >= self.document.doc_info.para_shapes.len() {
+            return Err(HwpError::RenderError(format!(
+                "문단 모양 ID {} 범위 초과 (총 {}개)",
+                para_shape_id,
+                self.document.doc_info.para_shapes.len()
+            )));
+        }
+
+        let styles = resolve_styles(&self.document.doc_info, self.dpi);
+        let available_width = {
+            let section = &self.document.sections[sec_idx];
+            let page_def = &section.section_def.page_def;
+            let column_def = DocumentCore::find_initial_column_def(&section.paragraphs);
+            let layout = PageLayoutInfo::from_page_def(page_def, &column_def, self.dpi);
+            let col_width = layout
+                .column_areas
+                .first()
+                .map(|a| a.width)
+                .unwrap_or(layout.body_area.width);
+            let para_style = styles.para_styles.get(para_shape_id as usize);
+            let margin_left = para_style.map(|s| s.margin_left).unwrap_or(0.0);
+            let margin_right = para_style.map(|s| s.margin_right).unwrap_or(0.0);
+            (col_width - margin_left - margin_right).max(1.0)
+        };
+
+        {
+            let para = &mut self.document.sections[sec_idx].paragraphs[para_idx];
+            para.para_shape_id = para_shape_id;
+            reflow_line_segs(para, available_width, &styles, self.dpi);
         }
 
         self.document.sections[sec_idx].raw_stream = None;
@@ -1286,6 +1468,52 @@ impl DocumentCore {
             }
         }
 
+        self.document.sections[sec_idx].raw_stream = None;
+        self.rebuild_section(sec_idx);
+        self.event_log.push(DocumentEvent::ParaFormatChanged {
+            section: sec_idx,
+            para: parent_para_idx,
+        });
+        Ok("{\"ok\":true}".to_string())
+    }
+
+    /// 문단 서식 ID 직접 복원 (네이티브) — 셀 내 문단.
+    pub fn set_cell_para_shape_id_native(
+        &mut self,
+        sec_idx: usize,
+        parent_para_idx: usize,
+        control_idx: usize,
+        cell_idx: usize,
+        cell_para_idx: usize,
+        para_shape_id: u16,
+    ) -> Result<String, HwpError> {
+        if para_shape_id as usize >= self.document.doc_info.para_shapes.len() {
+            return Err(HwpError::RenderError(format!(
+                "문단 모양 ID {} 범위 초과 (총 {}개)",
+                para_shape_id,
+                self.document.doc_info.para_shapes.len()
+            )));
+        }
+
+        {
+            let cell_para = self.get_cell_paragraph_mut(
+                sec_idx,
+                parent_para_idx,
+                control_idx,
+                cell_idx,
+                cell_para_idx,
+            )?;
+            cell_para.para_shape_id = para_shape_id;
+        }
+
+        self.reflow_cell_paragraph(
+            sec_idx,
+            parent_para_idx,
+            control_idx,
+            cell_idx,
+            cell_para_idx,
+        );
+        self.mark_cell_control_dirty(sec_idx, parent_para_idx, control_idx);
         self.document.sections[sec_idx].raw_stream = None;
         self.rebuild_section(sec_idx);
         self.event_log.push(DocumentEvent::ParaFormatChanged {

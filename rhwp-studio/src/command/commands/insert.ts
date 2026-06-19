@@ -5,6 +5,7 @@ import { EquationPropertiesDialog } from '@/ui/equation-props-dialog';
 import { SymbolsDialog } from '@/ui/symbols-dialog';
 import { BookmarkDialog } from '@/ui/bookmark-dialog';
 import { EndnoteShapeDialog } from '@/ui/endnote-shape-dialog';
+import { FieldInsertDialog } from '@/ui/field-insert-dialog';
 import { showShapePicker } from '@/ui/shape-picker';
 import type { ShapeType } from '@/ui/shape-picker';
 import type { CellPathLike } from '@/core/types';
@@ -27,6 +28,7 @@ let equationPropsDialog: EquationPropertiesDialog | null = null;
 let symbolsDialog: SymbolsDialog | null = null;
 let bookmarkDialog: BookmarkDialog | null = null;
 let endnoteShapeDialog: EndnoteShapeDialog | null = null;
+let fieldInsertDialog: FieldInsertDialog | null = null;
 
 function enterNoteEditing(
   services: any,
@@ -138,7 +140,40 @@ export const insertCommands: CommandDef[] = [
       }
     },
   },
-  stub('insert:field', '필드 입력', undefined, 'Ctrl+K+E'),
+  {
+    id: 'insert:field',
+    label: '필드 입력',
+    shortcutLabel: 'Ctrl+K+E',
+    canExecute: (ctx) => ctx.hasDocument && !ctx.isFormMode,
+    execute(services) {
+      const ih = services.getInputHandler();
+      if (!ih) return;
+      const pos = ih.getCursorPosition();
+      fieldInsertDialog = new FieldInsertDialog();
+      fieldInsertDialog.onApply = (props) => {
+        try {
+          const result = services.wasm.insertClickHereField(
+            pos,
+            props.guide,
+            props.memo,
+            props.name,
+            props.editable,
+          );
+          if (result.ok) {
+            const insertedPos = { ...pos, charOffset: result.charOffset ?? pos.charOffset };
+            ih.moveCursorTo(insertedPos);
+            ih.markCurrentFieldEndOutside();
+            services.wasm.clearActiveField();
+            services.eventBus.emit('document-mutated', 'insert-field');
+            services.eventBus.emit('document-changed');
+          }
+        } catch (err) {
+          console.warn('[insert:field] 누름틀 삽입 실패:', err);
+        }
+      };
+      fieldInsertDialog.show();
+    },
+  },
   stub('insert:caption-top', '캡션 - 위'),
   stub('insert:caption-lt', '캡션 - 왼쪽 위'),
   stub('insert:caption-lm', '캡션 - 왼쪽 가운데'),
@@ -561,6 +596,7 @@ function applyRotationDelta(services: import('../types').CommandServices, delta:
   const ref = ih.getSelectedPictureRef();
   if (!ref || ref.type === 'equation' || ref.type === 'group' || ref.type === 'line') return;
   const props = getProps(services, ref);
+  if (props.sizeProtect) return;
   const cur = ((props.rotationAngle as number) ?? 0);
   let next = cur + delta;
   // -180 ~ 180 범위로 정규화
@@ -577,6 +613,7 @@ function toggleFlip(services: import('../types').CommandServices, key: 'horzFlip
   const ref = ih.getSelectedPictureRef();
   if (!ref || ref.type === 'equation' || ref.type === 'group' || ref.type === 'line') return;
   const props = getProps(services, ref);
+  if (props.sizeProtect) return;
   const cur = !!props[key];
   setProps(services, ref, { [key]: !cur });
   services.eventBus.emit('document-changed');

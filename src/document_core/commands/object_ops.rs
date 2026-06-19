@@ -336,6 +336,8 @@ impl DocumentCore {
         } else {
             pic.common.width = cur_w;
             pic.common.height = cur_h;
+            pic.common.horizontal_offset = (old_center_x - (cur_w as i64 / 2)) as i32 as u32;
+            pic.common.vertical_offset = (old_center_y - (cur_h as i64 / 2)) as i32 as u32;
         }
 
         pic.shape_attr.rotation_center.x = (pic.common.width / 2) as i32;
@@ -494,7 +496,7 @@ impl DocumentCore {
                 "\"vertRelTo\":\"{}\",\"vertAlign\":\"{}\",",
                 "\"horzRelTo\":\"{}\",\"horzAlign\":\"{}\",",
                 "\"vertOffset\":{},\"horzOffset\":{},",
-                "\"textWrap\":\"{}\",",
+                "\"textWrap\":\"{}\",\"restrictInPage\":{},\"allowOverlap\":{},\"sizeProtect\":{},",
                 "\"brightness\":{},\"contrast\":{},\"effect\":\"{}\",",
                 "\"description\":\"{}\",",
                 // 회전/대칭
@@ -516,8 +518,8 @@ impl DocumentCore {
             c.width, c.height, c.treat_as_char,
             vert_rel, vert_align,
             horz_rel, horz_align,
-            c.vertical_offset, c.horizontal_offset,
-            text_wrap,
+            c.vertical_offset as i32, c.horizontal_offset as i32,
+            text_wrap, c.flow_with_text, c.allow_overlap, c.size_protect,
             pic.image_attr.brightness, pic.image_attr.contrast, effect,
             desc_escaped,
             // 회전/대칭
@@ -882,6 +884,273 @@ impl DocumentCore {
         Ok(current_para)
     }
 
+    fn required_cell_height_for_picture(
+        cell: &crate::model::table::Cell,
+        pic: &crate::model::image::Picture,
+    ) -> u32 {
+        Self::required_cell_height_for_picture_padding(cell.padding.top, cell.padding.bottom, pic)
+    }
+
+    fn required_cell_height_for_picture_padding(
+        padding_top: i16,
+        padding_bottom: i16,
+        pic: &crate::model::image::Picture,
+    ) -> u32 {
+        let vert_offset = (pic.common.vertical_offset as i32).max(0) as u32;
+        let visual_height = if pic.shape_attr.rotation_angle.rem_euclid(360) != 0
+            && pic.shape_attr.current_width > 0
+            && pic.shape_attr.current_height > 0
+        {
+            pic.common.height
+        } else {
+            let (_, height) = Self::picture_rotated_bounds(
+                pic.common.width,
+                pic.common.height,
+                pic.shape_attr.rotation_angle,
+            );
+            height
+        };
+        vert_offset
+            .saturating_add(visual_height)
+            .saturating_add(padding_top.max(0) as u32)
+            .saturating_add(padding_bottom.max(0) as u32)
+    }
+
+    fn take_place_picture_flow_offset(pic: &crate::model::image::Picture) -> Option<i32> {
+        if pic.common.treat_as_char
+            || !matches!(
+                pic.common.text_wrap,
+                crate::model::shape::TextWrap::TopAndBottom
+            )
+            || !matches!(pic.common.vert_rel_to, crate::model::shape::VertRelTo::Para)
+        {
+            return None;
+        }
+
+        let visual_height = if pic.shape_attr.rotation_angle.rem_euclid(360) != 0
+            && pic.shape_attr.current_width > 0
+            && pic.shape_attr.current_height > 0
+        {
+            pic.common.height
+        } else {
+            let (_, height) = Self::picture_rotated_bounds(
+                pic.common.width,
+                pic.common.height,
+                pic.shape_attr.rotation_angle,
+            );
+            height
+        };
+        Some(
+            (pic.common.vertical_offset as i32)
+                .saturating_add(visual_height.min(i32::MAX as u32) as i32)
+                .max(0),
+        )
+    }
+
+    fn sync_direct_owner_cell_for_picture(
+        section: &mut crate::model::document::Section,
+        parent_para_idx: usize,
+        path: &[(usize, usize, usize)],
+        inner_control_idx: usize,
+    ) -> Result<(), HwpError> {
+        if path.len() != 1 {
+            return Ok(());
+        }
+
+        let (table_ctrl_idx, cell_idx, cell_para_idx) = path[0];
+        let para = section.paragraphs.get_mut(parent_para_idx).ok_or_else(|| {
+            HwpError::RenderError(format!("문단 인덱스 {} 범위 초과", parent_para_idx))
+        })?;
+        let existing_line_height = para
+            .line_segs
+            .first()
+            .map(|seg| seg.line_height)
+            .unwrap_or(0);
+        let table = match para.controls.get_mut(table_ctrl_idx) {
+            Some(Control::Table(table)) => table,
+            _ => return Ok(()),
+        };
+        let line_height_extra = (existing_line_height - table.common.height as i32).max(0);
+        let mut line_seg_update: Option<(i32, i32)> = None;
+
+        let required_height = {
+            let cell = table.cells.get(cell_idx).ok_or_else(|| {
+                HwpError::RenderError(format!("경로[0]: cells[{}] 범위 초과", cell_idx))
+            })?;
+            let cell_para = cell.paragraphs.get(cell_para_idx).ok_or_else(|| {
+                HwpError::RenderError(format!("경로[0]: paragraphs[{}] 범위 초과", cell_para_idx))
+            })?;
+            let pic = match cell_para.controls.get(inner_control_idx) {
+                Some(Control::Picture(pic)) => pic,
+                _ => return Ok(()),
+            };
+            let take_place_flow_offset = Self::take_place_picture_flow_offset(pic);
+            if table.common.treat_as_char {
+                if let Some(flow_offset) = take_place_flow_offset {
+                    let vertical_pos = if pic.common.flow_with_text {
+                        0
+                    } else {
+                        flow_offset
+                    };
+                    line_seg_update = Some((vertical_pos, line_height_extra));
+                }
+            }
+            if pic.common.flow_with_text {
+                Some(Self::required_cell_height_for_picture(cell, pic))
+            } else {
+                None
+            }
+        };
+
+        if let (Some(required_height), Some(cell)) =
+            (required_height, table.cells.get_mut(cell_idx))
+        {
+            let synced_height = required_height.max(MIN_SHAPE_SIZE);
+            if cell.height != synced_height {
+                cell.height = synced_height;
+            }
+        }
+        table.update_ctrl_dimensions();
+        table.dirty = true;
+        let new_table_height = table.common.height as i32;
+        if let Some((vertical_pos, line_height_extra)) = line_seg_update {
+            if let Some(seg) = para.line_segs.first_mut() {
+                let line_height = new_table_height
+                    .saturating_add(line_height_extra)
+                    .max(MIN_SHAPE_SIZE as i32);
+                seg.vertical_pos = vertical_pos;
+                seg.line_height = line_height;
+                seg.text_height = line_height;
+                seg.baseline_distance =
+                    ((line_height as i64 * 17 + 10) / 20).min(i32::MAX as i64) as i32;
+            }
+        }
+        Ok(())
+    }
+
+    fn clamp_direct_owner_cell_picture_offsets(
+        section: &mut crate::model::document::Section,
+        parent_para_idx: usize,
+        path: &[(usize, usize, usize)],
+        inner_control_idx: usize,
+        clamp_horz: bool,
+        clamp_vert: bool,
+    ) -> Result<(), HwpError> {
+        if path.len() != 1 || (!clamp_horz && !clamp_vert) {
+            return Ok(());
+        }
+
+        let (table_ctrl_idx, cell_idx, cell_para_idx) = path[0];
+        let para = section.paragraphs.get_mut(parent_para_idx).ok_or_else(|| {
+            HwpError::RenderError(format!("문단 인덱스 {} 범위 초과", parent_para_idx))
+        })?;
+        let table = match para.controls.get_mut(table_ctrl_idx) {
+            Some(Control::Table(table)) => table,
+            _ => return Ok(()),
+        };
+        let cell = table.cells.get_mut(cell_idx).ok_or_else(|| {
+            HwpError::RenderError(format!("경로[0]: cells[{}] 범위 초과", cell_idx))
+        })?;
+
+        let inner_width = cell
+            .width
+            .saturating_sub(cell.padding.left.max(0) as u32)
+            .saturating_sub(cell.padding.right.max(0) as u32) as i64;
+        let cell_para = cell.paragraphs.get_mut(cell_para_idx).ok_or_else(|| {
+            HwpError::RenderError(format!("경로[0]: paragraphs[{}] 범위 초과", cell_para_idx))
+        })?;
+        let pic = match cell_para.controls.get_mut(inner_control_idx) {
+            Some(Control::Picture(pic)) => pic,
+            _ => return Ok(()),
+        };
+
+        if !pic.common.flow_with_text {
+            return Ok(());
+        }
+
+        if clamp_horz {
+            let max_horz = (inner_width - pic.common.width as i64)
+                .max(0)
+                .min(i32::MAX as i64);
+            let horz = (pic.common.horizontal_offset as i32).clamp(0, max_horz as i32);
+            pic.common.horizontal_offset = horz as u32;
+        }
+        if clamp_vert {
+            let vert = (pic.common.vertical_offset as i32).max(0);
+            pic.common.vertical_offset = vert as u32;
+        }
+        Ok(())
+    }
+
+    /// path 의 마지막 엔트리가 글상자(Shape text_box)를 가리키는지 판정한다.
+    ///
+    /// 표 셀 picture 삽입은 한컴 정합상 parent paragraph 의 sibling floating
+    /// picture 로 처리하지만, 글상자 내부 picture 는 text_box paragraph 안에
+    /// 실제 Picture control 로 들어가야 한다. `resolve_cell_by_path` 는 마지막
+    /// 엔트리가 표일 때만 성공하므로, insert path 에서는 표/글상자를 먼저 구분한다.
+    fn cell_path_terminates_at_textbox(
+        section: &crate::model::document::Section,
+        parent_para_idx: usize,
+        path: &[(usize, usize, usize)],
+    ) -> Result<bool, HwpError> {
+        let mut current_para = section.paragraphs.get(parent_para_idx).ok_or_else(|| {
+            HwpError::RenderError(format!("문단 인덱스 {} 범위 초과", parent_para_idx))
+        })?;
+
+        for (i, &(ctrl_idx, cell_idx, cell_para_idx)) in path.iter().enumerate() {
+            let ctrl = current_para.controls.get(ctrl_idx).ok_or_else(|| {
+                HwpError::RenderError(format!("경로[{}]: controls[{}] 범위 초과", i, ctrl_idx))
+            })?;
+            match ctrl {
+                crate::model::control::Control::Table(table) => {
+                    let cell = table.cells.get(cell_idx).ok_or_else(|| {
+                        HwpError::RenderError(format!("경로[{}]: cells[{}] 범위 초과", i, cell_idx))
+                    })?;
+                    if i == path.len() - 1 {
+                        return Ok(false);
+                    }
+                    current_para = cell.paragraphs.get(cell_para_idx).ok_or_else(|| {
+                        HwpError::RenderError(format!(
+                            "경로[{}]: paragraphs[{}] 범위 초과",
+                            i, cell_para_idx
+                        ))
+                    })?;
+                }
+                crate::model::control::Control::Shape(shape) => {
+                    if cell_idx != 0 {
+                        return Err(HwpError::RenderError(format!(
+                            "경로[{}]: 글상자의 cell_index는 0이어야 합니다 ({})",
+                            i, cell_idx
+                        )));
+                    }
+                    let text_box = get_textbox_from_shape(shape.as_ref()).ok_or_else(|| {
+                        HwpError::RenderError(format!(
+                            "경로[{}]: controls[{}]가 텍스트 글상자가 아닙니다",
+                            i, ctrl_idx
+                        ))
+                    })?;
+                    if i == path.len() - 1 {
+                        return Ok(true);
+                    }
+                    current_para = text_box.paragraphs.get(cell_para_idx).ok_or_else(|| {
+                        HwpError::RenderError(format!(
+                            "경로[{}]: 글상자문단 {} 범위 초과",
+                            i, cell_para_idx
+                        ))
+                    })?;
+                }
+                _ => {
+                    return Err(HwpError::RenderError(format!(
+                        "경로[{}]: controls[{}] 가 표/글상자가 아닙니다",
+                        i, ctrl_idx
+                    )))
+                }
+            }
+        }
+
+        Err(HwpError::RenderError("경로가 비어있습니다".to_string()))
+    }
+
     /// [Task #825] Picture 속성 JSON 적용 (mutation only). 후처리 (AutoNumber /
     /// recompose / paginate / event log) 는 호출자 책임.
     /// 반환: caption_created (true 면 호출자가 AutoNumber 후처리 필요).
@@ -953,11 +1222,41 @@ impl DocumentCore {
                 _ => pic.common.text_wrap,
             };
         }
-        if let Some(v) = json_u32(props_json, "vertOffset") {
-            pic.common.vertical_offset = v;
+        if let Some(v) = json_bool(props_json, "restrictInPage") {
+            pic.common.flow_with_text = v;
+            if v {
+                pic.common.attr |= 1 << 13;
+                pic.common.allow_overlap = false;
+                pic.common.attr &= !(1 << 14);
+            } else {
+                pic.common.attr &= !(1 << 13);
+            }
         }
-        if let Some(v) = json_u32(props_json, "horzOffset") {
-            pic.common.horizontal_offset = v;
+        if let Some(v) = json_bool(props_json, "allowOverlap") {
+            pic.common.allow_overlap = v;
+            if v {
+                pic.common.attr |= 1 << 14;
+            } else {
+                pic.common.attr &= !(1 << 14);
+            }
+        }
+        if let Some(v) = json_bool(props_json, "sizeProtect") {
+            pic.common.size_protect = v;
+            if v {
+                pic.common.attr |= 1 << 20;
+            } else {
+                pic.common.attr &= !(1 << 20);
+            }
+        }
+        if pic.common.flow_with_text {
+            pic.common.allow_overlap = false;
+            pic.common.attr &= !(1 << 14);
+        }
+        if let Some(v) = json_i32(props_json, "vertOffset") {
+            pic.common.vertical_offset = v as u32;
+        }
+        if let Some(v) = json_i32(props_json, "horzOffset") {
+            pic.common.horizontal_offset = v as u32;
         }
         if transform_changed {
             pic.shape_attr.raw_rendering.clear();
@@ -1980,10 +2279,22 @@ impl DocumentCore {
                 "이미지 데이터가 비어 있습니다".to_string(),
             ));
         }
-        // cell_path 가 있으면 경로가 유효한지 사전 검증.
-        if !cell_path.is_empty() {
-            self.resolve_cell_by_path(section_idx, para_idx, cell_path)?;
-        }
+        // cell_path 가 있으면 경로가 유효한지 사전 검증한다.
+        //
+        // 표 셀 picture 는 한컴 정합상 표 sibling floating 으로 삽입하지만,
+        // 글상자(text_box) 내부 picture 는 글상자 문단의 control 로 들어가야 한다.
+        // 기존 resolve_cell_by_path 는 마지막 엔트리가 표일 때만 성공하므로
+        // 먼저 표/글상자를 구분한다.
+        let cell_path_is_textbox = if !cell_path.is_empty() {
+            let section = &self.document.sections[section_idx];
+            let is_textbox = Self::cell_path_terminates_at_textbox(section, para_idx, cell_path)?;
+            if !is_textbox {
+                self.resolve_cell_by_path(section_idx, para_idx, cell_path)?;
+            }
+            is_textbox
+        } else {
+            false
+        };
 
         // --- 1. BinDataContent 추가 ---
         let next_id = self.document.bin_data_content.len() as u16 + 1;
@@ -2037,6 +2348,75 @@ impl DocumentCore {
         };
 
         if !cell_path.is_empty() {
+            if cell_path_is_textbox {
+                // === 글상자 내부 picture 분기 (#1322 maintainer fix) ===
+                // hitTest 의 글상자 sentinel path (`cellIdx=0`) 가 넘어온 경우에는
+                // Picture 를 body paragraph 의 sibling 으로 띄우지 않고, 실제 text_box
+                // paragraph 안에 삽입한다. 글상자 내부 좌표계는 text_box content box
+                // 기준이므로 caller 가 전달한 offset 은 Para-relative 로 해석한다.
+                let (offset_x_hu, offset_y_hu) = match (paper_offset_x_hu, paper_offset_y_hu) {
+                    (Some(x), Some(y)) => (x, y),
+                    _ => (0, 0),
+                };
+
+                // CommonObjAttr (text_box 내부 floating):
+                //   bits 3-4=vert_rel_to(2=Para), bits 8-10=horz_rel_to(3=Para),
+                //   bits 15-17=width_criterion(4=Absolute),
+                //   bits 18-20=height_criterion(2=Absolute),
+                //   bits 21-23=text_wrap(0=Square)
+                let common_attr: u32 = (2 << 3) | (3 << 8) | (4 << 15) | (2 << 18);
+                let common = CommonObjAttr {
+                    ctrl_id: 0x67736F20,
+                    attr: common_attr,
+                    treat_as_char: false,
+                    vert_rel_to: VertRelTo::Para,
+                    horz_rel_to: HorzRelTo::Para,
+                    text_wrap: crate::model::shape::TextWrap::Square,
+                    horizontal_offset: offset_x_hu.max(0) as u32,
+                    vertical_offset: offset_y_hu.max(0) as u32,
+                    width,
+                    height,
+                    z_order: 1,
+                    description: description.to_string(),
+                    ..Default::default()
+                };
+                let pic = Picture {
+                    common,
+                    shape_attr,
+                    border_x: bx,
+                    border_y: by,
+                    crop,
+                    image_attr,
+                    ..Default::default()
+                };
+
+                let new_ctrl_idx = {
+                    let section = &mut self.document.sections[section_idx];
+                    section.raw_stream = None;
+                    let target_para =
+                        Self::resolve_cell_paragraph_mut(section, para_idx, cell_path)?;
+                    let new_ctrl_idx = target_para.controls.len();
+                    target_para.controls.push(Control::Picture(Box::new(pic)));
+                    target_para.ctrl_data_records.push(None);
+                    target_para.control_mask |= 0x00000800;
+                    new_ctrl_idx
+                };
+
+                self.mark_section_dirty(section_idx);
+                self.recompose_section(section_idx);
+                self.paginate_if_needed();
+                self.invalidate_page_tree_cache();
+
+                self.event_log.push(DocumentEvent::PictureInserted {
+                    section: section_idx,
+                    para: para_idx,
+                });
+                return Ok(super::super::helpers::json_ok_with(&format!(
+                    "\"paraIdx\":{},\"controlIdx\":{}",
+                    para_idx, new_ctrl_idx
+                )));
+            }
+
             // === 셀 floating picture 분기 (#1151 v2 — 한컴 패턴 정합) ===
             // Picture 는 표가 들어있는 paragraph 의 sibling control 로 append 된다.
             // tac=false, wrap=Square (어울림), horz/vert_rel_to=Paper, offset 은 사용자 클릭/드래그 위치.
@@ -2420,7 +2800,8 @@ impl DocumentCore {
              \"vertRelTo\":\"{}\",\"vertAlign\":\"{}\",\
              \"horzRelTo\":\"{}\",\"horzAlign\":\"{}\",\
              \"vertOffset\":{},\"horzOffset\":{},\
-             \"textWrap\":\"{}\",\"zOrder\":{},\"instanceId\":{},\
+             \"textWrap\":\"{}\",\"restrictInPage\":{},\"allowOverlap\":{},\"sizeProtect\":{},\
+             \"zOrder\":{},\"instanceId\":{},\
              \"outerMarginLeft\":{},\"outerMarginTop\":{},\
              \"outerMarginRight\":{},\"outerMarginBottom\":{},\
              \"description\":\"{}\"",
@@ -2434,6 +2815,9 @@ impl DocumentCore {
             c.vertical_offset,
             c.horizontal_offset,
             text_wrap,
+            c.flow_with_text,
+            c.allow_overlap,
+            c.size_protect,
             c.z_order,
             c.instance_id,
             c.margin.left,
@@ -2508,6 +2892,36 @@ impl DocumentCore {
                 "InFrontOfText" => crate::model::shape::TextWrap::InFrontOfText,
                 _ => c.text_wrap,
             };
+        }
+        if let Some(v) = json_bool(props_json, "restrictInPage") {
+            c.flow_with_text = v;
+            if v {
+                c.attr |= 1 << 13;
+                c.allow_overlap = false;
+                c.attr &= !(1 << 14);
+            } else {
+                c.attr &= !(1 << 13);
+            }
+        }
+        if let Some(v) = json_bool(props_json, "allowOverlap") {
+            c.allow_overlap = v;
+            if v {
+                c.attr |= 1 << 14;
+            } else {
+                c.attr &= !(1 << 14);
+            }
+        }
+        if let Some(v) = json_bool(props_json, "sizeProtect") {
+            c.size_protect = v;
+            if v {
+                c.attr |= 1 << 20;
+            } else {
+                c.attr &= !(1 << 20);
+            }
+        }
+        if c.flow_with_text {
+            c.allow_overlap = false;
+            c.attr &= !(1 << 14);
         }
         if let Some(v) = json_u32(props_json, "vertOffset") {
             c.vertical_offset = v;
@@ -3322,7 +3736,15 @@ impl DocumentCore {
         inner_control_idx: usize,
         props_json: &str,
     ) -> Result<String, HwpError> {
+        use super::super::helpers::{json_bool, json_i32};
+
         let path = Self::parse_cell_path_json(cell_path_json)?;
+        let restrict_change = json_bool(props_json, "restrictInPage");
+        let restrict_enabled_by_this_call = restrict_change.unwrap_or(false);
+        let clamp_horz =
+            restrict_enabled_by_this_call || json_i32(props_json, "horzOffset").is_some();
+        let clamp_vert =
+            restrict_enabled_by_this_call || json_i32(props_json, "vertOffset").is_some();
         {
             let section = self.document.sections.get_mut(section_idx).ok_or_else(|| {
                 HwpError::RenderError(format!("구역 인덱스 {} 범위 초과", section_idx))
@@ -3345,6 +3767,20 @@ impl DocumentCore {
             Self::apply_picture_props_inner(pic, props_json);
         }
         let section = &mut self.document.sections[section_idx];
+        Self::clamp_direct_owner_cell_picture_offsets(
+            section,
+            parent_para_idx,
+            &path,
+            inner_control_idx,
+            clamp_horz,
+            clamp_vert,
+        )?;
+        Self::sync_direct_owner_cell_for_picture(
+            section,
+            parent_para_idx,
+            &path,
+            inner_control_idx,
+        )?;
         section.raw_stream = None;
         self.recompose_section(section_idx);
         self.paginate_if_needed();
@@ -3670,14 +4106,15 @@ impl DocumentCore {
             (pd.width as i32 - pd.margin_left as i32 - pd.margin_right as i32).max(7200) as u32;
 
         // attr 비트 계산
-        // textbox: Para/Top/Column/Left/Square = 0x0A0210
-        // 도형(line/ellipse/rectangle): 한컴 기본값 0x046A4000
-        //   Paper/Top/Paper/Left/InFrontOfText + textSide=2 + bit16-17=2 + objNumSort=2 + bit26=1
-        let mut attr: u32 = if shape_type == "textbox" {
-            0x0A0210
-        } else {
-            0x046A4000
-        };
+        // 도형(line/ellipse/rectangle) 및 floating 글상자: 한컴 기본값 0x046A4000
+        //   Paper/Top/Paper/Left/InFrontOfText + 절대크기 + allow_overlap + bit26
+        // inline 글상자(treat_as_char=true): Para/Top/Column/Left/Square = 0x0A0210
+        // [Task #1280 v2] 삽입 글상자는 한컴 정답값 floating(treat_as_char=false)+글앞으로(InFrontOfText).
+        //   권위 샘플 samples/textbox-under-image.hwp 실측: 글상자 배치=글앞으로/Paper/Paper/false.
+        //   serializer(control.rs:1768)는 common.attr!=0 이면 그대로 직렬화하므로 attr 와 enum 필드를
+        //   함께 정합시킨다. treat_as_char=true 인 inline 글상자는 #1280 본편 동작을 그대로 보존.
+        let inline_textbox = shape_type == "textbox" && treat_as_char;
+        let mut attr: u32 = if inline_textbox { 0x0A0210 } else { 0x046A4000 };
         if treat_as_char {
             attr |= 0x01;
         }
@@ -3780,13 +4217,14 @@ impl DocumentCore {
                 }
             },
             treat_as_char,
-            vert_rel_to: if shape_type == "textbox" {
+            // [Task #1280 v2] inline 글상자만 Para/Column(본문 기준), floating 글상자·도형은 Paper.
+            vert_rel_to: if inline_textbox {
                 VertRelTo::Para
             } else {
                 VertRelTo::Paper
             },
             vert_align: VertAlign::Top,
-            horz_rel_to: if shape_type == "textbox" {
+            horz_rel_to: if inline_textbox {
                 HorzRelTo::Column
             } else {
                 HorzRelTo::Paper
@@ -3851,6 +4289,7 @@ impl DocumentCore {
             text_box: if has_textbox {
                 Some(TextBox {
                     list_attr: 0x20,
+                    vertical_all: false,
                     vertical_align: crate::model::table::VerticalAlign::Top,
                     margin_left: 283,
                     margin_right: 283,
@@ -5740,57 +6179,14 @@ impl DocumentCore {
     // ─── 각주 삽입/삭제 API ──────────────────────────────
 
     fn footnote_shape_number_format_code(format: crate::model::footnote::NumberFormat) -> u8 {
-        use crate::model::footnote::NumberFormat;
-        match format {
-            NumberFormat::Digit => 0,
-            NumberFormat::CircledDigit => 1,
-            NumberFormat::UpperRoman => 2,
-            NumberFormat::LowerRoman => 3,
-            NumberFormat::UpperAlpha => 4,
-            NumberFormat::LowerAlpha => 5,
-            NumberFormat::CircledUpperAlpha => 6,
-            NumberFormat::CircledLowerAlpha => 7,
-            NumberFormat::HangulSyllable => 8,
-            NumberFormat::CircledHangulSyllable => 9,
-            NumberFormat::HangulJamo => 10,
-            NumberFormat::CircledHangulJamo => 11,
-            NumberFormat::HangulDigit => 12,
-            NumberFormat::HanjaDigit => 13,
-            NumberFormat::CircledHanjaDigit => 14,
-            NumberFormat::HanjaGapEul => 15,
-            NumberFormat::HanjaGapEulHanja => 16,
-            NumberFormat::FourSymbol => 17,
-            NumberFormat::UserChar => 18,
-        }
+        crate::model::footnote::FootnoteShape::number_format_attr_code(format) as u8
     }
 
     fn footnote_shape_number_format_from_str(
         value: &str,
         fallback: crate::model::footnote::NumberFormat,
     ) -> crate::model::footnote::NumberFormat {
-        use crate::model::footnote::NumberFormat;
-        match value {
-            "digit" => NumberFormat::Digit,
-            "circledDigit" => NumberFormat::CircledDigit,
-            "upperRoman" => NumberFormat::UpperRoman,
-            "lowerRoman" => NumberFormat::LowerRoman,
-            "upperAlpha" => NumberFormat::UpperAlpha,
-            "lowerAlpha" => NumberFormat::LowerAlpha,
-            "circledUpperAlpha" => NumberFormat::CircledUpperAlpha,
-            "circledLowerAlpha" => NumberFormat::CircledLowerAlpha,
-            "hangulSyllable" => NumberFormat::HangulSyllable,
-            "circledHangulSyllable" => NumberFormat::CircledHangulSyllable,
-            "hangulJamo" => NumberFormat::HangulJamo,
-            "circledHangulJamo" => NumberFormat::CircledHangulJamo,
-            "hangulDigit" => NumberFormat::HangulDigit,
-            "hanjaDigit" => NumberFormat::HanjaDigit,
-            "circledHanjaDigit" => NumberFormat::CircledHanjaDigit,
-            "hanjaGapEul" => NumberFormat::HanjaGapEul,
-            "hanjaGapEulHanja" => NumberFormat::HanjaGapEulHanja,
-            "fourSymbol" => NumberFormat::FourSymbol,
-            "userChar" => NumberFormat::UserChar,
-            _ => fallback,
-        }
+        crate::model::footnote::FootnoteShape::number_format_from_name(value, fallback)
     }
 
     fn footnote_shape_number_format_name(
@@ -5871,14 +6267,7 @@ impl DocumentCore {
     }
 
     fn encode_footnote_shape_attr(shape: &crate::model::footnote::FootnoteShape) -> u32 {
-        use crate::model::footnote::{FootnoteNumbering, FootnotePlacement};
-        let number_format = Self::footnote_shape_number_format_code(shape.number_format) as u32;
-        let placement_numbering_bits = match (shape.numbering, shape.placement) {
-            (FootnoteNumbering::RestartPage, _) | (_, FootnotePlacement::RightColumn) => 2,
-            (FootnoteNumbering::RestartSection, _) | (_, FootnotePlacement::BelowText) => 1,
-            _ => 0,
-        };
-        (shape.attr & !0x03ff) | number_format | ((placement_numbering_bits & 0x03) << 8)
+        shape.encode_attr()
     }
 
     fn first_char_or_nul(value: &str) -> char {
@@ -6608,6 +6997,8 @@ impl DocumentCore {
                 "\"separatorLineType\":{},",
                 "\"separatorLineWidth\":{},",
                 "\"separatorColor\":\"{}\",",
+                "\"numberCodeSuperscript\":{},",
+                "\"printInlineAfterText\":{},",
                 "\"numbering\":\"{}\",",
                 "\"placement\":\"{}\"",
                 "}}"
@@ -6619,16 +7010,22 @@ impl DocumentCore {
             shape.start_number,
             if separator_enabled { "true" } else { "false" },
             shape.separator_length,
-            shape.separator_margin_top,
-            if shape.note_spacing != 0 {
-                shape.note_spacing
-            } else {
-                shape.separator_margin_bottom
-            },
-            shape.raw_unknown,
+            shape.separator_above_margin_hu(),
+            shape.separator_below_margin_hu(),
+            shape.between_notes_margin_hu(),
             shape.separator_line_type,
             shape.separator_line_width,
             separator_color,
+            if shape.number_code_superscript {
+                "true"
+            } else {
+                "false"
+            },
+            if shape.print_inline_after_text {
+                "true"
+            } else {
+                "false"
+            },
             Self::footnote_numbering_name(shape.numbering),
             Self::footnote_placement_name(shape.placement),
         ))
@@ -6665,7 +7062,10 @@ impl DocumentCore {
             shape.separator_length = v.max(0);
         }
         if let Some(v) = Self::hwpunit16_from_json(props_json, "separatorMarginTop") {
-            shape.separator_margin_top = v.max(0);
+            let above = v.max(0);
+            // HWP5 저장본은 구분선 위 값을 fallback 슬롯에 보관하는 경우가 있어 함께 갱신한다.
+            shape.separator_margin_top = above;
+            shape.separator_margin_bottom = above;
         }
         if let Some(v) = Self::hwpunit16_from_json(props_json, "separatorMarginBottom") {
             shape.note_spacing = v.max(0);
@@ -6687,6 +7087,16 @@ impl DocumentCore {
         }
         if let Some(v) = crate::document_core::helpers::json_str(props_json, "placement") {
             shape.placement = Self::footnote_placement_from_str(&v, shape.placement);
+        }
+        if let Some(v) =
+            crate::document_core::helpers::json_bool(props_json, "numberCodeSuperscript")
+        {
+            shape.number_code_superscript = v;
+        }
+        if let Some(v) =
+            crate::document_core::helpers::json_bool(props_json, "printInlineAfterText")
+        {
+            shape.print_inline_after_text = v;
         }
         if let Some(false) =
             crate::document_core::helpers::json_bool(props_json, "separatorEnabled")
@@ -8322,5 +8732,382 @@ mod issue_1151_v2_tac_toggle_tests {
     #[test]
     fn integration_tac_toggle_matches_hancom_scenario_d() {
         assert_toggle_matches_hancom("d");
+    }
+}
+
+#[cfg(test)]
+mod issue_1280_textbox_creation_tests {
+    //! Issue #1280: rhwp-studio가 삽입한 글상자가 text_box 없는 Rectangle로 생성되어
+    //! 커서 진입·타이핑·붙여넣기가 모두 실패하던 결함.
+    //!
+    //! 근본 결함은 프런트(`input-handler.ts`)가 `shapeType: 'rectangle'`을 전달한 것이고,
+    //! 백엔드 `create_shape_control_native`는 `shape_type == "textbox"`일 때 text_box(내부 문단)를
+    //! 정상 구성한다. 본 테스트는 그 백엔드 계약(글상자=text_box 있음, 사각형=없음)을 고정하여
+    //! 프런트 수정과 함께 회귀를 막는다.
+
+    use super::*;
+    use crate::model::document::{Document, Section, SectionDef};
+    use crate::model::page::PageDef;
+
+    fn make_test_core() -> DocumentCore {
+        let mut doc = Document::default();
+        doc.sections.push(Section {
+            section_def: SectionDef {
+                page_def: PageDef {
+                    width: 59528,
+                    height: 84188,
+                    margin_left: 8504,
+                    margin_right: 8504,
+                    margin_top: 5668,
+                    margin_bottom: 4252,
+                    margin_header: 4252,
+                    margin_footer: 4252,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            paragraphs: vec![Paragraph::default()],
+            raw_stream: None,
+        });
+        let mut core = DocumentCore::new_empty();
+        core.set_document(doc);
+        core
+    }
+
+    fn parse_idx(res: &str, key: &str) -> usize {
+        res.split(&format!("\"{}\":", key))
+            .nth(1)
+            .and_then(|s| s.split(|c: char| !c.is_ascii_digit()).next())
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| panic!("missing {key} in {res}"))
+    }
+
+    fn minimal_png() -> Vec<u8> {
+        vec![
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
+            0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78,
+            0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x00, 0x00, 0x00,
+            0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ]
+    }
+
+    /// 도형 생성 후 (para_idx, ctrl_idx) 반환. 글상자는 한컴 기본값과 동일하게 treat_as_char=true.
+    fn create_shape(core: &mut DocumentCore, shape_type: &str) -> (usize, usize) {
+        let treat_as_char = shape_type == "textbox";
+        // 인자: section_idx, para_idx, char_offset, width, height, horz_offset, vert_offset,
+        // treat_as_char, text_wrap_str, shape_type, line_flip_x, line_flip_y, polygon_points
+        let res = core
+            .create_shape_control_native(
+                0,
+                0,
+                0,
+                21600,
+                7200,
+                0,
+                0,
+                treat_as_char,
+                "TopAndBottom",
+                shape_type,
+                false,
+                false,
+                &[],
+            )
+            .unwrap_or_else(|e| panic!("create {shape_type} failed: {e:?}"));
+        (parse_idx(&res, "paraIdx"), parse_idx(&res, "controlIdx"))
+    }
+
+    fn textbox_of<'a>(
+        core: &'a DocumentCore,
+        para_idx: usize,
+        ctrl_idx: usize,
+    ) -> Option<&'a crate::model::shape::TextBox> {
+        match &core.document.sections[0].paragraphs[para_idx].controls[ctrl_idx] {
+            Control::Shape(s) => crate::document_core::helpers::get_textbox_from_shape(s.as_ref()),
+            other => panic!("expected Control::Shape, got {other:?}"),
+        }
+    }
+
+    fn common_of<'a>(
+        core: &'a DocumentCore,
+        para_idx: usize,
+        ctrl_idx: usize,
+    ) -> &'a crate::model::shape::CommonObjAttr {
+        match &core.document.sections[0].paragraphs[para_idx].controls[ctrl_idx] {
+            Control::Shape(s) => s.common(),
+            other => panic!("expected Control::Shape, got {other:?}"),
+        }
+    }
+
+    /// 글상자를 직접 인자로 생성(treat_as_char/text_wrap 명시). (para_idx, ctrl_idx) 반환.
+    fn create_textbox_with(
+        core: &mut DocumentCore,
+        treat_as_char: bool,
+        text_wrap: &str,
+    ) -> (usize, usize) {
+        let res = core
+            .create_shape_control_native(
+                0,
+                0,
+                0,
+                21600,
+                7200,
+                1000,
+                2000,
+                treat_as_char,
+                text_wrap,
+                "textbox",
+                false,
+                false,
+                &[],
+            )
+            .unwrap_or_else(|e| panic!("create textbox failed: {e:?}"));
+        (parse_idx(&res, "paraIdx"), parse_idx(&res, "controlIdx"))
+    }
+
+    /// [Task #1280 v2] 삽입 글상자를 floating(treat_as_char=false)+InFrontOfText 로 만들면
+    /// 한컴 정답값(Paper/Paper/글앞으로)으로 생성되고 text_box 는 그대로 유지된다.
+    /// 권위 샘플 samples/textbox-under-image.hwp 실측 정합.
+    #[test]
+    fn create_floating_textbox_is_in_front_paper() {
+        use crate::model::shape::{HorzRelTo, TextWrap, VertRelTo};
+        let mut core = make_test_core();
+        let (para, ctrl) = create_textbox_with(&mut core, false, "InFrontOfText");
+
+        // text_box 유지 (글상자 기능 보존 — floating 에서도)
+        assert!(
+            textbox_of(&core, para, ctrl).is_some(),
+            "floating 글상자도 text_box 를 가져야 한다"
+        );
+
+        let c = common_of(&core, para, ctrl);
+        assert!(!c.treat_as_char, "floating: treat_as_char=false");
+        assert_eq!(
+            c.text_wrap,
+            TextWrap::InFrontOfText,
+            "글앞으로(InFrontOfText)"
+        );
+        assert_eq!(c.vert_rel_to, VertRelTo::Paper, "vert_rel_to=Paper");
+        assert_eq!(c.horz_rel_to, HorzRelTo::Paper, "horz_rel_to=Paper");
+        // 직렬화 attr 비트 정합 (serializer 는 common.attr!=0 이면 그대로 사용).
+        assert_eq!(c.attr & 0x01, 0, "attr bit0(treat_as_char)=0");
+        assert_eq!((c.attr >> 3) & 0x03, 0, "attr bit3-4(vert_rel_to)=Paper(0)");
+        assert_eq!((c.attr >> 8) & 0x03, 0, "attr bit8-9(horz_rel_to)=Paper(0)");
+        assert_eq!(
+            (c.attr >> 21) & 0x07,
+            3,
+            "attr bit21-23(text_wrap)=InFrontOfText(3)"
+        );
+    }
+
+    /// inline 글상자(treat_as_char=true)는 #1280 본편 배치(Para/Column)를 그대로 보존한다(회귀 가드).
+    #[test]
+    fn create_inline_textbox_preserves_para_column() {
+        use crate::model::shape::{HorzRelTo, VertRelTo};
+        let mut core = make_test_core();
+        let (para, ctrl) = create_textbox_with(&mut core, true, "Square");
+        let c = common_of(&core, para, ctrl);
+        assert!(c.treat_as_char, "inline: treat_as_char=true");
+        assert_eq!(c.vert_rel_to, VertRelTo::Para, "inline vert_rel_to=Para");
+        assert_eq!(
+            c.horz_rel_to,
+            HorzRelTo::Column,
+            "inline horz_rel_to=Column"
+        );
+    }
+
+    /// floating 글상자에도 텍스트 입력이 정상 동작(#1280 본편 회귀 없음).
+    #[test]
+    fn insert_text_into_floating_textbox() {
+        let mut core = make_test_core();
+        let (para, ctrl) = create_textbox_with(&mut core, false, "InFrontOfText");
+        core.insert_text_in_cell_native(0, para, ctrl, 0, 0, 0, "플로팅")
+            .expect("floating 글상자 텍스트 입력 성공");
+        let tb = textbox_of(&core, para, ctrl).expect("text_box 존재");
+        assert_eq!(
+            tb.paragraphs[0].text, "플로팅",
+            "floating 글상자 내부 텍스트 보존"
+        );
+    }
+
+    /// 글상자 안에서 이미지 배치 영역을 드래그한 경우, 그림은 body sibling 이 아니라
+    /// text_box 내부 paragraph 의 Picture control 로 들어가야 한다.
+    #[test]
+    fn insert_picture_into_textbox_uses_textbox_paragraph_control() {
+        use crate::model::shape::{HorzRelTo, TextWrap, VertRelTo};
+
+        let mut core = make_test_core();
+        let (para, ctrl) = create_textbox_with(&mut core, false, "InFrontOfText");
+        let body_control_count_before = core.document.sections[0].paragraphs[para].controls.len();
+        let cell_path = vec![(ctrl, 0, 0)];
+        let image = minimal_png();
+
+        core.insert_picture_native(
+            0,
+            para,
+            0,
+            &cell_path,
+            &image,
+            5000,
+            4000,
+            1,
+            1,
+            "png",
+            "textbox picture",
+            Some(750),
+            Some(1500),
+        )
+        .expect("글상자 내부 picture 삽입 성공");
+
+        let body = &core.document.sections[0].paragraphs[para];
+        assert_eq!(
+            body.controls.len(),
+            body_control_count_before,
+            "글상자 내부 삽입은 body sibling control 을 추가하면 안 된다"
+        );
+
+        let tb = textbox_of(&core, para, ctrl).expect("글상자 text_box 존재");
+        let picture = tb.paragraphs[0]
+            .controls
+            .iter()
+            .find_map(|c| match c {
+                Control::Picture(p) => Some(p.as_ref()),
+                _ => None,
+            })
+            .expect("글상자 내부 문단에 Picture control 이 있어야 한다");
+
+        assert!(!picture.common.treat_as_char);
+        assert_eq!(picture.common.horz_rel_to, HorzRelTo::Para);
+        assert_eq!(picture.common.vert_rel_to, VertRelTo::Para);
+        assert_eq!(picture.common.text_wrap, TextWrap::Square);
+        assert_eq!(picture.common.horizontal_offset, 750);
+        assert_eq!(picture.common.vertical_offset, 1500);
+        assert_eq!(picture.common.width, 5000);
+        assert_eq!(picture.common.height, 4000);
+    }
+
+    #[test]
+    fn create_textbox_has_textbox() {
+        let mut core = make_test_core();
+        let (para, ctrl) = create_shape(&mut core, "textbox");
+        assert!(
+            textbox_of(&core, para, ctrl).is_some(),
+            "글상자(shape_type=textbox)는 text_box를 가져야 한다 (#1280)"
+        );
+    }
+
+    #[test]
+    fn create_rectangle_has_no_textbox() {
+        let mut core = make_test_core();
+        let (para, ctrl) = create_shape(&mut core, "rectangle");
+        assert!(
+            textbox_of(&core, para, ctrl).is_none(),
+            "일반 사각형(shape_type=rectangle)은 text_box가 없어야 한다 (글상자/사각형 경로 분리)"
+        );
+    }
+
+    #[test]
+    fn insert_text_into_created_textbox() {
+        let mut core = make_test_core();
+        let (para, ctrl) = create_shape(&mut core, "textbox");
+
+        // 글상자 내부(cell_idx=0 무시, cell_para_idx=0, char_offset=0)에 텍스트 삽입.
+        // 수정 전 프런트 경로에서는 text_box가 없어 "지정된 Shape 컨트롤에 텍스트 박스가 없습니다"로 실패했다.
+        core.insert_text_in_cell_native(0, para, ctrl, 0, 0, 0, "테스트")
+            .expect("글상자에 텍스트 입력이 성공해야 한다 (#1280)");
+
+        let tb = textbox_of(&core, para, ctrl).expect("글상자 text_box 존재");
+        assert_eq!(
+            tb.paragraphs[0].text, "테스트",
+            "글상자 내부 첫 문단에 입력 텍스트가 보존되어야 한다"
+        );
+    }
+
+    /// #1280 이슈가 기대 동작에 명시한 "글상자 안 붙여넣기"를 실측한다.
+    /// 본문 텍스트를 copy_selection 으로 복사한 뒤 글상자 안에 paste_internal_in_cell 로 붙여넣는다.
+    /// 수정 전(text_box 없는 Rectangle)이면 이 경로가 "글상자 없음"(clipboard.rs:512)으로 실패한다.
+    ///
+    /// 이미지/컨트롤 붙여넣기는 merge_from 이 controls 를 병합하지 않아 조용히 누락되던
+    /// 별개 결함(#1323)이 있었으며, merge_from 보강으로 해소되었다.
+    /// 회귀 테스트는 `paste_picture_into_textbox` 참고.
+    #[test]
+    fn paste_text_into_textbox() {
+        let mut core = make_test_core();
+
+        // 1. 본문에 텍스트 입력 후 선택 영역 복사 → 내부 클립보드에 텍스트 적재(controls 없음)
+        core.insert_text_native(0, 0, 0, "복사원본")
+            .expect("본문 텍스트 입력");
+        core.copy_selection_native(0, 0, 0, 0, 4)
+            .expect("본문 텍스트 복사");
+
+        // 2. 글상자 생성
+        let (tb_para, tb_ctrl) = create_shape(&mut core, "textbox");
+
+        // 3. 글상자 안에 붙여넣기 (cell_idx=0, cell_para_idx=0, char_offset=0)
+        core.paste_internal_in_cell_native(0, tb_para, tb_ctrl, 0, 0, 0)
+            .expect("글상자에 붙여넣기가 성공해야 한다 (#1280; 수정 전엔 \"글상자 없음\")");
+
+        // 4. 글상자 내부 첫 문단에 붙여넣은 텍스트가 들어갔는지 확인
+        let tb = textbox_of(&core, tb_para, tb_ctrl).expect("글상자 text_box 존재");
+        assert!(
+            tb.paragraphs.iter().any(|p| p.text.contains("복사원본")),
+            "붙여넣기 후 글상자 내부 문단에 복사한 텍스트가 있어야 한다"
+        );
+    }
+
+    /// #1323: 글상자 안 이미지(그림 컨트롤) 붙여넣기 회귀 테스트.
+    /// 본문 그림을 copy_control 로 복사한 뒤 글상자 안에 paste_internal_in_cell 로
+    /// 붙여넣는다. merge_from 이 controls 를 병합하지 않던 수정 전에는 그림이
+    /// 에러 없이 조용히 누락되었다.
+    #[test]
+    fn paste_picture_into_textbox() {
+        let mut core = make_test_core();
+
+        // 1. 본문에 그림 삽입 (BinData 등록 포함)
+        let res = core
+            .insert_picture_native(
+                0,
+                0,
+                0,
+                &[],
+                &minimal_png(),
+                5000,
+                5000,
+                1,
+                1,
+                "png",
+                "",
+                None,
+                None,
+            )
+            .expect("본문 그림 삽입");
+        let pic_para = parse_idx(&res, "paraIdx");
+        let pic_ctrl = parse_idx(&res, "controlIdx");
+
+        // 2. 그림 복사 → 내부 클립보드
+        core.copy_control_native(0, pic_para, &[], pic_ctrl)
+            .expect("그림 복사");
+
+        // 3. 글상자 생성 + 안에 붙여넣기 (cell_idx=0 무시, cell_para_idx=0, char_offset=0)
+        let (tb_para, tb_ctrl) = create_shape(&mut core, "textbox");
+        core.paste_internal_in_cell_native(0, tb_para, tb_ctrl, 0, 0, 0)
+            .expect("글상자에 그림 붙여넣기");
+
+        // 4. 글상자 내부 문단에 그림 컨트롤 보존 확인
+        let tb = textbox_of(&core, tb_para, tb_ctrl).expect("글상자 text_box 존재");
+        let pic_count: usize = tb
+            .paragraphs
+            .iter()
+            .map(|p| {
+                p.controls
+                    .iter()
+                    .filter(|c| matches!(c, Control::Picture(_)))
+                    .count()
+            })
+            .sum();
+        assert_eq!(
+            pic_count, 1,
+            "글상자 안에 붙여넣은 그림 컨트롤이 보존되어야 한다 (#1323)"
+        );
     }
 }

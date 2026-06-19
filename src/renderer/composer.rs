@@ -118,20 +118,23 @@ pub fn compose_section(section: &Section) -> Vec<ComposedParagraph> {
 ///
 /// 영향 범위: composer 내부만 (rendering pipeline). para 원본 (editor) 영향 없음.
 fn synthesize_marker_paragraph(para: &Paragraph) -> Option<Paragraph> {
-    // inline-visible extended ctrls 수 계산 (header/footer/footnote/endnote/hidden 제외)
+    fn needs_synthesized_inline_marker(ctrl: &Control) -> bool {
+        matches!(
+            ctrl,
+            Control::Picture(_) | Control::Shape(_) | Control::Table(_) | Control::Form(_)
+        ) || matches!(
+            ctrl,
+            Control::Equation(eq) if eq.common.treat_as_char
+        )
+    }
+
+    // 렌더에 실제 자리를 차지하는 TAC/개체 컨트롤 수 계산.
+    // Field/ColumnDef/SectionDef 같은 비가시 컨트롤은 char_offsets gap에 있어도
+    // 본문 텍스트 char_start를 밀면 안 된다.
     let inline_ctrl_count = para
         .controls
         .iter()
-        .filter(|c| {
-            !matches!(
-                c,
-                Control::Header(_)
-                    | Control::Footer(_)
-                    | Control::Footnote(_)
-                    | Control::Endnote(_)
-                    | Control::HiddenComment(_)
-            )
-        })
+        .filter(|ctrl| needs_synthesized_inline_marker(ctrl))
         .count();
 
     if inline_ctrl_count == 0 {
@@ -149,11 +152,10 @@ fn synthesize_marker_paragraph(para: &Paragraph) -> Option<Paragraph> {
     let controls_are_tac_objects = para.controls.iter().all(|ctrl| {
         matches!(
             ctrl,
-            Control::Equation(_)
-                | Control::Picture(_)
-                | Control::Shape(_)
-                | Control::Table(_)
-                | Control::Form(_)
+            Control::Equation(eq) if eq.common.treat_as_char
+        ) || matches!(
+            ctrl,
+            Control::Picture(_) | Control::Shape(_) | Control::Table(_) | Control::Form(_)
         )
     });
     if text_has_only_layout_space && controls_are_tac_objects {
@@ -193,16 +195,7 @@ fn synthesize_marker_paragraph(para: &Paragraph) -> Option<Paragraph> {
         .controls
         .iter()
         .enumerate()
-        .filter(|(_, c)| {
-            !matches!(
-                c,
-                Control::Header(_)
-                    | Control::Footer(_)
-                    | Control::Footnote(_)
-                    | Control::Endnote(_)
-                    | Control::HiddenComment(_)
-            )
-        })
+        .filter(|(_, ctrl)| needs_synthesized_inline_marker(ctrl))
         .filter_map(|(i, _)| raw_positions.get(i).copied())
         .collect();
     if raw_inline_positions.iter().any(|pos| *pos > 0) {
@@ -297,7 +290,7 @@ pub fn compose_paragraph(para: &Paragraph) -> ComposedParagraph {
                 Control::Shape(s) if s.common().treat_as_char => {
                     Some((pos, s.common().width as i32, i))
                 }
-                Control::Equation(eq) => {
+                Control::Equation(eq) if eq.common.treat_as_char => {
                     // HWP 저장값을 사용 — 한컴 편집기가 실제 폰트로 계산한 정확한 너비
                     Some((pos, eq.common.width as i32, i))
                 }
@@ -1042,9 +1035,8 @@ fn identify_inline_controls(para: &Paragraph) -> Vec<InlineControl> {
     for (ctrl_idx, ctrl) in para.controls.iter().enumerate() {
         let control_type = match ctrl {
             Control::Table(_) => InlineControlType::Table,
-            Control::Shape(_) | Control::Picture(_) | Control::Equation(_) => {
-                InlineControlType::Shape
-            }
+            Control::Shape(_) | Control::Picture(_) => InlineControlType::Shape,
+            Control::Equation(eq) if eq.common.treat_as_char => InlineControlType::Shape,
             Control::SectionDef(_) | Control::ColumnDef(_) => InlineControlType::Other,
             _ => continue,
         };
