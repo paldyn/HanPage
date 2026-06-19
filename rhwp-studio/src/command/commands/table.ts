@@ -6,6 +6,7 @@ import { CellBorderBgDialog } from '@/ui/cell-border-bg-dialog';
 import { FormulaDialog } from '@/ui/formula-dialog';
 
 const inTable = (ctx: EditorContext) => ctx.inTable;
+const inTableOrCellSelection = (ctx: EditorContext) => ctx.inTable || ctx.inCellSelectionMode;
 
 function safeTableOp(fn: () => void, label: string): void {
   try { fn(); } catch (e) { console.error(`[table] ${label} 실패:`, e); }
@@ -432,7 +433,7 @@ export const tableCommands: CommandDef[] = [
     id: 'table:cell-height-equal',
     label: '셀 높이를 같게',
     shortcutLabel: 'H',
-    canExecute: inTable,
+    canExecute: inTableOrCellSelection,
     execute(services) {
       const ih = services.getInputHandler();
       if (!ih) return;
@@ -473,7 +474,7 @@ export const tableCommands: CommandDef[] = [
     id: 'table:cell-width-equal',
     label: '셀 너비를 같게',
     shortcutLabel: 'W',
-    canExecute: inTable,
+    canExecute: inTableOrCellSelection,
     execute(services) {
       const ih = services.getInputHandler();
       if (!ih) return;

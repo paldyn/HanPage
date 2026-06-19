@@ -1270,7 +1270,12 @@ export class CursorState {
 
   /** 현재 셀 선택의 표 컨텍스트를 반환한다 (셀 bbox 조회용). */
   getCellTableContext(): { sec: number; ppi: number; ci: number; cellPath?: CellPathEntry[] } | null {
-    return this.cellTableCtx;
+    if (this.cellTableCtx) return this.cellTableCtx;
+    if (!this.isInCell()) return null;
+
+    const { sectionIndex: sec, parentParaIndex: ppi, controlIndex: ci, cellPath } = this.position;
+    if (ppi === undefined || ci === undefined) return null;
+    return { sec, ppi, ci, cellPath };
   }
 
   // ─── 표 객체 선택 모드 ─────────────────────────────────

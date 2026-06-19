@@ -136,6 +136,12 @@ export class InputHandler {
     lastCol: number;
     isDragging: boolean;
   } | null = null;
+  private cellSelectionDragCandidate: {
+    startClientX: number;
+    startClientY: number;
+    startRow: number;
+    startCol: number;
+  } | null = null;
 
   // 표 경계선 hover 상태
   private resizeHoverRafId = 0;
@@ -1135,6 +1141,7 @@ export class InputHandler {
   /** 텍스트 선택 드래그를 종료한다 */
   private stopTextSelectionDrag(): void {
     this.isDragging = false;
+    this.cellSelectionDragCandidate = null;
     document.removeEventListener('mousemove', this.onMouseMoveBound);
     this.stopTextSelectionDragAutoScroll();
   }
@@ -1401,6 +1408,9 @@ export class InputHandler {
       { type: 'separator' },
       { type: 'command', commandId: 'table:delete-row' },
       { type: 'command', commandId: 'table:delete-col' },
+      { type: 'separator' },
+      { type: 'command', commandId: 'table:cell-height-equal' },
+      { type: 'command', commandId: 'table:cell-width-equal' },
       { type: 'separator' },
       { type: 'command', commandId: 'table:cell-merge' },
       { type: 'command', commandId: 'table:cell-split' },
@@ -2535,6 +2545,7 @@ export class InputHandler {
       this.dragRafId = 0;
     }
     this.cellSelectionDragState = null;
+    this.cellSelectionDragCandidate = null;
     this.stopTextSelectionDragAutoScroll();
     if (this.resizeHoverRafId) {
       cancelAnimationFrame(this.resizeHoverRafId);

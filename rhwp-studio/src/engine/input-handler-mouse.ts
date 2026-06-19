@@ -131,6 +131,15 @@ function startCellSelectionDrag(this: any, e: MouseEvent, cellRC: { row: number;
   this.textarea.focus();
 }
 
+function startCellSelectionDragCandidate(this: any, e: MouseEvent, cellRC: { row: number; col: number }): void {
+  this.cellSelectionDragCandidate = {
+    startClientX: e.clientX,
+    startClientY: e.clientY,
+    startRow: cellRC.row,
+    startCol: cellRC.col,
+  };
+}
+
 function updateCellSelectionDrag(this: any, e: MouseEvent): void {
   const state = this.cellSelectionDragState;
   if (!state) return;
@@ -158,6 +167,37 @@ function finishCellSelectionDrag(this: any): void {
   document.removeEventListener('mousemove', this.onMouseMoveBound);
   this.updateCellSelection();
   this.textarea.focus();
+}
+
+function promoteCellSelectionDragCandidate(this: any, e: MouseEvent): boolean {
+  const candidate = this.cellSelectionDragCandidate;
+  if (!candidate) return false;
+
+  const dx = e.clientX - candidate.startClientX;
+  const dy = e.clientY - candidate.startClientY;
+  if (Math.hypot(dx, dy) < 3) return false;
+
+  const cellRC = this.hitTestCellRowCol(e);
+  if (!cellRC) return false;
+  if (cellRC.row === candidate.startRow && cellRC.col === candidate.startCol) return false;
+
+  this.stopTextSelectionDrag?.();
+  this.cellSelectionDragCandidate = null;
+  document.removeEventListener('mouseup', this.onMouseUpBound);
+  this.cursor.clearSelection();
+  if (!this.cursor.enterCellSelectionMode()) return false;
+
+  this.caret.hide();
+  this.fieldMarker.hide();
+  this.selectionRenderer.clear();
+  this.eventBus.emit('command-state-changed');
+
+  startCellSelectionDrag.call(this, {
+    clientX: candidate.startClientX,
+    clientY: candidate.startClientY,
+  } as MouseEvent, { row: candidate.startRow, col: candidate.startCol });
+  updateCellSelectionDrag.call(this, e);
+  return true;
 }
 
 export function onClick(this: any, e: MouseEvent): void {
@@ -1098,6 +1138,17 @@ export function onClick(this: any, e: MouseEvent): void {
     this.prepareClickHerePointerEntry?.(pageX);
     this.cursor.setAnchor(); // 드래그 시작점(anchor) 설정
     this.active = true;
+    if (
+      e.button === 0 &&
+      hit.parentParaIndex !== undefined &&
+      hit.controlIndex !== undefined &&
+      !hit.isTextBox
+    ) {
+      const cellRC = this.hitTestCellRowCol(e);
+      if (cellRC) startCellSelectionDragCandidate.call(this, e, cellRC);
+    } else {
+      this.cellSelectionDragCandidate = null;
+    }
     this.startTextSelectionDrag(e);
 
     const rect = this.cursor.getRect();
@@ -1456,6 +1507,7 @@ export function onMouseMove(this: any, e: MouseEvent): void {
 
   // 드래그 중: requestAnimationFrame으로 throttle하여 성능 확보
   if (this.isDragging) {
+    if (promoteCellSelectionDragCandidate.call(this, e)) return;
     this.updateTextSelectionDragPointer(e);
     if (this.dragRafId) return; // 이미 예약된 프레임이 있으면 건너뜀
     this.dragRafId = requestAnimationFrame(() => {
