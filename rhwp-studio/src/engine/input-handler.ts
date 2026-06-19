@@ -41,8 +41,94 @@ const DRAG_SCROLL_MIN_STEP_PX = 2;
 const DRAG_SCROLL_MAX_STEP_PX = 20;
 const PX_TO_RAW_2X = 150;
 
+type FormatCopyState = {
+  charProps: Partial<CharProperties>;
+  paraProps: Partial<ParaProperties>;
+};
+
+const FORMAT_COPY_CHAR_KEYS: Array<keyof CharProperties> = [
+  'fontSize',
+  'bold',
+  'italic',
+  'underline',
+  'strikethrough',
+  'textColor',
+  'shadeColor',
+  'emboss',
+  'engrave',
+  'fontId',
+  'fontIds',
+  'underlineType',
+  'underlineColor',
+  'outlineType',
+  'shadowType',
+  'shadowColor',
+  'shadowOffsetX',
+  'shadowOffsetY',
+  'strikeColor',
+  'subscript',
+  'superscript',
+  'ratios',
+  'spacings',
+  'relativeSizes',
+  'charOffsets',
+  'emphasisDot',
+  'underlineShape',
+  'strikeShape',
+  'kerning',
+];
+
+const FORMAT_COPY_PARA_KEYS: Array<keyof ParaProperties> = [
+  'alignment',
+  'lineSpacing',
+  'lineSpacingType',
+  'marginLeft',
+  'marginRight',
+  'indent',
+  'spacingBefore',
+  'spacingAfter',
+  'headType',
+  'paraLevel',
+  'numberingId',
+  'widowOrphan',
+  'keepWithNext',
+  'keepLines',
+  'pageBreakBefore',
+  'fontLineHeight',
+  'singleLine',
+  'autoSpaceKrEn',
+  'autoSpaceKrNum',
+  'verticalAlign',
+  'englishBreakUnit',
+  'koreanBreakUnit',
+  'borderConnect',
+  'borderIgnoreMargin',
+];
+
+function pickDefined<T extends object, K extends keyof T>(source: T, keys: K[]): Partial<T> {
+  const result: Partial<T> = {};
+  for (const key of keys) {
+    if (source[key] !== undefined) result[key] = source[key];
+  }
+  return result;
+}
+
 function pxToRaw2x(px: number): number {
   return Math.round(px * PX_TO_RAW_2X);
+}
+
+function pxToRaw(px: number): number {
+  return Math.round(px * 75);
+}
+
+function normalizeFormatCopyParaProps(props: Partial<ParaProperties>): Partial<ParaProperties> {
+  const normalized = { ...props };
+  if (props.marginLeft !== undefined) normalized.marginLeft = pxToRaw2x(props.marginLeft);
+  if (props.marginRight !== undefined) normalized.marginRight = pxToRaw2x(props.marginRight);
+  if (props.indent !== undefined) normalized.indent = pxToRaw2x(props.indent);
+  if (props.spacingBefore !== undefined) normalized.spacingBefore = pxToRaw(props.spacingBefore);
+  if (props.spacingAfter !== undefined) normalized.spacingAfter = pxToRaw(props.spacingAfter);
+  return normalized;
 }
 
 function createOverlaySvg(): SVGSVGElement {
@@ -118,6 +204,8 @@ export class InputHandler {
   private fieldEndExitKey: string | null = null;
   /** 누름틀을 포함한 붙여넣기 직후 마지막 필드 끝을 바깥 위치로 고정한다 */
   private pastedFieldEndOutsidePending = false;
+  /** 모양 복사로 기억한 글자/문단 모양 */
+  private formatCopyState: FormatCopyState | null = null;
 
   // 마우스 드래그 선택 상태
   private isDragging = false;
@@ -3560,6 +3648,49 @@ export class InputHandler {
 
   /** 전체 선택 (커맨드 시스템용) */
   performSelectAll(): void { this.handleSelectAll(); }
+
+  /** 모양 복사/붙여넣기 (커맨드 시스템용) */
+  performFormatCopy(): void {
+    const sel = this.getSelection();
+    if (!sel) {
+      this.copyFormatAtCursor();
+      return;
+    }
+
+    if (!this.formatCopyState) {
+      this.copyFormatAtCursor();
+      return;
+    }
+
+    const { charProps, paraProps } = this.formatCopyState;
+    if (Object.keys(charProps).length > 0) {
+      this.applyCharPropsToRange(sel.start, sel.end, charProps);
+    }
+    if (Object.keys(paraProps).length > 0) {
+      this.applyParaPropsToRange(sel.start, sel.end, paraProps);
+    }
+    this.focusTextarea();
+  }
+
+  private copyFormatAtCursor(): void {
+    const currentCharProps = this.getCharProperties();
+    const charProps = pickDefined(currentCharProps, FORMAT_COPY_CHAR_KEYS) as Partial<CharProperties>;
+    if (charProps.fontIds === undefined && charProps.fontId === undefined) {
+      const fontFamily = currentCharProps.fontFamily;
+      if (fontFamily) {
+        const fontId = this.wasm.findOrCreateFontId(fontFamily);
+        if (fontId >= 0) charProps.fontId = fontId;
+      }
+    }
+    const paraProps = normalizeFormatCopyParaProps(
+      pickDefined(this.getParaProperties(), FORMAT_COPY_PARA_KEYS) as Partial<ParaProperties>,
+    );
+    this.formatCopyState = {
+      charProps: JSON.parse(JSON.stringify(charProps)),
+      paraProps: JSON.parse(JSON.stringify(paraProps)),
+    };
+    this.focusTextarea();
+  }
 
   /** 서식 토글 (커맨드 시스템용) */
   toggleFormat(prop: 'bold' | 'italic' | 'underline' | 'strikethrough' | 'emboss' | 'engrave' | 'outline' | 'superscript' | 'subscript'): void {

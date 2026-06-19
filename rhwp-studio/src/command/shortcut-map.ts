@@ -20,6 +20,8 @@ export const defaultShortcuts: [ShortcutDef, string][] = [
 
   [{ key: 'e', ctrl: true }, 'edit:delete'],
   [{ key: 'ㄷ', ctrl: true }, 'edit:delete'],
+  [{ key: 'c', alt: true }, 'edit:format-copy'],
+  [{ key: 'ㅊ', alt: true }, 'edit:format-copy'],
 
   // 파일
   [{ key: 'n', alt: true }, 'file:new-doc'],
