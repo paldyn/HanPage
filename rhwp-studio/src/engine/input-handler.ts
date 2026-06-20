@@ -3700,8 +3700,9 @@ export class InputHandler {
 
     if (this.cursor.isInCellSelectionMode()) {
       if (this.formatCopyState.cellProps && Object.keys(this.formatCopyState.cellProps).length > 0) {
-        this.applyCopiedCellPropsToSelection(this.formatCopyState.cellProps);
-        return true;
+        const applied = this.applyCopiedCellPropsToSelection(this.formatCopyState.cellProps);
+        if (applied) this.formatCopyState = null;
+        return applied;
       }
       return false;
     }
@@ -3716,6 +3717,8 @@ export class InputHandler {
     if (Object.keys(paraProps).length > 0) {
       this.applyParaPropsToRange(sel.start, sel.end, paraProps);
     }
+    // 한컴 호환: 복사한 모양은 한 번 붙여넣으면 자동 해제한다.
+    this.formatCopyState = null;
     this.focusTextarea();
     return true;
   }
@@ -3748,17 +3751,17 @@ export class InputHandler {
     this.focusTextarea();
   }
 
-  private applyCopiedCellPropsToSelection(cellProps: Partial<CellProperties>): void {
+  private applyCopiedCellPropsToSelection(cellProps: Partial<CellProperties>): boolean {
     const ctx = this.cursor.getCellTableContext();
     const range = this.cursor.getSelectedCellRange();
     if (!ctx || !range) {
       this.focusTextarea();
-      return;
+      return false;
     }
     if (ctx.cellPath && ctx.cellPath.length > 1) {
       console.info('[InputHandler] 중첩 표 셀 모양복사는 아직 지원하지 않습니다');
       this.focusTextarea();
-      return;
+      return false;
     }
 
     const props = JSON.parse(JSON.stringify(cellProps)) as Partial<CellProperties>;
@@ -3781,6 +3784,7 @@ export class InputHandler {
       },
     });
     this.focusTextarea();
+    return true;
   }
 
   /** 서식 토글 (커맨드 시스템용) */

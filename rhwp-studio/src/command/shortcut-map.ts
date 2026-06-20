@@ -20,7 +20,8 @@ export const defaultShortcuts: [ShortcutDef, string][] = [
 
   [{ key: 'e', ctrl: true }, 'edit:delete'],
   [{ key: 'ㄷ', ctrl: true }, 'edit:delete'],
-  [{ key: 'c', alt: true }, 'edit:format-copy'],
+  // macOS Option+C가 문자 입력으로 해석되어도 물리 C 키를 한컴 호환 모양 복사로 처리한다.
+  [{ key: 'c', code: 'KeyC', alt: true }, 'edit:format-copy'],
   [{ key: 'ㅊ', alt: true }, 'edit:format-copy'],
 
   // 파일
