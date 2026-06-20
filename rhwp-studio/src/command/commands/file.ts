@@ -256,6 +256,7 @@ export const fileCommands: CommandDef[] = [
           if (saveResult.method !== 'fallback') {
             services.wasm.currentFileHandle = saveResult.handle;
             services.wasm.fileName = saveResult.fileName;
+            services.documentState.markClean('save-as');
             console.log(`[file:save-as] ${saveResult.fileName} (${(bytes.length / 1024).toFixed(1)}KB)`);
             return;
           }
@@ -278,6 +279,7 @@ export const fileCommands: CommandDef[] = [
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
 
+        services.documentState.markClean('save-as');
         console.log(`[file:save-as] ${downloadName} (${(bytes.length / 1024).toFixed(1)}KB)`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
