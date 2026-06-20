@@ -91,20 +91,39 @@ export class TableResizeRenderer {
 
     const { rowLines, colLines } = this.computeBorderLines(bboxes);
     const pageIndex = bboxes[0].pageIndex;
+    const rounded = (v: number) => Math.round(v * 10) / 10;
+    const rowIndexByY = new Map(rowLines.map(line => [rounded(line.y), line.index]));
+    const colIndexByX = new Map(colLines.map(line => [rounded(line.x), line.index]));
 
-    // 행 경계선 검사 (수평선)
-    for (const line of rowLines) {
-      if (Math.abs(pageY - line.y) <= tolerance &&
-          pageX >= line.xStart - tolerance && pageX <= line.xEnd + tolerance) {
-        return { type: 'row', index: line.index, pageIndex };
+    // 행 경계선 검사 (수평선): 실제 셀 segment 위에서만 잡는다.
+    for (const b of bboxes) {
+      if (pageX < b.x - tolerance || pageX > b.x + b.w + tolerance) continue;
+
+      const topIndex = rowIndexByY.get(rounded(b.y));
+      if (topIndex !== undefined && Math.abs(pageY - b.y) <= tolerance) {
+        return { type: 'row', index: topIndex, pageIndex };
+      }
+
+      const bottomY = b.y + b.h;
+      const bottomIndex = rowIndexByY.get(rounded(bottomY));
+      if (bottomIndex !== undefined && Math.abs(pageY - bottomY) <= tolerance) {
+        return { type: 'row', index: bottomIndex, pageIndex };
       }
     }
 
-    // 열 경계선 검사 (수직선)
-    for (const line of colLines) {
-      if (Math.abs(pageX - line.x) <= tolerance &&
-          pageY >= line.yStart - tolerance && pageY <= line.yEnd + tolerance) {
-        return { type: 'col', index: line.index, pageIndex };
+    // 열 경계선 검사 (수직선): 실제 셀 segment 위에서만 잡는다.
+    for (const b of bboxes) {
+      if (pageY < b.y - tolerance || pageY > b.y + b.h + tolerance) continue;
+
+      const leftIndex = colIndexByX.get(rounded(b.x));
+      if (leftIndex !== undefined && Math.abs(pageX - b.x) <= tolerance) {
+        return { type: 'col', index: leftIndex, pageIndex };
+      }
+
+      const rightX = b.x + b.w;
+      const rightIndex = colIndexByX.get(rounded(rightX));
+      if (rightIndex !== undefined && Math.abs(pageX - rightX) <= tolerance) {
+        return { type: 'col', index: rightIndex, pageIndex };
       }
     }
 
@@ -166,10 +185,12 @@ export class TableResizeRenderer {
     pageIndex: number,
     bboxes: CellBbox[],
     zoom: number,
+    markerBboxes?: CellBbox[],
   ): void {
     this.clear();
     this.ensureAttached();
     if (bboxes.length === 0) return;
+    const markerRange = markerBboxes && markerBboxes.length > 0 ? markerBboxes : bboxes;
 
     const scrollContent = this.container.querySelector('#scroll-content');
     const contentWidth = scrollContent?.clientWidth ?? 0;
@@ -181,8 +202,8 @@ export class TableResizeRenderer {
     const el = document.createElement('div');
 
     if (type === 'row') {
-      const minX = Math.min(...bboxes.map(b => b.x));
-      const maxX = Math.max(...bboxes.map(b => b.x + b.w));
+      const minX = Math.min(...markerRange.map(b => b.x));
+      const maxX = Math.max(...markerRange.map(b => b.x + b.w));
       const left = pageLeft + minX * zoom;
       const top = pageOffset + position * zoom - t / 2;
       const width = (maxX - minX) * zoom;
@@ -191,8 +212,8 @@ export class TableResizeRenderer {
         `width:${width}px;height:${t}px;` +
         `background:${TableResizeRenderer.MARKER_COLOR};pointer-events:none;`;
     } else {
-      const minY = Math.min(...bboxes.map(b => b.y));
-      const maxY = Math.max(...bboxes.map(b => b.y + b.h));
+      const minY = Math.min(...markerRange.map(b => b.y));
+      const maxY = Math.max(...markerRange.map(b => b.y + b.h));
       const left = pageLeft + position * zoom - t / 2;
       const top = pageOffset + minY * zoom;
       const height = (maxY - minY) * zoom;

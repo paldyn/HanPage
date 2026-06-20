@@ -895,8 +895,8 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
       }
       return;
     }
-    // Ctrl+방향키: 셀 크기 조절
-    if ((e.ctrlKey || e.metaKey) && (
+    // Ctrl/Cmd/Alt+방향키: 셀 크기 조절
+    if ((e.ctrlKey || e.metaKey || e.altKey) && (
         e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
         e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
       e.preventDefault();
@@ -938,6 +938,14 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
       e.preventDefault();
       this.dispatcher?.dispatch('table:cell-split');
       return;
+    }
+    if (e.altKey && !e.ctrlKey && !e.metaKey) {
+      const cmdId = matchShortcut(e, defaultShortcuts);
+      if (cmdId === 'edit:format-copy') {
+        e.preventDefault();
+        this.dispatcher?.dispatch(cmdId);
+        return;
+      }
     }
     if (this.cursor.isProtectedCellSelectionMode()) {
       e.preventDefault();

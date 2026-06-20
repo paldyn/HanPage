@@ -70,9 +70,11 @@ export const editCommands: CommandDef[] = [
     id: 'edit:format-copy',
     label: '모양 복사',
     icon: 'icon-format-copy',
-    shortcutLabel: 'Ctrl+Alt+C',
-    canExecute: () => false, // 미구현
-    execute() { /* TODO */ },
+    shortcutLabel: 'Alt+C',
+    canExecute: (ctx) => ctx.hasDocument,
+    execute(services) {
+      services.getInputHandler()?.performFormatCopy();
+    },
   },
   {
     id: 'edit:delete',

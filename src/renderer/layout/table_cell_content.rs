@@ -635,6 +635,7 @@ impl LayoutEngine {
                 &composed_paras,
                 &cell.paragraphs,
                 styles,
+                cell.apply_inner_margin,
             );
             pad_left = new_pl;
             pad_right = new_pr;

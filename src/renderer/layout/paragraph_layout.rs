@@ -2447,6 +2447,8 @@ impl LayoutEngine {
                 .iter()
                 .map(|r| r.text.chars().filter(|c| *c != '\t').count())
                 .sum();
+            let suppress_cell_overflow_spacing =
+                cell_ctx.is_some() && total_text_width > available_width * 1.15;
 
             // Task #352: 라인 내 dash leader (3+ 연속 '-') 글자 수 카운트.
             // visible_count 까지의 chars 에서만 카운트 (후행 공백 제외).
@@ -2508,6 +2510,10 @@ impl LayoutEngine {
                         // dash 가 흡수 (PDF elastic leader 동작 모방). 공백·일반
                         // 글자 자연 폭 유지.
                         (0.0, 0.0, slack / leader_dashes as f64)
+                    } else if suppress_cell_overflow_spacing && slack < 0.0 {
+                        // 셀 내부 폭이 글자 자연 폭보다 작아도 한컴처럼 글자를 압축하지 않는다.
+                        // 줄바꿈은 LINE_SEG/리플로우가 결정하고, 그린 글자는 셀 경계에서만 클리핑한다.
+                        (0.0, 0.0, 0.0)
                     } else {
                         // 양쪽 정렬: 단어 간격 분배 (또는 음수 슬랙 시 압축)
                         let raw_ews = slack / interior_spaces as f64;
@@ -2527,6 +2533,9 @@ impl LayoutEngine {
                     let slack = available_width - total_text_width;
                     if leader_dashes > 0 && slack > 0.0 {
                         (0.0, 0.0, slack / leader_dashes as f64)
+                    } else if suppress_cell_overflow_spacing && slack < 0.0 {
+                        // 셀의 좁은 내부 폭은 줄바꿈 기준일 뿐, 숫자/문자를 수평 압축하지 않는다.
+                        (0.0, 0.0, 0.0)
                     } else {
                         let raw = slack / total_char_count as f64;
                         let avg_char_w = total_text_width / total_char_count as f64;
@@ -2539,15 +2548,23 @@ impl LayoutEngine {
             } else if needs_distribute && total_char_count > 1 {
                 // 배분/나눔 정렬: 모든 글자에 균등 분배
                 let raw = (available_width - total_text_width) / total_char_count as f64;
-                let avg_char_w = total_text_width / total_char_count as f64;
-                let min_sp = -avg_char_w * 0.5;
-                (0.0, raw.max(min_sp), 0.0)
+                if suppress_cell_overflow_spacing && raw < 0.0 {
+                    (0.0, 0.0, 0.0)
+                } else {
+                    let avg_char_w = total_text_width / total_char_count as f64;
+                    let min_sp = -avg_char_w * 0.5;
+                    (0.0, raw.max(min_sp), 0.0)
+                }
             } else if total_text_width > available_width && total_char_count > 1 && !has_tabs {
                 // 비정렬(왼쪽/오른쪽/가운데) 텍스트가 오버플로우할 때 글자 간격 압축
-                let raw = (available_width - total_text_width) / total_char_count as f64;
-                let avg_char_w = total_text_width / total_char_count as f64;
-                let min_sp = -avg_char_w * 0.5;
-                (0.0, raw.max(min_sp), 0.0)
+                if suppress_cell_overflow_spacing {
+                    (0.0, 0.0, 0.0)
+                } else {
+                    let raw = (available_width - total_text_width) / total_char_count as f64;
+                    let avg_char_w = total_text_width / total_char_count as f64;
+                    let min_sp = -avg_char_w * 0.5;
+                    (0.0, raw.max(min_sp), 0.0)
+                }
             } else if cell_ctx.is_some()
                 && total_char_count > 1
                 && !has_tabs

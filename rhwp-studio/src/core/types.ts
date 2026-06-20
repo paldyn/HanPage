@@ -433,6 +433,8 @@ export interface CellProperties {
   paddingRight: number;
   paddingTop: number;
   paddingBottom: number;
+  /** 셀 고유 안 여백 지정 */
+  applyInnerMargin: boolean;
   /** 0=top, 1=center, 2=bottom */
   verticalAlign: number;
   /** 0=horizontal, 1=vertical */

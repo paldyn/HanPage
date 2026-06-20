@@ -714,12 +714,12 @@ impl DocumentCore {
                             return;
                         }
                     } else if let Some(cell) = table.cells.get(cell_idx) {
-                        let pad_l = if cell.padding.left != 0 {
+                        let pad_l = if cell.apply_inner_margin {
                             cell.padding.left
                         } else {
                             table.padding.left
                         };
-                        let pad_r = if cell.padding.right != 0 {
+                        let pad_r = if cell.apply_inner_margin {
                             cell.padding.right
                         } else {
                             table.padding.right

@@ -59,18 +59,6 @@ function hideProtectedCellHover(self: any): void {
   }
 }
 
-function isOuterTableBorderEdge(self: any, edge: any, pageBboxes: any[]): boolean {
-  try {
-    const { rowLines, colLines } = self.tableResizeRenderer.computeBorderLines(pageBboxes);
-    if (edge.type === 'row') {
-      return edge.index === 0 || edge.index === rowLines.length - 1;
-    }
-    return edge.index === 0 || edge.index === colLines.length - 1;
-  } catch {
-    return false;
-  }
-}
-
 function selectTableObject(this: any, tableRef: { sec: number; ppi: number; ci: number }): void {
   hideProtectedCellHover(this);
   this.cursor.clearSelection();
@@ -108,6 +96,122 @@ function selectProtectedCell(this: any, hit: any): void {
   this.updateCellSelection();
   this.eventBus.emit('command-state-changed');
   this.textarea.focus();
+}
+
+function startCellSelectionDrag(this: any, e: MouseEvent, cellRC: { row: number; col: number }): void {
+  hideProtectedCellHover(this);
+  this.active = true;
+  this.cursor.setCellSelectionAnchor?.(cellRC.row, cellRC.col);
+  this.updateCellSelection();
+  this.cellSelectionDragState = {
+    startClientX: e.clientX,
+    startClientY: e.clientY,
+    lastClientX: e.clientX,
+    lastClientY: e.clientY,
+    startRow: cellRC.row,
+    startCol: cellRC.col,
+    lastRow: cellRC.row,
+    lastCol: cellRC.col,
+    isDragging: false,
+  };
+  document.addEventListener('mousemove', this.onMouseMoveBound);
+  document.addEventListener('mouseup', this.onMouseUpBound, { once: true });
+  this.textarea.focus();
+}
+
+function startCellSelectionDragCandidate(this: any, e: MouseEvent, cellRC: { row: number; col: number }): void {
+  this.cellSelectionDragCandidate = {
+    startClientX: e.clientX,
+    startClientY: e.clientY,
+    startRow: cellRC.row,
+    startCol: cellRC.col,
+  };
+}
+
+function updateCellSelectionDrag(this: any, e: MouseEvent): void {
+  const state = this.cellSelectionDragState;
+  if (!state) return;
+  state.lastClientX = e.clientX;
+  state.lastClientY = e.clientY;
+
+  const dx = e.clientX - state.startClientX;
+  const dy = e.clientY - state.startClientY;
+  if (!state.isDragging && Math.hypot(dx, dy) < 3) return;
+  state.isDragging = true;
+
+  const cellRC = this.hitTestCellRowCol(e);
+  if (!cellRC) return;
+  if (cellRC.row === state.lastRow && cellRC.col === state.lastCol) return;
+
+  state.lastRow = cellRC.row;
+  state.lastCol = cellRC.col;
+  this.cursor.setCellSelectionFocus?.(cellRC.row, cellRC.col);
+  this.updateCellSelection();
+}
+
+function finishCellSelectionDrag(this: any, e: MouseEvent): void {
+  const state = this.cellSelectionDragState;
+  if (!state) return;
+  this.cellSelectionDragState = null;
+  document.removeEventListener('mousemove', this.onMouseMoveBound);
+
+  if (!state.isDragging) {
+    const hit = this.hitTestFromClientPoint?.(e.clientX, e.clientY);
+    if (hit) {
+      if (this.cursor.isProtectedCellSelectionMode?.() && isProtectedCellHit(this, hit)) {
+        this.updateCellSelection();
+        this.textarea.focus();
+        return;
+      }
+      this.cursor.exitCellSelectionMode();
+      this.cellSelectionRenderer?.clear();
+      this.cursor.clearSelection();
+      this.cursor.moveTo(hit);
+      this.cursor.resetPreferredX();
+      this.cursor.setAnchor();
+      this.active = true;
+      this.selectionRenderer.clear();
+      this.updateCaret();
+      this.updateFieldMarkers?.();
+      this.eventBus.emit('command-state-changed');
+      this.textarea.focus();
+      return;
+    }
+  }
+
+  this.updateCellSelection();
+  this.textarea.focus();
+}
+
+function promoteCellSelectionDragCandidate(this: any, e: MouseEvent): boolean {
+  const candidate = this.cellSelectionDragCandidate;
+  if (!candidate) return false;
+
+  const dx = e.clientX - candidate.startClientX;
+  const dy = e.clientY - candidate.startClientY;
+  if (Math.hypot(dx, dy) < 3) return false;
+
+  const cellRC = this.hitTestCellRowCol(e);
+  if (!cellRC) return false;
+  if (cellRC.row === candidate.startRow && cellRC.col === candidate.startCol) return false;
+
+  this.stopTextSelectionDrag?.();
+  this.cellSelectionDragCandidate = null;
+  document.removeEventListener('mouseup', this.onMouseUpBound);
+  this.cursor.clearSelection();
+  if (!this.cursor.enterCellSelectionMode()) return false;
+
+  this.caret.hide();
+  this.fieldMarker.hide();
+  this.selectionRenderer.clear();
+  this.eventBus.emit('command-state-changed');
+
+  startCellSelectionDrag.call(this, {
+    clientX: candidate.startClientX,
+    clientY: candidate.startClientY,
+  } as MouseEvent, { row: candidate.startRow, col: candidate.startCol });
+  updateCellSelectionDrag.call(this, e);
+  return true;
 }
 
 export function onClick(this: any, e: MouseEvent): void {
@@ -220,6 +324,8 @@ export function onClick(this: any, e: MouseEvent): void {
     // 우클릭 → 표 객체 선택 유지 (컨텍스트 메뉴에서 처리)
     if (e.button === 2) return;
 
+    let clickedInsideSelectedTable = false;
+
     // 좌클릭이 표 내부이면 → 이동 드래그 시작
     const ref = this.cursor.getSelectedTableRef();
     if (ref && e.button === 0) {
@@ -236,9 +342,22 @@ export function onClick(this: any, e: MouseEvent): void {
         const px = (cx - pl) / zoom;
         const py = (cy - po) / zoom;
         try {
+          const handleDir = this.tableObjectRenderer?.getHandleAtPoint(cx, cy);
+          let enterCellHit: any = null;
+          if (!handleDir) {
+            const hit = this.wasm.hitTest(pi, px, py);
+            if (!hit.isTextBox &&
+                hit.sectionIndex === ref.sec &&
+                hit.parentParaIndex === ref.ppi &&
+                hit.controlIndex === ref.ci &&
+                !this.isTableBorderClick(px, py, hit.sectionIndex, hit.parentParaIndex, hit.controlIndex)) {
+              enterCellHit = hit;
+            }
+          }
           const bbox = this.wasm.getTableBBox(ref.sec, ref.ppi, ref.ci);
           if (px >= bbox.x && px <= bbox.x + bbox.width &&
               py >= bbox.y && py <= bbox.y + bbox.height) {
+            clickedInsideSelectedTable = true;
             e.preventDefault();
             this.isMoveDragging = true;
             this.moveDragState = {
@@ -247,6 +366,7 @@ export function onClick(this: any, e: MouseEvent): void {
               startPageX: px, startPageY: py,
               lastPageX: px, lastPageY: py,
               totalDeltaH: 0, totalDeltaV: 0,
+              pendingEnterCellHit: enterCellHit,
             };
             this.container.style.cursor = 'move';
             document.addEventListener('mouseup', this.onMouseUpBound, { once: true });
@@ -257,10 +377,12 @@ export function onClick(this: any, e: MouseEvent): void {
       }
     }
 
-    // 표 밖 좌클릭 → 표 객체 선택 해제
-    this.cursor.exitTableObjectSelection();
-    this.eventBus.emit('table-object-selection-changed', false);
-    this.container.style.cursor = '';
+    if (!clickedInsideSelectedTable) {
+      // 표 밖 좌클릭 → 표 객체 선택 해제
+      this.cursor.exitTableObjectSelection();
+      this.eventBus.emit('table-object-selection-changed', false);
+      this.container.style.cursor = '';
+    }
   }
 
   // 그림/글상자 객체 선택 중 클릭 처리
@@ -547,11 +669,7 @@ export function onClick(this: any, e: MouseEvent): void {
             const edge = this.tableResizeRenderer.hitTestBorder(pageX, pageY, pageBboxes);
             if (edge) {
               e.preventDefault();
-              if (isOuterTableBorderEdge(this, edge, pageBboxes)) {
-                selectTableObject.call(this, ctx);
-                return;
-              }
-              this.startResizeDrag(edge, pageX, pageY, pageBboxes);
+              this.startResizeDrag(edge, pageX, pageY, pageBboxes, e.shiftKey);
               this.textarea.focus();
               return;
             }
@@ -559,7 +677,15 @@ export function onClick(this: any, e: MouseEvent): void {
         } catch { /* bboxes 조회 실패 시 무시 */ }
       }
     }
-    // 일반 좌클릭 → 셀 선택 모드 종료
+    if (e.button === 0) {
+      const cellRC = this.hitTestCellRowCol(e);
+      if (cellRC) {
+        e.preventDefault();
+        startCellSelectionDrag.call(this, e, cellRC);
+        return;
+      }
+    }
+    // 셀 밖 일반 좌클릭 → 셀 선택 모드 종료
     this.cursor.exitCellSelectionMode();
     this.cellSelectionRenderer?.clear();
   }
@@ -600,11 +726,7 @@ export function onClick(this: any, e: MouseEvent): void {
     const edge = this.tableResizeRenderer.hitTestBorder(pageX, pageY, pageBboxes);
     if (edge) {
       e.preventDefault();
-      if (isOuterTableBorderEdge(this, edge, pageBboxes)) {
-        selectTableObject.call(this, this.cachedTableRef);
-        return;
-      }
-      this.startResizeDrag(edge, pageX, pageY, pageBboxes);
+      this.startResizeDrag(edge, pageX, pageY, pageBboxes, e.shiftKey);
       this.textarea.focus();
       return;
     }
@@ -794,6 +916,10 @@ export function onClick(this: any, e: MouseEvent): void {
     // 보호 셀은 텍스트 커서를 넣지 않고 셀 선택 상태로 전환한다.
     if (isProtectedCellHit(this, hit)) {
       selectProtectedCell.call(this, hit);
+      if (e.button === 0) {
+        const cellRC = this.hitTestCellRowCol(e);
+        if (cellRC) startCellSelectionDrag.call(this, e, cellRC);
+      }
       return;
     }
 
@@ -1036,6 +1162,17 @@ export function onClick(this: any, e: MouseEvent): void {
     this.prepareClickHerePointerEntry?.(pageX);
     this.cursor.setAnchor(); // 드래그 시작점(anchor) 설정
     this.active = true;
+    if (
+      e.button === 0 &&
+      hit.parentParaIndex !== undefined &&
+      hit.controlIndex !== undefined &&
+      !hit.isTextBox
+    ) {
+      const cellRC = this.hitTestCellRowCol(e);
+      if (cellRC) startCellSelectionDragCandidate.call(this, e, cellRC);
+    } else {
+      this.cellSelectionDragCandidate = null;
+    }
     this.startTextSelectionDrag(e);
 
     const rect = this.cursor.getRect();
@@ -1386,8 +1523,15 @@ export function onMouseMove(this: any, e: MouseEvent): void {
     return;
   }
 
+  // 셀 블록 선택 드래그 중
+  if (this.cellSelectionDragState) {
+    updateCellSelectionDrag.call(this, e);
+    return;
+  }
+
   // 드래그 중: requestAnimationFrame으로 throttle하여 성능 확보
   if (this.isDragging) {
+    if (promoteCellSelectionDragCandidate.call(this, e)) return;
     this.updateTextSelectionDragPointer(e);
     if (this.dragRafId) return; // 이미 예약된 프레임이 있으면 건너뜀
     this.dragRafId = requestAnimationFrame(() => {
@@ -1669,6 +1813,12 @@ export function onMouseUp(this: any, _e: MouseEvent): void {
   // 리사이즈 드래그 종료
   if (this.isResizeDragging) {
     this.finishResizeDrag(_e);
+    return;
+  }
+
+  // 셀 블록 선택 드래그 종료
+  if (this.cellSelectionDragState) {
+    finishCellSelectionDrag.call(this, _e);
     return;
   }
 
