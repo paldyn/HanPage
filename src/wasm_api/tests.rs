@@ -22383,3 +22383,117 @@ fn task1413_insert_click_here_field_by_path_ex_equivalent() {
     );
     assert_eq!(format!("{res_pos:?}"), format!("{res_ex:?}"));
 }
+
+// ---------- #1413 4단계: 7인자 군 *Ex 동치 (13개) ----------
+
+// 표 셀(para0/control0/cell0)에 정상 동작하는 *InCell 류. 반환 동일성 비교.
+#[test]
+fn task1413_insert_text_in_cell_ex_equivalent() {
+    let mut a = create_doc_with_table();
+    let rp = a.insert_text_in_cell(0, 0, 0, 0, 0, 0, "텍스트");
+    let mut b = create_doc_with_table();
+    let re = b.insert_text_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,"charOffset":0,"text":"텍스트"}"#,
+    );
+    assert_eq!(format!("{rp:?}"), format!("{re:?}"));
+}
+
+#[test]
+fn task1413_get_text_in_cell_ex_equivalent() {
+    let a = create_doc_with_table();
+    let rp = a.get_text_in_cell(0, 0, 0, 0, 0, 0, 1);
+    let re = a.get_text_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,"charOffset":0,"count":1}"#,
+    );
+    assert_eq!(format!("{rp:?}"), format!("{re:?}"));
+}
+
+#[test]
+fn task1413_delete_text_in_cell_ex_equivalent() {
+    let mut a = create_doc_with_table();
+    let rp = a.delete_text_in_cell(0, 0, 0, 0, 0, 0, 1);
+    let mut b = create_doc_with_table();
+    let re = b.delete_text_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,"charOffset":0,"count":1}"#,
+    );
+    assert_eq!(format!("{rp:?}"), format!("{re:?}"));
+}
+
+#[test]
+fn task1413_paste_html_in_cell_ex_equivalent() {
+    let mut a = create_doc_with_table();
+    let rp = a.paste_html_in_cell(0, 0, 0, 0, 0, 0, "<p>x</p>");
+    let mut b = create_doc_with_table();
+    let re = b.paste_html_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,"charOffset":0,"html":"<p>x</p>"}"#,
+    );
+    assert_eq!(format!("{rp:?}"), format!("{re:?}"));
+}
+
+#[test]
+fn task1413_merge_table_cells_ex_equivalent() {
+    let mut a = create_doc_with_table();
+    let rp = a.merge_table_cells(0, 0, 0, 0, 0, 0, 1);
+    let mut b = create_doc_with_table();
+    let re = b.merge_table_cells_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"startRow":0,"startCol":0,"endRow":0,"endCol":1}"#,
+    );
+    assert_eq!(format!("{rp:?}"), format!("{re:?}"));
+}
+
+#[test]
+fn task1413_insert_click_here_field_ex_equivalent() {
+    let mut a = HwpDocument::create_empty();
+    a.insert_text_native(0, 0, 0, "abc").unwrap();
+    let rp = a.insert_click_here_field_api(0, 0, 0, "안내", "메모", "이름", true);
+    let mut b = HwpDocument::create_empty();
+    b.insert_text_native(0, 0, 0, "abc").unwrap();
+    let re = b.insert_click_here_field_ex(
+        r#"{"sectionIdx":0,"paraIdx":0,"charOffset":0,"guide":"안내","memo":"메모","name":"이름","editable":true}"#,
+    );
+    assert_eq!(format!("{rp:?}"), format!("{re:?}"));
+}
+
+// bool/String 반환 (JsValue 변환 없음 — 패닉 무관).
+#[test]
+fn task1413_set_active_field_in_cell_ex_equivalent() {
+    let mut a = create_doc_with_table();
+    let rp = a.set_active_field_in_cell_api(0, 0, 0, 0, 0, 0, false);
+    let mut b = create_doc_with_table();
+    let re = b.set_active_field_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,"charOffset":0,"isTextbox":false}"#,
+    );
+    assert_eq!(rp, re);
+}
+
+#[test]
+fn task1413_get_field_info_at_in_cell_ex_equivalent() {
+    let a = create_doc_with_table();
+    let rp = a.get_field_info_at_in_cell_api(0, 0, 0, 0, 0, 0, false);
+    let re = a.get_field_info_at_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,"charOffset":0,"isTextbox":false}"#,
+    );
+    assert_eq!(rp, re);
+}
+
+#[test]
+fn task1413_remove_field_at_in_cell_ex_equivalent() {
+    let mut a = create_doc_with_table();
+    let rp = a.remove_field_at_in_cell_api(0, 0, 0, 0, 0, 0, false);
+    let mut b = create_doc_with_table();
+    let re = b.remove_field_at_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,"charOffset":0,"isTextbox":false}"#,
+    );
+    assert_eq!(rp, re);
+}
+
+#[test]
+fn task1413_evaluate_table_formula_ex_equivalent() {
+    let mut a = create_doc_with_table();
+    let rp = a.evaluate_table_formula(0, 0, 0, 0, 0, "=1+1", false);
+    let mut b = create_doc_with_table();
+    let re = b.evaluate_table_formula_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"targetRow":0,"targetCol":0,"formula":"=1+1","writeResult":false}"#,
+    );
+    assert_eq!(format!("{rp:?}"), format!("{re:?}"));
+}
