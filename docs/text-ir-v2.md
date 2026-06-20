@@ -292,9 +292,34 @@ backend contract.
   compatible export.
 - Font metrics data and font-name resolution remain compatibility diagnostics,
   not portable replay proof. A resolver may use `font_metrics_data.rs` to compare
-  shaped advances against legacy `TextRun` layout, but strict glyph replay still
-  needs explicit `fontResources`/`ResourceArena` identity, resource bytes,
-  digest/`dataRef`, face index, variation axes, and shaping proof.
+  shaped advances against legacy `TextRun` layout, but the future native strict
+  replay proof should still be based on explicit `fontResources`/`ResourceArena`
+  identity, resource bytes, digest/`dataRef`, face index, variation axes, and
+  shaping proof. P26 keeps metrics/name resolution out of strict proof and leaves
+  full ResourceArena enforcement to the resolver/proof follow-up.
+
+## P27 Font Resolver and Proof Boundary
+
+P27 closes the resolver/proof boundary without turning glyph-id replay into a
+default path.
+
+- A `GlyphRun` marked `Portable` is no longer enough for CanvasKit/native-style
+  selection by itself. The shared selection report also requires a matching
+  `FontFaceResource`, `FontBlobResource`, portable `dataRef`, interned blob
+  bytes, and digest agreement before it can select the sidecar.
+- Font name resolution, HWP `FontFace` substitution, runtime font fallback, and
+  `font_metrics_data.rs` remain compatibility diagnostics. They may explain why
+  `TextRun` layout or advances look plausible, but they are not portable
+  glyph-id replay proof.
+- Missing or incomplete proof now has deterministic shared reject reasons:
+  `fontFaceMissing`, `fontBlobMissing`, `fontBlobNotPortable`,
+  `fontBlobBytesMissing`, `fontBlobDataRefMismatch`, and
+  `fontBlobDigestMismatch`.
+- Variation axes and non-default collection faces remain separate gates. P27
+  keeps those as exact-construction blockers rather than folding them into
+  generic font-name matching.
+- The public compatibility path is unchanged: when proof is missing, the backend
+  keeps the `TextRun` fallback.
 
 Every overlay removal requires a Canvas2D-vs-CanvasKit fixture. Rasterizer
 output can use fuzzy PNG comparison, but semantic decisions must be exact:
