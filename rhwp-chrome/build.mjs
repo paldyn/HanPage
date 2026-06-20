@@ -92,6 +92,8 @@ copy(resolve(__dirname, '_locales'), resolve(DIST, '_locales'));
 // rhwp-studio 리소스 (CSS에서 참조)
 mkdirSync(resolve(DIST, 'images'), { recursive: true });
 copy(resolve(ROOT, 'rhwp-studio', 'public', 'images', 'icon_small_ko.svg'), resolve(DIST, 'images', 'icon_small_ko.svg'));
+// [#1444] 다크 모드 아이콘 스프라이트 (base.css 다크 테마에서 참조). 누락 시 viewer 404.
+copy(resolve(ROOT, 'rhwp-studio', 'public', 'images', 'icon_small_ko_dark.svg'), resolve(DIST, 'images', 'icon_small_ko_dark.svg'));
 copy(resolve(ROOT, 'rhwp-studio', 'public', 'favicon.ico'), resolve(DIST, 'favicon.ico'));
 
 // 3. WASM 복사
