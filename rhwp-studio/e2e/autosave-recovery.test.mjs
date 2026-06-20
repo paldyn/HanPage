@@ -105,6 +105,17 @@ async function exportHwpFromSample(page, filename) {
   }, { fname: filename, url: sampleUrl(filename) });
 }
 
+async function exportNewDocument(page) {
+  return await page.evaluate(() => {
+    window.__wasm.createNewDocument();
+    return {
+      fileName: window.__wasm.fileName || '새 문서.hwp',
+      sourceFormat: window.__wasm.getSourceFormat(),
+      data: Array.from(window.__wasm.exportHwp()),
+    };
+  });
+}
+
 async function openAndRestore(page, expectedFileNamePart) {
   await navigateApp(page);
   await page.waitForSelector('.modal-overlay .dialog-wrap', { timeout: 5000 });
@@ -132,7 +143,33 @@ runTest('Task #1448 자동 백업 복구', async ({ page }) => {
   await navigateApp(page, `?url=${encodeURIComponent(sampleUrl(SAMPLE_HWP))}&filename=${encodeURIComponent(SAMPLE_HWP)}`);
   await clearAutosaveDb(page);
 
-  setTestCase('TC-1: HWP draft 복구');
+  setTestCase('TC-1: 새 문서 draft 복구');
+  const newDocument = await exportNewDocument(page);
+  await putDraft(page, {
+    id: 'e2e-new-draft',
+    fileName: newDocument.fileName,
+    sourceFormat: newDocument.sourceFormat,
+    savedAt: Date.now(),
+    byteLength: newDocument.data.length,
+    data: newDocument.data,
+    dirtyReason: 'e2e-new-document',
+  });
+  await openAndRestore(page, newDocument.fileName);
+  const newDocState = await page.evaluate(() => ({
+    fileName: window.__wasm.fileName,
+    pageCount: window.__wasm.pageCount,
+    isDirty: window.__documentState.isDirty(),
+  }));
+  assert(newDocState.pageCount >= 1, `새 문서 복구본 페이지 수 확인 (${newDocState.pageCount})`);
+  assert(newDocState.fileName.includes('복구본') && newDocState.fileName.endsWith('.hwp'),
+    `새 문서 복구본 파일명 확인 (${newDocState.fileName})`);
+  assert(newDocState.isDirty === true, '새 문서 복구본은 저장 전 dirty 상태 유지');
+  assert(!await draftExists(page, 'e2e-new-draft'), '복구 성공 후 원본 새 문서 draft 삭제');
+  await screenshot(page, 'autosave-recovery-new-document');
+  await page.evaluate(() => window.__documentState?.markClean?.('e2e-next-case'));
+
+  setTestCase('TC-2: HWP draft 복구');
+  await clearAutosaveDb(page);
   const hwpBytes = await fetchSampleBytes(page, SAMPLE_HWP);
   await putDraft(page, {
     id: 'e2e-hwp-draft',
@@ -157,7 +194,7 @@ runTest('Task #1448 자동 백업 복구', async ({ page }) => {
   await screenshot(page, 'autosave-recovery-hwp');
   await page.evaluate(() => window.__documentState?.markClean?.('e2e-next-case'));
 
-  setTestCase('TC-2: HWPX 출처 draft는 HWP 복구본으로 열린다');
+  setTestCase('TC-3: HWPX 출처 draft는 HWP 복구본으로 열린다');
   await clearAutosaveDb(page);
   await navigateApp(page, `?url=${encodeURIComponent(sampleUrl(SAMPLE_HWPX))}&filename=${encodeURIComponent(SAMPLE_HWPX)}`);
   const hwpxAsHwpBytes = await exportHwpFromSample(page, SAMPLE_HWPX);
