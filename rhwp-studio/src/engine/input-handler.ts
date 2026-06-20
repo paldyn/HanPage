@@ -1513,6 +1513,8 @@ export class InputHandler {
       { type: 'command', commandId: 'edit:cut' },
       { type: 'command', commandId: 'edit:copy' },
       { type: 'command', commandId: 'edit:paste' },
+      { type: 'command', commandId: 'edit:format-copy' },
+      { type: 'command', commandId: 'edit:format-paste' },
       { type: 'separator' },
       { type: 'command', commandId: 'table:cell-props', label: '셀 속성...' },
       { type: 'separator' },
@@ -1547,6 +1549,8 @@ export class InputHandler {
       { type: 'command', commandId: 'edit:cut' },
       { type: 'command', commandId: 'edit:copy' },
       { type: 'command', commandId: 'edit:paste' },
+      { type: 'command', commandId: 'edit:format-copy' },
+      { type: 'command', commandId: 'edit:format-paste' },
       { type: 'separator' },
       { type: 'command', commandId: 'format:char-shape', label: '글자 모양' },
       { type: 'command', commandId: 'format:para-shape', label: '문단 모양' },
@@ -2993,6 +2997,9 @@ export class InputHandler {
   /** 선택 영역이 있는가? */
   hasSelection(): boolean { return this.cursor.hasSelection(); }
 
+  /** 모양 복사 상태가 있는가? */
+  hasCopiedFormat(): boolean { return this.formatCopyState !== null; }
+
   /** 현재 커서 위치를 반환한다 */
   getCursorPosition(): DocumentPosition { return this.cursor.getPosition(); }
 
@@ -3678,25 +3685,29 @@ export class InputHandler {
 
   /** 모양 복사/붙여넣기 (커맨드 시스템용) */
   performFormatCopy(): void {
+    if (this.applyCopiedFormatToCurrentTarget()) return;
+    this.copyFormatAtCursor();
+  }
+
+  /** 모양 붙여넣기 (커맨드 시스템용) */
+  performFormatPaste(): void {
+    this.applyCopiedFormatToCurrentTarget();
+    this.focusTextarea();
+  }
+
+  private applyCopiedFormatToCurrentTarget(): boolean {
+    if (!this.formatCopyState) return false;
+
     if (this.cursor.isInCellSelectionMode()) {
-      if (this.formatCopyState?.cellProps && Object.keys(this.formatCopyState.cellProps).length > 0) {
+      if (this.formatCopyState.cellProps && Object.keys(this.formatCopyState.cellProps).length > 0) {
         this.applyCopiedCellPropsToSelection(this.formatCopyState.cellProps);
-      } else {
-        this.copyFormatAtCursor();
+        return true;
       }
-      return;
+      return false;
     }
 
     const sel = this.getSelection();
-    if (!sel) {
-      this.copyFormatAtCursor();
-      return;
-    }
-
-    if (!this.formatCopyState) {
-      this.copyFormatAtCursor();
-      return;
-    }
+    if (!sel) return false;
 
     const { charProps, paraProps } = this.formatCopyState;
     if (Object.keys(charProps).length > 0) {
@@ -3706,6 +3717,7 @@ export class InputHandler {
       this.applyParaPropsToRange(sel.start, sel.end, paraProps);
     }
     this.focusTextarea();
+    return true;
   }
 
   private copyFormatAtCursor(): void {
