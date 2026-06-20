@@ -6,6 +6,34 @@ import { getObjectProperties, setObjectProperties } from './input-handler-pictur
 import type { CellBbox } from '@/core/types';
 import type { BorderEdge } from './table-resize-renderer';
 
+function isOuterResizeEdge(self: any, edge: BorderEdge, pageBboxes: CellBbox[]): boolean {
+  try {
+    const { rowLines, colLines } = self.tableResizeRenderer.computeBorderLines(pageBboxes);
+    if (edge.type === 'row') {
+      return edge.index === 0 || edge.index === rowLines.length - 1;
+    }
+    return edge.index === 0 || edge.index === colLines.length - 1;
+  } catch {
+    return false;
+  }
+}
+
+function selectTableObjectFromResize(this: any, tableRef: { sec: number; ppi: number; ci: number }): void {
+  this.cursor.clearSelection();
+  this.cursor.exitCellSelectionMode();
+  this.cellSelectionRenderer?.clear();
+  this.exitPictureObjectSelectionIfNeeded();
+  this.cursor.enterTableObjectSelectionDirect(tableRef.sec, tableRef.ppi, tableRef.ci);
+  this.active = true;
+  this.caret.hide();
+  this.fieldMarker.hide();
+  this.selectionRenderer.clear();
+  this.renderTableObjectSelection();
+  this.eventBus.emit('table-object-selection-changed', true);
+  this.eventBus.emit('command-state-changed');
+  this.textarea.focus();
+}
+
 export function startResizeDrag(this: any, 
   edge: BorderEdge,
   pageX: number, pageY: number,
@@ -119,7 +147,12 @@ export function finishResizeDrag(this: any, e: MouseEvent): void {
 
   // 너무 작은 드래그는 무시 (1px 미만)
   if (Math.abs(deltaHwpUnit) < 75) {
+    const shouldSelectTable = isOuterResizeEdge(this, state.edge, state.pageBboxes);
+    const tableRef = { ...state.tableRef };
     this.cleanupResizeDrag();
+    if (shouldSelectTable) {
+      selectTableObjectFromResize.call(this, tableRef);
+    }
     return;
   }
 

@@ -467,20 +467,20 @@ export const tableCommands: CommandDef[] = [
         const dims = services.wasm.getTableDimensions(sec, ppi, ci);
         const range = equalizeTargetRange(ih, dims);
         const cells: Array<{ idx: number; row: number; height: number }> = [];
-        const rowHeights = new Map<number, { sum: number; count: number }>();
+        const rowHeights = new Map<number, number>();
+        const targetRows = new Set<number>();
+        for (let row = range.startRow; row <= range.endRow; row++) targetRows.add(row);
         for (let i = 0; i < dims.cellCount; i++) {
           const info = services.wasm.getCellInfo(sec, ppi, ci, i);
-          if (!isCellInRange(info, range)) continue;
+          if (!targetRows.has(info.row)) continue;
           if (info.rowSpan > 1) continue;
           const h = services.wasm.getCellProperties(sec, ppi, ci, i).height;
           cells.push({ idx: i, row: info.row, height: h });
-          const entry = rowHeights.get(info.row);
-          if (entry) { entry.sum += h; entry.count++; }
-          else rowHeights.set(info.row, { sum: h, count: 1 });
+          rowHeights.set(info.row, Math.max(rowHeights.get(info.row) ?? 0, h));
         }
         if (rowHeights.size < 2) return;
         let totalHeight = 0;
-        for (const v of rowHeights.values()) totalHeight += v.sum / v.count;
+        for (const h of rowHeights.values()) totalHeight += h;
         const avgHeight = Math.round(totalHeight / rowHeights.size);
         const updates: Array<{ cellIdx: number; heightDelta: number }> = [];
         for (const c of cells) {

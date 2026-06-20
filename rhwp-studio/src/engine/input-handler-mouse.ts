@@ -59,18 +59,6 @@ function hideProtectedCellHover(self: any): void {
   }
 }
 
-function isOuterTableBorderEdge(self: any, edge: any, pageBboxes: any[]): boolean {
-  try {
-    const { rowLines, colLines } = self.tableResizeRenderer.computeBorderLines(pageBboxes);
-    if (edge.type === 'row') {
-      return edge.index === 0 || edge.index === rowLines.length - 1;
-    }
-    return edge.index === 0 || edge.index === colLines.length - 1;
-  } catch {
-    return false;
-  }
-}
-
 function selectTableObject(this: any, tableRef: { sec: number; ppi: number; ci: number }): void {
   hideProtectedCellHover(this);
   this.cursor.clearSelection();
@@ -683,10 +671,6 @@ export function onClick(this: any, e: MouseEvent): void {
             const edge = this.tableResizeRenderer.hitTestBorder(pageX, pageY, pageBboxes);
             if (edge) {
               e.preventDefault();
-              if (isOuterTableBorderEdge(this, edge, pageBboxes)) {
-                selectTableObject.call(this, ctx);
-                return;
-              }
               this.startResizeDrag(edge, pageX, pageY, pageBboxes);
               this.textarea.focus();
               return;
@@ -744,10 +728,6 @@ export function onClick(this: any, e: MouseEvent): void {
     const edge = this.tableResizeRenderer.hitTestBorder(pageX, pageY, pageBboxes);
     if (edge) {
       e.preventDefault();
-      if (isOuterTableBorderEdge(this, edge, pageBboxes)) {
-        selectTableObject.call(this, this.cachedTableRef);
-        return;
-      }
       this.startResizeDrag(edge, pageX, pageY, pageBboxes);
       this.textarea.focus();
       return;
