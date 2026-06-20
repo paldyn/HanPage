@@ -27,6 +27,9 @@ import { initRhwpDev } from '@/core/rhwp-dev';
 import { DocumentDirtyState } from '@/core/document-dirty-state';
 import { initThemeSync, setThemeMode, getThemeMode, getEffectiveTheme } from '@/core/theme';
 import { AutosaveManager } from '@/recovery/autosave-manager';
+import { clearAutosaveDrafts, deleteAutosaveDraft, listAutosaveDrafts, type AutosaveDraft } from '@/recovery/autosave-store';
+import { recoveryFileName } from '@/recovery/recovery-format';
+import { showAutosaveRecoveryDialog } from '@/recovery/recovery-ui';
 import { CellSelectionRenderer } from '@/engine/cell-selection-renderer';
 import { TableObjectRenderer } from '@/engine/table-object-renderer';
 import { TableResizeRenderer } from '@/engine/table-resize-renderer';
@@ -272,7 +275,8 @@ async function initialize(): Promise<void> {
     setupZoomControls();
     setupEventListeners();
     setupGlobalShortcuts();
-    loadFromUrlParam();
+    void loadFromUrlParam();
+    void offerAutosaveRecoveryIfIdle();
     installPwaFileHandling(window as FileHandlingWindowLike, {
       openDocumentBytes(payload) {
         eventBus.emit('open-document-bytes', payload);
@@ -674,6 +678,50 @@ async function loadBytes(
   // HWPX 토스트는 모달과의 이벤트 충돌을 피하기 위해 모달 닫힌 후 표시.
   await initializeDocument(docInfo, `${fileName} — ${docInfo.pageCount}페이지 (${elapsed.toFixed(1)}ms)`);
   notifyHwpxSaveModeIfNeeded();
+}
+
+function shouldSkipInitialAutosaveRecovery(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  return params.has('url');
+}
+
+async function offerAutosaveRecoveryIfIdle(): Promise<void> {
+  if (shouldSkipInitialAutosaveRecovery()) return;
+
+  try {
+    const drafts = (await listAutosaveDrafts()).filter((draft) => draft.data.byteLength > 0);
+    if (drafts.length === 0) return;
+    if (wasm.pageCount > 0 || documentState.isDirty()) return;
+
+    const choice = await showAutosaveRecoveryDialog(drafts);
+    if (choice.action === 'later') return;
+    if (choice.action === 'delete-all') {
+      await clearAutosaveDrafts();
+      showToast({ message: '복구 후보를 삭제했습니다.', durationMs: 2200 });
+      return;
+    }
+
+    const draft = drafts.find((item) => item.id === choice.draftId);
+    if (!draft) return;
+    try {
+      await restoreAutosaveDraft(draft);
+    } catch (error) {
+      showLoadError(error);
+    }
+  } catch (error) {
+    console.warn('[autosave] 복구 후보 확인 실패:', error);
+  }
+}
+
+async function restoreAutosaveDraft(draft: AutosaveDraft): Promise<void> {
+  const fileName = recoveryFileName(draft.fileName);
+  await loadBytes(new Uint8Array(draft.data), fileName, null);
+  await deleteAutosaveDraft(draft.id);
+  documentState.markDirty('autosave-recovered');
+  showToast({
+    message: `"${fileName}" 복구본을 열었습니다.\n원본 파일은 자동으로 덮어쓰지 않습니다.`,
+    durationMs: 5000,
+  });
 }
 
 /**
