@@ -22095,3 +22095,93 @@ fn test_reflow_linesegs_empty_document_returns_zero() {
     let count = doc.reflow_linesegs();
     assert_eq!(count, 0);
 }
+
+// ---------- #1413: insertPictureEx(options object) 동치 ----------
+
+/// `insertPictureEx`(options JSON + image_data)가 positional `insertPicture` 와
+/// 동일하게 동작해야 한다. 같은 입력으로 두 문서에 각각 삽입 → 렌더 SVG 의 이미지
+/// 수와 반환 JSON 의 paraIdx/controlIdx 가 일치.
+#[test]
+fn task1413_insert_picture_ex_equivalent_to_positional() {
+    fn png() -> Vec<u8> {
+        vec![
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
+            0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78,
+            0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x00, 0x00, 0x00,
+            0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ]
+    }
+    fn count_images(svg: &str) -> usize {
+        svg.matches("<image").count()
+    }
+
+    // positional 경로
+    let mut doc_pos = HwpDocument::create_empty();
+    let res_pos = doc_pos
+        .insert_picture(
+            0,
+            0,
+            0,
+            "",
+            &png(),
+            4000,
+            3000,
+            100,
+            80,
+            "png",
+            "",
+            None,
+            None,
+        )
+        .expect("positional insertPicture");
+
+    // *Ex 경로 — 동일 입력을 options JSON 으로
+    let mut doc_ex = HwpDocument::create_empty();
+    let options = r#"{"sectionIdx":0,"paraIdx":0,"charOffset":0,"cellPath":"",
+        "width":4000,"height":3000,"naturalWidthPx":100,"naturalHeightPx":80,
+        "extension":"png","description":""}"#;
+    let res_ex = doc_ex
+        .insert_picture_ex(options, &png())
+        .expect("insertPictureEx");
+
+    // 반환 JSON 동치 (paraIdx/controlIdx)
+    assert_eq!(res_pos, res_ex, "*Ex 반환이 positional 과 동일해야 함");
+
+    // 렌더 결과 동치 (이미지 수)
+    let svg_pos = doc_pos.render_page_svg_native(0).expect("svg pos");
+    let svg_ex = doc_ex.render_page_svg_native(0).expect("svg ex");
+    assert_eq!(
+        count_images(&svg_pos),
+        count_images(&svg_ex),
+        "*Ex 렌더 이미지 수가 positional 과 동일해야 함"
+    );
+    assert_eq!(count_images(&svg_ex), 1, "그림 1개 삽입");
+}
+
+/// options JSON 의 키 누락 시 positional default 와 동일 처리 (description/extension/
+/// paperOffset 부재).
+#[test]
+fn task1413_insert_picture_ex_optional_keys_default() {
+    fn png() -> Vec<u8> {
+        vec![
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
+            0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78,
+            0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x00, 0x00, 0x00,
+            0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ]
+    }
+    // optional 키(extension/description/paperOffset/cellPath) 생략 — 본문 inline 삽입.
+    let mut doc = HwpDocument::create_empty();
+    let res = doc
+        .insert_picture_ex(
+            r#"{"sectionIdx":0,"paraIdx":0,"width":4000,"height":3000,"naturalWidthPx":100,"naturalHeightPx":80}"#,
+            &png(),
+        )
+        .expect("insertPictureEx with optional keys omitted");
+    assert!(
+        res.contains("\"ok\":true") || res.contains("paraIdx"),
+        "삽입 성공: {res}"
+    );
+}

@@ -2372,6 +2372,63 @@ impl HwpDocument {
         .map_err(|e| e.into())
     }
 
+    /// 커서 위치에 그림을 삽입한다 (확장, options object — #1413).
+    ///
+    /// positional `insertPicture` 와 동일 동작의 얇은 어댑터. 이미지 바이너리는 별도
+    /// `image_data` 인자(Uint8Array)로 받고, 나머지는 JSON options 로 받는다. 필드 추가/
+    /// 순서 변경 시 호출부 영향이 작다.
+    ///
+    /// options JSON 키 (positional 과 동일 의미, camelCase):
+    /// `{ sectionIdx, paraIdx, charOffset?, cellPath?: string, width, height,
+    ///    naturalWidthPx, naturalHeightPx, extension?, description?,
+    ///    paperOffsetXHu?: number|null, paperOffsetYHu?: number|null }`
+    /// - `cellPath` 는 cell_path_json 문자열(빈 문자열/`"[]"` 이면 본문 inline).
+    /// - 반환값은 `insertPicture` 와 동일.
+    #[wasm_bindgen(js_name = insertPictureEx)]
+    pub fn insert_picture_ex(
+        &mut self,
+        options_json: &str,
+        image_data: &[u8],
+    ) -> Result<String, JsValue> {
+        use crate::document_core::helpers::{json_i32, json_str, json_u32};
+        let section_idx = json_u32(options_json, "sectionIdx").unwrap_or(0);
+        let para_idx = json_u32(options_json, "paraIdx").unwrap_or(0);
+        let char_offset = json_u32(options_json, "charOffset").unwrap_or(0);
+        let cell_path_json = json_str(options_json, "cellPath").unwrap_or_default();
+        let width = json_u32(options_json, "width").unwrap_or(0);
+        let height = json_u32(options_json, "height").unwrap_or(0);
+        let natural_width_px = json_u32(options_json, "naturalWidthPx").unwrap_or(0);
+        let natural_height_px = json_u32(options_json, "naturalHeightPx").unwrap_or(0);
+        let extension = json_str(options_json, "extension").unwrap_or_default();
+        let description = json_str(options_json, "description").unwrap_or_default();
+        // paperOffset 은 키 부재 시 None(셀 좌상단 default) — positional 의 Option 동작과 동일.
+        let paper_offset_x_hu = json_i32(options_json, "paperOffsetXHu");
+        let paper_offset_y_hu = json_i32(options_json, "paperOffsetYHu");
+
+        let cell_path: Vec<(usize, usize, usize)> =
+            if cell_path_json.is_empty() || cell_path_json == "[]" {
+                Vec::new()
+            } else {
+                DocumentCore::parse_cell_path(&cell_path_json).map_err(JsValue::from)?
+            };
+        self.insert_picture_native(
+            section_idx as usize,
+            para_idx as usize,
+            char_offset as usize,
+            &cell_path,
+            image_data,
+            width,
+            height,
+            natural_width_px,
+            natural_height_px,
+            &extension,
+            &description,
+            paper_offset_x_hu,
+            paper_offset_y_hu,
+        )
+        .map_err(|e| e.into())
+    }
+
     /// [Task #1142] 외부 file path 그림 reference 목록을 구조화된 JSON 배열로 반환한다.
     ///
     /// 반환: JSON 배열 `[{ key, binDataId, originalPath, basename, extension, loaded }, ...]`
