@@ -996,6 +996,9 @@ impl LayoutEngine {
         // 1단계: col_span==1인 셀에서 개별 열 폭 추출
         let mut col_widths = vec![0.0f64; col_count];
         for cell in &table.cells {
+            if table.local_resize_rows.contains(&cell.row) {
+                continue;
+            }
             if cell.col_span == 1 && (cell.col as usize) < col_count {
                 let w = hwpunit_to_px(cell.width as i32, self.dpi);
                 if w > col_widths[cell.col as usize] {
@@ -1008,6 +1011,9 @@ impl LayoutEngine {
         {
             let mut constraints: Vec<(usize, usize, f64)> = Vec::new();
             for cell in &table.cells {
+                if table.local_resize_rows.contains(&cell.row) {
+                    continue;
+                }
                 let c = cell.col as usize;
                 let span = cell.col_span as usize;
                 if span > 1 && c + span <= col_count {
@@ -1150,6 +1156,9 @@ impl LayoutEngine {
         // 1단계: row_span==1인 셀에서 개별 행 높이 추출
         let mut row_heights = vec![0.0f64; row_count];
         for cell in &table.cells {
+            if table.local_resize_cols.contains(&cell.col) {
+                continue;
+            }
             if cell.row_span == 1 && (cell.row as usize) < row_count {
                 let r = cell.row as usize;
                 if cell.height < 0x80000000 {
@@ -1189,6 +1198,9 @@ impl LayoutEngine {
         {
             let mut constraints: Vec<(usize, usize, f64)> = Vec::new();
             for cell in &table.cells {
+                if table.local_resize_cols.contains(&cell.col) {
+                    continue;
+                }
                 let r = cell.row as usize;
                 let span = cell.row_span as usize;
                 if span > 1 && r + span <= row_count && cell.height < 0x80000000 {
@@ -2059,8 +2071,8 @@ impl LayoutEngine {
             // 텍스트 오버플로우 시 좌우 패딩 축소.
             // 1443 셀 안여백 샘플처럼 큰 명시 좌우 여백은 한컴과 같이 보존하되,
             // 기존 문서의 1~4mm급 일반 셀 여백은 종전 오버플로우 방어를 유지한다.
-            let preserve_explicit_horizontal_padding = cell.apply_inner_margin
-                && cell.padding.left.max(cell.padding.right) >= 1700;
+            let preserve_explicit_horizontal_padding =
+                cell.apply_inner_margin && cell.padding.left.max(cell.padding.right) >= 1700;
             let (new_pl, new_pr) = self.shrink_cell_padding_for_overflow(
                 pad_left,
                 pad_right,

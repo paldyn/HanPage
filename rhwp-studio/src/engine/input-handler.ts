@@ -264,6 +264,8 @@ export class InputHandler {
     pageBboxes: CellBbox[];
     affectedCellIndices: number[];
     borderOriginalPos: number;
+    minResizePos: number;
+    maxResizePos: number;
     singleCellTarget?: { cellIdx: number; side: 'start' | 'end' } | null;
     shiftResize?: boolean;
   } | null = null;

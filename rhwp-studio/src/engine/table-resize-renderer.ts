@@ -185,10 +185,12 @@ export class TableResizeRenderer {
     pageIndex: number,
     bboxes: CellBbox[],
     zoom: number,
+    markerBboxes?: CellBbox[],
   ): void {
     this.clear();
     this.ensureAttached();
     if (bboxes.length === 0) return;
+    const markerRange = markerBboxes && markerBboxes.length > 0 ? markerBboxes : bboxes;
 
     const scrollContent = this.container.querySelector('#scroll-content');
     const contentWidth = scrollContent?.clientWidth ?? 0;
@@ -200,8 +202,8 @@ export class TableResizeRenderer {
     const el = document.createElement('div');
 
     if (type === 'row') {
-      const minX = Math.min(...bboxes.map(b => b.x));
-      const maxX = Math.max(...bboxes.map(b => b.x + b.w));
+      const minX = Math.min(...markerRange.map(b => b.x));
+      const maxX = Math.max(...markerRange.map(b => b.x + b.w));
       const left = pageLeft + minX * zoom;
       const top = pageOffset + position * zoom - t / 2;
       const width = (maxX - minX) * zoom;
@@ -210,8 +212,8 @@ export class TableResizeRenderer {
         `width:${width}px;height:${t}px;` +
         `background:${TableResizeRenderer.MARKER_COLOR};pointer-events:none;`;
     } else {
-      const minY = Math.min(...bboxes.map(b => b.y));
-      const maxY = Math.max(...bboxes.map(b => b.y + b.h));
+      const minY = Math.min(...markerRange.map(b => b.y));
+      const maxY = Math.max(...markerRange.map(b => b.y + b.h));
       const left = pageLeft + position * zoom - t / 2;
       const top = pageOffset + minY * zoom;
       const height = (maxY - minY) * zoom;

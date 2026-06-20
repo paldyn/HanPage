@@ -139,6 +139,40 @@ fn table_common_offsets(doc: &HwpDocument, pos: TablePos) -> (i32, i32) {
     )
 }
 
+fn table_cell_bbox_value(doc: &HwpDocument, pos: TablePos, cell_idx: u64, key: &str) -> f64 {
+    let json = doc
+        .get_table_cell_bboxes(
+            pos.section as u32,
+            pos.para as u32,
+            pos.control as u32,
+            Some(0),
+        )
+        .expect("get table cell bboxes");
+    let bboxes: Value = serde_json::from_str(&json).expect("parse table cell bboxes");
+    bboxes
+        .as_array()
+        .expect("bbox array")
+        .iter()
+        .find(|bbox| bbox["cellIdx"].as_u64() == Some(cell_idx))
+        .and_then(|bbox| bbox[key].as_f64())
+        .unwrap_or_else(|| panic!("cell {cell_idx} bbox key {key} not found: {json}"))
+}
+
+fn table_cell_property_i64(doc: &HwpDocument, pos: TablePos, cell_idx: u32, key: &str) -> i64 {
+    let json = doc
+        .get_cell_properties(
+            pos.section as u32,
+            pos.para as u32,
+            pos.control as u32,
+            cell_idx,
+        )
+        .expect("get cell properties");
+    let props: Value = serde_json::from_str(&json).expect("parse cell properties");
+    props[key]
+        .as_i64()
+        .unwrap_or_else(|| panic!("cell {cell_idx} property {key} not found: {json}"))
+}
+
 fn hwpx_section0_xml(bytes: &[u8]) -> String {
     let reader = std::io::Cursor::new(bytes);
     let mut zip = zip::ZipArchive::new(reader).expect("open hwpx zip");
@@ -238,6 +272,301 @@ fn table_move_keeps_raw_and_common_offsets_in_sync() {
         table_common_offsets(&doc, pos),
         (expected_horz, expected_vert),
         "렌더링이 참조하는 table.common 위치도 raw_ctrl_data와 동기화되어야 함"
+    );
+}
+
+#[test]
+fn compensated_cell_resize_keeps_cellprotect2_table_common_size() {
+    let bytes = sample_bytes("samples/셀보호2.hwp");
+    let parsed = parse_document(&bytes).expect("parse 셀보호2.hwp");
+    let pos = find_first_table(&parsed);
+    let mut doc = HwpDocument::from_bytes(&bytes).expect("load HwpDocument");
+
+    let before_json = doc
+        .get_table_properties(pos.section as u32, pos.para as u32, pos.control as u32)
+        .expect("get before table properties");
+    let before: Value = serde_json::from_str(&before_json).expect("parse before table properties");
+    let before_width = before["tableWidth"].as_u64().expect("before tableWidth");
+    let before_height = before["tableHeight"].as_u64().expect("before tableHeight");
+    let before_cell22_x = table_cell_bbox_value(&doc, pos, 22, "x");
+
+    doc.resize_table_cells(
+        pos.section as u32,
+        pos.para as u32,
+        pos.control as u32,
+        r#"[
+            {"cellIdx":20,"widthDelta":1200},
+            {"cellIdx":21,"widthDelta":-1200},
+            {"cellIdx":20,"heightDelta":300},
+            {"cellIdx":21,"heightDelta":-300}
+        ]"#,
+    )
+    .expect("compensated resize table cells");
+
+    let after_json = doc
+        .get_table_properties(pos.section as u32, pos.para as u32, pos.control as u32)
+        .expect("get after table properties");
+    let after: Value = serde_json::from_str(&after_json).expect("parse after table properties");
+    let after_cell20_w = table_cell_bbox_value(&doc, pos, 20, "w");
+    let after_cell22_x = table_cell_bbox_value(&doc, pos, 22, "x");
+    assert_eq!(
+        after["tableWidth"].as_u64(),
+        Some(before_width),
+        "보상 셀 너비 조절은 표 common width를 바꾸면 안 됨: {after_json}"
+    );
+    assert_eq!(
+        after["tableHeight"].as_u64(),
+        Some(before_height),
+        "보상 셀 높이 조절은 표 common height를 바꾸면 안 됨: {after_json}"
+    );
+    assert!(
+        after_cell20_w > 90.0,
+        "대상 셀은 실제 렌더 bbox 폭이 커져야 함: {after_cell20_w}"
+    );
+    assert!(
+        (after_cell22_x - before_cell22_x).abs() <= 0.2,
+        "보상 셀 너비 조절은 뒤쪽 셀 x를 밀면 안 됨: before={before_cell22_x}, after={after_cell22_x}"
+    );
+}
+
+#[test]
+fn compensated_colspan_cell_resize_does_not_leak_to_other_rows() {
+    let bytes = sample_bytes("samples/셀보호2.hwp");
+    let parsed = parse_document(&bytes).expect("parse 셀보호2.hwp");
+    let pos = find_first_table(&parsed);
+    let mut doc = HwpDocument::from_bytes(&bytes).expect("load HwpDocument");
+
+    let before_cell0_w = table_cell_bbox_value(&doc, pos, 0, "w");
+    let before_cell5_w = table_cell_bbox_value(&doc, pos, 5, "w");
+    let before_cell6_w = table_cell_bbox_value(&doc, pos, 6, "w");
+    let before_cell7_x = table_cell_bbox_value(&doc, pos, 7, "x");
+    let before_cell10_w = table_cell_bbox_value(&doc, pos, 10, "w");
+    let drag_delta_hu = 1200_i64;
+    let cell5_model_w = table_cell_property_i64(&doc, pos, 5, "width");
+    let cell6_model_w = table_cell_property_i64(&doc, pos, 6, "width");
+    let cell7_render_w = (table_cell_bbox_value(&doc, pos, 7, "w") * 75.0).round() as i64;
+    let cell8_render_w = (table_cell_bbox_value(&doc, pos, 8, "w") * 75.0).round() as i64;
+    let cell9_render_w = (table_cell_bbox_value(&doc, pos, 9, "w") * 75.0).round() as i64;
+    let cell5_render_w = (before_cell5_w * 75.0).round() as i64 + drag_delta_hu;
+    let cell6_render_w = (before_cell6_w * 75.0).round() as i64 - drag_delta_hu;
+    let cell5_delta = cell5_render_w - cell5_model_w;
+    let cell6_delta = cell6_render_w - cell6_model_w;
+
+    doc.resize_table_cells(
+        pos.section as u32,
+        pos.para as u32,
+        pos.control as u32,
+        &format!(
+            r#"[
+            {{"cellIdx":5,"widthDelta":{cell5_delta},"localResize":true,"renderWidth":{cell5_render_w}}},
+            {{"cellIdx":6,"widthDelta":{cell6_delta},"localResize":true,"renderWidth":{cell6_render_w}}},
+            {{"cellIdx":7,"widthDelta":0,"localResize":true,"renderWidth":{cell7_render_w}}},
+            {{"cellIdx":8,"widthDelta":0,"localResize":true,"renderWidth":{cell8_render_w}}},
+            {{"cellIdx":9,"widthDelta":0,"localResize":true,"renderWidth":{cell9_render_w}}}
+        ]"#
+        ),
+    )
+    .expect("compensated resize merged row cells");
+
+    let after_cell0_w = table_cell_bbox_value(&doc, pos, 0, "w");
+    let after_cell5_w = table_cell_bbox_value(&doc, pos, 5, "w");
+    let after_cell7_x = table_cell_bbox_value(&doc, pos, 7, "x");
+    let after_cell10_w = table_cell_bbox_value(&doc, pos, 10, "w");
+
+    assert!(
+        after_cell5_w > before_cell5_w + 10.0,
+        "대상 병합 셀 폭은 커져야 함: before={before_cell5_w}, after={after_cell5_w}"
+    );
+    assert!(
+        (after_cell7_x - before_cell7_x).abs() <= 0.2,
+        "보상 셀 너비 조절은 같은 행의 뒤쪽 셀 x를 밀면 안 됨: before={before_cell7_x}, after={after_cell7_x}"
+    );
+    assert!(
+        (after_cell0_w - before_cell0_w).abs() <= 0.2,
+        "보상 셀 너비 조절은 위 행 폭을 바꾸면 안 됨: before={before_cell0_w}, after={after_cell0_w}"
+    );
+    assert!(
+        (after_cell10_w - before_cell10_w).abs() <= 0.2,
+        "보상 셀 너비 조절은 아래 행 폭을 바꾸면 안 됨: before={before_cell10_w}, after={after_cell10_w}"
+    );
+}
+
+#[test]
+fn local_resize_render_width_keeps_untouched_bottom_cells_stable() {
+    let bytes = sample_bytes("samples/셀보호2.hwp");
+    let parsed = parse_document(&bytes).expect("parse 셀보호2.hwp");
+    let pos = find_first_table(&parsed);
+    let mut doc = HwpDocument::from_bytes(&bytes).expect("load HwpDocument");
+
+    let before_cell20_w = table_cell_bbox_value(&doc, pos, 20, "w");
+    let before_cell21_w = table_cell_bbox_value(&doc, pos, 21, "w");
+    let before_cell22_x = table_cell_bbox_value(&doc, pos, 22, "x");
+    let before_cell23_x = table_cell_bbox_value(&doc, pos, 23, "x");
+    let before_cell23_w = table_cell_bbox_value(&doc, pos, 23, "w");
+    let before_cell24_x = table_cell_bbox_value(&doc, pos, 24, "x");
+    let before_cell22_w = table_cell_bbox_value(&doc, pos, 22, "w");
+    let before_cell24_w = table_cell_bbox_value(&doc, pos, 24, "w");
+    let drag_delta_hu = 2400_i64;
+    let cell20_model_w = table_cell_property_i64(&doc, pos, 20, "width");
+    let cell21_model_w = table_cell_property_i64(&doc, pos, 21, "width");
+    let cell20_render_w = (before_cell20_w * 75.0).round() as i64 + drag_delta_hu;
+    let cell21_render_w = (before_cell21_w * 75.0).round() as i64 - drag_delta_hu;
+    let cell22_render_w = (before_cell22_w * 75.0).round() as i64;
+    let cell23_render_w = (before_cell23_w * 75.0).round() as i64;
+    let cell24_render_w = (before_cell24_w * 75.0).round() as i64;
+    let cell20_delta = cell20_render_w - cell20_model_w;
+    let cell21_delta = cell21_render_w - cell21_model_w;
+
+    doc.resize_table_cells(
+        pos.section as u32,
+        pos.para as u32,
+        pos.control as u32,
+        &format!(
+            r#"[
+            {{"cellIdx":20,"widthDelta":{cell20_delta},"localResize":true,"renderWidth":{cell20_render_w}}},
+            {{"cellIdx":21,"widthDelta":{cell21_delta},"localResize":true,"renderWidth":{cell21_render_w}}},
+            {{"cellIdx":22,"widthDelta":0,"localResize":true,"renderWidth":{cell22_render_w}}},
+            {{"cellIdx":23,"widthDelta":0,"localResize":true,"renderWidth":{cell23_render_w}}},
+            {{"cellIdx":24,"widthDelta":0,"localResize":true,"renderWidth":{cell24_render_w}}}
+        ]"#
+        ),
+    )
+    .expect("local resize bottom row cells");
+
+    let after_cell20_w = table_cell_bbox_value(&doc, pos, 20, "w");
+    let after_cell21_w = table_cell_bbox_value(&doc, pos, 21, "w");
+    let after_cell22_x = table_cell_bbox_value(&doc, pos, 22, "x");
+    let after_cell23_x = table_cell_bbox_value(&doc, pos, 23, "x");
+    let after_cell23_w = table_cell_bbox_value(&doc, pos, 23, "w");
+    let after_cell24_x = table_cell_bbox_value(&doc, pos, 24, "x");
+
+    assert!(
+        after_cell20_w > before_cell20_w + 20.0,
+        "대상 셀은 커져야 함: before={before_cell20_w}, after={after_cell20_w}"
+    );
+    assert!(
+        after_cell21_w < before_cell21_w - 20.0,
+        "이웃 셀은 줄어야 함: before={before_cell21_w}, after={after_cell21_w}"
+    );
+    assert!(
+        (after_cell22_x - before_cell22_x).abs() <= 0.2,
+        "뒤쪽 셀 x는 유지되어야 함: before={before_cell22_x}, after={after_cell22_x}"
+    );
+    assert!(
+        (after_cell23_x - before_cell23_x).abs() <= 0.2
+            && (after_cell23_w - before_cell23_w).abs() <= 0.2
+            && (after_cell24_x - before_cell24_x).abs() <= 0.2,
+        "건드리지 않은 뒤쪽 셀은 유지되어야 함: 23x {before_cell23_x}->{after_cell23_x}, 23w {before_cell23_w}->{after_cell23_w}, 24x {before_cell24_x}->{after_cell24_x}"
+    );
+}
+
+#[test]
+fn local_then_global_column_resize_preserves_unaffected_rows() {
+    let bytes = sample_bytes("samples/셀보호2.hwp");
+    let parsed = parse_document(&bytes).expect("parse 셀보호2.hwp");
+    let pos = find_first_table(&parsed);
+    let mut doc = HwpDocument::from_bytes(&bytes).expect("load HwpDocument");
+
+    let local_delta_hu = 1200_i64;
+    let cell5_before_w = table_cell_bbox_value(&doc, pos, 5, "w");
+    let cell6_before_w = table_cell_bbox_value(&doc, pos, 6, "w");
+    let cell5_model_w = table_cell_property_i64(&doc, pos, 5, "width");
+    let cell6_model_w = table_cell_property_i64(&doc, pos, 6, "width");
+    let cell5_render_w = (cell5_before_w * 75.0).round() as i64 + local_delta_hu;
+    let cell6_render_w = (cell6_before_w * 75.0).round() as i64 - local_delta_hu;
+    let cell7_render_w = (table_cell_bbox_value(&doc, pos, 7, "w") * 75.0).round() as i64;
+    let cell8_render_w = (table_cell_bbox_value(&doc, pos, 8, "w") * 75.0).round() as i64;
+    let cell9_render_w = (table_cell_bbox_value(&doc, pos, 9, "w") * 75.0).round() as i64;
+
+    doc.resize_table_cells(
+        pos.section as u32,
+        pos.para as u32,
+        pos.control as u32,
+        &format!(
+            r#"[
+            {{"cellIdx":5,"widthDelta":{},"localResize":true,"renderWidth":{cell5_render_w}}},
+            {{"cellIdx":6,"widthDelta":{},"localResize":true,"renderWidth":{cell6_render_w}}},
+            {{"cellIdx":7,"widthDelta":0,"localResize":true,"renderWidth":{cell7_render_w}}},
+            {{"cellIdx":8,"widthDelta":0,"localResize":true,"renderWidth":{cell8_render_w}}},
+            {{"cellIdx":9,"widthDelta":0,"localResize":true,"renderWidth":{cell9_render_w}}}
+        ]"#,
+            cell5_render_w - cell5_model_w,
+            cell6_render_w - cell6_model_w,
+        ),
+    )
+    .expect("first local row resize");
+
+    let after_local_cell5_w = table_cell_bbox_value(&doc, pos, 5, "w");
+    let after_local_cell7_x = table_cell_bbox_value(&doc, pos, 7, "x");
+    let after_local_cell2_x = table_cell_bbox_value(&doc, pos, 2, "x");
+    let after_local_cell23_x = table_cell_bbox_value(&doc, pos, 23, "x");
+    let after_local_cell23_w = table_cell_bbox_value(&doc, pos, 23, "w");
+    let after_local_cell24_x = table_cell_bbox_value(&doc, pos, 24, "x");
+    let before_global_cell0_w = table_cell_bbox_value(&doc, pos, 0, "w");
+    let before_global_cell1_w = table_cell_bbox_value(&doc, pos, 1, "w");
+    let global_delta_hu = 1200_i64;
+    let target_cells = [0_u32, 10, 15];
+    let neighbor_cells = [1_u32, 11, 16];
+
+    let updates = (0_u32..25)
+        .map(|idx| {
+            let current_render_w =
+                (table_cell_bbox_value(&doc, pos, idx as u64, "w") * 75.0).round() as i64;
+            let desired_render_w = if target_cells.contains(&idx) {
+                current_render_w + global_delta_hu
+            } else if neighbor_cells.contains(&idx) {
+                current_render_w - global_delta_hu
+            } else {
+                current_render_w
+            };
+            let model_w = table_cell_property_i64(&doc, pos, idx, "width");
+            format!(
+                r#"{{"cellIdx":{idx},"widthDelta":{},"localResize":true,"renderWidth":{desired_render_w}}}"#,
+                desired_render_w - model_w
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+
+    doc.resize_table_cells(
+        pos.section as u32,
+        pos.para as u32,
+        pos.control as u32,
+        &format!("[{updates}]"),
+    )
+    .expect("global column resize after local row resize");
+
+    let after_global_cell0_w = table_cell_bbox_value(&doc, pos, 0, "w");
+    let after_global_cell1_w = table_cell_bbox_value(&doc, pos, 1, "w");
+    let after_global_cell5_w = table_cell_bbox_value(&doc, pos, 5, "w");
+    let after_global_cell7_x = table_cell_bbox_value(&doc, pos, 7, "x");
+    let after_global_cell2_x = table_cell_bbox_value(&doc, pos, 2, "x");
+    let after_global_cell23_x = table_cell_bbox_value(&doc, pos, 23, "x");
+    let after_global_cell23_w = table_cell_bbox_value(&doc, pos, 23, "w");
+    let after_global_cell24_x = table_cell_bbox_value(&doc, pos, 24, "x");
+
+    assert!(
+        after_global_cell0_w > before_global_cell0_w + 10.0,
+        "전체 컬럼 대상 셀은 커져야 함: before={before_global_cell0_w}, after={after_global_cell0_w}"
+    );
+    assert!(
+        after_global_cell1_w < before_global_cell1_w - 10.0,
+        "전체 컬럼 보상 이웃 셀은 줄어야 함: before={before_global_cell1_w}, after={after_global_cell1_w}"
+    );
+    assert!(
+        (after_global_cell2_x - after_local_cell2_x).abs() <= 0.2,
+        "대상/이웃 뒤쪽 셀은 같이 밀리면 안 됨: before={after_local_cell2_x}, after={after_global_cell2_x}"
+    );
+    assert!(
+        (after_global_cell5_w - after_local_cell5_w).abs() <= 0.2
+            && (after_global_cell7_x - after_local_cell7_x).abs() <= 0.2,
+        "이전에 Shift로 분리한 행은 일반 컬럼 resize 뒤에도 유지되어야 함: 5w {after_local_cell5_w}->{after_global_cell5_w}, 7x {after_local_cell7_x}->{after_global_cell7_x}"
+    );
+    assert!(
+        (after_global_cell23_x - after_local_cell23_x).abs() <= 0.2
+            && (after_global_cell23_w - after_local_cell23_w).abs() <= 0.2
+            && (after_global_cell24_x - after_local_cell24_x).abs() <= 0.2,
+        "업데이트 대상이 아닌 마지막 행 뒤쪽 셀은 전역 fallback 때문에 흔들리면 안 됨: 23x {after_local_cell23_x}->{after_global_cell23_x}, 23w {after_local_cell23_w}->{after_global_cell23_w}, 24x {after_local_cell24_x}->{after_global_cell24_x}"
     );
 }
 

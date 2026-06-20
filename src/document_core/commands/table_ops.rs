@@ -787,8 +787,12 @@ impl DocumentCore {
             cell_idx: usize,
             width_delta: i32,
             height_delta: i32,
+            local_resize: bool,
+            render_width: Option<u32>,
+            render_height: Option<u32>,
         }
         let mut updates: Vec<CellUpdate> = Vec::new();
+        let mut force_local_resize = false;
 
         let mut depth = 0i32;
         let mut start = 0usize;
@@ -811,10 +815,20 @@ impl DocumentCore {
                         }
                         let width_delta = Self::parse_json_i32(obj, "widthDelta").unwrap_or(0);
                         let height_delta = Self::parse_json_i32(obj, "heightDelta").unwrap_or(0);
+                        let local_resize = obj.contains("\"localResize\":true")
+                            || obj.contains("\"localResize\": true");
+                        force_local_resize |= local_resize;
+                        let render_width = Self::parse_json_i32(obj, "renderWidth")
+                            .and_then(|v| (v > 0).then_some(v as u32));
+                        let render_height = Self::parse_json_i32(obj, "renderHeight")
+                            .and_then(|v| (v > 0).then_some(v as u32));
                         updates.push(CellUpdate {
                             cell_idx: cell_idx as usize,
                             width_delta,
                             height_delta,
+                            local_resize,
+                            render_width,
+                            render_height,
                         });
                     }
                 }
@@ -828,21 +842,115 @@ impl DocumentCore {
 
         // 셀 업데이트 적용
         let table = self.get_table_mut(section_idx, parent_para_idx, control_idx)?;
+        let original_width = table.common.width;
+        let original_height = table.common.height;
+        let mut applied_width_delta: i64 = 0;
+        let mut applied_height_delta: i64 = 0;
+        let mut width_delta_by_row = std::collections::BTreeMap::<u16, (usize, i64)>::new();
+        let mut height_delta_by_col = std::collections::BTreeMap::<u16, (usize, i64)>::new();
+        let mut local_resize_rows = std::collections::BTreeSet::<u16>::new();
+        let mut local_resize_cols = std::collections::BTreeSet::<u16>::new();
         for upd in &updates {
             if let Some(cell) = table.cells.get_mut(upd.cell_idx) {
                 if upd.width_delta != 0 {
+                    let old_w = cell.width;
                     let new_w =
                         (cell.width as i32 + upd.width_delta).max(MIN_CELL_SIZE as i32) as u32;
                     cell.width = new_w;
+                    let actual_delta = new_w as i64 - old_w as i64;
+                    applied_width_delta += actual_delta;
+                    let entry = width_delta_by_row.entry(cell.row).or_insert((0, 0));
+                    entry.0 += 1;
+                    entry.1 += actual_delta;
                 }
                 if upd.height_delta != 0 {
+                    let old_h = cell.height;
                     let new_h =
                         (cell.height as i32 + upd.height_delta).max(MIN_CELL_SIZE as i32) as u32;
                     cell.height = new_h;
+                    let actual_delta = new_h as i64 - old_h as i64;
+                    applied_height_delta += actual_delta;
+                    let entry = height_delta_by_col.entry(cell.col).or_insert((0, 0));
+                    entry.0 += 1;
+                    entry.1 += actual_delta;
+                }
+            }
+            if upd.local_resize {
+                if let Some(width) = upd.render_width {
+                    if let Some(cell) = table.cells.get(upd.cell_idx) {
+                        local_resize_rows.insert(cell.row);
+                    }
+                    if let Some((_, existing)) = table
+                        .local_resize_cell_widths
+                        .iter_mut()
+                        .find(|(idx, _)| *idx == upd.cell_idx)
+                    {
+                        *existing = width;
+                    } else {
+                        table.local_resize_cell_widths.push((upd.cell_idx, width));
+                    }
+                }
+                if let Some(height) = upd.render_height {
+                    if let Some(cell) = table.cells.get(upd.cell_idx) {
+                        local_resize_cols.insert(cell.col);
+                    }
+                    if let Some((_, existing)) = table
+                        .local_resize_cell_heights
+                        .iter_mut()
+                        .find(|(idx, _)| *idx == upd.cell_idx)
+                    {
+                        *existing = height;
+                    } else {
+                        table.local_resize_cell_heights.push((upd.cell_idx, height));
+                    }
                 }
             }
         }
+        for row in local_resize_rows {
+            if !table.local_resize_rows.contains(&row) {
+                table.local_resize_rows.push(row);
+            }
+        }
+        for col in local_resize_cols {
+            if !table.local_resize_cols.contains(&col) {
+                table.local_resize_cols.push(col);
+            }
+        }
+        for (row, (count, delta_sum)) in width_delta_by_row {
+            if count >= 2
+                && (delta_sum == 0 || force_local_resize)
+                && !table.local_resize_rows.contains(&row)
+            {
+                table.local_resize_rows.push(row);
+            }
+        }
+        for (col, (count, delta_sum)) in height_delta_by_col {
+            if count >= 2
+                && (delta_sum == 0 || force_local_resize)
+                && !table.local_resize_cols.contains(&col)
+            {
+                table.local_resize_cols.push(col);
+            }
+        }
         table.update_ctrl_dimensions();
+        if applied_width_delta == 0
+            || (force_local_resize && updates.iter().any(|u| u.width_delta != 0))
+        {
+            table.common.width = original_width;
+            if table.raw_ctrl_data.len() >= common_obj_offsets::WIDTH.end {
+                table.raw_ctrl_data[common_obj_offsets::WIDTH]
+                    .copy_from_slice(&original_width.to_le_bytes());
+            }
+        }
+        if applied_height_delta == 0
+            || (force_local_resize && updates.iter().any(|u| u.height_delta != 0))
+        {
+            table.common.height = original_height;
+            if table.raw_ctrl_data.len() >= common_obj_offsets::HEIGHT.end {
+                table.raw_ctrl_data[common_obj_offsets::HEIGHT]
+                    .copy_from_slice(&original_height.to_le_bytes());
+            }
+        }
         table.dirty = true;
 
         // 너비가 변경된 셀의 모든 문단에 대해 line_segs 재계산 (텍스트 리플로우)
