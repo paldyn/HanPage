@@ -1348,12 +1348,9 @@ impl LayoutEngine {
         // (Task #279의 "전 축에서 cell 우선" 휴리스틱은 일반 박스 셀에서 표 padding을
         // 무시해 텍스트가 왼쪽으로 붙어버리는 부작용이 있어 축소 적용.)
         let prefer_cell_axis = |c: i16, t: i16| -> bool {
-            if cell.apply_inner_margin {
-                c != 0
-            } else {
-                // aim=false: cell이 table보다 명백히 큰 경우만 cell 우선 (의도된 비대칭)
-                (c as i32) > (t as i32)
-            }
+            // aim=true: 0mm도 사용자가 지정한 셀 고유 안 여백이다.
+            // aim=false: cell이 table보다 명백히 큰 경우만 cell 우선 (의도된 비대칭)
+            cell.apply_inner_margin || (c as i32) > (t as i32)
         };
         let pad_left = if prefer_cell_axis(cell.padding.left, table.padding.left) {
             hwpunit_to_px(cell.padding.left as i32, self.dpi)
@@ -1412,7 +1409,12 @@ impl LayoutEngine {
         composed_paras: &[ComposedParagraph],
         paragraphs: &[Paragraph],
         styles: &ResolvedStyleSet,
+        preserve_cell_padding: bool,
     ) -> (f64, f64) {
+        if preserve_cell_padding {
+            return (pad_left, pad_right);
+        }
+
         // [Task #617] 다중 줄(2 줄 이상) 단락이 line_segs 로 분배 완료된 경우,
         // HWP 가 가용 폭에 맞춰 자간을 분배하고 줄바꿈을 확정한 상태이므로
         // 자연 폭 추정으로 다시 깎으면 오버 페인팅. 단일 줄 셀(좁은 수치 셀
@@ -1898,6 +1900,7 @@ impl LayoutEngine {
                 &composed_paras,
                 &cell.paragraphs,
                 styles,
+                cell.apply_inner_margin,
             );
             pad_left = new_pl;
             pad_right = new_pr;
@@ -4604,6 +4607,7 @@ mod row_cut_tests {
     use super::LayoutEngine;
     use crate::model::paragraph::{LineSeg, Paragraph};
     use crate::model::table::{Cell, Table};
+    use crate::renderer::composer::{ComposedLine, ComposedParagraph, ComposedTextRun};
     use crate::renderer::style_resolver::ResolvedStyleSet;
 
     /// line_height=1200 HU (=16 px @96dpi), line_spacing=0 인 N줄 텍스트 문단.
@@ -4643,6 +4647,67 @@ mod row_cut_tests {
             cells,
             ..Default::default()
         }
+    }
+
+    fn composed_text(text: &str) -> ComposedParagraph {
+        ComposedParagraph {
+            lines: vec![ComposedLine {
+                runs: vec![ComposedTextRun {
+                    text: text.to_string(),
+                    ..Default::default()
+                }],
+                line_height: 1000,
+                baseline_distance: 850,
+                segment_width: 1000,
+                column_start: 0,
+                line_spacing: 0,
+                has_line_break: false,
+                char_start: 0,
+            }],
+            para_style_id: 0,
+            inline_controls: Vec::new(),
+            numbering_text: None,
+            tac_controls: Vec::new(),
+            footnote_positions: Vec::new(),
+            tab_extended: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_shrink_cell_padding_preserves_explicit_cell_margin() {
+        let eng = LayoutEngine::new(96.0);
+        let styles = ResolvedStyleSet::default();
+        let composed = vec![composed_text("12345678901234567890")];
+        let paragraphs = vec![Paragraph::default()];
+
+        let shrunk = eng.shrink_cell_padding_for_overflow(
+            20.0,
+            20.0,
+            30.0,
+            &composed,
+            &paragraphs,
+            &styles,
+            false,
+        );
+        assert!(
+            shrunk.0 < 20.0 || shrunk.1 < 20.0,
+            "일반 셀의 기존 오버플로우 방어는 유지되어야 함: {shrunk:?}"
+        );
+
+        let preserved = eng.shrink_cell_padding_for_overflow(
+            20.0,
+            20.0,
+            30.0,
+            &composed,
+            &paragraphs,
+            &styles,
+            true,
+        );
+        assert_eq!(
+            preserved,
+            (20.0, 20.0),
+            "안 여백 지정 셀은 한컴처럼 입력한 좌우 여백을 렌더링에서도 보존해야 함"
+        );
     }
 
     #[test]

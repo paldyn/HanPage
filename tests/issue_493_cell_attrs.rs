@@ -51,6 +51,10 @@ fn assert_cell_attrs(doc: &Document, pos: TablePos) {
     assert!(table.cells[0].cell_protect(), "0번 셀은 보호 상태");
     assert!(table.cells[1].cell_protect(), "1번 셀은 보호 상태");
     assert!(table.cells[2].cell_protect(), "2번 셀은 보호 상태");
+    assert!(
+        table.cells.iter().all(|cell| !cell.apply_inner_margin),
+        "셀보호 샘플은 모든 셀의 안 여백 지정이 꺼져 있어야 함"
+    );
 
     assert_eq!(table.cells[2].field_name.as_deref(), Some("name"));
     assert!(
@@ -68,6 +72,7 @@ fn assert_api_attrs(bytes: &[u8], pos: TablePos) {
     assert_eq!(props["cellProtect"].as_bool(), Some(true), "{json}");
     assert_eq!(props["fieldName"].as_str(), Some("name"), "{json}");
     assert_eq!(props["editableInForm"].as_bool(), Some(true), "{json}");
+    assert_eq!(props["applyInnerMargin"].as_bool(), Some(false), "{json}");
 
     let fields: Value = serde_json::from_str(&doc.get_field_list()).expect("parse getFieldList");
     let field = fields
@@ -78,6 +83,48 @@ fn assert_api_attrs(bytes: &[u8], pos: TablePos) {
         .expect("cell field in getFieldList");
     assert_eq!(field["value"].as_str(), Some("12334"), "{fields}");
     assert_eq!(field["editableInForm"].as_bool(), Some(true), "{fields}");
+}
+
+fn assert_inner_margin_sample_attrs(doc: &Document, pos: TablePos) {
+    let Control::Table(table) =
+        &doc.sections[pos.section].paragraphs[pos.para].controls[pos.control]
+    else {
+        panic!("expected table control");
+    };
+    assert_eq!(table.cells.len(), 25, "셀보호2 샘플은 25개 셀");
+    let explicit_cells: Vec<_> = table
+        .cells
+        .iter()
+        .enumerate()
+        .filter(|(_, cell)| cell.apply_inner_margin)
+        .collect();
+    assert_eq!(
+        explicit_cells.len(),
+        1,
+        "셀보호2 샘플은 한컴 기준 1개 셀만 안 여백 지정 상태"
+    );
+
+    let cell = &table.cells[20];
+    assert!(
+        cell.apply_inner_margin,
+        "마지막 행 첫 셀은 안 여백 지정 상태"
+    );
+    assert_eq!(cell.padding.left, 2834, "좌측 안 여백은 10mm");
+    assert_eq!(cell.padding.right, 2834, "우측 안 여백은 10mm");
+    assert_eq!(cell.padding.top, 0, "상단 안 여백은 0mm");
+    assert_eq!(cell.padding.bottom, 0, "하단 안 여백은 0mm");
+    assert_eq!(cell.paragraphs[0].text, "12345");
+
+    let text_starts: Vec<_> = cell.paragraphs[0]
+        .line_segs
+        .iter()
+        .map(|seg| seg.text_start)
+        .collect();
+    assert_eq!(
+        text_starts,
+        vec![0, 2, 4],
+        "한컴은 좌우 10mm 안 여백 셀을 12/34/5 세 줄로 저장한다"
+    );
 }
 
 fn hwpx_section0_xml(bytes: &[u8]) -> String {
@@ -114,6 +161,27 @@ fn cell_protect_field_name_and_form_editable_are_parsed_from_hwp_and_hwpx() {
 }
 
 #[test]
+fn explicit_cell_inner_margin_sample_matches_hancom_saved_result() {
+    for rel in ["samples/셀보호2.hwp", "samples/셀보호2.hwpx"] {
+        let bytes = sample_bytes(rel);
+        let doc = parse_document(&bytes).unwrap_or_else(|e| panic!("parse {rel}: {e:?}"));
+        let pos = find_first_table(&doc);
+        assert_inner_margin_sample_attrs(&doc, pos);
+
+        let api = HwpDocument::from_bytes(&bytes).expect("load HwpDocument");
+        let json = api
+            .get_cell_properties(pos.section as u32, pos.para as u32, pos.control as u32, 20)
+            .expect("get explicit margin cell properties");
+        let props: Value = serde_json::from_str(&json).expect("parse cell properties");
+        assert_eq!(props["applyInnerMargin"].as_bool(), Some(true), "{json}");
+        assert_eq!(props["paddingLeft"].as_i64(), Some(2834), "{json}");
+        assert_eq!(props["paddingRight"].as_i64(), Some(2834), "{json}");
+        assert_eq!(props["paddingTop"].as_i64(), Some(0), "{json}");
+        assert_eq!(props["paddingBottom"].as_i64(), Some(0), "{json}");
+    }
+}
+
+#[test]
 fn cell_protect_and_form_editable_survive_hwpx_roundtrip() {
     let bytes = sample_bytes("samples/셀보호.hwpx");
     let doc = parse_hwpx(&bytes).expect("parse 셀보호.hwpx");
@@ -132,6 +200,11 @@ fn cell_protect_and_form_editable_survive_hwpx_roundtrip() {
         1,
         "serialized section0.xml should keep one form-editable cell"
     );
+    assert_eq!(
+        xml.matches(r#"hasMargin="0""#).count(),
+        25,
+        "serialized section0.xml should keep all cell inner-margin flags off"
+    );
     let named_cell = named_cell_opening_tag(&xml);
     assert!(
         named_cell.contains(r#"protect="1""#) && named_cell.contains(r#"editable="1""#),
@@ -141,6 +214,31 @@ fn cell_protect_and_form_editable_survive_hwpx_roundtrip() {
     let reparsed = parse_hwpx(&serialized).expect("reparse serialized hwpx");
     let pos2 = find_first_table(&reparsed);
     assert_cell_attrs(&reparsed, pos2);
+}
+
+#[test]
+fn explicit_cell_inner_margin_survives_hwpx_roundtrip() {
+    let bytes = sample_bytes("samples/셀보호2.hwpx");
+    let doc = parse_hwpx(&bytes).expect("parse 셀보호2.hwpx");
+    let pos = find_first_table(&doc);
+    assert_inner_margin_sample_attrs(&doc, pos);
+
+    let serialized = serialize_hwpx(&doc).expect("serialize hwpx");
+    let xml = hwpx_section0_xml(&serialized);
+    assert_eq!(
+        xml.matches(r#"hasMargin="1""#).count(),
+        1,
+        "serialized section0.xml should keep one explicit inner-margin cell"
+    );
+    assert_eq!(
+        xml.matches(r#"hasMargin="0""#).count(),
+        24,
+        "serialized section0.xml should keep the other cells with inner-margin flags off"
+    );
+    assert!(
+        xml.contains(r#"<hp:cellMargin left="2834" right="2834" top="0" bottom="0"/>"#),
+        "serialized section0.xml should keep Hancom's 10mm/10mm/0/0 cell margin"
+    );
 }
 
 #[test]
@@ -198,4 +296,83 @@ fn set_cell_border_properties_do_not_overwrite_cell_size() {
     );
     assert_eq!(after["fillType"].as_str(), Some("solid"), "{after_json}");
     assert_eq!(after["fillColor"].as_str(), Some("#ddeeff"), "{after_json}");
+}
+
+#[test]
+fn set_cell_properties_updates_apply_inner_margin_flag() {
+    let bytes = sample_bytes("samples/셀보호.hwp");
+    let parsed = parse_document(&bytes).expect("parse 셀보호.hwp");
+    let pos = find_first_table(&parsed);
+    let mut doc = HwpDocument::from_bytes(&bytes).expect("load HwpDocument");
+
+    doc.set_cell_properties(
+        pos.section as u32,
+        pos.para as u32,
+        pos.control as u32,
+        0,
+        r#"{"applyInnerMargin":true,"paddingLeft":1134,"paddingRight":0,"paddingTop":0,"paddingBottom":0}"#,
+    )
+    .expect("set applyInnerMargin true");
+    let on_json = doc
+        .get_cell_properties(pos.section as u32, pos.para as u32, pos.control as u32, 0)
+        .expect("get cell properties on");
+    let on: Value = serde_json::from_str(&on_json).expect("parse on properties");
+    assert_eq!(on["applyInnerMargin"].as_bool(), Some(true), "{on_json}");
+    assert_eq!(on["paddingLeft"].as_i64(), Some(1134), "{on_json}");
+
+    doc.set_cell_properties(
+        pos.section as u32,
+        pos.para as u32,
+        pos.control as u32,
+        0,
+        r#"{"applyInnerMargin":false}"#,
+    )
+    .expect("set applyInnerMargin false");
+    let off_json = doc
+        .get_cell_properties(pos.section as u32, pos.para as u32, pos.control as u32, 0)
+        .expect("get cell properties off");
+    let off: Value = serde_json::from_str(&off_json).expect("parse off properties");
+    assert_eq!(off["applyInnerMargin"].as_bool(), Some(false), "{off_json}");
+    assert_eq!(
+        off["paddingLeft"].as_i64(),
+        Some(1134),
+        "체크 해제는 padding 원값을 지우지 않고 적용 플래그만 끈다: {off_json}"
+    );
+}
+
+#[test]
+fn set_cell_properties_reflows_text_after_inner_margin_change() {
+    let bytes = sample_bytes("samples/셀보호.hwp");
+    let parsed = parse_document(&bytes).expect("parse 셀보호.hwp");
+    let pos = find_first_table(&parsed);
+    let mut doc = HwpDocument::from_bytes(&bytes).expect("load HwpDocument");
+
+    doc.set_cell_properties(
+        pos.section as u32,
+        pos.para as u32,
+        pos.control as u32,
+        2,
+        r#"{"applyInnerMargin":true,"paddingLeft":2835,"paddingRight":2835,"paddingTop":0,"paddingBottom":0}"#,
+    )
+    .expect("set wide inner margin");
+
+    let Control::Table(table) =
+        &doc.document().sections[pos.section].paragraphs[pos.para].controls[pos.control]
+    else {
+        panic!("expected table control");
+    };
+    let named_cell_para = &table.cells[2].paragraphs[0];
+    assert!(
+        named_cell_para.line_segs.len() > 1,
+        "좌우 안 여백 지정 후에는 한컴처럼 새 내부 폭 기준으로 셀 문단을 다시 줄바꿈해야 함: {:?}",
+        named_cell_para.line_segs
+    );
+    assert_eq!(
+        table.cells[2].padding.top, 0,
+        "안 여백 지정 상태의 0mm 값은 표 기본 여백으로 되살리면 안 됨"
+    );
+    assert!(
+        table.cells[2].apply_inner_margin,
+        "안 여백 지정 플래그가 켜져 있어야 함"
+    );
 }

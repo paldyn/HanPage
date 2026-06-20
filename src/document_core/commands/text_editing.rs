@@ -714,12 +714,16 @@ impl DocumentCore {
                             return;
                         }
                     } else if let Some(cell) = table.cells.get(cell_idx) {
-                        let pad_l = if cell.padding.left != 0 {
+                        let prefer_cell_axis = |cell_padding: i16, table_padding: i16| -> bool {
+                            cell.apply_inner_margin
+                                || (cell_padding as i32) > (table_padding as i32)
+                        };
+                        let pad_l = if prefer_cell_axis(cell.padding.left, table.padding.left) {
                             cell.padding.left
                         } else {
                             table.padding.left
                         };
-                        let pad_r = if cell.padding.right != 0 {
+                        let pad_r = if prefer_cell_axis(cell.padding.right, table.padding.right) {
                             cell.padding.right
                         } else {
                             table.padding.right

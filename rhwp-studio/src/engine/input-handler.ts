@@ -112,6 +112,7 @@ const FORMAT_COPY_CELL_KEYS: Array<keyof CellProperties> = [
   'paddingRight',
   'paddingTop',
   'paddingBottom',
+  'applyInnerMargin',
   'verticalAlign',
   'textDirection',
   'isHeader',

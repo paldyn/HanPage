@@ -479,9 +479,10 @@ impl DocumentCore {
         let bf_json = self.build_border_fill_json_by_id(cell.border_fill_id);
 
         Ok(format!(
-            "{{\"width\":{},\"height\":{},\"paddingLeft\":{},\"paddingRight\":{},\"paddingTop\":{},\"paddingBottom\":{},\"verticalAlign\":{},\"textDirection\":{},\"isHeader\":{},\"cellProtect\":{},\"fieldName\":{},\"editableInForm\":{},{}}}",
+            "{{\"width\":{},\"height\":{},\"paddingLeft\":{},\"paddingRight\":{},\"paddingTop\":{},\"paddingBottom\":{},\"applyInnerMargin\":{},\"verticalAlign\":{},\"textDirection\":{},\"isHeader\":{},\"cellProtect\":{},\"fieldName\":{},\"editableInForm\":{},{}}}",
             cell.width, cell.height,
             cell.padding.left, cell.padding.right, cell.padding.top, cell.padding.bottom,
+            cell.apply_inner_margin,
             va, cell.text_direction, cell.is_header, cell.cell_protect(),
             json_escape(cell.field_name.as_deref().unwrap_or("")),
             cell.editable_in_form(),
@@ -520,54 +521,79 @@ impl DocumentCore {
                 .map(ToOwned::to_owned)
         };
 
-        let table = self.get_table_mut(section_idx, parent_para_idx, control_idx)?;
-        let cell = table
-            .cells
-            .get_mut(cell_idx)
-            .ok_or_else(|| HwpError::RenderError(format!("셀 인덱스 {} 범위 초과", cell_idx)))?;
+        let (needs_reflow, reflow_para_count) = {
+            let mut needs_reflow = false;
+            let table = self.get_table_mut(section_idx, parent_para_idx, control_idx)?;
+            let cell = table.cells.get_mut(cell_idx).ok_or_else(|| {
+                HwpError::RenderError(format!("셀 인덱스 {} 범위 초과", cell_idx))
+            })?;
 
-        if let Some(v) = top_u32("width") {
-            cell.width = v;
-        }
-        if let Some(v) = top_u32("height") {
-            cell.height = v;
-        }
-        if let Some(v) = top_i16("paddingLeft") {
-            cell.padding.left = v;
-        }
-        if let Some(v) = top_i16("paddingRight") {
-            cell.padding.right = v;
-        }
-        if let Some(v) = top_i16("paddingTop") {
-            cell.padding.top = v;
-        }
-        if let Some(v) = top_i16("paddingBottom") {
-            cell.padding.bottom = v;
-        }
-        if let Some(v) = top_u8("verticalAlign") {
-            cell.vertical_align = match v {
-                1 => crate::model::table::VerticalAlign::Center,
-                2 => crate::model::table::VerticalAlign::Bottom,
-                _ => crate::model::table::VerticalAlign::Top,
-            };
-        }
-        if let Some(v) = top_u8("textDirection") {
-            cell.text_direction = v;
-        }
-        if let Some(v) = top_bool("isHeader") {
-            cell.set_header(v);
-        }
-        if let Some(v) = top_bool("cellProtect") {
-            cell.set_cell_protect(v);
-        }
-        if let Some(v) = top_bool("editableInForm") {
-            cell.set_editable_in_form(v);
-        }
-        if let Some(v) = top_str("fieldName") {
-            cell.field_name = if v.is_empty() { None } else { Some(v) };
-        }
-        if let Some(v) = top_u32("borderFillId") {
-            cell.border_fill_id = v as u16;
+            if let Some(v) = top_u32("width") {
+                needs_reflow |= cell.width != v;
+                cell.width = v;
+            }
+            if let Some(v) = top_u32("height") {
+                cell.height = v;
+            }
+            if let Some(v) = top_i16("paddingLeft") {
+                needs_reflow |= cell.padding.left != v;
+                cell.padding.left = v;
+            }
+            if let Some(v) = top_i16("paddingRight") {
+                needs_reflow |= cell.padding.right != v;
+                cell.padding.right = v;
+            }
+            if let Some(v) = top_i16("paddingTop") {
+                cell.padding.top = v;
+            }
+            if let Some(v) = top_i16("paddingBottom") {
+                cell.padding.bottom = v;
+            }
+            if let Some(v) = top_bool("applyInnerMargin") {
+                needs_reflow |= cell.apply_inner_margin != v;
+                cell.set_apply_inner_margin(v);
+            }
+            if let Some(v) = top_u8("verticalAlign") {
+                cell.vertical_align = match v {
+                    1 => crate::model::table::VerticalAlign::Center,
+                    2 => crate::model::table::VerticalAlign::Bottom,
+                    _ => crate::model::table::VerticalAlign::Top,
+                };
+            }
+            if let Some(v) = top_u8("textDirection") {
+                cell.text_direction = v;
+            }
+            if let Some(v) = top_bool("isHeader") {
+                cell.set_header(v);
+            }
+            if let Some(v) = top_bool("cellProtect") {
+                cell.set_cell_protect(v);
+            }
+            if let Some(v) = top_bool("editableInForm") {
+                cell.set_editable_in_form(v);
+            }
+            if let Some(v) = top_str("fieldName") {
+                cell.field_name = if v.is_empty() { None } else { Some(v) };
+            }
+            if let Some(v) = top_u32("borderFillId") {
+                cell.border_fill_id = v as u16;
+            }
+            table.update_ctrl_dimensions();
+            table.dirty = true;
+            (needs_reflow, table.cells[cell_idx].paragraphs.len())
+        };
+
+        if needs_reflow {
+            let para_count = reflow_para_count;
+            for cell_para_idx in 0..para_count {
+                self.reflow_cell_paragraph(
+                    section_idx,
+                    parent_para_idx,
+                    control_idx,
+                    cell_idx,
+                    cell_para_idx,
+                );
+            }
         }
 
         // BorderFill 변경: borderLeft 등이 포함된 경우 create_border_fill_from_json으로 처리
