@@ -45,6 +45,8 @@ maintainer가 외부 기여자 PR을 검토하는 기본 경로는 active review
 | `mydocs/plans/task_m100_1425.md` | 수행계획서 |
 | `mydocs/plans/task_m100_1425_impl.md` | 구현계획서 |
 | `mydocs/report/task_m100_1425_report.md` | 최종 보고서 |
+| `mydocs/pr/archives/pr_1449_review.md` | PR #1449 review 문서 |
+| `mydocs/pr/archives/pr_1449_review_impl.md` | PR #1449 처리 계획 |
 
 ## 4. 검증
 
