@@ -89,6 +89,11 @@ copy(resolve(__dirname, 'icons'), resolve(DIST, 'icons'));
 // i18n
 copy(resolve(__dirname, '_locales'), resolve(DIST, '_locales'));
 
+// [#1444] 다크테마 FOUC 방지 스크립트. vite 는 publicDir:false 라 public/ 을 복사하지
+// 않으므로 viewer.html 의 <script src="/theme-init.js"> 가 가리키는 파일을 개별 복사한다.
+// 확장 CSP('self')는 인라인을 금지하므로 인라인 대신 이 외부 파일을 쓴다.
+copy(resolve(ROOT, 'rhwp-studio', 'public', 'theme-init.js'), resolve(DIST, 'theme-init.js'));
+
 // rhwp-studio 리소스 (CSS에서 참조)
 mkdirSync(resolve(DIST, 'images'), { recursive: true });
 copy(resolve(ROOT, 'rhwp-studio', 'public', 'images', 'icon_small_ko.svg'), resolve(DIST, 'images', 'icon_small_ko.svg'));
