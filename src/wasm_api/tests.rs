@@ -22267,3 +22267,119 @@ fn task1413_move_vertical_ex_equivalent() {
         "*Ex 가 positional 과 동일 반환 (본문 이동)"
     );
 }
+
+// ---------- #1413 3단계: 8인자 군 *Ex 동치 ----------
+
+#[test]
+fn task1413_set_page_hide_ex_equivalent() {
+    let mut doc_pos = HwpDocument::create_empty();
+    let res_pos = doc_pos
+        .set_page_hide(0, 0, true, false, true, false, true, false)
+        .expect("positional setPageHide");
+    let mut doc_ex = HwpDocument::create_empty();
+    let res_ex = doc_ex
+        .set_page_hide_ex(
+            r#"{"sec":0,"para":0,"hideHeader":true,"hideFooter":false,"hideMaster":true,
+                "hideBorder":false,"hideFill":true,"hidePageNum":false}"#,
+        )
+        .expect("setPageHideEx");
+    assert_eq!(res_pos, res_ex);
+}
+
+#[test]
+fn task1413_set_char_shape_id_in_cell_ex_equivalent() {
+    // char_shape_id=0 이 유효하려면 char_shapes 가 최소 1개 등록돼 있어야 한다
+    // (없으면 native 가 "범위 초과" Err → wasm JsValue 변환 패닉). 정상 입력으로 비교.
+    let mut doc_pos = create_doc_with_table();
+    doc_pos
+        .document
+        .doc_info
+        .char_shapes
+        .push(crate::model::style::CharShape::default());
+    let res_pos = doc_pos.set_char_shape_id_in_cell(0, 0, 0, 0, 0, 0, 0, 0);
+    let mut doc_ex = create_doc_with_table();
+    doc_ex
+        .document
+        .doc_info
+        .char_shapes
+        .push(crate::model::style::CharShape::default());
+    let res_ex = doc_ex.set_char_shape_id_in_cell_ex(
+        r#"{"secIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,
+            "startOffset":0,"endOffset":0,"charShapeId":0}"#,
+    );
+    assert_eq!(format!("{res_pos:?}"), format!("{res_ex:?}"));
+}
+
+#[test]
+fn task1413_get_selection_rects_in_cell_ex_equivalent() {
+    let doc = create_doc_with_table();
+    let res_pos = doc.get_selection_rects_in_cell(0, 0, 0, 0, 0, 0, 0, 0);
+    let res_ex = doc.get_selection_rects_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"startCellParaIdx":0,
+            "startCharOffset":0,"endCellParaIdx":0,"endCharOffset":0}"#,
+    );
+    assert_eq!(format!("{res_pos:?}"), format!("{res_ex:?}"));
+}
+
+#[test]
+fn task1413_export_selection_in_cell_html_ex_equivalent() {
+    let doc = create_doc_with_table();
+    let res_pos = doc.export_selection_in_cell_html(0, 0, 0, 0, 0, 0, 0, 0);
+    let res_ex = doc.export_selection_in_cell_html_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"startCellParaIdx":0,
+            "startCharOffset":0,"endCellParaIdx":0,"endCharOffset":0}"#,
+    );
+    assert_eq!(format!("{res_pos:?}"), format!("{res_ex:?}"));
+}
+
+#[test]
+fn task1413_delete_range_in_cell_ex_equivalent() {
+    let mut doc_pos = create_doc_with_table();
+    let res_pos = doc_pos.delete_range_in_cell(0, 0, 0, 0, 0, 0, 0, 0);
+    let mut doc_ex = create_doc_with_table();
+    let res_ex = doc_ex.delete_range_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"startCellParaIdx":0,
+            "startCharOffset":0,"endCellParaIdx":0,"endCharOffset":0}"#,
+    );
+    assert_eq!(format!("{res_pos:?}"), format!("{res_ex:?}"));
+}
+
+#[test]
+fn task1413_copy_selection_in_cell_ex_equivalent() {
+    let mut doc_pos = create_doc_with_table();
+    let res_pos = doc_pos.copy_selection_in_cell(0, 0, 0, 0, 0, 0, 0, 0);
+    let mut doc_ex = create_doc_with_table();
+    let res_ex = doc_ex.copy_selection_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"startCellParaIdx":0,
+            "startCharOffset":0,"endCellParaIdx":0,"endCharOffset":0}"#,
+    );
+    assert_eq!(format!("{res_pos:?}"), format!("{res_ex:?}"));
+}
+
+#[test]
+fn task1413_apply_char_format_in_cell_ex_equivalent() {
+    let props = r#"{"bold":true}"#;
+    let mut doc_pos = create_doc_with_table();
+    let res_pos = doc_pos.apply_char_format_in_cell(0, 0, 0, 0, 0, 0, 0, props);
+    let mut doc_ex = create_doc_with_table();
+    let res_ex = doc_ex.apply_char_format_in_cell_ex(
+        r#"{"secIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,
+            "startOffset":0,"endOffset":0,"props":{"bold":true}}"#,
+    );
+    assert_eq!(format!("{res_pos:?}"), format!("{res_ex:?}"));
+}
+
+#[test]
+fn task1413_insert_click_here_field_by_path_ex_equivalent() {
+    // 유효 cell path(표 para 0, control 0, cell 0)로 셀 안에 삽입. positional 과 *Ex 동치.
+    // (빈 path 는 native 에서 에러 → wasm JsValue 변환 패닉이라 정상 path 를 쓴다.)
+    let path = r#"[{"controlIndex":0,"cellIndex":0,"cellParaIndex":0}]"#;
+    let mut doc_pos = create_doc_with_table();
+    let res_pos =
+        doc_pos.insert_click_here_field_by_path_api(0, 0, path, 0, "안내", "메모", "이름", true);
+    let mut doc_ex = create_doc_with_table();
+    let res_ex = doc_ex.insert_click_here_field_by_path_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"path":"[{\"controlIndex\":0,\"cellIndex\":0,\"cellParaIndex\":0}]","charOffset":0,"guide":"안내","memo":"메모","name":"이름","editable":true}"#,
+    );
+    assert_eq!(format!("{res_pos:?}"), format!("{res_ex:?}"));
+}
