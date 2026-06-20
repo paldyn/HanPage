@@ -479,9 +479,10 @@ impl DocumentCore {
         let bf_json = self.build_border_fill_json_by_id(cell.border_fill_id);
 
         Ok(format!(
-            "{{\"width\":{},\"height\":{},\"paddingLeft\":{},\"paddingRight\":{},\"paddingTop\":{},\"paddingBottom\":{},\"verticalAlign\":{},\"textDirection\":{},\"isHeader\":{},\"cellProtect\":{},\"fieldName\":{},\"editableInForm\":{},{}}}",
+            "{{\"width\":{},\"height\":{},\"paddingLeft\":{},\"paddingRight\":{},\"paddingTop\":{},\"paddingBottom\":{},\"applyInnerMargin\":{},\"verticalAlign\":{},\"textDirection\":{},\"isHeader\":{},\"cellProtect\":{},\"fieldName\":{},\"editableInForm\":{},{}}}",
             cell.width, cell.height,
             cell.padding.left, cell.padding.right, cell.padding.top, cell.padding.bottom,
+            cell.apply_inner_margin,
             va, cell.text_direction, cell.is_header, cell.cell_protect(),
             json_escape(cell.field_name.as_deref().unwrap_or("")),
             cell.editable_in_form(),
@@ -498,53 +499,101 @@ impl DocumentCore {
         cell_idx: usize,
         json: &str,
     ) -> Result<String, HwpError> {
-        use super::super::helpers::{json_bool, json_i16, json_str, json_u32, json_u8};
+        let parsed: serde_json::Value =
+            serde_json::from_str(json).unwrap_or(serde_json::Value::Null);
+        let obj = parsed.as_object();
+        let top_u32 = |key: &str| -> Option<u32> {
+            obj.and_then(|m| m.get(key))
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32)
+        };
+        let top_u8 = |key: &str| -> Option<u8> { top_u32(key).map(|v| v as u8) };
+        let top_i16 = |key: &str| -> Option<i16> {
+            obj.and_then(|m| m.get(key))
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i16)
+        };
+        let top_bool =
+            |key: &str| -> Option<bool> { obj.and_then(|m| m.get(key)).and_then(|v| v.as_bool()) };
+        let top_str = |key: &str| -> Option<String> {
+            obj.and_then(|m| m.get(key))
+                .and_then(|v| v.as_str())
+                .map(ToOwned::to_owned)
+        };
 
-        let table = self.get_table_mut(section_idx, parent_para_idx, control_idx)?;
-        let cell = table
-            .cells
-            .get_mut(cell_idx)
-            .ok_or_else(|| HwpError::RenderError(format!("셀 인덱스 {} 범위 초과", cell_idx)))?;
+        let (needs_reflow, reflow_para_count) = {
+            let mut needs_reflow = false;
+            let table = self.get_table_mut(section_idx, parent_para_idx, control_idx)?;
+            let cell = table.cells.get_mut(cell_idx).ok_or_else(|| {
+                HwpError::RenderError(format!("셀 인덱스 {} 범위 초과", cell_idx))
+            })?;
 
-        if let Some(v) = json_u32(json, "width") {
-            cell.width = v;
-        }
-        if let Some(v) = json_u32(json, "height") {
-            cell.height = v;
-        }
-        if let Some(v) = json_i16(json, "paddingLeft") {
-            cell.padding.left = v;
-        }
-        if let Some(v) = json_i16(json, "paddingRight") {
-            cell.padding.right = v;
-        }
-        if let Some(v) = json_i16(json, "paddingTop") {
-            cell.padding.top = v;
-        }
-        if let Some(v) = json_i16(json, "paddingBottom") {
-            cell.padding.bottom = v;
-        }
-        if let Some(v) = json_u8(json, "verticalAlign") {
-            cell.vertical_align = match v {
-                1 => crate::model::table::VerticalAlign::Center,
-                2 => crate::model::table::VerticalAlign::Bottom,
-                _ => crate::model::table::VerticalAlign::Top,
-            };
-        }
-        if let Some(v) = json_u8(json, "textDirection") {
-            cell.text_direction = v;
-        }
-        if let Some(v) = json_bool(json, "isHeader") {
-            cell.set_header(v);
-        }
-        if let Some(v) = json_bool(json, "cellProtect") {
-            cell.set_cell_protect(v);
-        }
-        if let Some(v) = json_bool(json, "editableInForm") {
-            cell.set_editable_in_form(v);
-        }
-        if let Some(v) = json_str(json, "fieldName") {
-            cell.field_name = if v.is_empty() { None } else { Some(v) };
+            if let Some(v) = top_u32("width") {
+                needs_reflow |= cell.width != v;
+                cell.width = v;
+            }
+            if let Some(v) = top_u32("height") {
+                cell.height = v;
+            }
+            if let Some(v) = top_i16("paddingLeft") {
+                needs_reflow |= cell.padding.left != v;
+                cell.padding.left = v;
+            }
+            if let Some(v) = top_i16("paddingRight") {
+                needs_reflow |= cell.padding.right != v;
+                cell.padding.right = v;
+            }
+            if let Some(v) = top_i16("paddingTop") {
+                cell.padding.top = v;
+            }
+            if let Some(v) = top_i16("paddingBottom") {
+                cell.padding.bottom = v;
+            }
+            if let Some(v) = top_bool("applyInnerMargin") {
+                needs_reflow |= cell.apply_inner_margin != v;
+                cell.set_apply_inner_margin(v);
+            }
+            if let Some(v) = top_u8("verticalAlign") {
+                cell.vertical_align = match v {
+                    1 => crate::model::table::VerticalAlign::Center,
+                    2 => crate::model::table::VerticalAlign::Bottom,
+                    _ => crate::model::table::VerticalAlign::Top,
+                };
+            }
+            if let Some(v) = top_u8("textDirection") {
+                cell.text_direction = v;
+            }
+            if let Some(v) = top_bool("isHeader") {
+                cell.set_header(v);
+            }
+            if let Some(v) = top_bool("cellProtect") {
+                cell.set_cell_protect(v);
+            }
+            if let Some(v) = top_bool("editableInForm") {
+                cell.set_editable_in_form(v);
+            }
+            if let Some(v) = top_str("fieldName") {
+                cell.field_name = if v.is_empty() { None } else { Some(v) };
+            }
+            if let Some(v) = top_u32("borderFillId") {
+                cell.border_fill_id = v as u16;
+            }
+            table.update_ctrl_dimensions();
+            table.dirty = true;
+            (needs_reflow, table.cells[cell_idx].paragraphs.len())
+        };
+
+        if needs_reflow {
+            let para_count = reflow_para_count;
+            for cell_para_idx in 0..para_count {
+                self.reflow_cell_paragraph(
+                    section_idx,
+                    parent_para_idx,
+                    control_idx,
+                    cell_idx,
+                    cell_para_idx,
+                );
+            }
         }
 
         // BorderFill 변경: borderLeft 등이 포함된 경우 create_border_fill_from_json으로 처리
@@ -738,8 +787,12 @@ impl DocumentCore {
             cell_idx: usize,
             width_delta: i32,
             height_delta: i32,
+            local_resize: bool,
+            render_width: Option<u32>,
+            render_height: Option<u32>,
         }
         let mut updates: Vec<CellUpdate> = Vec::new();
+        let mut force_local_resize = false;
 
         let mut depth = 0i32;
         let mut start = 0usize;
@@ -762,10 +815,20 @@ impl DocumentCore {
                         }
                         let width_delta = Self::parse_json_i32(obj, "widthDelta").unwrap_or(0);
                         let height_delta = Self::parse_json_i32(obj, "heightDelta").unwrap_or(0);
+                        let local_resize = obj.contains("\"localResize\":true")
+                            || obj.contains("\"localResize\": true");
+                        force_local_resize |= local_resize;
+                        let render_width = Self::parse_json_i32(obj, "renderWidth")
+                            .and_then(|v| (v > 0).then_some(v as u32));
+                        let render_height = Self::parse_json_i32(obj, "renderHeight")
+                            .and_then(|v| (v > 0).then_some(v as u32));
                         updates.push(CellUpdate {
                             cell_idx: cell_idx as usize,
                             width_delta,
                             height_delta,
+                            local_resize,
+                            render_width,
+                            render_height,
                         });
                     }
                 }
@@ -779,21 +842,115 @@ impl DocumentCore {
 
         // 셀 업데이트 적용
         let table = self.get_table_mut(section_idx, parent_para_idx, control_idx)?;
+        let original_width = table.common.width;
+        let original_height = table.common.height;
+        let mut applied_width_delta: i64 = 0;
+        let mut applied_height_delta: i64 = 0;
+        let mut width_delta_by_row = std::collections::BTreeMap::<u16, (usize, i64)>::new();
+        let mut height_delta_by_col = std::collections::BTreeMap::<u16, (usize, i64)>::new();
+        let mut local_resize_rows = std::collections::BTreeSet::<u16>::new();
+        let mut local_resize_cols = std::collections::BTreeSet::<u16>::new();
         for upd in &updates {
             if let Some(cell) = table.cells.get_mut(upd.cell_idx) {
                 if upd.width_delta != 0 {
+                    let old_w = cell.width;
                     let new_w =
                         (cell.width as i32 + upd.width_delta).max(MIN_CELL_SIZE as i32) as u32;
                     cell.width = new_w;
+                    let actual_delta = new_w as i64 - old_w as i64;
+                    applied_width_delta += actual_delta;
+                    let entry = width_delta_by_row.entry(cell.row).or_insert((0, 0));
+                    entry.0 += 1;
+                    entry.1 += actual_delta;
                 }
                 if upd.height_delta != 0 {
+                    let old_h = cell.height;
                     let new_h =
                         (cell.height as i32 + upd.height_delta).max(MIN_CELL_SIZE as i32) as u32;
                     cell.height = new_h;
+                    let actual_delta = new_h as i64 - old_h as i64;
+                    applied_height_delta += actual_delta;
+                    let entry = height_delta_by_col.entry(cell.col).or_insert((0, 0));
+                    entry.0 += 1;
+                    entry.1 += actual_delta;
+                }
+            }
+            if upd.local_resize {
+                if let Some(width) = upd.render_width {
+                    if let Some(cell) = table.cells.get(upd.cell_idx) {
+                        local_resize_rows.insert(cell.row);
+                    }
+                    if let Some((_, existing)) = table
+                        .local_resize_cell_widths
+                        .iter_mut()
+                        .find(|(idx, _)| *idx == upd.cell_idx)
+                    {
+                        *existing = width;
+                    } else {
+                        table.local_resize_cell_widths.push((upd.cell_idx, width));
+                    }
+                }
+                if let Some(height) = upd.render_height {
+                    if let Some(cell) = table.cells.get(upd.cell_idx) {
+                        local_resize_cols.insert(cell.col);
+                    }
+                    if let Some((_, existing)) = table
+                        .local_resize_cell_heights
+                        .iter_mut()
+                        .find(|(idx, _)| *idx == upd.cell_idx)
+                    {
+                        *existing = height;
+                    } else {
+                        table.local_resize_cell_heights.push((upd.cell_idx, height));
+                    }
                 }
             }
         }
+        for row in local_resize_rows {
+            if !table.local_resize_rows.contains(&row) {
+                table.local_resize_rows.push(row);
+            }
+        }
+        for col in local_resize_cols {
+            if !table.local_resize_cols.contains(&col) {
+                table.local_resize_cols.push(col);
+            }
+        }
+        for (row, (count, delta_sum)) in width_delta_by_row {
+            if count >= 2
+                && (delta_sum == 0 || force_local_resize)
+                && !table.local_resize_rows.contains(&row)
+            {
+                table.local_resize_rows.push(row);
+            }
+        }
+        for (col, (count, delta_sum)) in height_delta_by_col {
+            if count >= 2
+                && (delta_sum == 0 || force_local_resize)
+                && !table.local_resize_cols.contains(&col)
+            {
+                table.local_resize_cols.push(col);
+            }
+        }
         table.update_ctrl_dimensions();
+        if applied_width_delta == 0
+            || (force_local_resize && updates.iter().any(|u| u.width_delta != 0))
+        {
+            table.common.width = original_width;
+            if table.raw_ctrl_data.len() >= common_obj_offsets::WIDTH.end {
+                table.raw_ctrl_data[common_obj_offsets::WIDTH]
+                    .copy_from_slice(&original_width.to_le_bytes());
+            }
+        }
+        if applied_height_delta == 0
+            || (force_local_resize && updates.iter().any(|u| u.height_delta != 0))
+        {
+            table.common.height = original_height;
+            if table.raw_ctrl_data.len() >= common_obj_offsets::HEIGHT.end {
+                table.raw_ctrl_data[common_obj_offsets::HEIGHT]
+                    .copy_from_slice(&original_height.to_le_bytes());
+            }
+        }
         table.dirty = true;
 
         // 너비가 변경된 셀의 모든 문단에 대해 line_segs 재계산 (텍스트 리플로우)
@@ -997,6 +1154,7 @@ impl DocumentCore {
             );
             let nv = cur_v.wrapping_add(delta_v);
             table.raw_ctrl_data[common_obj_offsets::V_OFFSET].copy_from_slice(&nv.to_le_bytes());
+            table.common.vertical_offset = nv as u32;
             nv
         } else {
             i32::from_le_bytes(
@@ -1015,6 +1173,7 @@ impl DocumentCore {
             );
             let new_h = cur_h.wrapping_add(delta_h);
             table.raw_ctrl_data[common_obj_offsets::H_OFFSET].copy_from_slice(&new_h.to_le_bytes());
+            table.common.horizontal_offset = new_h as u32;
         }
 
         // treat_as_char 표: 문단 경계를 넘으면 문단 이동 (다중 경계 루프)
@@ -1058,6 +1217,7 @@ impl DocumentCore {
                 let tbl = self.get_table_mut(section_idx, result_ppi, control_idx)?;
                 tbl.raw_ctrl_data[common_obj_offsets::V_OFFSET]
                     .copy_from_slice(&new_v.to_le_bytes());
+                tbl.common.vertical_offset = new_v as u32;
             }
         }
 
@@ -1279,6 +1439,7 @@ impl DocumentCore {
             } else {
                 table.attr &= !0x01;
             }
+            table.common.treat_as_char = v;
         }
 
         // 위치 속성: attr 비트 필드
@@ -1291,6 +1452,12 @@ impl DocumentCore {
                 _ => 0,
             };
             table.attr = (table.attr & !(0x07 << 21)) | (bits << 21);
+            table.common.text_wrap = match bits {
+                1 => crate::model::shape::TextWrap::TopAndBottom,
+                2 => crate::model::shape::TextWrap::BehindText,
+                3 => crate::model::shape::TextWrap::InFrontOfText,
+                _ => crate::model::shape::TextWrap::Square,
+            };
         }
         if let Some(v) = json_str(json, "vertRelTo") {
             let bits: u32 = match v.as_str() {
@@ -1300,6 +1467,11 @@ impl DocumentCore {
                 _ => 0,
             };
             table.attr = (table.attr & !(0x03 << 3)) | (bits << 3);
+            table.common.vert_rel_to = match bits {
+                1 => crate::model::shape::VertRelTo::Page,
+                2 => crate::model::shape::VertRelTo::Para,
+                _ => crate::model::shape::VertRelTo::Paper,
+            };
         }
         if let Some(v) = json_str(json, "vertAlign") {
             let bits: u32 = match v.as_str() {
@@ -1311,6 +1483,13 @@ impl DocumentCore {
                 _ => 0,
             };
             table.attr = (table.attr & !(0x07 << 5)) | (bits << 5);
+            table.common.vert_align = match bits {
+                1 => crate::model::shape::VertAlign::Center,
+                2 => crate::model::shape::VertAlign::Bottom,
+                3 => crate::model::shape::VertAlign::Inside,
+                4 => crate::model::shape::VertAlign::Outside,
+                _ => crate::model::shape::VertAlign::Top,
+            };
         }
         if let Some(v) = json_str(json, "horzRelTo") {
             let bits: u32 = match v.as_str() {
@@ -1321,6 +1500,12 @@ impl DocumentCore {
                 _ => 0,
             };
             table.attr = (table.attr & !(0x03 << 8)) | (bits << 8);
+            table.common.horz_rel_to = match bits {
+                1 => crate::model::shape::HorzRelTo::Page,
+                2 => crate::model::shape::HorzRelTo::Column,
+                3 => crate::model::shape::HorzRelTo::Para,
+                _ => crate::model::shape::HorzRelTo::Paper,
+            };
         }
         if let Some(v) = json_str(json, "horzAlign") {
             let bits: u32 = match v.as_str() {
@@ -1332,32 +1517,48 @@ impl DocumentCore {
                 _ => 0,
             };
             table.attr = (table.attr & !(0x07 << 10)) | (bits << 10);
+            table.common.horz_align = match bits {
+                1 => crate::model::shape::HorzAlign::Center,
+                2 => crate::model::shape::HorzAlign::Right,
+                3 => crate::model::shape::HorzAlign::Inside,
+                4 => crate::model::shape::HorzAlign::Outside,
+                _ => crate::model::shape::HorzAlign::Left,
+            };
         }
+        table.common.attr = table.attr;
         // 위치 오프셋: CommonObjAttr [0..4]=flags, [4..8]=v_offset, [8..12]=h_offset
         while table.raw_ctrl_data.len() < common_obj_offsets::H_OFFSET.end {
             table.raw_ctrl_data.push(0);
         }
         if let Some(v) = json_i32(json, "vertOffset") {
             table.raw_ctrl_data[common_obj_offsets::V_OFFSET].copy_from_slice(&v.to_le_bytes());
+            table.common.vertical_offset = v as u32;
         }
         if let Some(v) = json_i32(json, "horzOffset") {
             table.raw_ctrl_data[common_obj_offsets::H_OFFSET].copy_from_slice(&v.to_le_bytes());
+            table.common.horizontal_offset = v as u32;
         }
         // restrictInPage → attr bit 13
         if let Some(v) = json_bool(json, "restrictInPage") {
             if v {
                 table.attr |= 1 << 13;
+                table.common.flow_with_text = true;
             } else {
                 table.attr &= !(1 << 13);
+                table.common.flow_with_text = false;
             }
+            table.common.attr = table.attr;
         }
         // allowOverlap → attr bit 14
         if let Some(v) = json_bool(json, "allowOverlap") {
             if v {
                 table.attr |= 1 << 14;
+                table.common.allow_overlap = true;
             } else {
                 table.attr &= !(1 << 14);
+                table.common.allow_overlap = false;
             }
+            table.common.attr = table.attr;
         }
         // keepWithAnchor → prevent_page_break
         // CommonObjAttr::PREVENT_PAGE_BREAK (parse_common_obj_attr 정합)
@@ -1368,6 +1569,7 @@ impl DocumentCore {
             let val: i32 = if v { 1 } else { 0 };
             table.raw_ctrl_data[common_obj_offsets::PREVENT_PAGE_BREAK]
                 .copy_from_slice(&val.to_le_bytes());
+            table.common.prevent_page_break = val;
         }
 
         // 바깥 여백 (CommonObjAttr margin ranges, parse_common_obj_attr 정합)
@@ -1375,18 +1577,22 @@ impl DocumentCore {
             if let Some(v) = json_i16(json, "outerLeft") {
                 table.raw_ctrl_data[common_obj_offsets::MARGIN_LEFT]
                     .copy_from_slice(&v.to_le_bytes());
+                table.common.margin.left = v;
             }
             if let Some(v) = json_i16(json, "outerRight") {
                 table.raw_ctrl_data[common_obj_offsets::MARGIN_RIGHT]
                     .copy_from_slice(&v.to_le_bytes());
+                table.common.margin.right = v;
             }
             if let Some(v) = json_i16(json, "outerTop") {
                 table.raw_ctrl_data[common_obj_offsets::MARGIN_TOP]
                     .copy_from_slice(&v.to_le_bytes());
+                table.common.margin.top = v;
             }
             if let Some(v) = json_i16(json, "outerBottom") {
                 table.raw_ctrl_data[common_obj_offsets::MARGIN_BOTTOM]
                     .copy_from_slice(&v.to_le_bytes());
+                table.common.margin.bottom = v;
             }
         }
 

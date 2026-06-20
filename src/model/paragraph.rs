@@ -1020,6 +1020,12 @@ impl Paragraph {
         if start_char_offset >= end_char_offset || self.char_offsets.is_empty() {
             return;
         }
+        if self.char_shapes.is_empty() {
+            self.char_shapes.push(CharShapeRef {
+                start_pos: 0,
+                char_shape_id: 0,
+            });
+        }
 
         // char offset → UTF-16 위치 변환
         let utf16_start = if start_char_offset < self.char_offsets.len() {

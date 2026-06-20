@@ -222,7 +222,6 @@ export class TableCellPropsDialog extends ModalDialog {
     const sizeSection = this.createSection('셀 크기');
     const sizeCheck = this.row();
     this.cellApplySizeCheck = this.checkbox('셀 크기 적용');
-    this.cellApplySizeCheck.checked = true;
     sizeCheck.appendChild(this.cellApplySizeCheck.parentElement!);
     sizeSection.appendChild(sizeCheck);
 
@@ -236,13 +235,13 @@ export class TableCellPropsDialog extends ModalDialog {
     sizeRow.appendChild(this.cellHeightInput);
     sizeRow.appendChild(this.unit('mm'));
     sizeSection.appendChild(sizeRow);
+    this.cellApplySizeCheck.addEventListener('change', () => this.updateCellSizeState());
     frag.appendChild(sizeSection);
 
     // 안 여백
     const padSection = this.createSection('안 여백');
     const padCheck = this.row();
     this.cellPaddingCheck = this.checkbox('안 여백 지정');
-    this.cellPaddingCheck.checked = true;
     padCheck.appendChild(this.cellPaddingCheck.parentElement!);
     padSection.appendChild(padCheck);
 
@@ -260,6 +259,7 @@ export class TableCellPropsDialog extends ModalDialog {
     padRow.appendChild(padGrid);
     padRow.appendChild(this.buildAllSpinner(this.cellPaddingInputs));
     padSection.appendChild(padRow);
+    this.cellPaddingCheck.addEventListener('change', () => this.updateCellPaddingState());
     frag.appendChild(padSection);
 
     // 속성
@@ -617,6 +617,19 @@ export class TableCellPropsDialog extends ModalDialog {
   private updatePositionVisibility(): void {
     const disabled = this.treatAsCharCheck.checked;
     this.posGroup.classList.toggle('disabled', disabled);
+  }
+
+  private updateCellPaddingState(): void {
+    const enabled = this.cellPaddingCheck.checked;
+    for (const input of Object.values(this.cellPaddingInputs)) {
+      input.disabled = !enabled;
+    }
+  }
+
+  private updateCellSizeState(): void {
+    const enabled = this.cellApplySizeCheck.checked;
+    this.cellWidthInput.disabled = !enabled;
+    this.cellHeightInput.disabled = !enabled;
   }
 
   private selectWrap(idx: number): void {
@@ -1231,10 +1244,13 @@ export class TableCellPropsDialog extends ModalDialog {
     // 셀 탭
     this.cellWidthInput.value = hwpunitToMm(cp.width).toFixed(1);
     this.cellHeightInput.value = hwpunitToMm(cp.height).toFixed(1);
+    this.updateCellSizeState();
     this.cellPaddingInputs['left'].value = hwp16ToMm(cp.paddingLeft).toFixed(1);
     this.cellPaddingInputs['right'].value = hwp16ToMm(cp.paddingRight).toFixed(1);
     this.cellPaddingInputs['top'].value = hwp16ToMm(cp.paddingTop).toFixed(1);
     this.cellPaddingInputs['bottom'].value = hwp16ToMm(cp.paddingBottom).toFixed(1);
+    this.cellPaddingCheck.checked = cp.applyInnerMargin ?? false;
+    this.updateCellPaddingState();
     this.setButtonGroupActive(this.cellVAlignBtns, cp.verticalAlign);
     this.setButtonGroupActive(this.cellTextDirBtns, cp.textDirection);
     this.cellHeaderCheck.checked = cp.isHeader;
@@ -1324,6 +1340,7 @@ export class TableCellPropsDialog extends ModalDialog {
       newCellProps.width = mmToHwpunit(parseFloat(this.cellWidthInput.value) || 0);
       newCellProps.height = mmToHwpunit(parseFloat(this.cellHeightInput.value) || 0);
     }
+    newCellProps.applyInnerMargin = this.cellPaddingCheck.checked;
     if (this.cellPaddingCheck.checked) {
       newCellProps.paddingLeft = mmToHwp16(parseFloat(this.cellPaddingInputs['left'].value) || 0);
       newCellProps.paddingRight = mmToHwp16(parseFloat(this.cellPaddingInputs['right'].value) || 0);

@@ -55,6 +55,18 @@ pub struct Table {
     /// 구조/내용 변경 시 true → 재측정 필요 (Default: false)
     #[doc(hidden)]
     pub dirty: bool,
+    /// Studio 보상 resize로 행별 독립 가로 경계를 보존해야 하는 행.
+    #[doc(hidden)]
+    pub local_resize_rows: Vec<u16>,
+    /// Studio 보상 resize로 열별 독립 세로 경계를 보존해야 하는 열.
+    #[doc(hidden)]
+    pub local_resize_cols: Vec<u16>,
+    /// Studio 로컬 가로 resize 후 셀별 목표 표시 폭(HWPUNIT).
+    #[doc(hidden)]
+    pub local_resize_cell_widths: Vec<(usize, u32)>,
+    /// Studio 로컬 세로 resize 후 셀별 목표 표시 높이(HWPUNIT).
+    #[doc(hidden)]
+    pub local_resize_cell_heights: Vec<(usize, u32)>,
 }
 
 /// 표 쪽 나눔 종류
