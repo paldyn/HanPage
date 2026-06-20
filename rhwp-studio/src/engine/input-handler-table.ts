@@ -81,6 +81,44 @@ function computeResizePositionBounds(
   };
 }
 
+function computeAffectedResizePositionBounds(
+  edge: BorderEdge,
+  affectedCellIndices: number[],
+  bboxes: CellBbox[],
+): { min: number; max: number } | null {
+  const minSizePx = MIN_TABLE_CELL_SIZE_HWP / 75;
+  const minX = Math.min(...bboxes.map(b => b.x));
+  const maxX = Math.max(...bboxes.map(b => b.x + b.w));
+  const minY = Math.min(...bboxes.map(b => b.y));
+  const maxY = Math.max(...bboxes.map(b => b.y + b.h));
+  let min = -Infinity;
+  let max = Infinity;
+  let found = false;
+
+  for (const cellIdx of affectedCellIndices) {
+    const targetBox = bboxes.find(b => b.cellIdx === cellIdx);
+    if (!targetBox) continue;
+    const neighborIdx = findResizeCompensationNeighbor(edge, targetBox, bboxes);
+    const neighborBox = neighborIdx === null
+      ? null
+      : bboxes.find(b => b.cellIdx === neighborIdx) ?? null;
+
+    if (edge.type === 'col') {
+      min = Math.max(min, targetBox.x + minSizePx);
+      max = Math.min(max, neighborBox ? neighborBox.x + neighborBox.w - minSizePx : maxX);
+    } else {
+      min = Math.max(min, targetBox.y + minSizePx);
+      max = Math.min(max, neighborBox ? neighborBox.y + neighborBox.h - minSizePx : maxY);
+    }
+    found = true;
+  }
+
+  if (!found) return null;
+  if (!Number.isFinite(min)) min = edge.type === 'col' ? minX : minY;
+  if (!Number.isFinite(max)) max = edge.type === 'col' ? maxX : maxY;
+  return { min, max };
+}
+
 function clampResizePosition(pos: number, bounds: { min: number; max: number }): number {
   return Math.min(Math.max(pos, bounds.min), bounds.max);
 }
@@ -572,13 +610,6 @@ export function startResizeDrag(this: any,
   const shouldResizeSingleCell = shiftResize ||
     isKnownLocalResizeSegment(this, this.cachedTableRef, edge, resizeTarget, this.cachedCellBboxes);
   const singleCellTarget = shouldResizeSingleCell ? resizeTarget : null;
-  const resizeBounds = computeResizePositionBounds(
-    this,
-    edge,
-    pageBboxes,
-    singleCellTarget,
-    this.cachedCellBboxes,
-  );
   const logicalAffectedCellIndices = !shouldResizeSingleCell
     ? findAlignedLogicalResizeAffectedCells(edge, resizeTarget, this.cachedCellBboxes)
     : [];
@@ -586,6 +617,16 @@ export function startResizeDrag(this: any,
     ? logicalAffectedCellIndices
     : coordinateAffectedCellIndices;
   if (affectedCellIndices.length === 0 && !singleCellTarget) return;
+  const affectedBounds = !singleCellTarget && hasLocalResizeHistory(this, this.cachedTableRef)
+    ? computeAffectedResizePositionBounds(edge, affectedCellIndices, this.cachedCellBboxes)
+    : null;
+  const resizeBounds = affectedBounds ?? computeResizePositionBounds(
+    this,
+    edge,
+    pageBboxes,
+    singleCellTarget,
+    this.cachedCellBboxes,
+  );
 
   this.isResizeDragging = true;
   this.resizeDragState = {
