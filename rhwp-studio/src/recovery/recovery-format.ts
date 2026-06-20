@@ -1,12 +1,22 @@
 import type { AutosaveDraft } from './autosave-store.ts';
 
-export function recoveryFileName(fileName: string): string {
+function baseNameWithoutKnownExtension(fileName: string): string {
   const trimmed = fileName.trim() || '문서.hwp';
   const dot = trimmed.lastIndexOf('.');
-  if (dot > 0) {
-    return `${trimmed.slice(0, dot)} 복구본${trimmed.slice(dot)}`;
+  if (dot <= 0) return trimmed;
+
+  const ext = trimmed.slice(dot).toLowerCase();
+  if (ext === '.hwp' || ext === '.hwpx') {
+    return trimmed.slice(0, dot);
   }
-  return `${trimmed} 복구본.hwp`;
+  return trimmed;
+}
+
+export function recoveryFileName(fileName: string, sourceFormat = 'hwp'): string {
+  const base = baseNameWithoutKnownExtension(fileName);
+  // autosave draft는 exportHwp() 결과이므로 HWPX 출처도 복구본은 HWP로 연다.
+  if (sourceFormat.toLowerCase() === 'hwpx') return `${base} 복구본.hwp`;
+  return `${base} 복구본.hwp`;
 }
 
 export function formatDraftSavedAt(timestamp: number): string {
@@ -23,5 +33,7 @@ export function formatDraftSize(byteLength: number): string {
 }
 
 export function describeDraft(draft: AutosaveDraft): string {
-  return `${formatDraftSavedAt(draft.savedAt)} · ${formatDraftSize(draft.byteLength)} · ${draft.sourceFormat.toUpperCase()}`;
+  const format = draft.sourceFormat.toUpperCase();
+  const suffix = draft.sourceFormat.toLowerCase() === 'hwpx' ? ' → HWP 복구본' : '';
+  return `${formatDraftSavedAt(draft.savedAt)} · ${formatDraftSize(draft.byteLength)} · ${format}${suffix}`;
 }

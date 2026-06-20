@@ -714,7 +714,7 @@ async function offerAutosaveRecoveryIfIdle(): Promise<void> {
 }
 
 async function restoreAutosaveDraft(draft: AutosaveDraft): Promise<void> {
-  const fileName = recoveryFileName(draft.fileName);
+  const fileName = recoveryFileName(draft.fileName, draft.sourceFormat);
   await loadBytes(new Uint8Array(draft.data), fileName, null);
   await deleteAutosaveDraft(draft.id);
   documentState.markDirty('autosave-recovered');
