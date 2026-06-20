@@ -3,7 +3,7 @@
 - 이슈: #1448 `rhwp-studio: 미저장 문서 자동 백업 및 복구 기능`
 - 브랜치: `local/task_m100_1448`
 - 기준 브랜치: `upstream/devel` `23dc197f`
-- 최종 HEAD: `ee846266`
+- 최종 HEAD: `2df5b759`
 - 상태: PR 준비 완료
 
 ## 1. 해결 범위
@@ -119,8 +119,8 @@ rhwp-studio의 미저장 문서 자동 백업과 복구 흐름을 추가했다.
 
 ## 5. Git 상태
 
-- `upstream/devel...HEAD`: behind 0, ahead 4
-- 워크트리: PR 문서 생성 전 기준 clean
+- `upstream/devel...HEAD`: behind 0, ahead 5
+- 워크트리: clean
 - PR 생성 전 권장 원격 브랜치:
   - `task_m100_1448`
 
