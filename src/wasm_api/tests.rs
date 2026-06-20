@@ -22095,3 +22095,405 @@ fn test_reflow_linesegs_empty_document_returns_zero() {
     let count = doc.reflow_linesegs();
     assert_eq!(count, 0);
 }
+
+// ---------- #1413: insertPictureEx(options object) 동치 ----------
+
+/// `insertPictureEx`(options JSON + image_data)가 positional `insertPicture` 와
+/// 동일하게 동작해야 한다. 같은 입력으로 두 문서에 각각 삽입 → 렌더 SVG 의 이미지
+/// 수와 반환 JSON 의 paraIdx/controlIdx 가 일치.
+#[test]
+fn task1413_insert_picture_ex_equivalent_to_positional() {
+    fn png() -> Vec<u8> {
+        vec![
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
+            0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78,
+            0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x00, 0x00, 0x00,
+            0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ]
+    }
+    fn count_images(svg: &str) -> usize {
+        svg.matches("<image").count()
+    }
+
+    // positional 경로
+    let mut doc_pos = HwpDocument::create_empty();
+    let res_pos = doc_pos
+        .insert_picture(
+            0,
+            0,
+            0,
+            "",
+            &png(),
+            4000,
+            3000,
+            100,
+            80,
+            "png",
+            "",
+            None,
+            None,
+        )
+        .expect("positional insertPicture");
+
+    // *Ex 경로 — 동일 입력을 options JSON 으로
+    let mut doc_ex = HwpDocument::create_empty();
+    let options = r#"{"sectionIdx":0,"paraIdx":0,"charOffset":0,"cellPath":"",
+        "width":4000,"height":3000,"naturalWidthPx":100,"naturalHeightPx":80,
+        "extension":"png","description":""}"#;
+    let res_ex = doc_ex
+        .insert_picture_ex(options, &png())
+        .expect("insertPictureEx");
+
+    // 반환 JSON 동치 (paraIdx/controlIdx)
+    assert_eq!(res_pos, res_ex, "*Ex 반환이 positional 과 동일해야 함");
+
+    // 렌더 결과 동치 (이미지 수)
+    let svg_pos = doc_pos.render_page_svg_native(0).expect("svg pos");
+    let svg_ex = doc_ex.render_page_svg_native(0).expect("svg ex");
+    assert_eq!(
+        count_images(&svg_pos),
+        count_images(&svg_ex),
+        "*Ex 렌더 이미지 수가 positional 과 동일해야 함"
+    );
+    assert_eq!(count_images(&svg_ex), 1, "그림 1개 삽입");
+}
+
+/// options JSON 의 키 누락 시 positional default 와 동일 처리 (description/extension/
+/// paperOffset 부재).
+#[test]
+fn task1413_insert_picture_ex_optional_keys_default() {
+    fn png() -> Vec<u8> {
+        vec![
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
+            0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78,
+            0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x00, 0x00, 0x00,
+            0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ]
+    }
+    // optional 키(extension/description/paperOffset/cellPath) 생략 — 본문 inline 삽입.
+    let mut doc = HwpDocument::create_empty();
+    let res = doc
+        .insert_picture_ex(
+            r#"{"sectionIdx":0,"paraIdx":0,"width":4000,"height":3000,"naturalWidthPx":100,"naturalHeightPx":80}"#,
+            &png(),
+        )
+        .expect("insertPictureEx with optional keys omitted");
+    assert!(
+        res.contains("\"ok\":true") || res.contains("paraIdx"),
+        "삽입 성공: {res}"
+    );
+}
+
+// ---------- #1413 2단계: 고인자(9~11) *Ex 동치 ----------
+
+/// splitTableCellInto vs splitTableCellIntoEx 동치.
+#[test]
+fn task1413_split_table_cell_into_ex_equivalent() {
+    let mut doc_pos = create_doc_with_table();
+    let res_pos = doc_pos
+        .split_table_cell_into(0, 0, 0, 0, 0, 2, 2, true, false)
+        .expect("positional splitTableCellInto");
+
+    let mut doc_ex = create_doc_with_table();
+    let res_ex = doc_ex
+        .split_table_cell_into_ex(
+            r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"row":0,"col":0,
+                "nRows":2,"mCols":2,"equalRowHeight":true,"mergeFirst":false}"#,
+        )
+        .expect("splitTableCellIntoEx");
+    assert_eq!(res_pos, res_ex, "*Ex 가 positional 과 동일 반환");
+}
+
+/// splitTableCellsInRange vs splitTableCellsInRangeEx 동치.
+#[test]
+fn task1413_split_table_cells_in_range_ex_equivalent() {
+    let mut doc_pos = create_doc_with_table();
+    let res_pos = doc_pos
+        .split_table_cells_in_range(0, 0, 0, 0, 0, 0, 0, 2, 2, true)
+        .expect("positional splitTableCellsInRange");
+
+    let mut doc_ex = create_doc_with_table();
+    let res_ex = doc_ex
+        .split_table_cells_in_range_ex(
+            r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"startRow":0,"startCol":0,
+                "endRow":0,"endCol":0,"nRows":2,"mCols":2,"equalRowHeight":true}"#,
+        )
+        .expect("splitTableCellsInRangeEx");
+    assert_eq!(res_pos, res_ex, "*Ex 가 positional 과 동일 반환");
+}
+
+/// insertClickHereFieldInCell vs insertClickHereFieldInCellEx 동치.
+#[test]
+fn task1413_insert_click_here_field_in_cell_ex_equivalent() {
+    let mut doc_pos = create_doc_with_table();
+    let res_pos = doc_pos
+        .insert_click_here_field_in_cell_api(0, 0, 0, 0, 0, 0, false, "안내", "메모", "이름", true)
+        .expect("positional insertClickHereFieldInCell");
+
+    let mut doc_ex = create_doc_with_table();
+    let res_ex = doc_ex
+        .insert_click_here_field_in_cell_ex(
+            r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,
+                "charOffset":0,"isTextbox":false,"guide":"안내","memo":"메모","name":"이름","editable":true}"#,
+        )
+        .expect("insertClickHereFieldInCellEx");
+    assert_eq!(res_pos, res_ex, "*Ex 가 positional 과 동일 반환");
+}
+
+/// moveVertical vs moveVerticalEx 동치 (본문 — parentParaIdx 생략 = MAX).
+#[test]
+fn task1413_move_vertical_ex_equivalent() {
+    let mut doc_pos = HwpDocument::create_empty();
+    doc_pos
+        .insert_text_native(0, 0, 0, "첫째 줄\n둘째 줄\n셋째 줄")
+        .expect("텍스트 삽입");
+    let res_pos = doc_pos
+        .move_vertical(0, 0, 2, 1, 10.0, u32::MAX, 0, 0, 0)
+        .expect("positional moveVertical");
+
+    let mut doc_ex = HwpDocument::create_empty();
+    doc_ex
+        .insert_text_native(0, 0, 0, "첫째 줄\n둘째 줄\n셋째 줄")
+        .expect("텍스트 삽입");
+    let res_ex = doc_ex
+        .move_vertical_ex(
+            r#"{"sectionIdx":0,"paraIdx":0,"charOffset":2,"delta":1,"preferredX":10.0}"#,
+        )
+        .expect("moveVerticalEx");
+    assert_eq!(
+        res_pos, res_ex,
+        "*Ex 가 positional 과 동일 반환 (본문 이동)"
+    );
+}
+
+// ---------- #1413 3단계: 8인자 군 *Ex 동치 ----------
+
+#[test]
+fn task1413_set_page_hide_ex_equivalent() {
+    let mut doc_pos = HwpDocument::create_empty();
+    let res_pos = doc_pos
+        .set_page_hide(0, 0, true, false, true, false, true, false)
+        .expect("positional setPageHide");
+    let mut doc_ex = HwpDocument::create_empty();
+    let res_ex = doc_ex
+        .set_page_hide_ex(
+            r#"{"sec":0,"para":0,"hideHeader":true,"hideFooter":false,"hideMaster":true,
+                "hideBorder":false,"hideFill":true,"hidePageNum":false}"#,
+        )
+        .expect("setPageHideEx");
+    assert_eq!(res_pos, res_ex);
+}
+
+#[test]
+fn task1413_set_char_shape_id_in_cell_ex_equivalent() {
+    // char_shape_id=0 이 유효하려면 char_shapes 가 최소 1개 등록돼 있어야 한다
+    // (없으면 native 가 "범위 초과" Err → wasm JsValue 변환 패닉). 정상 입력으로 비교.
+    let mut doc_pos = create_doc_with_table();
+    doc_pos
+        .document
+        .doc_info
+        .char_shapes
+        .push(crate::model::style::CharShape::default());
+    let res_pos = doc_pos.set_char_shape_id_in_cell(0, 0, 0, 0, 0, 0, 0, 0);
+    let mut doc_ex = create_doc_with_table();
+    doc_ex
+        .document
+        .doc_info
+        .char_shapes
+        .push(crate::model::style::CharShape::default());
+    let res_ex = doc_ex.set_char_shape_id_in_cell_ex(
+        r#"{"secIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,
+            "startOffset":0,"endOffset":0,"charShapeId":0}"#,
+    );
+    assert_eq!(format!("{res_pos:?}"), format!("{res_ex:?}"));
+}
+
+#[test]
+fn task1413_get_selection_rects_in_cell_ex_equivalent() {
+    let doc = create_doc_with_table();
+    let res_pos = doc.get_selection_rects_in_cell(0, 0, 0, 0, 0, 0, 0, 0);
+    let res_ex = doc.get_selection_rects_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"startCellParaIdx":0,
+            "startCharOffset":0,"endCellParaIdx":0,"endCharOffset":0}"#,
+    );
+    assert_eq!(format!("{res_pos:?}"), format!("{res_ex:?}"));
+}
+
+#[test]
+fn task1413_export_selection_in_cell_html_ex_equivalent() {
+    let doc = create_doc_with_table();
+    let res_pos = doc.export_selection_in_cell_html(0, 0, 0, 0, 0, 0, 0, 0);
+    let res_ex = doc.export_selection_in_cell_html_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"startCellParaIdx":0,
+            "startCharOffset":0,"endCellParaIdx":0,"endCharOffset":0}"#,
+    );
+    assert_eq!(format!("{res_pos:?}"), format!("{res_ex:?}"));
+}
+
+#[test]
+fn task1413_delete_range_in_cell_ex_equivalent() {
+    let mut doc_pos = create_doc_with_table();
+    let res_pos = doc_pos.delete_range_in_cell(0, 0, 0, 0, 0, 0, 0, 0);
+    let mut doc_ex = create_doc_with_table();
+    let res_ex = doc_ex.delete_range_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"startCellParaIdx":0,
+            "startCharOffset":0,"endCellParaIdx":0,"endCharOffset":0}"#,
+    );
+    assert_eq!(format!("{res_pos:?}"), format!("{res_ex:?}"));
+}
+
+#[test]
+fn task1413_copy_selection_in_cell_ex_equivalent() {
+    let mut doc_pos = create_doc_with_table();
+    let res_pos = doc_pos.copy_selection_in_cell(0, 0, 0, 0, 0, 0, 0, 0);
+    let mut doc_ex = create_doc_with_table();
+    let res_ex = doc_ex.copy_selection_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"startCellParaIdx":0,
+            "startCharOffset":0,"endCellParaIdx":0,"endCharOffset":0}"#,
+    );
+    assert_eq!(format!("{res_pos:?}"), format!("{res_ex:?}"));
+}
+
+#[test]
+fn task1413_apply_char_format_in_cell_ex_equivalent() {
+    let props = r#"{"bold":true}"#;
+    let mut doc_pos = create_doc_with_table();
+    let res_pos = doc_pos.apply_char_format_in_cell(0, 0, 0, 0, 0, 0, 0, props);
+    let mut doc_ex = create_doc_with_table();
+    let res_ex = doc_ex.apply_char_format_in_cell_ex(
+        r#"{"secIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,
+            "startOffset":0,"endOffset":0,"props":{"bold":true}}"#,
+    );
+    assert_eq!(format!("{res_pos:?}"), format!("{res_ex:?}"));
+}
+
+#[test]
+fn task1413_insert_click_here_field_by_path_ex_equivalent() {
+    // 유효 cell path(표 para 0, control 0, cell 0)로 셀 안에 삽입. positional 과 *Ex 동치.
+    // (빈 path 는 native 에서 에러 → wasm JsValue 변환 패닉이라 정상 path 를 쓴다.)
+    let path = r#"[{"controlIndex":0,"cellIndex":0,"cellParaIndex":0}]"#;
+    let mut doc_pos = create_doc_with_table();
+    let res_pos =
+        doc_pos.insert_click_here_field_by_path_api(0, 0, path, 0, "안내", "메모", "이름", true);
+    let mut doc_ex = create_doc_with_table();
+    let res_ex = doc_ex.insert_click_here_field_by_path_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"path":"[{\"controlIndex\":0,\"cellIndex\":0,\"cellParaIndex\":0}]","charOffset":0,"guide":"안내","memo":"메모","name":"이름","editable":true}"#,
+    );
+    assert_eq!(format!("{res_pos:?}"), format!("{res_ex:?}"));
+}
+
+// ---------- #1413 4단계: 7인자 군 *Ex 동치 (13개) ----------
+
+// 표 셀(para0/control0/cell0)에 정상 동작하는 *InCell 류. 반환 동일성 비교.
+#[test]
+fn task1413_insert_text_in_cell_ex_equivalent() {
+    let mut a = create_doc_with_table();
+    let rp = a.insert_text_in_cell(0, 0, 0, 0, 0, 0, "텍스트");
+    let mut b = create_doc_with_table();
+    let re = b.insert_text_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,"charOffset":0,"text":"텍스트"}"#,
+    );
+    assert_eq!(format!("{rp:?}"), format!("{re:?}"));
+}
+
+#[test]
+fn task1413_get_text_in_cell_ex_equivalent() {
+    let a = create_doc_with_table();
+    let rp = a.get_text_in_cell(0, 0, 0, 0, 0, 0, 1);
+    let re = a.get_text_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,"charOffset":0,"count":1}"#,
+    );
+    assert_eq!(format!("{rp:?}"), format!("{re:?}"));
+}
+
+#[test]
+fn task1413_delete_text_in_cell_ex_equivalent() {
+    let mut a = create_doc_with_table();
+    let rp = a.delete_text_in_cell(0, 0, 0, 0, 0, 0, 1);
+    let mut b = create_doc_with_table();
+    let re = b.delete_text_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,"charOffset":0,"count":1}"#,
+    );
+    assert_eq!(format!("{rp:?}"), format!("{re:?}"));
+}
+
+#[test]
+fn task1413_paste_html_in_cell_ex_equivalent() {
+    let mut a = create_doc_with_table();
+    let rp = a.paste_html_in_cell(0, 0, 0, 0, 0, 0, "<p>x</p>");
+    let mut b = create_doc_with_table();
+    let re = b.paste_html_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,"charOffset":0,"html":"<p>x</p>"}"#,
+    );
+    assert_eq!(format!("{rp:?}"), format!("{re:?}"));
+}
+
+#[test]
+fn task1413_merge_table_cells_ex_equivalent() {
+    let mut a = create_doc_with_table();
+    let rp = a.merge_table_cells(0, 0, 0, 0, 0, 0, 1);
+    let mut b = create_doc_with_table();
+    let re = b.merge_table_cells_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"startRow":0,"startCol":0,"endRow":0,"endCol":1}"#,
+    );
+    assert_eq!(format!("{rp:?}"), format!("{re:?}"));
+}
+
+#[test]
+fn task1413_insert_click_here_field_ex_equivalent() {
+    let mut a = HwpDocument::create_empty();
+    a.insert_text_native(0, 0, 0, "abc").unwrap();
+    let rp = a.insert_click_here_field_api(0, 0, 0, "안내", "메모", "이름", true);
+    let mut b = HwpDocument::create_empty();
+    b.insert_text_native(0, 0, 0, "abc").unwrap();
+    let re = b.insert_click_here_field_ex(
+        r#"{"sectionIdx":0,"paraIdx":0,"charOffset":0,"guide":"안내","memo":"메모","name":"이름","editable":true}"#,
+    );
+    assert_eq!(format!("{rp:?}"), format!("{re:?}"));
+}
+
+// bool/String 반환 (JsValue 변환 없음 — 패닉 무관).
+#[test]
+fn task1413_set_active_field_in_cell_ex_equivalent() {
+    let mut a = create_doc_with_table();
+    let rp = a.set_active_field_in_cell_api(0, 0, 0, 0, 0, 0, false);
+    let mut b = create_doc_with_table();
+    let re = b.set_active_field_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,"charOffset":0,"isTextbox":false}"#,
+    );
+    assert_eq!(rp, re);
+}
+
+#[test]
+fn task1413_get_field_info_at_in_cell_ex_equivalent() {
+    let a = create_doc_with_table();
+    let rp = a.get_field_info_at_in_cell_api(0, 0, 0, 0, 0, 0, false);
+    let re = a.get_field_info_at_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,"charOffset":0,"isTextbox":false}"#,
+    );
+    assert_eq!(rp, re);
+}
+
+#[test]
+fn task1413_remove_field_at_in_cell_ex_equivalent() {
+    let mut a = create_doc_with_table();
+    let rp = a.remove_field_at_in_cell_api(0, 0, 0, 0, 0, 0, false);
+    let mut b = create_doc_with_table();
+    let re = b.remove_field_at_in_cell_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"cellIdx":0,"cellParaIdx":0,"charOffset":0,"isTextbox":false}"#,
+    );
+    assert_eq!(rp, re);
+}
+
+#[test]
+fn task1413_evaluate_table_formula_ex_equivalent() {
+    let mut a = create_doc_with_table();
+    let rp = a.evaluate_table_formula(0, 0, 0, 0, 0, "=1+1", false);
+    let mut b = create_doc_with_table();
+    let re = b.evaluate_table_formula_ex(
+        r#"{"sectionIdx":0,"parentParaIdx":0,"controlIdx":0,"targetRow":0,"targetCol":0,"formula":"=1+1","writeResult":false}"#,
+    );
+    assert_eq!(format!("{rp:?}"), format!("{re:?}"));
+}

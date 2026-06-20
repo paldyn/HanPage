@@ -2,6 +2,23 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다.
 
+## [Unreleased]
+
+### API
+- WASM public API 의 고인자(7+) 함수 26개에 options object 변형 `*Ex(options_json[, image_data])`
+  를 추가했다 (#1413). 기존 positional API 는 그대로 유지되며(하위 호환), `*Ex` 는 JSON
+  options 로 같은 동작을 한다. downstream 은 중간 삽입형 시그니처 변경에 덜 취약하다.
+  - 대상: insertPicture(하이브리드: image_data 별도 인자), insertClickHereFieldInCell,
+    splitTableCellsInRange, splitTableCellInto, moveVertical, setPageHide,
+    setCharShapeIdInCell, insertClickHereFieldByPath, getSelectionRectsInCell,
+    exportSelectionInCellHtml, deleteRangeInCell, copySelectionInCell, applyCharFormatInCell,
+    setNoteEquationProperties, setFormValueInCell, setActiveFieldInCell, removeFieldAtInCell,
+    pasteHtmlInCell, moveLineEndpoint, mergeTableCells, insertTextInCell, insertClickHereField,
+    getTextInCell, getFieldInfoAtInCell, evaluateTableFormula, deleteTextInCell.
+  - 설계 관행·breaking change 표기 규약: `mydocs/manual/wasm_api_options_convention.md`.
+  - **권고**: 고인자 API 는 `*Ex` 사용을 권장한다. positional 시그니처 변경 시 CHANGELOG
+    `### API` 에 인자 index 변경을 명시한다.
+
 ## [0.7.16] — 2026-06-19
 
 > v0.7.15 후속 patch — HWPX 저장 계약(serializer fidelity) 정밀화, 누름틀 안내문 한컴 호환,
