@@ -647,7 +647,7 @@ impl WebCanvasRenderer {
             if !run.text.is_empty() && !is_marker {
                 let char_positions = compute_char_positions(&run.text, &run.style);
                 let mark_font_size = font_size * 0.5;
-                self.ctx.set_fill_style_str("#4A90D9");
+                self.ctx.set_fill_style_str("#0066FF");
                 self.ctx
                     .set_font(&format!("{:.3}px sans-serif", mark_font_size));
                 for (i, c) in run.text.chars().enumerate() {
@@ -667,7 +667,7 @@ impl WebCanvasRenderer {
                 }
             }
             if run.is_para_end || run.is_line_break_end {
-                self.ctx.set_fill_style_str("#4A90D9");
+                self.ctx.set_fill_style_str("#0066FF");
                 self.ctx.set_font(&format!("{:.3}px sans-serif", font_size));
                 if run.is_vertical {
                     let mark_x = bbox.x + (bbox.width - font_size * 0.5) / 2.0;

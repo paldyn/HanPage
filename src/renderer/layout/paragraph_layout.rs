@@ -267,6 +267,50 @@ fn tac_offsets_for_line(
         .collect()
 }
 
+fn repeated_empty_tac_line_offset(
+    comp: &ComposedParagraph,
+    tac_offsets_px: &[(usize, f64, usize)],
+    line_idx: usize,
+) -> Option<Vec<(usize, f64, usize)>> {
+    let line = comp.lines.get(line_idx)?;
+    if !line.runs.is_empty() {
+        return None;
+    }
+
+    let start = line.char_start;
+    let repeated_empty_line_count = comp
+        .lines
+        .iter()
+        .filter(|candidate| candidate.runs.is_empty() && candidate.char_start == start)
+        .count();
+    if repeated_empty_line_count <= 1 {
+        return None;
+    }
+
+    let line_ordinal = comp
+        .lines
+        .iter()
+        .take(line_idx)
+        .filter(|candidate| candidate.runs.is_empty() && candidate.char_start == start)
+        .count();
+    let line_tac_sequence = tac_offsets_px
+        .iter()
+        .copied()
+        .filter(|(pos, _, _)| *pos >= start && *pos < start + repeated_empty_line_count)
+        .collect::<Vec<_>>();
+
+    // 텍스트 없는 HWP 문단은 LINE_SEG 여러 줄이 같은 text_start 를 가질 수 있다.
+    // 이때 TAC 개수와 빈 줄 수가 정확히 맞으면 한 줄에 하나씩 순서대로 배정한다.
+    if line_tac_sequence.len() == repeated_empty_line_count {
+        line_tac_sequence
+            .get(line_ordinal)
+            .copied()
+            .map(|offset| vec![offset])
+    } else {
+        None
+    }
+}
+
 fn tac_picture_or_shape_height_px(ctrl: &Control, dpi: f64) -> Option<f64> {
     let height_hu = match ctrl {
         Control::Picture(pic) if pic.common.treat_as_char => pic.common.height as i32,
@@ -1759,7 +1803,12 @@ impl LayoutEngine {
                     }
                 })
                 .fold(0.0f64, f64::max);
-            let line_tac_offsets = tac_offsets_for_line(composed, &tac_offsets_px, line_idx);
+            let mut line_tac_offsets = tac_offsets_for_line(composed, &tac_offsets_px, line_idx);
+            if let Some(offsets) =
+                repeated_empty_tac_line_offset(composed, &tac_offsets_px, line_idx)
+            {
+                line_tac_offsets = offsets;
+            }
             let runs_all_whitespace = comp_line.runs.iter().all(|r| r.text.trim().is_empty());
             let mut line_tac_offsets_for_width = line_tac_offsets.clone();
             if cell_ctx.is_some()

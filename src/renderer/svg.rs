@@ -376,13 +376,13 @@ impl SvgRenderer {
                                 };
                                 let mid_x = (cx + next_x) / 2.0 - mark_font_size * 0.25;
                                 self.output.push_str(&format!(
-                                    "<text x=\"{}\" y=\"{}\" font-size=\"{}\" fill=\"#4A90D9\">\u{2228}</text>\n",
+                                    "<text x=\"{}\" y=\"{}\" font-size=\"{}\" fill=\"#0066FF\">\u{2228}</text>\n",
                                     mid_x, node.bbox.y + run.baseline, mark_font_size,
                                 ));
                             } else if c == '\t' {
                                 let cx = node.bbox.x + char_positions[i];
                                 self.output.push_str(&format!(
-                                    "<text x=\"{}\" y=\"{}\" font-size=\"{}\" fill=\"#4A90D9\">\u{2192}</text>\n",
+                                    "<text x=\"{}\" y=\"{}\" font-size=\"{}\" fill=\"#0066FF\">\u{2192}</text>\n",
                                     cx, node.bbox.y + run.baseline, mark_font_size,
                                 ));
                             }
@@ -401,7 +401,7 @@ impl SvgRenderer {
                             "\u{21B5}"
                         };
                         self.output.push_str(&format!(
-                            "<text x=\"{}\" y=\"{}\" font-size=\"{}\" fill=\"#4A90D9\">{}</text>\n",
+                            "<text x=\"{}\" y=\"{}\" font-size=\"{}\" fill=\"#0066FF\">{}</text>\n",
                             mark_x,
                             node.bbox.y + run.baseline,
                             font_size,

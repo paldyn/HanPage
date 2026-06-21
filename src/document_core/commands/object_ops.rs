@@ -8076,6 +8076,61 @@ mod issue_1151_cell_picture_insert_tests {
     }
 
     #[test]
+    fn issue1452_picture_transparency_samples_render_once_with_opacity() {
+        use crate::renderer::render_tree::{RenderNode, RenderNodeType};
+
+        fn collect_images(node: &RenderNode, out: &mut Vec<(Option<usize>, Option<usize>, f64)>) {
+            if let RenderNodeType::Image(img) = &node.node_type {
+                out.push((img.para_index, img.control_index, img.opacity));
+            }
+            for child in &node.children {
+                collect_images(child, out);
+            }
+        }
+
+        for path in ["samples/투명도0-50.hwp", "samples/투명도0-50.hwpx"] {
+            let data =
+                std::fs::read(path).unwrap_or_else(|err| panic!("fixture 읽기 실패 {path}: {err}"));
+            let core =
+                DocumentCore::from_bytes(&data).unwrap_or_else(|err| panic!("parse {path}: {err}"));
+            let tree = core
+                .build_page_tree(0)
+                .unwrap_or_else(|err| panic!("render tree {path}: {err}"));
+            let mut images = Vec::new();
+            collect_images(&tree.root, &mut images);
+
+            assert_eq!(
+                images.len(),
+                2,
+                "투명도 샘플의 그림은 두 번만 렌더되어야 한다: {path}, got {images:?}"
+            );
+
+            let mut identities = images
+                .iter()
+                .map(|(para, control, _)| (*para, *control))
+                .collect::<Vec<_>>();
+            identities.sort_unstable();
+            identities.dedup();
+            assert_eq!(
+                identities.len(),
+                2,
+                "같은 그림 control 이 중복 렌더되면 안 된다: {path}, got {images:?}"
+            );
+
+            let mut opacities = images
+                .iter()
+                .map(|(_, _, opacity)| (opacity * 100.0).round() as i32)
+                .collect::<Vec<_>>();
+            opacities.sort_unstable();
+            assert_eq!(
+                opacities,
+                vec![50, 100],
+                "렌더 트리 불투명도는 투명도 0/50%를 100/50%로 보존해야 한다: {path}"
+            );
+        }
+    }
+
+    #[test]
     fn issue1151_invalid_cell_path_returns_error() {
         let mut core = make_test_core();
         let _ = core
