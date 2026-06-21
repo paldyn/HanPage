@@ -86,14 +86,64 @@ b"barChart" | b"lineChart" | b"pieChart" | b"bar3DChart" | b"pie3DChart" | b"ofP
 
 ---
 
+# Part B — 막대 누적(stacked/percentStacked) 보정 (범위 확장, 4~6단계)
+
+> 3단계 시각판정에서 `render_bars`가 `c:grouping`을 무시하고 항상 grouped로 그려 누적/백프로
+> 막대 6종이 왜곡됨을 확인 → 작업지시자 승인(2026-06-21)으로 C1a에 포함. 꺾은선 누적은 후속.
+
+## 4단계 — 파서 grouping 파싱 + 모델 필드
+
+**대상**: `src/ooxml_chart/parser.rs`, `src/ooxml_chart/mod.rs`
+
+- `mod.rs`: `OoxmlChart`에 `grouping: BarGrouping` 필드 추가. 신규 enum
+  ```rust
+  #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+  pub enum BarGrouping { #[default] Clustered, Stacked, PercentStacked }
+  ```
+  (`standard`는 Clustered로 흡수.)
+- `parser.rs` `handle_start`에 `b"grouping"` 추가: `val` 속성을 BarGrouping으로 매핑
+  (`stacked`→Stacked, `percentStacked`→PercentStacked, 그 외→Clustered). bar/bar3D plot 내에서만 유효.
+- 단위 테스트: `c:grouping=stacked`·`percentStacked`·`clustered` → 필드 매핑 검증.
+
+**완료 기준**: `cargo test ooxml_chart` 통과. 빌드 통과.
+
+## 5단계 — render_bars 누적/백프로 렌더 + 값축
+
+**대상**: `src/ooxml_chart/renderer.rs`
+
+- `render_bars` 분기:
+  - **Clustered**(현행): 그대로 side-by-side.
+  - **Stacked**: 카테고리별로 시리즈 값을 누적 — 같은 x(카테고리 1열)에 아래에서 위로 쌓음.
+    값축 max = 카테고리별 시리즈 합의 최대.
+  - **PercentStacked**: 카테고리 합을 100%로 정규화 — 각 시리즈는 비율만큼 차지, 누적이 플롯 전체 높이.
+    값축 0~100%(`%` 라벨).
+- `value_range` / `render_value_grid`를 grouping-aware로 (stacked max, percent 라벨). 가로(`horizontal`)도 동일 원리.
+- Pie/Line 경로 무영향.
+
+**완료 기준**: 6종 export-svg에서 stacked는 누적 막대, percent는 100% 꽉 찬 막대로 렌더.
+
+## 6단계 — 누적 회귀 테스트 + 시각판정 + 최종 검증
+
+- `tests/issue_1453_chart_3d_ofpie_routing.rs`(또는 신규)에 누적 기하 가드 추가:
+  - stacked 수직 막대: 한 카테고리 내 시리즈 rect가 **같은 x 공유**(grouped와 구분).
+  - percentStacked: 각 카테고리 누적 top이 플롯 상단 도달(전체 높이).
+  - 대상 6종(3차원누적세로/가로 + 누적세로/가로 + 백프로기준누적세로/가로) hwpx.
+- `output/poc/chart_c1a/` 6종 재산출 → `pdf/chart/` 대조표 갱신.
+- `cargo test` 전체 + `clippy` 무경고.
+
+**완료 기준**: 누적 가드 통과 + 전체 스위트 통과 + 시각판정 자료 산출.
+
+---
+
 ## 변경 파일 예상
 
 | 파일 | 변경 |
 |---|---|
-| `src/ooxml_chart/parser.rs` | `handle_start` 요소명 3개(~14줄) + `handle_end` arm 확장(1줄) + 단위 테스트 4건 |
-| `src/ooxml_chart/mod.rs` | 지원 범위 주석 갱신 |
-| `tests/issue_1453_chart_3d_ofpie_routing.rs` | 신규 회귀 통합 테스트 (14파일) |
-| `mydocs/working/task_m100_1453_stage{1..3}.md` | 단계별 보고서 |
+| `src/ooxml_chart/parser.rs` | (A) `handle_start` 요소명 3개 + `handle_end` arm + 단위 4건 / (B) `grouping` 파싱 + 단위 |
+| `src/ooxml_chart/mod.rs` | (A) 범위 주석 / (B) `BarGrouping` enum + `OoxmlChart.grouping` 필드 |
+| `src/ooxml_chart/renderer.rs` | (B) `render_bars` 누적/백프로 + 값축 grouping-aware |
+| `tests/issue_1453_chart_3d_ofpie_routing.rs` | (A) 14파일 가드 / (B) 누적 기하 가드 6종 |
+| `mydocs/working/task_m100_1453_stage{1..6}.md` | 단계별 보고서 |
 | `mydocs/report/task_m100_1453_report.md` | 최종 보고서 |
 | `output/poc/chart_c1a/` | 시각판정 산출물 (gitignore) |
 
