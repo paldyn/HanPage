@@ -9,7 +9,7 @@
 //! - `<c:valAx>`에서 `<c:axId>`와 `<c:axPos>` 수집 → axId→primary/secondary 매핑 생성
 //! - 파싱 완료 시 시리즈의 axis_ids를 primary/secondary 집합과 비교해 axis_group 지정
 
-use super::{OoxmlChart, OoxmlChartType, OoxmlSeries};
+use super::{BarGrouping, OoxmlChart, OoxmlChartType, OoxmlSeries};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::collections::HashMap;
@@ -207,6 +207,21 @@ fn handle_start(e: &quick_xml::events::BytesStart, chart: &mut OoxmlChart, st: &
                     "col" => Some(BarDir::Col),
                     _ => None,
                 };
+            }
+        }
+        b"grouping" => {
+            // 막대(bar/bar3D) plot의 grouping만 채택 (line의 grouping은 C1d 후속).
+            if matches!(
+                st.cur_plot_type,
+                Some(OoxmlChartType::Column | OoxmlChartType::Bar)
+            ) {
+                if let Some(val) = attr_val(e, "val") {
+                    chart.grouping = match val.as_str() {
+                        "stacked" => BarGrouping::Stacked,
+                        "percentStacked" => BarGrouping::PercentStacked,
+                        _ => BarGrouping::Clustered,
+                    };
+                }
             }
         }
         b"ser" => {
@@ -534,5 +549,46 @@ mod tests {
         let c = parse_chart_xml(xml).expect("parse OK");
         assert_eq!(c.chart_type, OoxmlChartType::Pie);
         assert_eq!(c.series[0].values, vec![40.0, 25.0, 35.0]);
+    }
+
+    // --- C1a Part B (#1453): 막대 누적 grouping 파싱 ---
+
+    fn bar_xml_with_grouping(plot: &str, grouping: &str) -> String {
+        format!(
+            r#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea><c:{plot}><c:barDir val="col"/><c:grouping val="{grouping}"/><c:ser><c:val><c:numCache><c:pt idx="0"><c:v>3</c:v></c:pt></c:numCache></c:val></c:ser></c:{plot}></c:plotArea></c:chart></c:chartSpace>"#
+        )
+    }
+
+    #[test]
+    fn test_parse_grouping_stacked() {
+        let c = parse_chart_xml(bar_xml_with_grouping("barChart", "stacked").as_bytes())
+            .expect("parse OK");
+        assert_eq!(c.grouping, BarGrouping::Stacked);
+    }
+
+    #[test]
+    fn test_parse_grouping_percent_stacked() {
+        // bar3DChart 경로에서도 grouping 파싱
+        let c = parse_chart_xml(bar_xml_with_grouping("bar3DChart", "percentStacked").as_bytes())
+            .expect("parse OK");
+        assert_eq!(c.grouping, BarGrouping::PercentStacked);
+    }
+
+    #[test]
+    fn test_parse_grouping_clustered_default() {
+        // clustered 명시 → Clustered. grouping 없는 차트도 기본 Clustered.
+        let c = parse_chart_xml(bar_xml_with_grouping("barChart", "clustered").as_bytes())
+            .expect("parse OK");
+        assert_eq!(c.grouping, BarGrouping::Clustered);
+        let c2 = parse_chart_xml(BAR_XML.as_bytes()).expect("parse OK");
+        assert_eq!(c2.grouping, BarGrouping::Clustered);
+    }
+
+    #[test]
+    fn test_parse_grouping_line_ignored() {
+        // line plot의 grouping은 막대 grouping에 반영되지 않음 (C1d 후속)
+        let xml = r#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea><c:lineChart><c:grouping val="stacked"/><c:ser><c:val><c:numCache><c:pt idx="0"><c:v>3</c:v></c:pt></c:numCache></c:val></c:ser></c:lineChart></c:plotArea></c:chart></c:chartSpace>"#;
+        let c = parse_chart_xml(xml.as_bytes()).expect("parse OK");
+        assert_eq!(c.grouping, BarGrouping::Clustered);
     }
 }

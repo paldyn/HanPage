@@ -29,6 +29,21 @@ pub struct OoxmlChart {
     pub categories: Vec<String>,
     /// 시리즈 중 하나라도 보조축을 쓰면 true
     pub has_secondary_axis: bool,
+    /// 막대(bar/bar3D) plot의 `c:grouping` (clustered/stacked/percentStacked).
+    /// 막대 렌더러만 사용. line/pie 무관. (C1a #1453 막대 누적 보정)
+    pub grouping: BarGrouping,
+}
+
+/// 막대 차트 그룹화 방식 (`c:grouping`). line 누적은 미지원(C1d).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BarGrouping {
+    /// 묶은(side-by-side). `clustered`/`standard` 흡수.
+    #[default]
+    Clustered,
+    /// 누적 (시리즈를 카테고리별로 쌓음).
+    Stacked,
+    /// 백분율 누적 (카테고리 합을 100%로 정규화).
+    PercentStacked,
 }
 
 /// 차트 종류
