@@ -15,6 +15,28 @@ use crate::model::shape::{common_obj_offsets, ShapeObject};
 const MIN_SHAPE_SIZE: u32 = 200;
 
 impl DocumentCore {
+    const COMMON_OBJ_ATTR_KNOWN_MASK: u32 = 0x01
+        | (0x03 << 3)
+        | (0x07 << 5)
+        | (0x03 << 8)
+        | (0x07 << 10)
+        | (1 << 13)
+        | (1 << 14)
+        | (0x07 << 15)
+        | (0x03 << 18)
+        | (1 << 20)
+        | (0x07 << 21)
+        | (0x03 << 24)
+        | (1 << 26)
+        | (1 << 28);
+
+    fn sync_common_obj_attr_known_bits(c: &mut crate::model::shape::CommonObjAttr) {
+        let packed =
+            crate::document_core::converters::common_obj_attr_writer::pack_common_attr_bits(c);
+        c.attr = (c.attr & !Self::COMMON_OBJ_ATTR_KNOWN_MASK)
+            | (packed & Self::COMMON_OBJ_ATTR_KNOWN_MASK);
+    }
+
     fn resolve_shape_control_ref(
         &self,
         section_idx: usize,
@@ -497,7 +519,7 @@ impl DocumentCore {
                 "\"horzRelTo\":\"{}\",\"horzAlign\":\"{}\",",
                 "\"vertOffset\":{},\"horzOffset\":{},",
                 "\"textWrap\":\"{}\",\"restrictInPage\":{},\"allowOverlap\":{},\"sizeProtect\":{},",
-                "\"brightness\":{},\"contrast\":{},\"effect\":\"{}\",",
+                "\"brightness\":{},\"contrast\":{},\"effect\":\"{}\",\"transparency\":{},",
                 "\"description\":\"{}\",",
                 // 회전/대칭
                 "\"rotationAngle\":{},\"horzFlip\":{},\"vertFlip\":{},",
@@ -520,7 +542,10 @@ impl DocumentCore {
             horz_rel, horz_align,
             c.vertical_offset as i32, c.horizontal_offset as i32,
             text_wrap, c.flow_with_text, c.allow_overlap, c.size_protect,
-            pic.image_attr.brightness, pic.image_attr.contrast, effect,
+            pic.image_attr.brightness,
+            pic.image_attr.contrast,
+            effect,
+            pic.image_attr.clamped_transparency(),
             desc_escaped,
             // 회전/대칭
             sa.rotation_angle, sa.horz_flip, sa.vert_flip,
@@ -1258,6 +1283,7 @@ impl DocumentCore {
         if let Some(v) = json_i32(props_json, "horzOffset") {
             pic.common.horizontal_offset = v as u32;
         }
+        Self::sync_common_obj_attr_known_bits(&mut pic.common);
         if transform_changed {
             pic.shape_attr.raw_rendering.clear();
             pic.shape_attr.render_tx = pic.shape_attr.offset_x as f64;
@@ -1274,6 +1300,9 @@ impl DocumentCore {
         }
         if let Some(v) = json_i32(props_json, "contrast") {
             pic.image_attr.contrast = v as i8;
+        }
+        if let Some(v) = json_i32(props_json, "transparency") {
+            pic.image_attr.transparency = v.clamp(0, 100) as u8;
         }
         if let Some(v) = json_str(props_json, "effect") {
             pic.image_attr.effect = match v.as_str() {
@@ -2352,6 +2381,7 @@ impl DocumentCore {
             brightness: 0,
             contrast: 0,
             effect: ImageEffect::RealPic,
+            transparency: 0,
             external_path: None,
         };
 
@@ -2398,7 +2428,7 @@ impl DocumentCore {
                     ..Default::default()
                 };
 
-                let new_ctrl_idx = {
+                let (new_ctrl_idx, logical_after) = {
                     let section = &mut self.document.sections[section_idx];
                     section.raw_stream = None;
                     let target_para =
@@ -2407,7 +2437,14 @@ impl DocumentCore {
                     target_para.controls.push(Control::Picture(Box::new(pic)));
                     target_para.ctrl_data_records.push(None);
                     target_para.control_mask |= 0x00000800;
-                    new_ctrl_idx
+                    let logical_positions =
+                        super::super::helpers::find_logical_control_positions(target_para);
+                    let logical_after = logical_positions
+                        .get(new_ctrl_idx)
+                        .copied()
+                        .unwrap_or_else(|| target_para.text.chars().count())
+                        + 1;
+                    (new_ctrl_idx, logical_after)
                 };
 
                 self.mark_section_dirty(section_idx);
@@ -2420,8 +2457,8 @@ impl DocumentCore {
                     para: para_idx,
                 });
                 return Ok(super::super::helpers::json_ok_with(&format!(
-                    "\"paraIdx\":{},\"controlIdx\":{}",
-                    para_idx, new_ctrl_idx
+                    "\"paraIdx\":{},\"controlIdx\":{},\"logicalOffset\":{}",
+                    para_idx, new_ctrl_idx, logical_after
                 )));
             }
 
@@ -2473,6 +2510,12 @@ impl DocumentCore {
             let new_ctrl_idx = parent.controls.len();
             parent.controls.push(Control::Picture(Box::new(pic)));
             parent.ctrl_data_records.push(None);
+            let logical_positions = super::super::helpers::find_logical_control_positions(parent);
+            let logical_after = logical_positions
+                .get(new_ctrl_idx)
+                .copied()
+                .unwrap_or_else(|| parent.text.chars().count())
+                + 1;
 
             // outer table dirty 마킹 (재측정 유도)
             let outer_ctrl = cell_path[0].0;
@@ -2495,8 +2538,8 @@ impl DocumentCore {
                 para: para_idx,
             });
             return Ok(super::super::helpers::json_ok_with(&format!(
-                "\"paraIdx\":{},\"controlIdx\":{}",
-                para_idx, new_ctrl_idx
+                "\"paraIdx\":{},\"controlIdx\":{},\"logicalOffset\":{}",
+                para_idx, new_ctrl_idx, logical_after
             )));
         }
 
@@ -2548,6 +2591,12 @@ impl DocumentCore {
         let new_ctrl_idx = parent.controls.len();
         parent.controls.push(Control::Picture(Box::new(pic)));
         parent.ctrl_data_records.push(None);
+        let logical_positions = super::super::helpers::find_logical_control_positions(parent);
+        let logical_after = logical_positions
+            .get(new_ctrl_idx)
+            .copied()
+            .unwrap_or_else(|| parent.text.chars().count())
+            + 1;
 
         self.mark_section_dirty(section_idx);
         self.paginate_if_needed();
@@ -2559,8 +2608,8 @@ impl DocumentCore {
             para: para_idx,
         });
         Ok(super::super::helpers::json_ok_with(&format!(
-            "\"paraIdx\":{},\"controlIdx\":{}",
-            para_idx, new_ctrl_idx
+            "\"paraIdx\":{},\"controlIdx\":{},\"logicalOffset\":{}",
+            para_idx, new_ctrl_idx, logical_after
         )))
     }
 
@@ -2952,6 +3001,7 @@ impl DocumentCore {
         if let Some(v) = json_i16(props_json, "outerMarginBottom") {
             c.margin.bottom = v;
         }
+        Self::sync_common_obj_attr_known_bits(c);
     }
 
     /// 글상자(Shape) 속성 조회 (네이티브).
@@ -7505,6 +7555,90 @@ mod issue_1151_cell_picture_insert_tests {
         ]
     }
 
+    fn collect_picture_transparencies(doc: &Document) -> Vec<u8> {
+        let mut values = Vec::new();
+        for section in &doc.sections {
+            collect_picture_transparencies_from_paragraphs(&section.paragraphs, &mut values);
+        }
+        values
+    }
+
+    fn collect_picture_transparencies_from_paragraphs(
+        paragraphs: &[Paragraph],
+        values: &mut Vec<u8>,
+    ) {
+        for para in paragraphs {
+            for control in &para.controls {
+                collect_picture_transparencies_from_control(control, values);
+            }
+        }
+    }
+
+    fn collect_picture_transparencies_from_control(control: &Control, values: &mut Vec<u8>) {
+        match control {
+            Control::Picture(pic) => {
+                values.push(pic.image_attr.clamped_transparency());
+                if let Some(caption) = &pic.caption {
+                    collect_picture_transparencies_from_paragraphs(&caption.paragraphs, values);
+                }
+            }
+            Control::Table(table) => {
+                for cell in &table.cells {
+                    collect_picture_transparencies_from_paragraphs(&cell.paragraphs, values);
+                }
+            }
+            Control::Shape(shape) => collect_picture_transparencies_from_shape(shape, values),
+            Control::Header(header) => {
+                collect_picture_transparencies_from_paragraphs(&header.paragraphs, values);
+            }
+            Control::Footer(footer) => {
+                collect_picture_transparencies_from_paragraphs(&footer.paragraphs, values);
+            }
+            Control::Footnote(footnote) => {
+                collect_picture_transparencies_from_paragraphs(&footnote.paragraphs, values);
+            }
+            Control::Endnote(endnote) => {
+                collect_picture_transparencies_from_paragraphs(&endnote.paragraphs, values);
+            }
+            _ => {}
+        }
+    }
+
+    fn collect_picture_transparencies_from_shape(
+        shape: &crate::model::shape::ShapeObject,
+        values: &mut Vec<u8>,
+    ) {
+        match shape {
+            crate::model::shape::ShapeObject::Picture(pic) => {
+                values.push(pic.image_attr.clamped_transparency());
+                if let Some(caption) = &pic.caption {
+                    collect_picture_transparencies_from_paragraphs(&caption.paragraphs, values);
+                }
+            }
+            crate::model::shape::ShapeObject::Group(group) => {
+                for child in &group.children {
+                    collect_picture_transparencies_from_shape(child, values);
+                }
+                if let Some(caption) = &group.caption {
+                    collect_picture_transparencies_from_paragraphs(&caption.paragraphs, values);
+                }
+            }
+            _ => {
+                if let Some(drawing) = shape.drawing() {
+                    if let Some(text_box) = &drawing.text_box {
+                        collect_picture_transparencies_from_paragraphs(
+                            &text_box.paragraphs,
+                            values,
+                        );
+                    }
+                    if let Some(caption) = &drawing.caption {
+                        collect_picture_transparencies_from_paragraphs(&caption.paragraphs, values);
+                    }
+                }
+            }
+        }
+    }
+
     fn parse_idx(res: &str, key: &str) -> usize {
         res.split(&format!("\"{}\":", key))
             .nth(1)
@@ -7645,6 +7779,407 @@ mod issue_1151_cell_picture_insert_tests {
             core.document.sections[0].paragraphs.len(),
             1,
             "본문 picture 삽입 시 새 paragraph 생성 안 함 (sibling control)"
+        );
+    }
+
+    #[test]
+    fn issue1452_insert_picture_returns_logical_offset_after_picture() {
+        let mut core = make_test_core();
+        core.insert_text_native(0, 0, 0, "abc")
+            .expect("insert text");
+
+        let image = minimal_png();
+        let result = core
+            .insert_picture_native(
+                0,
+                0,
+                3,
+                &[],
+                &image,
+                5000,
+                5000,
+                1,
+                1,
+                "png",
+                "test",
+                None,
+                None,
+            )
+            .expect("insert picture body");
+
+        assert_eq!(parse_idx(&result, "paraIdx"), 0);
+        assert_eq!(parse_idx(&result, "controlIdx"), 0);
+        assert_eq!(
+            parse_idx(&result, "logicalOffset"),
+            4,
+            "본문 텍스트 'abc' 뒤에 그림 1개를 넣으면 그림 뒤 커서 offset은 4여야 한다: {result}"
+        );
+    }
+
+    #[test]
+    fn issue1452_enter_after_dropped_inline_picture_keeps_next_para_below_picture() {
+        use crate::renderer::render_tree::{RenderNode, RenderNodeType};
+
+        fn collect_image_bboxes(node: &RenderNode, out: &mut Vec<(f64, f64, f64, f64)>) {
+            if matches!(node.node_type, RenderNodeType::Image(_)) {
+                out.push((node.bbox.x, node.bbox.y, node.bbox.width, node.bbox.height));
+            }
+            for child in &node.children {
+                collect_image_bboxes(child, out);
+            }
+        }
+
+        fn collect_para_end_runs(
+            node: &RenderNode,
+            out: &mut Vec<(usize, Option<usize>, f64, f64, f64, f64)>,
+        ) {
+            if let RenderNodeType::TextRun(run) = &node.node_type {
+                if run.is_para_end {
+                    if let Some(para_idx) = run.para_index {
+                        out.push((
+                            para_idx,
+                            run.char_start,
+                            node.bbox.x,
+                            node.bbox.y,
+                            node.bbox.width,
+                            node.bbox.height,
+                        ));
+                    }
+                }
+            }
+            for child in &node.children {
+                collect_para_end_runs(child, out);
+            }
+        }
+
+        let mut core = make_test_core();
+        let image = minimal_png();
+        let pic_w = 30000u32;
+        let pic_h = 9000u32;
+
+        let result = core
+            .insert_picture_native(
+                0,
+                0,
+                0,
+                &[],
+                &image,
+                pic_w,
+                pic_h,
+                1,
+                1,
+                "png",
+                "drop",
+                None,
+                None,
+            )
+            .expect("insert dropped picture");
+        let ctrl_idx = parse_idx(&result, "controlIdx");
+        let logical_offset = parse_idx(&result, "logicalOffset");
+
+        core.set_picture_properties_native(0, 0, ctrl_idx, r#"{"treatAsChar":true}"#)
+            .expect("dropped picture becomes treat-as-char");
+        core.split_paragraph_native(0, 0, logical_offset)
+            .expect("Enter after dropped picture");
+
+        assert_eq!(
+            core.document.sections[0].paragraphs.len(),
+            2,
+            "그림 뒤 Enter 는 새 빈 문단을 만들어야 한다"
+        );
+        assert_eq!(
+            core.document.sections[0].paragraphs[0].line_segs[0].line_height, pic_h as i32,
+            "TAC 그림만 남은 첫 문단은 그림 높이를 줄 높이로 유지해야 한다"
+        );
+        assert!(
+            core.document.sections[0].paragraphs[1].line_segs[0].line_height < pic_h as i32 / 2,
+            "새 빈 문단은 그림 높이를 물려받지 않고 기본 줄 높이로 시작해야 한다"
+        );
+
+        let tree = core.build_page_tree(0).expect("build page tree");
+        let mut images = Vec::new();
+        collect_image_bboxes(&tree.root, &mut images);
+        assert_eq!(images.len(), 1, "drop 그림 ImageNode 1개 필요");
+
+        let mut para_ends = Vec::new();
+        collect_para_end_runs(&tree.root, &mut para_ends);
+        let image = images[0];
+        let image_right = image.0 + image.2;
+        let image_bottom = image.1 + image.3;
+        let para0_end = para_ends
+            .iter()
+            .find(|(para_idx, _, _, _, _, _)| *para_idx == 0)
+            .expect("첫 문단 끝 표시");
+        let para1_end = para_ends
+            .iter()
+            .find(|(para_idx, _, _, _, _, _)| *para_idx == 1)
+            .expect("새 빈 문단 끝 표시");
+
+        assert_eq!(
+            para0_end.1,
+            Some(logical_offset),
+            "첫 문단 끝 표시는 그림 뒤 logical offset에 놓여야 한다"
+        );
+        assert!(
+            para0_end.2 >= image_right - 0.5,
+            "첫 문단부호 x는 그림 뒤에 있어야 한다: mark_x={}, image_right={}",
+            para0_end.2,
+            image_right
+        );
+        assert!(
+            para1_end.3 >= image_bottom - 0.5,
+            "새 빈 문단부호는 그림 아래 줄에 있어야 한다: mark_y={}, image_bottom={}",
+            para1_end.3,
+            image_bottom
+        );
+    }
+
+    #[test]
+    fn issue1452_picture_text_wrap_updates_hwp_attr_bits() {
+        let mut core = make_test_core();
+        let image = minimal_png();
+        core.insert_picture_native(
+            0,
+            0,
+            0,
+            &[],
+            &image,
+            5000,
+            5000,
+            1,
+            1,
+            "png",
+            "test",
+            None,
+            None,
+        )
+        .expect("insert picture body");
+
+        {
+            let pic = match &mut core.document.sections[0].paragraphs[0].controls[0] {
+                Control::Picture(p) => p.as_mut(),
+                _ => panic!("expected picture"),
+            };
+            pic.common.attr |= 1 << 30;
+        }
+
+        let cases = [
+            (
+                "InFrontOfText",
+                crate::model::shape::TextWrap::InFrontOfText,
+                3u32,
+            ),
+            (
+                "BehindText",
+                crate::model::shape::TextWrap::BehindText,
+                2u32,
+            ),
+            (
+                "TopAndBottom",
+                crate::model::shape::TextWrap::TopAndBottom,
+                1u32,
+            ),
+            ("Square", crate::model::shape::TextWrap::Square, 0u32),
+        ];
+
+        for (name, expected_wrap, expected_bits) in cases {
+            let json = format!(r#"{{"textWrap":"{}"}}"#, name);
+            core.set_picture_properties_native(0, 0, 0, &json)
+                .unwrap_or_else(|err| panic!("set textWrap={name} failed: {err}"));
+            let pic = match &core.document.sections[0].paragraphs[0].controls[0] {
+                Control::Picture(p) => p.as_ref(),
+                _ => panic!("expected picture"),
+            };
+            assert_eq!(pic.common.text_wrap, expected_wrap);
+            assert_eq!(
+                (pic.common.attr >> 21) & 0x07,
+                expected_bits,
+                "HWP 저장용 attr textWrap bit가 stale이면 안 된다: {name}"
+            );
+            assert_ne!(
+                pic.common.attr & (1 << 30),
+                0,
+                "알 수 없는 원본 attr 비트는 보존되어야 한다"
+            );
+        }
+    }
+
+    #[test]
+    fn issue1452_picture_transparency_props_roundtrip() {
+        let mut core = make_test_core();
+        let image = minimal_png();
+        core.insert_picture_native(
+            0,
+            0,
+            0,
+            &[],
+            &image,
+            5000,
+            5000,
+            1,
+            1,
+            "png",
+            "test",
+            None,
+            None,
+        )
+        .expect("insert picture body");
+
+        core.set_picture_properties_native(0, 0, 0, r#"{"transparency":50}"#)
+            .expect("set transparency");
+        let props = core
+            .get_picture_properties_native(0, 0, 0)
+            .expect("get picture properties");
+        assert!(
+            props.contains(r#""transparency":50"#),
+            "그림 속성 JSON은 투명도 50%를 반환해야 한다: {props}"
+        );
+
+        let pic = match &core.document.sections[0].paragraphs[0].controls[0] {
+            Control::Picture(p) => p.as_ref(),
+            _ => panic!("expected picture"),
+        };
+        assert_eq!(pic.image_attr.clamped_transparency(), 50);
+        assert!((pic.image_attr.opacity() - 0.5).abs() < f64::EPSILON);
+
+        core.set_picture_properties_native(0, 0, 0, r#"{"transparency":200}"#)
+            .expect("set clamped transparency");
+        let pic = match &core.document.sections[0].paragraphs[0].controls[0] {
+            Control::Picture(p) => p.as_ref(),
+            _ => panic!("expected picture"),
+        };
+        assert_eq!(
+            pic.image_attr.clamped_transparency(),
+            100,
+            "속성 API로 들어온 범위 밖 투명도는 0~100으로 clamp되어야 한다"
+        );
+    }
+
+    #[test]
+    fn issue1452_picture_transparency_samples_parse_as_ui_percent() {
+        for path in ["samples/투명도0-50.hwp", "samples/투명도0-50.hwpx"] {
+            let data =
+                std::fs::read(path).unwrap_or_else(|err| panic!("fixture 읽기 실패 {path}: {err}"));
+            let core =
+                DocumentCore::from_bytes(&data).unwrap_or_else(|err| panic!("parse {path}: {err}"));
+            let transparencies = collect_picture_transparencies(&core.document);
+            assert!(
+                transparencies.len() >= 2,
+                "샘플에는 최소 두 개의 그림이 있어야 한다: {path}, got {transparencies:?}"
+            );
+            assert_eq!(
+                &transparencies[..2],
+                &[0, 50],
+                "샘플 첫 번째/두 번째 그림 투명도는 각각 0%, 50%여야 한다: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn issue1452_picture_transparency_samples_render_once_with_opacity() {
+        use crate::renderer::render_tree::{RenderNode, RenderNodeType};
+
+        fn collect_images(node: &RenderNode, out: &mut Vec<(Option<usize>, Option<usize>, f64)>) {
+            if let RenderNodeType::Image(img) = &node.node_type {
+                out.push((img.para_index, img.control_index, img.opacity));
+            }
+            for child in &node.children {
+                collect_images(child, out);
+            }
+        }
+
+        for path in ["samples/투명도0-50.hwp", "samples/투명도0-50.hwpx"] {
+            let data =
+                std::fs::read(path).unwrap_or_else(|err| panic!("fixture 읽기 실패 {path}: {err}"));
+            let core =
+                DocumentCore::from_bytes(&data).unwrap_or_else(|err| panic!("parse {path}: {err}"));
+            let tree = core
+                .build_page_tree(0)
+                .unwrap_or_else(|err| panic!("render tree {path}: {err}"));
+            let mut images = Vec::new();
+            collect_images(&tree.root, &mut images);
+
+            assert_eq!(
+                images.len(),
+                2,
+                "투명도 샘플의 그림은 두 번만 렌더되어야 한다: {path}, got {images:?}"
+            );
+
+            let mut identities = images
+                .iter()
+                .map(|(para, control, _)| (*para, *control))
+                .collect::<Vec<_>>();
+            identities.sort_unstable();
+            identities.dedup();
+            assert_eq!(
+                identities.len(),
+                2,
+                "같은 그림 control 이 중복 렌더되면 안 된다: {path}, got {images:?}"
+            );
+
+            let mut opacities = images
+                .iter()
+                .map(|(_, _, opacity)| (opacity * 100.0).round() as i32)
+                .collect::<Vec<_>>();
+            opacities.sort_unstable();
+            assert_eq!(
+                opacities,
+                vec![50, 100],
+                "렌더 트리 불투명도는 투명도 0/50%를 100/50%로 보존해야 한다: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn issue1452_enter_after_second_tac_picture_keeps_both_pictures() {
+        use crate::renderer::render_tree::{RenderNode, RenderNodeType};
+
+        fn collect_images(node: &RenderNode, out: &mut Vec<(Option<usize>, Option<usize>, f64)>) {
+            if let RenderNodeType::Image(img) = &node.node_type {
+                out.push((img.para_index, img.control_index, img.opacity));
+            }
+            for child in &node.children {
+                collect_images(child, out);
+            }
+        }
+
+        let data = std::fs::read("samples/투명도0-50.hwp")
+            .expect("fixture 읽기 실패 samples/투명도0-50.hwp");
+        let mut core = DocumentCore::from_bytes(&data).expect("parse samples/투명도0-50.hwp");
+
+        core.split_paragraph_native(0, 0, 2)
+            .expect("두 번째 TAC 그림 뒤 Enter");
+
+        assert_eq!(
+            core.document.sections[0].paragraphs.len(),
+            2,
+            "그림 뒤 Enter 는 새 빈 문단을 만들어야 한다"
+        );
+        assert!(
+            core.document.sections[0].paragraphs[0].line_segs.len() >= 2,
+            "원래 문단은 두 TAC 그림 줄을 유지해야 한다: {:?}",
+            core.document.sections[0].paragraphs[0].line_segs
+        );
+
+        let tree = core.build_page_tree(0).expect("build page tree");
+        let mut images = Vec::new();
+        collect_images(&tree.root, &mut images);
+        assert_eq!(
+            images.len(),
+            2,
+            "Enter 후에도 두 그림이 모두 렌더되어야 한다: {images:?}"
+        );
+
+        let mut identities = images
+            .iter()
+            .map(|(para, control, _)| (*para, *control))
+            .collect::<Vec<_>>();
+        identities.sort_unstable();
+        identities.dedup();
+        assert_eq!(
+            identities.len(),
+            2,
+            "두 그림 control 이 각각 렌더되어야 한다: {images:?}"
         );
     }
 

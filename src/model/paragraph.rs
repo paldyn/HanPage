@@ -254,6 +254,112 @@ pub struct FieldRange {
 }
 
 impl Paragraph {
+    fn is_split_movable_control(ctrl: &Control) -> bool {
+        matches!(
+            ctrl,
+            Control::Shape(_)
+                | Control::Table(_)
+                | Control::Picture(_)
+                | Control::Equation(_)
+                | Control::Footnote(_)
+                | Control::Endnote(_)
+                | Control::AutoNumber(_)
+                | Control::CharOverlap(_)
+        )
+    }
+
+    fn control_mask_bit(ctrl: &Control) -> u32 {
+        match ctrl {
+            Control::SectionDef(_) | Control::ColumnDef(_) => 0x0002,
+            Control::Field(_) => 0x0003,
+            Control::Table(_)
+            | Control::Shape(_)
+            | Control::Picture(_)
+            | Control::Hyperlink(_)
+            | Control::Ruby(_)
+            | Control::Equation(_)
+            | Control::Form(_)
+            | Control::Unknown(_) => 0x000B,
+            Control::HiddenComment(_) => 0x000F,
+            Control::Header(_) | Control::Footer(_) => 0x0010,
+            Control::Footnote(_) | Control::Endnote(_) => 0x0011,
+            Control::AutoNumber(_) | Control::NewNumber(_) => 0x0012,
+            Control::PageNumberPos(_) | Control::PageHide(_) => 0x0015,
+            Control::Bookmark(_) => 0x0016,
+            Control::CharOverlap(_) => 0x0017,
+        }
+    }
+
+    fn compute_control_mask_for(
+        text: &str,
+        controls: &[Control],
+        field_ranges: &[FieldRange],
+    ) -> u32 {
+        let mut mask = 0u32;
+        for ctrl in controls {
+            mask |= 1u32 << Self::control_mask_bit(ctrl);
+        }
+        if !field_ranges.is_empty() {
+            mask |= 1u32 << 0x0004;
+        }
+        if text.contains('\t') {
+            mask |= 1u32 << 0x0009;
+        }
+        if text.contains('\n') {
+            mask |= 1u32 << 0x000A;
+        }
+        mask
+    }
+
+    fn split_logical_control_positions(&self) -> Vec<usize> {
+        if self.text.is_empty() && self.char_offsets.is_empty() {
+            let mut inline_seen = 0usize;
+            let mut positions = Vec::with_capacity(self.controls.len());
+            for ctrl in &self.controls {
+                positions.push(inline_seen);
+                if Self::is_split_movable_control(ctrl) {
+                    inline_seen += 1;
+                }
+            }
+            return positions;
+        }
+
+        let text_positions = self.control_text_positions();
+        let text_len = self.text.chars().count();
+        let mut inline_seen = 0usize;
+        let mut positions = Vec::with_capacity(self.controls.len());
+
+        for (ci, ctrl) in self.controls.iter().enumerate() {
+            let text_pos = text_positions.get(ci).copied().unwrap_or(text_len);
+            positions.push(text_pos + inline_seen);
+            if Self::is_split_movable_control(ctrl) {
+                inline_seen += 1;
+            }
+        }
+
+        positions
+    }
+
+    fn split_text_pos_for_logical_offset(
+        &self,
+        logical_offset: usize,
+        control_positions: &[usize],
+    ) -> usize {
+        let controls_before = self
+            .controls
+            .iter()
+            .enumerate()
+            .filter(|(_, ctrl)| Self::is_split_movable_control(ctrl))
+            .filter(|(ci, _)| {
+                control_positions.get(*ci).copied().unwrap_or(usize::MAX) < logical_offset
+            })
+            .count();
+
+        logical_offset
+            .saturating_sub(controls_before)
+            .min(self.text.chars().count())
+    }
+
     /// 빈 문단을 생성한다 (문단 끝 마커만 포함).
     ///
     /// 표 셀 생성 등에서 최소한의 유효한 문단이 필요할 때 사용한다.
@@ -538,9 +644,9 @@ impl Paragraph {
     /// 현재 문단은 char_offset 이전까지만 유지되고,
     /// char_offset 이후의 텍스트와 메타데이터로 새 문단을 생성하여 반환한다.
     pub fn split_at(&mut self, char_offset: usize) -> Paragraph {
+        let control_positions = self.split_logical_control_positions();
+        let split_pos = self.split_text_pos_for_logical_offset(char_offset, &control_positions);
         let text_chars: Vec<char> = self.text.chars().collect();
-        let text_len = text_chars.len();
-        let split_pos = char_offset.min(text_len);
 
         // 분할 지점의 UTF-16 위치
         let utf16_split: u32 = if split_pos < self.char_offsets.len() {
@@ -669,22 +775,53 @@ impl Paragraph {
         }
         self.range_tags = kept_range_tags;
 
-        // 5-1. field_ranges 분할 (controls는 split되지 않으므로 원래 문단에만 유지)
+        // 5-1. field_ranges 분할 (필드 control은 원래 문단에 유지)
         self.field_ranges.retain(|fr| fr.end_char_idx <= split_pos);
+
+        // 5-2. controls 분할
+        //
+        // TAC 그림/표/수식 등은 본문에서 한 글자처럼 취급되므로 문단 분할 시
+        // logical offset 기준으로 앞뒤 문단에 나뉘어야 한다. SectionDef/ColumnDef 같은
+        // 구조 control은 문단 시작에 붙은 문서 구조 정보라 원래 문단에 둔다.
+        let old_controls = std::mem::take(&mut self.controls);
+        let old_ctrl_data = std::mem::take(&mut self.ctrl_data_records);
+        let mut kept_controls = Vec::with_capacity(old_controls.len());
+        let mut kept_ctrl_data = Vec::new();
+        let mut new_controls = Vec::new();
+        let mut new_ctrl_data_records = Vec::new();
+
+        for (ci, ctrl) in old_controls.into_iter().enumerate() {
+            let data = old_ctrl_data.get(ci).cloned().flatten();
+            let move_to_new = Self::is_split_movable_control(&ctrl)
+                && control_positions.get(ci).copied().unwrap_or(usize::MAX) >= char_offset;
+
+            if move_to_new {
+                new_controls.push(ctrl);
+                new_ctrl_data_records.push(data);
+            } else {
+                kept_controls.push(ctrl);
+                kept_ctrl_data.push(data);
+            }
+        }
+        self.controls = kept_controls;
+        self.ctrl_data_records = kept_ctrl_data;
 
         // 6. char_count 갱신
         //    원본 문단에 남은 controls는 각각 8 code unit을 차지하므로 반영 필요
         let new_text_char_count = new_text.chars().count() as u32;
         let ctrl_code_units: u32 = self.controls.len() as u32 * 8;
         self.char_count = split_pos as u32 + ctrl_code_units + 1; // +1 for paragraph end marker
-        let new_char_count = new_text_char_count + 1;
+        let new_char_count = new_text_char_count + new_controls.len() as u32 * 8 + 1;
 
         // 7. has_para_text: 빈 문단(텍스트 없고 컨트롤 없음)이면 PARA_TEXT 불필요
         //    HWP 프로그램은 cc=1(빈 문단)에 PARA_TEXT가 있으면 파일 손상으로 판단
-        if self.text.is_empty() && self.controls.is_empty() {
-            self.has_para_text = false;
-        }
-        let new_has_para_text = !new_text.is_empty(); // 새 문단은 controls가 없으므로 텍스트 유무로 판단
+        self.has_para_text = !(self.text.is_empty() && self.controls.is_empty());
+        let new_has_para_text = !new_text.is_empty() || !new_controls.is_empty();
+
+        self.control_mask =
+            Self::compute_control_mask_for(&self.text, &self.controls, &self.field_ranges);
+        let new_control_mask =
+            Self::compute_control_mask_for(&new_text, &new_controls, &Vec::new());
 
         Paragraph {
             text: new_text,
@@ -698,9 +835,9 @@ impl Paragraph {
             style_id: self.style_id,
             column_type: ColumnBreakType::None,
             raw_break_type: 0,
-            control_mask: 0,
-            controls: Vec::new(),
-            ctrl_data_records: Vec::new(),
+            control_mask: new_control_mask,
+            controls: new_controls,
+            ctrl_data_records: new_ctrl_data_records,
             char_count_msb: false,
             raw_header_extra: self.raw_header_extra.clone(),
             has_para_text: new_has_para_text,

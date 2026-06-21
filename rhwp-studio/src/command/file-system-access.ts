@@ -65,6 +65,10 @@ export function isSupportedDocumentFileName(fileName: string): boolean {
   return /\.(hwp|hwpx)$/i.test(fileName.trim());
 }
 
+export function canUseOpenFilePicker(windowLike: FileSystemWindowLike): boolean {
+  return typeof windowLike.showOpenFilePicker === 'function';
+}
+
 async function writeBlobToHandle(handle: FileSystemFileHandleLike, blob: Blob): Promise<void> {
   const writable = await handle.createWritable();
   await writable.write(blob);
@@ -72,10 +76,10 @@ async function writeBlobToHandle(handle: FileSystemFileHandleLike, blob: Blob): 
 }
 
 export async function pickOpenFileHandle(windowLike: FileSystemWindowLike): Promise<FileSystemFileHandleLike | null> {
-  if (!windowLike.showOpenFilePicker) return null;
+  if (!canUseOpenFilePicker(windowLike)) return null;
 
   try {
-    const handles = await windowLike.showOpenFilePicker({
+    const handles = await windowLike.showOpenFilePicker!({
       excludeAcceptAllOption: true,
       multiple: false,
       types: HWP_OPEN_PICKER_TYPES,

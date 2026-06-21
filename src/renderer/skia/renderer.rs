@@ -1012,6 +1012,17 @@ impl SkiaLayerRenderer {
                                 } else {
                                     image.effect
                                 };
+                                let opacity = image.opacity.clamp(0.0, 1.0);
+                                if opacity < 1.0 {
+                                    let rect = Rect::from_xywh(
+                                        bbox.x as f32,
+                                        bbox.y as f32,
+                                        bbox.width as f32,
+                                        bbox.height as f32,
+                                    );
+                                    let alpha = (255.0 * opacity).round() as u32;
+                                    canvas.save_layer_alpha(Some(rect), alpha);
+                                }
                                 draw_image(
                                     data,
                                     *bbox,
@@ -1020,6 +1031,9 @@ impl SkiaLayerRenderer {
                                     image.crop,
                                     effect,
                                 );
+                                if opacity < 1.0 {
+                                    canvas.restore();
+                                }
                             } else {
                                 draw_placeholder(*bbox, "image");
                             }

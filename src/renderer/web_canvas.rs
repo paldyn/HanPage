@@ -34,6 +34,8 @@ use crate::paint::{
     PaintOp, PaintReplayPlane,
 };
 
+const TEXT_MARK_CLIP_RIGHT_PAD: f64 = 48.0;
+
 /// Hanyang-PUA 옛한글 코드포인트를 KS X 1026-1:2007 자모 시퀀스로 확장 (Task #528).
 fn expand_pua_old_hangul_canvas(text: &str) -> String {
     if !text.chars().any(|ch| map_pua_old_hangul(ch).is_some()) {
@@ -389,8 +391,12 @@ impl WebCanvasRenderer {
             } => {
                 self.ctx.save();
                 self.ctx.begin_path();
-                // 우측 여유: 레이아웃 메트릭과 브라우저 글리프 폭 차이 흡수
-                self.ctx.rect(cr.x, cr.y, cr.width + 4.0, cr.height);
+                let right_pad = if self.show_paragraph_marks || self.show_control_codes {
+                    TEXT_MARK_CLIP_RIGHT_PAD
+                } else {
+                    4.0
+                };
+                self.ctx.rect(cr.x, cr.y, cr.width + right_pad, cr.height);
                 self.ctx.clip();
             }
             RenderNodeType::TableCell(ref tc) if tc.clip => {
@@ -647,7 +653,7 @@ impl WebCanvasRenderer {
             if !run.text.is_empty() && !is_marker {
                 let char_positions = compute_char_positions(&run.text, &run.style);
                 let mark_font_size = font_size * 0.5;
-                self.ctx.set_fill_style_str("#4A90D9");
+                self.ctx.set_fill_style_str("#0066FF");
                 self.ctx
                     .set_font(&format!("{:.3}px sans-serif", mark_font_size));
                 for (i, c) in run.text.chars().enumerate() {
@@ -667,7 +673,7 @@ impl WebCanvasRenderer {
                 }
             }
             if run.is_para_end || run.is_line_break_end {
-                self.ctx.set_fill_style_str("#4A90D9");
+                self.ctx.set_fill_style_str("#0066FF");
                 self.ctx.set_font(&format!("{:.3}px sans-serif", font_size));
                 if run.is_vertical {
                     let mark_x = bbox.x + (bbox.width - font_size * 0.5) / 2.0;
@@ -819,13 +825,19 @@ impl WebCanvasRenderer {
             }
             let needs_watermark_opacity =
                 preserve_color_watermark || (is_watermark_image && !baked_watermark);
-            if needs_watermark_opacity {
-                let opacity = if preserve_color_watermark {
+            let watermark_opacity = if needs_watermark_opacity {
+                if preserve_color_watermark {
                     REAL_PICTURE_WATERMARK_FILL_OPACITY
                 } else {
                     LEGACY_IMAGE_WATERMARK_OPACITY
-                };
-                self.ctx.set_global_alpha(opacity);
+                }
+            } else {
+                1.0
+            };
+            let combined_opacity =
+                (img.opacity.clamp(0.0, 1.0) * watermark_opacity).clamp(0.0, 1.0);
+            if combined_opacity < 1.0 {
+                self.ctx.set_global_alpha(combined_opacity);
             }
             self.draw_image_with_fill_mode(
                 render_data.as_ref(),
@@ -835,7 +847,7 @@ impl WebCanvasRenderer {
                 img.crop,
                 img.original_size_hu,
             );
-            if needs_watermark_opacity {
+            if combined_opacity < 1.0 {
                 self.ctx.set_global_alpha(1.0);
             }
             if filter_str.is_some() {
@@ -1042,7 +1054,13 @@ impl WebCanvasRenderer {
                 ClipKind::Body => {
                     self.ctx.save();
                     self.ctx.begin_path();
-                    self.ctx.rect(clip.x, clip.y, clip.width + 4.0, clip.height);
+                    let right_pad = if self.show_paragraph_marks || self.show_control_codes {
+                        TEXT_MARK_CLIP_RIGHT_PAD
+                    } else {
+                        4.0
+                    };
+                    self.ctx
+                        .rect(clip.x, clip.y, clip.width + right_pad, clip.height);
                     self.ctx.clip();
                     self.render_layer_node(child, active_layer);
                     self.ctx.restore();
