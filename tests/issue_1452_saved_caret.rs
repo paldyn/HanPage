@@ -1,9 +1,26 @@
 //! Issue #1452: 텍스트 없이 TAC 그림만 있는 문단의 저장 커서 위치 복원.
 
+use rhwp::document_core::DocumentCore;
+use rhwp::model::control::Control;
 use serde_json::Value;
 
 fn parse_json(label: &str, json: &str) -> Value {
     serde_json::from_str(json).unwrap_or_else(|e| panic!("parse {label} json `{json}`: {e}"))
+}
+
+fn load_transparency_core() -> DocumentCore {
+    let repo_root = env!("CARGO_MANIFEST_DIR");
+    let path = std::path::Path::new(repo_root).join("samples/투명도0-50.hwp");
+    let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    DocumentCore::from_bytes(&bytes).expect("load samples/투명도0-50.hwp")
+}
+
+fn picture_count(core: &DocumentCore, para_idx: usize) -> usize {
+    core.document().sections[0].paragraphs[para_idx]
+        .controls
+        .iter()
+        .filter(|ctrl| matches!(ctrl, Control::Picture(_)))
+        .count()
 }
 
 #[test]
@@ -93,5 +110,91 @@ fn transparency_sample_restores_saved_caret_after_second_inline_picture() {
     assert_eq!(
         visible_before_second_picture_rect["y"], visible_mark_rect["y"],
         "왼쪽 이동 후 두 번째 그림 앞 커서도 문단부호 표시 기준선에 맞아야 함: before_second={visible_before_second_picture_rect}, visible={visible_mark_rect}"
+    );
+}
+
+#[test]
+fn enter_before_second_tac_picture_splits_inline_controls() {
+    let mut core = load_transparency_core();
+
+    core.split_paragraph_native(0, 0, 1)
+        .expect("두 TAC 그림 사이 Enter");
+
+    assert_eq!(core.document().sections[0].paragraphs.len(), 2);
+    assert_eq!(
+        picture_count(&core, 0),
+        1,
+        "첫 문단에는 첫 번째 그림만 남아야 한다"
+    );
+    assert_eq!(
+        picture_count(&core, 1),
+        1,
+        "새 문단에는 두 번째 그림이 이동해야 한다"
+    );
+}
+
+#[test]
+fn repeated_enter_before_second_tac_picture_keeps_picture_after_blank_lines() {
+    let mut core = load_transparency_core();
+
+    core.split_paragraph_native(0, 0, 1)
+        .expect("두 TAC 그림 사이 Enter");
+    core.split_paragraph_native(0, 1, 0)
+        .expect("두 번째 그림 앞 Enter 1회 추가");
+    core.split_paragraph_native(0, 2, 0)
+        .expect("두 번째 그림 앞 Enter 2회 추가");
+
+    assert_eq!(core.document().sections[0].paragraphs.len(), 4);
+    assert_eq!(picture_count(&core, 0), 1);
+    assert_eq!(picture_count(&core, 1), 0);
+    assert_eq!(picture_count(&core, 2), 0);
+    assert_eq!(
+        picture_count(&core, 3),
+        1,
+        "반복 Enter 후에도 두 번째 그림은 빈 문단들 뒤에 남아야 한다"
+    );
+}
+
+#[test]
+fn repeated_enter_after_second_tac_picture_appends_blank_lines() {
+    let mut core = load_transparency_core();
+
+    core.split_paragraph_native(0, 0, 2)
+        .expect("두 번째 TAC 그림 뒤 Enter");
+    core.split_paragraph_native(0, 1, 0)
+        .expect("두 번째 그림 뒤 Enter 1회 추가");
+    core.split_paragraph_native(0, 2, 0)
+        .expect("두 번째 그림 뒤 Enter 2회 추가");
+
+    assert_eq!(core.document().sections[0].paragraphs.len(), 4);
+    assert_eq!(
+        picture_count(&core, 0),
+        2,
+        "두 번째 그림 뒤 Enter는 두 그림을 앞 문단에 유지해야 한다"
+    );
+    assert_eq!(picture_count(&core, 1), 0);
+    assert_eq!(picture_count(&core, 2), 0);
+    assert_eq!(picture_count(&core, 3), 0);
+}
+
+#[test]
+fn arrow_up_from_second_tac_picture_end_moves_to_first_picture_end() {
+    let doc = {
+        let repo_root = env!("CARGO_MANIFEST_DIR");
+        let path = std::path::Path::new(repo_root).join("samples/투명도0-50.hwp");
+        let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+        rhwp::wasm_api::HwpDocument::from_bytes(&bytes).expect("load samples/투명도0-50.hwp")
+    };
+
+    let moved = parse_json(
+        "move up from second picture end",
+        &doc.move_vertical(0, 0, 2, -1, -1.0, u32::MAX, u32::MAX, u32::MAX, u32::MAX)
+            .expect("moveVertical ArrowUp"),
+    );
+    assert_eq!(moved["sectionIndex"], 0);
+    assert_eq!(moved["paragraphIndex"], 0);
+    assert_eq!(
+        moved["charOffset"], 1,
+        "두 번째 TAC 그림 끝에서 위쪽 이동하면 첫 번째 TAC 그림 끝으로 가야 한다: {moved}"
     );
 }

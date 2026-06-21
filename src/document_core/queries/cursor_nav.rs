@@ -1,8 +1,8 @@
 //! 커서 이동/줄 정보/경로 탐색/선택 영역 관련 native 메서드
 
 use super::super::helpers::{
-    get_textbox_from_shape, has_table_control, navigable_text_len, utf16_pos_to_char_idx,
-    LineInfoResult,
+    find_logical_control_positions, get_textbox_from_shape, has_table_control, navigable_text_len,
+    utf16_pos_to_char_idx, LineInfoResult,
 };
 use crate::document_core::DocumentCore;
 use crate::error::HwpError;
@@ -193,6 +193,8 @@ impl DocumentCore {
             .map(|ls| {
                 if ls.text_start == 0 {
                     0
+                } else if char_offsets.is_empty() {
+                    control_only_caret_utf16_to_char_idx(para, ls.text_start)
                 } else {
                     utf16_pos_to_char_idx(char_offsets, ls.text_start)
                 }
@@ -824,7 +826,7 @@ impl DocumentCore {
         Ok((page_idx, x, y, height))
     }
 
-    /// 렌더 트리에서 특정 줄(char_range)의 TextRun을 찾아 preferredX에 가장 가까운 문자를 반환한다.
+    /// 렌더 트리에서 특정 줄(char_range)의 TextRun/ImageNode를 찾아 preferredX에 가장 가까운 문자를 반환한다.
     pub(crate) fn find_char_at_x_on_line(
         &self,
         sec: usize,
@@ -850,6 +852,33 @@ impl DocumentCore {
             bbox_x: f64,
         }
 
+        #[derive(Clone, Copy)]
+        struct PositionCandidate {
+            offset: usize,
+            x: f64,
+        }
+
+        fn node_matches_context(
+            node_sec: Option<usize>,
+            node_para: Option<usize>,
+            node_cell_ctx: Option<&crate::renderer::layout::CellContext>,
+            sec: usize,
+            para: usize,
+            cell_ctx: Option<(usize, usize, usize, usize)>,
+        ) -> bool {
+            if let Some((ppi, ci, cei, cpi)) = cell_ctx {
+                node_sec == Some(sec)
+                    && node_cell_ctx.as_ref().map_or(false, |ctx| {
+                        ctx.parent_para_index == ppi
+                            && ctx.path[0].control_index == ci
+                            && ctx.path[0].cell_index == cei
+                            && ctx.path[0].cell_para_index == cpi
+                    })
+            } else {
+                node_sec == Some(sec) && node_para == Some(para) && node_cell_ctx.is_none()
+            }
+        }
+
         fn collect_matching_runs(
             node: &RenderNode,
             sec: usize,
@@ -859,19 +888,14 @@ impl DocumentCore {
             result: &mut Vec<RunMatch>,
         ) {
             if let RenderNodeType::TextRun(ref tr) = node.node_type {
-                let matches = if let Some((ppi, ci, cei, cpi)) = cell_ctx {
-                    tr.section_index == Some(sec)
-                        && tr.cell_context.as_ref().map_or(false, |ctx| {
-                            ctx.parent_para_index == ppi
-                                && ctx.path[0].control_index == ci
-                                && ctx.path[0].cell_index == cei
-                                && ctx.path[0].cell_para_index == cpi
-                        })
-                } else {
-                    tr.section_index == Some(sec)
-                        && tr.para_index == Some(para)
-                        && tr.cell_context.is_none()
-                };
+                let matches = node_matches_context(
+                    tr.section_index,
+                    tr.para_index,
+                    tr.cell_context.as_ref(),
+                    sec,
+                    para,
+                    cell_ctx,
+                );
                 // 번호/글머리표 TextRun (char_start: None)은 건너뛴다
                 if let (true, Some(cs)) = (matches, tr.char_start) {
                     let cc = tr.text.chars().count();
@@ -892,18 +916,81 @@ impl DocumentCore {
             }
         }
 
+        fn collect_image_candidates(
+            node: &RenderNode,
+            sec: usize,
+            para: usize,
+            cell_ctx: Option<(usize, usize, usize, usize)>,
+            char_range: (usize, usize),
+            control_positions: &[usize],
+            result: &mut Vec<PositionCandidate>,
+        ) {
+            if let RenderNodeType::Image(ref img) = node.node_type {
+                let matches = node_matches_context(
+                    img.section_index,
+                    img.para_index,
+                    img.cell_context.as_ref(),
+                    sec,
+                    para,
+                    cell_ctx,
+                );
+                if matches {
+                    if let Some(ci) = img.control_index {
+                        if let Some(pos) = control_positions.get(ci).copied() {
+                            if pos >= char_range.0 && pos <= char_range.1 {
+                                result.push(PositionCandidate {
+                                    offset: pos,
+                                    x: node.bbox.x,
+                                });
+                            }
+                            let after = pos + 1;
+                            if after >= char_range.0 && after <= char_range.1 {
+                                result.push(PositionCandidate {
+                                    offset: after,
+                                    x: node.bbox.x + node.bbox.width,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            for child in &node.children {
+                collect_image_candidates(
+                    child,
+                    sec,
+                    para,
+                    cell_ctx,
+                    char_range,
+                    control_positions,
+                    result,
+                );
+            }
+        }
+
+        let control_positions = self
+            .resolve_paragraph(sec, para, cell_ctx)
+            .map(find_logical_control_positions)
+            .unwrap_or_default();
+
         // 페이지 순회하며 매칭 run 수집
         for &page_num in &pages {
             let tree = self.build_page_tree(page_num)?;
             let mut runs = Vec::new();
             collect_matching_runs(&tree.root, sec, para, cell_ctx, char_range, &mut runs);
+            let mut candidates = Vec::new();
+            collect_image_candidates(
+                &tree.root,
+                sec,
+                para,
+                cell_ctx,
+                char_range,
+                &control_positions,
+                &mut candidates,
+            );
 
             if !runs.is_empty() {
                 // preferredX에 가장 가까운 문자 찾기
                 runs.sort_by_key(|a| a.char_start);
-                let mut best_offset = char_range.0;
-                let mut best_dist = f64::MAX;
-
                 for run in &runs {
                     for i in 0..=run.char_count {
                         let global_offset = run.char_start + i;
@@ -919,14 +1006,25 @@ impl DocumentCore {
                             } else {
                                 0.0
                             };
-                        let dist = (x - preferred_x).abs();
-                        if dist < best_dist {
-                            best_dist = dist;
-                            best_offset = global_offset;
-                        }
+                        candidates.push(PositionCandidate {
+                            offset: global_offset,
+                            x,
+                        });
                     }
                 }
-                return Ok(best_offset);
+            }
+
+            if !candidates.is_empty() {
+                let mut best = candidates[0];
+                let mut best_dist = (best.x - preferred_x).abs();
+                for candidate in &candidates[1..] {
+                    let dist = (candidate.x - preferred_x).abs();
+                    if dist < best_dist {
+                        best = *candidate;
+                        best_dist = dist;
+                    }
+                }
+                return Ok(best.offset);
             }
         }
 
