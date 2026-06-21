@@ -919,6 +919,37 @@ fn inline_control_line_height_hwp(para: &Paragraph) -> Option<i32> {
         .max()
 }
 
+fn inline_control_size_hwp(ctrl: &Control) -> Option<(i32, i32)> {
+    let (width, height) = match ctrl {
+        Control::Picture(pic) if pic.common.treat_as_char => {
+            (pic.common.width as i32, pic.common.height as i32)
+        }
+        Control::Shape(shape) if shape.common().treat_as_char => {
+            let common = shape.common();
+            let shape_attr = shape.shape_attr();
+            (
+                (common.width as i32).max(shape_attr.current_width as i32),
+                (common.height as i32).max(shape_attr.current_height as i32),
+            )
+        }
+        Control::Table(table) if table.common.treat_as_char => {
+            let width = table.get_column_widths().iter().sum::<u32>() as i32;
+            (width, table.common.height as i32)
+        }
+        Control::Equation(eq) if eq.common.treat_as_char => {
+            (eq.common.width as i32, eq.common.height as i32)
+        }
+        Control::Form(form) => (form.width as i32, form.height as i32),
+        _ => return None,
+    };
+
+    if width > 0 && height > 0 {
+        Some((width, height))
+    } else {
+        None
+    }
+}
+
 fn apply_inline_control_line_height(seg: &mut LineSeg, height_hwp: i32) {
     if height_hwp > seg.line_height {
         seg.line_height = height_hwp;
@@ -978,11 +1009,69 @@ pub(crate) fn reflow_line_segs(
     };
 
     if para.text.is_empty() {
-        let mut seg = make_line_seg(0, 0.0);
-        if let Some(height_hwp) = inline_control_line_height_hwp(para) {
-            apply_inline_control_line_height(&mut seg, height_hwp);
+        let inline_sizes = para
+            .controls
+            .iter()
+            .filter_map(inline_control_size_hwp)
+            .collect::<Vec<_>>();
+        if !inline_sizes.is_empty() {
+            let max_line_width = seg_width_hwp.max(1);
+            let mut line_specs: Vec<(usize, i32, i32)> = Vec::new();
+            let mut line_start = 0usize;
+            let mut line_width = 0i32;
+            let mut line_height = 0i32;
+
+            for (idx, (ctrl_width, ctrl_height)) in inline_sizes.iter().copied().enumerate() {
+                if line_width > 0 && line_width + ctrl_width > max_line_width {
+                    line_specs.push((line_start, line_width, line_height));
+                    line_start = idx;
+                    line_width = 0;
+                    line_height = 0;
+                }
+                line_width += ctrl_width;
+                line_height = line_height.max(ctrl_height);
+            }
+            line_specs.push((line_start, line_width, line_height));
+
+            let orig_line_segs = para.line_segs.clone();
+            let mut new_line_segs = Vec::with_capacity(line_specs.len());
+            for (line_idx, (start_pos, _line_width, height_hwp)) in
+                line_specs.into_iter().enumerate()
+            {
+                let mut seg = make_line_seg(start_pos as u32, 0.0);
+                if let Some(template) = orig_line_segs
+                    .get(line_idx)
+                    .or_else(|| orig_line_segs.first())
+                {
+                    seg.line_spacing = template.line_spacing;
+                    seg.segment_width = if template.segment_width > 0 {
+                        template.segment_width
+                    } else {
+                        seg_width_hwp
+                    };
+                    seg.tag = if template.tag != 0 {
+                        template.tag
+                    } else {
+                        seg.tag
+                    };
+                }
+                apply_inline_control_line_height(&mut seg, height_hwp);
+                new_line_segs.push(seg);
+            }
+
+            let mut vpos = orig.as_ref().map(|ls| ls.vertical_pos).unwrap_or(0);
+            for seg in &mut new_line_segs {
+                seg.vertical_pos = vpos;
+                vpos += seg.line_height + seg.line_spacing;
+            }
+            para.line_segs = new_line_segs;
+        } else {
+            let mut seg = make_line_seg(0, 0.0);
+            if let Some(height_hwp) = inline_control_line_height_hwp(para) {
+                apply_inline_control_line_height(&mut seg, height_hwp);
+            }
+            para.line_segs = vec![seg];
         }
-        para.line_segs = vec![seg];
         return;
     }
 

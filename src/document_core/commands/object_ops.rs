@@ -8131,6 +8131,59 @@ mod issue_1151_cell_picture_insert_tests {
     }
 
     #[test]
+    fn issue1452_enter_after_second_tac_picture_keeps_both_pictures() {
+        use crate::renderer::render_tree::{RenderNode, RenderNodeType};
+
+        fn collect_images(node: &RenderNode, out: &mut Vec<(Option<usize>, Option<usize>, f64)>) {
+            if let RenderNodeType::Image(img) = &node.node_type {
+                out.push((img.para_index, img.control_index, img.opacity));
+            }
+            for child in &node.children {
+                collect_images(child, out);
+            }
+        }
+
+        let data = std::fs::read("samples/투명도0-50.hwp")
+            .expect("fixture 읽기 실패 samples/투명도0-50.hwp");
+        let mut core = DocumentCore::from_bytes(&data).expect("parse samples/투명도0-50.hwp");
+
+        core.split_paragraph_native(0, 0, 2)
+            .expect("두 번째 TAC 그림 뒤 Enter");
+
+        assert_eq!(
+            core.document.sections[0].paragraphs.len(),
+            2,
+            "그림 뒤 Enter 는 새 빈 문단을 만들어야 한다"
+        );
+        assert!(
+            core.document.sections[0].paragraphs[0].line_segs.len() >= 2,
+            "원래 문단은 두 TAC 그림 줄을 유지해야 한다: {:?}",
+            core.document.sections[0].paragraphs[0].line_segs
+        );
+
+        let tree = core.build_page_tree(0).expect("build page tree");
+        let mut images = Vec::new();
+        collect_images(&tree.root, &mut images);
+        assert_eq!(
+            images.len(),
+            2,
+            "Enter 후에도 두 그림이 모두 렌더되어야 한다: {images:?}"
+        );
+
+        let mut identities = images
+            .iter()
+            .map(|(para, control, _)| (*para, *control))
+            .collect::<Vec<_>>();
+        identities.sort_unstable();
+        identities.dedup();
+        assert_eq!(
+            identities.len(),
+            2,
+            "두 그림 control 이 각각 렌더되어야 한다: {images:?}"
+        );
+    }
+
+    #[test]
     fn issue1151_invalid_cell_path_returns_error() {
         let mut core = make_test_core();
         let _ = core
