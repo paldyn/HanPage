@@ -24,18 +24,6 @@ fn effective_char_count(text_run: &TextRunNode) -> usize {
     text_run.text.chars().count()
 }
 
-fn visible_end_mark_caret_y_offset(text_run: &TextRunNode, marks_visible: bool) -> f64 {
-    if !marks_visible
-        || !text_run.text.is_empty()
-        || text_run.is_vertical
-        || !(text_run.is_para_end || text_run.is_line_break_end)
-    {
-        return 0.0;
-    }
-
-    text_run.style.font_size
-}
-
 fn note_number_format_from_hwp_code(code: u8) -> crate::renderer::NumberFormat {
     match code {
         0 => crate::renderer::NumberFormat::Digit,
@@ -225,8 +213,6 @@ impl DocumentCore {
         };
         use crate::renderer::render_tree::{RenderNode, RenderNodeType};
 
-        let text_marks_visible = self.show_paragraph_marks || self.show_control_codes;
-
         // 문단이 포함된 페이지 찾기
         let pages = self.find_pages_for_paragraph(section_idx, para_idx)?;
 
@@ -383,7 +369,6 @@ impl DocumentCore {
             raw_text_index: &mut usize,
             stops: &mut std::collections::BTreeMap<usize, CursorHit>,
             page_index: u32,
-            text_marks_visible: bool,
         ) {
             if let RenderNodeType::TextRun(ref text_run) = node.node_type {
                 if text_run.section_index == Some(sec)
@@ -400,12 +385,10 @@ impl DocumentCore {
 
                     if text_run.text.is_empty() && effective_char_count(text_run) == 0 {
                         if let Some(char_start) = text_run.char_start {
-                            let y_offset =
-                                visible_end_mark_caret_y_offset(text_run, text_marks_visible);
                             stops.entry(char_start).or_insert(CursorHit {
                                 page_index,
                                 x: node.bbox.x,
-                                y: caret_y + y_offset,
+                                y: caret_y,
                                 height: font_size.max(10.0),
                             });
                         }
@@ -458,7 +441,6 @@ impl DocumentCore {
                     raw_text_index,
                     stops,
                     page_index,
-                    text_marks_visible,
                 );
             }
         }
@@ -470,7 +452,6 @@ impl DocumentCore {
             para: &Paragraph,
             offset: usize,
             page_index: u32,
-            text_marks_visible: bool,
         ) -> Option<CursorHit> {
             if !para.controls.iter().any(is_inline_cursor_control) {
                 return None;
@@ -486,7 +467,6 @@ impl DocumentCore {
                 &mut raw_text_index,
                 &mut stops,
                 page_index,
-                text_marks_visible,
             );
 
             let mut control_bboxes = std::collections::HashMap::new();
@@ -522,7 +502,9 @@ impl DocumentCore {
                     })
                     .unwrap_or_else(|| {
                         let fallback_h = 12.0;
-                        (y + (h - fallback_h).max(0.0) / 2.0, fallback_h)
+                        let baseline = h * 0.85;
+                        let ascent = fallback_h * 0.8;
+                        (y + (baseline - ascent).max(0.0), fallback_h)
                     });
 
                 stops.insert(
@@ -534,16 +516,10 @@ impl DocumentCore {
                         height: line_metrics.1,
                     },
                 );
-                let end_mark_y_offset = if text_marks_visible && pos + 1 == navigable_text_len(para)
-                {
-                    line_metrics.1
-                } else {
-                    0.0
-                };
                 stops.entry(pos + 1).or_insert(CursorHit {
                     page_index,
                     x: x + w,
-                    y: line_metrics.0 + end_mark_y_offset,
+                    y: line_metrics.0,
                     height: line_metrics.1,
                 });
             }
@@ -635,7 +611,6 @@ impl DocumentCore {
             exact_only: bool,
             is_list_para: bool,
             footnote_marker_positions: &[(usize, usize)],
-            text_marks_visible: bool,
         ) -> Option<CursorHit> {
             if let RenderNodeType::FootnoteMarker(ref marker) = node.node_type {
                 if marker.section_index == sec && marker.para_index == para {
@@ -698,14 +673,10 @@ impl DocumentCore {
                                         let font_size = text_run.style.font_size;
                                         let ascent = font_size * 0.8;
                                         let caret_y = node.bbox.y + text_run.baseline - ascent;
-                                        let y_offset = visible_end_mark_caret_y_offset(
-                                            text_run,
-                                            text_marks_visible,
-                                        );
                                         return Some(CursorHit {
                                             page_index,
                                             x: node.bbox.x + x_in_run,
-                                            y: caret_y + y_offset,
+                                            y: caret_y,
                                             height: font_size,
                                         });
                                     }
@@ -748,14 +719,10 @@ impl DocumentCore {
                                     let font_size = text_run.style.font_size;
                                     let ascent = font_size * 0.8;
                                     let caret_y = node.bbox.y + text_run.baseline - ascent;
-                                    let y_offset = visible_end_mark_caret_y_offset(
-                                        text_run,
-                                        text_marks_visible,
-                                    );
                                     return Some(CursorHit {
                                         page_index,
                                         x: node.bbox.x + x_in_run,
-                                        y: caret_y + y_offset,
+                                        y: caret_y,
                                         height: font_size,
                                     });
                                 }
@@ -807,7 +774,6 @@ impl DocumentCore {
                     exact_only,
                     is_list_para,
                     footnote_marker_positions,
-                    text_marks_visible,
                 ) {
                     return Some(hit);
                 }
@@ -828,7 +794,6 @@ impl DocumentCore {
                         para,
                         char_offset,
                         page_num,
-                        text_marks_visible,
                     ) {
                         return Ok(format!(
                             "{{\"pageIndex\":{},\"x\":{:.1},\"y\":{:.1},\"height\":{:.1}}}",
@@ -848,7 +813,6 @@ impl DocumentCore {
                 true,
                 is_list_para,
                 &footnote_marker_positions,
-                text_marks_visible,
             );
             let hit_result = exact_hit.or_else(|| {
                 find_cursor_in_node(
@@ -861,7 +825,6 @@ impl DocumentCore {
                     false,
                     is_list_para,
                     &footnote_marker_positions,
-                    text_marks_visible,
                 )
             });
             if let Some(hit) = hit_result {

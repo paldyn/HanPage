@@ -51,18 +51,47 @@ fn transparency_sample_restores_saved_caret_after_second_inline_picture() {
     );
 
     doc.set_show_paragraph_marks(true);
+    let visible_before_first_picture_rect = parse_json(
+        "visible before-first-picture cursor rect",
+        &doc.get_cursor_rect_native(0, 0, 0)
+            .expect("visible before-first-picture cursor rect"),
+    );
     let visible_mark_rect = parse_json(
         "visible paragraph-mark cursor rect",
         &doc.get_cursor_rect_native(0, 0, 2)
             .expect("visible paragraph-mark cursor rect"),
     );
+    let visible_before_second_picture_rect = parse_json(
+        "visible before-second-picture cursor rect",
+        &doc.get_cursor_rect_native(0, 0, 1)
+            .expect("visible before-second-picture cursor rect"),
+    );
     assert!(
         visible_mark_rect["x"].as_f64().unwrap() <= saved_rect["x"].as_f64().unwrap() + 1.0,
         "문단부호 표시 중 캐럿이 문단부호 오른쪽으로 과도하게 밀리면 안 됨: hidden={saved_rect}, visible={visible_mark_rect}"
     );
-    assert!(
-        visible_mark_rect["y"].as_f64().unwrap() > saved_rect["y"].as_f64().unwrap(),
-        "문단부호 표시 중 캐럿은 한컴처럼 문단부호 기준으로 아래쪽에 맞춰야 함: hidden={saved_rect}, visible={visible_mark_rect}"
+    assert_eq!(
+        visible_mark_rect["y"], saved_rect["y"],
+        "문단부호 표시 여부가 그림 bbox 기준 캐럿 y를 임의로 바꾸면 안 됨: hidden={saved_rect}, visible={visible_mark_rect}"
     );
     assert_eq!(visible_mark_rect["height"], saved_rect["height"]);
+    assert!(
+        visible_before_first_picture_rect["x"].as_f64().unwrap()
+            <= visible_before_second_picture_rect["x"].as_f64().unwrap() + 1.0,
+        "첫 번째 그림 앞 커서는 첫 번째 그림 왼쪽 기준에 있어야 함: first={visible_before_first_picture_rect}, second={visible_before_second_picture_rect}"
+    );
+    assert!(
+        visible_before_first_picture_rect["y"].as_f64().unwrap()
+            < visible_before_second_picture_rect["y"].as_f64().unwrap(),
+        "첫 번째 그림 앞 커서는 첫 번째 그림 bbox 기준선에 있어야 함: first={visible_before_first_picture_rect}, second={visible_before_second_picture_rect}"
+    );
+    assert!(
+        visible_before_second_picture_rect["x"].as_f64().unwrap()
+            < visible_mark_rect["x"].as_f64().unwrap(),
+        "왼쪽 이동 후 커서는 두 번째 그림의 왼쪽에 있어야 함: before_second={visible_before_second_picture_rect}, visible={visible_mark_rect}"
+    );
+    assert_eq!(
+        visible_before_second_picture_rect["y"], visible_mark_rect["y"],
+        "왼쪽 이동 후 두 번째 그림 앞 커서도 문단부호 표시 기준선에 맞아야 함: before_second={visible_before_second_picture_rect}, visible={visible_mark_rect}"
+    );
 }
