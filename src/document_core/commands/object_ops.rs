@@ -2428,7 +2428,7 @@ impl DocumentCore {
                     ..Default::default()
                 };
 
-                let new_ctrl_idx = {
+                let (new_ctrl_idx, logical_after) = {
                     let section = &mut self.document.sections[section_idx];
                     section.raw_stream = None;
                     let target_para =
@@ -2437,7 +2437,14 @@ impl DocumentCore {
                     target_para.controls.push(Control::Picture(Box::new(pic)));
                     target_para.ctrl_data_records.push(None);
                     target_para.control_mask |= 0x00000800;
-                    new_ctrl_idx
+                    let logical_positions =
+                        super::super::helpers::find_logical_control_positions(target_para);
+                    let logical_after = logical_positions
+                        .get(new_ctrl_idx)
+                        .copied()
+                        .unwrap_or_else(|| target_para.text.chars().count())
+                        + 1;
+                    (new_ctrl_idx, logical_after)
                 };
 
                 self.mark_section_dirty(section_idx);
@@ -2450,8 +2457,8 @@ impl DocumentCore {
                     para: para_idx,
                 });
                 return Ok(super::super::helpers::json_ok_with(&format!(
-                    "\"paraIdx\":{},\"controlIdx\":{}",
-                    para_idx, new_ctrl_idx
+                    "\"paraIdx\":{},\"controlIdx\":{},\"logicalOffset\":{}",
+                    para_idx, new_ctrl_idx, logical_after
                 )));
             }
 
@@ -2503,6 +2510,12 @@ impl DocumentCore {
             let new_ctrl_idx = parent.controls.len();
             parent.controls.push(Control::Picture(Box::new(pic)));
             parent.ctrl_data_records.push(None);
+            let logical_positions = super::super::helpers::find_logical_control_positions(parent);
+            let logical_after = logical_positions
+                .get(new_ctrl_idx)
+                .copied()
+                .unwrap_or_else(|| parent.text.chars().count())
+                + 1;
 
             // outer table dirty 마킹 (재측정 유도)
             let outer_ctrl = cell_path[0].0;
@@ -2525,8 +2538,8 @@ impl DocumentCore {
                 para: para_idx,
             });
             return Ok(super::super::helpers::json_ok_with(&format!(
-                "\"paraIdx\":{},\"controlIdx\":{}",
-                para_idx, new_ctrl_idx
+                "\"paraIdx\":{},\"controlIdx\":{},\"logicalOffset\":{}",
+                para_idx, new_ctrl_idx, logical_after
             )));
         }
 
@@ -2578,6 +2591,12 @@ impl DocumentCore {
         let new_ctrl_idx = parent.controls.len();
         parent.controls.push(Control::Picture(Box::new(pic)));
         parent.ctrl_data_records.push(None);
+        let logical_positions = super::super::helpers::find_logical_control_positions(parent);
+        let logical_after = logical_positions
+            .get(new_ctrl_idx)
+            .copied()
+            .unwrap_or_else(|| parent.text.chars().count())
+            + 1;
 
         self.mark_section_dirty(section_idx);
         self.paginate_if_needed();
@@ -2589,8 +2608,8 @@ impl DocumentCore {
             para: para_idx,
         });
         Ok(super::super::helpers::json_ok_with(&format!(
-            "\"paraIdx\":{},\"controlIdx\":{}",
-            para_idx, new_ctrl_idx
+            "\"paraIdx\":{},\"controlIdx\":{},\"logicalOffset\":{}",
+            para_idx, new_ctrl_idx, logical_after
         )))
     }
 
@@ -7760,6 +7779,158 @@ mod issue_1151_cell_picture_insert_tests {
             core.document.sections[0].paragraphs.len(),
             1,
             "본문 picture 삽입 시 새 paragraph 생성 안 함 (sibling control)"
+        );
+    }
+
+    #[test]
+    fn issue1452_insert_picture_returns_logical_offset_after_picture() {
+        let mut core = make_test_core();
+        core.insert_text_native(0, 0, 0, "abc")
+            .expect("insert text");
+
+        let image = minimal_png();
+        let result = core
+            .insert_picture_native(
+                0,
+                0,
+                3,
+                &[],
+                &image,
+                5000,
+                5000,
+                1,
+                1,
+                "png",
+                "test",
+                None,
+                None,
+            )
+            .expect("insert picture body");
+
+        assert_eq!(parse_idx(&result, "paraIdx"), 0);
+        assert_eq!(parse_idx(&result, "controlIdx"), 0);
+        assert_eq!(
+            parse_idx(&result, "logicalOffset"),
+            4,
+            "본문 텍스트 'abc' 뒤에 그림 1개를 넣으면 그림 뒤 커서 offset은 4여야 한다: {result}"
+        );
+    }
+
+    #[test]
+    fn issue1452_enter_after_dropped_inline_picture_keeps_next_para_below_picture() {
+        use crate::renderer::render_tree::{RenderNode, RenderNodeType};
+
+        fn collect_image_bboxes(node: &RenderNode, out: &mut Vec<(f64, f64, f64, f64)>) {
+            if matches!(node.node_type, RenderNodeType::Image(_)) {
+                out.push((node.bbox.x, node.bbox.y, node.bbox.width, node.bbox.height));
+            }
+            for child in &node.children {
+                collect_image_bboxes(child, out);
+            }
+        }
+
+        fn collect_para_end_runs(
+            node: &RenderNode,
+            out: &mut Vec<(usize, Option<usize>, f64, f64, f64, f64)>,
+        ) {
+            if let RenderNodeType::TextRun(run) = &node.node_type {
+                if run.is_para_end {
+                    if let Some(para_idx) = run.para_index {
+                        out.push((
+                            para_idx,
+                            run.char_start,
+                            node.bbox.x,
+                            node.bbox.y,
+                            node.bbox.width,
+                            node.bbox.height,
+                        ));
+                    }
+                }
+            }
+            for child in &node.children {
+                collect_para_end_runs(child, out);
+            }
+        }
+
+        let mut core = make_test_core();
+        let image = minimal_png();
+        let pic_w = 30000u32;
+        let pic_h = 9000u32;
+
+        let result = core
+            .insert_picture_native(
+                0,
+                0,
+                0,
+                &[],
+                &image,
+                pic_w,
+                pic_h,
+                1,
+                1,
+                "png",
+                "drop",
+                None,
+                None,
+            )
+            .expect("insert dropped picture");
+        let ctrl_idx = parse_idx(&result, "controlIdx");
+        let logical_offset = parse_idx(&result, "logicalOffset");
+
+        core.set_picture_properties_native(0, 0, ctrl_idx, r#"{"treatAsChar":true}"#)
+            .expect("dropped picture becomes treat-as-char");
+        core.split_paragraph_native(0, 0, logical_offset)
+            .expect("Enter after dropped picture");
+
+        assert_eq!(
+            core.document.sections[0].paragraphs.len(),
+            2,
+            "그림 뒤 Enter 는 새 빈 문단을 만들어야 한다"
+        );
+        assert_eq!(
+            core.document.sections[0].paragraphs[0].line_segs[0].line_height, pic_h as i32,
+            "TAC 그림만 남은 첫 문단은 그림 높이를 줄 높이로 유지해야 한다"
+        );
+        assert!(
+            core.document.sections[0].paragraphs[1].line_segs[0].line_height < pic_h as i32 / 2,
+            "새 빈 문단은 그림 높이를 물려받지 않고 기본 줄 높이로 시작해야 한다"
+        );
+
+        let tree = core.build_page_tree(0).expect("build page tree");
+        let mut images = Vec::new();
+        collect_image_bboxes(&tree.root, &mut images);
+        assert_eq!(images.len(), 1, "drop 그림 ImageNode 1개 필요");
+
+        let mut para_ends = Vec::new();
+        collect_para_end_runs(&tree.root, &mut para_ends);
+        let image = images[0];
+        let image_right = image.0 + image.2;
+        let image_bottom = image.1 + image.3;
+        let para0_end = para_ends
+            .iter()
+            .find(|(para_idx, _, _, _, _, _)| *para_idx == 0)
+            .expect("첫 문단 끝 표시");
+        let para1_end = para_ends
+            .iter()
+            .find(|(para_idx, _, _, _, _, _)| *para_idx == 1)
+            .expect("새 빈 문단 끝 표시");
+
+        assert_eq!(
+            para0_end.1,
+            Some(logical_offset),
+            "첫 문단 끝 표시는 그림 뒤 logical offset에 놓여야 한다"
+        );
+        assert!(
+            para0_end.2 >= image_right - 0.5,
+            "첫 문단부호 x는 그림 뒤에 있어야 한다: mark_x={}, image_right={}",
+            para0_end.2,
+            image_right
+        );
+        assert!(
+            para1_end.3 >= image_bottom - 0.5,
+            "새 빈 문단부호는 그림 아래 줄에 있어야 한다: mark_y={}, image_bottom={}",
+            para1_end.3,
+            image_bottom
         );
     }
 

@@ -403,9 +403,27 @@ function setupFileInput(): void {
       try {
         img.src = url;
         await img.decode();
-        inputHandler.enterImagePlacementMode(data, ext, img.naturalWidth, img.naturalHeight, file.name);
+        const result = inputHandler.insertDroppedImageAtClientPoint(
+          data,
+          ext,
+          img.naturalWidth,
+          img.naturalHeight,
+          file.name,
+          e.clientX,
+          e.clientY,
+        );
+        if (!result.ok) {
+          showToast({
+            message: `그림 삽입에 실패했습니다.\n${result.error ?? '삽입 위치 또는 이미지 정보를 확인할 수 없습니다.'}`,
+            durationMs: 6000,
+          });
+        }
       } catch {
         console.warn('[drop] 이미지 디코딩 실패:', file.name);
+        showToast({
+          message: '그림을 삽입할 수 없습니다.\n브라우저가 이 이미지 파일을 읽지 못했습니다.',
+          durationMs: 6000,
+        });
       } finally {
         URL.revokeObjectURL(url);
       }

@@ -3793,6 +3793,7 @@ impl LayoutEngine {
                         }
                         // tac 폭만큼 x 전진
                         x += tac_w;
+                        sub_char_offset += 1;
                         seg_start = tac_rel;
                     }
 
@@ -4030,6 +4031,8 @@ impl LayoutEngine {
 
             // runs가 비어있으면 빈 TextRun 생성 (빈 셀 편집용)
             if comp_line.runs.is_empty() {
+                let mut empty_line_mark_x = x_start;
+                let mut empty_line_logical_end = char_offset;
                 // runs가 없는 빈 줄에서 treat_as_char 이미지 렌더링
                 // 테이블 셀 내부에서는 table_layout.rs가 layout_picture로 이미 처리하므로 스킵.
                 // 셀 외부에서 해당 줄 범위에 걸린 TAC만 여기서 렌더링.
@@ -4066,6 +4069,8 @@ impl LayoutEngine {
                                         shape_y,
                                     );
                                     img_x += tac_w;
+                                    empty_line_mark_x = img_x;
+                                    empty_line_logical_end += 1;
                                     continue;
                                 }
                                 if let Control::Picture(pic) = ctrl {
@@ -4150,6 +4155,8 @@ impl LayoutEngine {
                                         img_y,
                                     );
                                     img_x += tac_w;
+                                    empty_line_mark_x = img_x;
+                                    empty_line_logical_end += 1;
                                 }
                             }
                         }
@@ -4168,7 +4175,7 @@ impl LayoutEngine {
                         para_shape_id: Some(composed.para_style_id),
                         section_index: Some(section_index),
                         para_index: Some(para_index),
-                        char_start: Some(char_offset),
+                        char_start: Some(empty_line_logical_end),
                         cell_context: cell_ctx.clone(),
                         is_para_end: is_last_line_of_para && !defer_empty_line_control_marker,
                         is_line_break_end: comp_line.has_line_break
@@ -4180,7 +4187,16 @@ impl LayoutEngine {
                         baseline,
                         field_marker: FieldMarkerType::None,
                     }),
-                    BoundingBox::new(x_start, y, available_width, line_flow_height),
+                    BoundingBox::new(
+                        empty_line_mark_x,
+                        y,
+                        if empty_line_mark_x > x_start {
+                            0.0
+                        } else {
+                            available_width
+                        },
+                        line_flow_height,
+                    ),
                 );
                 line_node.children.push(run_node);
             }

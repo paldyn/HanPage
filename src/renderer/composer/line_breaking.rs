@@ -4,6 +4,7 @@
 //! 한글 어절/글자, 영어 단어/하이픈, CJK 개별 분할을 지원한다.
 
 use super::{find_active_char_shape, is_lang_neutral};
+use crate::model::control::Control;
 use crate::model::paragraph::{CharShapeRef, LineSeg, Paragraph};
 use crate::model::style::LineSpacingType;
 use crate::renderer::layout::{
@@ -899,6 +900,33 @@ fn char_level_break_hwp(
 ///
 /// 텍스트 편집(삽입/삭제) 후 호출하여 줄 바꿈을 재배치한다.
 /// `available_width_px`는 문단 여백을 제외한 사용 가능 너비(px)이다.
+fn inline_control_line_height_hwp(para: &Paragraph) -> Option<i32> {
+    para.controls
+        .iter()
+        .filter_map(|ctrl| match ctrl {
+            Control::Picture(pic) if pic.common.treat_as_char => Some(pic.common.height as i32),
+            Control::Shape(shape) if shape.common().treat_as_char => {
+                let common_h = shape.common().height as i32;
+                let current_h = shape.shape_attr().current_height as i32;
+                Some(common_h.max(current_h))
+            }
+            Control::Table(table) if table.common.treat_as_char => Some(table.common.height as i32),
+            Control::Equation(eq) if eq.common.treat_as_char => Some(eq.common.height as i32),
+            Control::Form(form) => Some(form.height as i32),
+            _ => None,
+        })
+        .filter(|height| *height > 0)
+        .max()
+}
+
+fn apply_inline_control_line_height(seg: &mut LineSeg, height_hwp: i32) {
+    if height_hwp > seg.line_height {
+        seg.line_height = height_hwp;
+        seg.text_height = height_hwp;
+        seg.baseline_distance = (height_hwp as f64 * 0.85).round() as i32;
+    }
+}
+
 pub(crate) fn reflow_line_segs(
     para: &mut Paragraph,
     available_width_px: f64,
@@ -950,7 +978,11 @@ pub(crate) fn reflow_line_segs(
     };
 
     if para.text.is_empty() {
-        para.line_segs = vec![make_line_seg(0, 0.0)];
+        let mut seg = make_line_seg(0, 0.0);
+        if let Some(height_hwp) = inline_control_line_height_hwp(para) {
+            apply_inline_control_line_height(&mut seg, height_hwp);
+        }
+        para.line_segs = vec![seg];
         return;
     }
 
@@ -1013,28 +1045,11 @@ pub(crate) fn reflow_line_segs(
         new_line_segs.push(make_line_seg(0, 12.0));
     }
 
-    // 인라인 TAC 표의 높이 반영: 표가 포함된 줄의 line_height를 표 높이 이상으로 보정
+    // 인라인 TAC 개체의 높이 반영: 개체가 포함된 줄의 line_height를 개체 높이 이상으로 보정
     {
-        use crate::model::control::Control;
-        let has_inline_table = para
-            .controls
-            .iter()
-            .any(|c| matches!(c, Control::Table(t) if t.common.treat_as_char));
-        if has_inline_table {
-            for ctrl in &para.controls {
-                if let Control::Table(t) = ctrl {
-                    if t.common.treat_as_char {
-                        let table_height_hwp = t.common.height as i32;
-                        // 첫 번째 LINE_SEG의 line_height를 표 높이 이상으로 확장
-                        if let Some(seg) = new_line_segs.first_mut() {
-                            if table_height_hwp > seg.line_height {
-                                seg.line_height = table_height_hwp;
-                                seg.text_height = table_height_hwp;
-                                seg.baseline_distance = (table_height_hwp as f64 * 0.85) as i32;
-                            }
-                        }
-                    }
-                }
+        if let Some(height_hwp) = inline_control_line_height_hwp(para) {
+            if let Some(seg) = new_line_segs.first_mut() {
+                apply_inline_control_line_height(seg, height_hwp);
             }
         }
     }
