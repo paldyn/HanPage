@@ -34,6 +34,7 @@ import * as _table from './input-handler-table';
 import * as _keyboard from './input-handler-keyboard';
 import * as _text from './input-handler-text';
 import * as _picture from './input-handler-picture';
+import { computeHangingIndentPx } from './hanging-indent';
 import { isPageLocalTextEditCommand } from './input-edit-invalidation';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -1732,7 +1733,7 @@ export class InputHandler {
     return targets;
   }
 
-  /** 한컴식 Shift+Tab: 현재 커서 x 위치를 기준으로 문단 내어쓰기를 설정한다. */
+  /** 한컴식 Shift+Tab: 첫 줄 시작 위치를 기준으로 문단 내어쓰기를 설정한다. */
   applyHangingIndentAtCursor(): boolean {
     if (this.cursor.isInHeaderFooter() || this.cursor.isInFootnote()) {
       console.info('[InputHandler] Shift+Tab hanging indent: unsupported note/header context');
@@ -1747,7 +1748,7 @@ export class InputHandler {
 
     try {
       let cursorRect: CursorRect | null = this.cursor.getRect();
-      let lineStartRect: CursorRect;
+      let firstLineStartRect: CursorRect;
 
       if (pos.parentParaIndex !== undefined) {
         const pathEntry = pos.cellPath?.[0];
@@ -1760,22 +1761,22 @@ export class InputHandler {
           return false;
         }
 
-        const lineInfo = this.wasm.getLineInfoInCell(
+        const firstLineInfo = this.wasm.getLineInfoInCell(
           pos.sectionIndex,
           pos.parentParaIndex,
           controlIndex,
           cellIndex,
           cellParaIndex,
-          pos.charOffset,
+          0,
         );
 
         if (pos.cellPath?.length === 1) {
           const pathJson = JSON.stringify(pos.cellPath);
-          lineStartRect = this.wasm.getCursorRectByPath(
+          firstLineStartRect = this.wasm.getCursorRectByPath(
             pos.sectionIndex,
             pos.parentParaIndex,
             pathJson,
-            lineInfo.charStart,
+            firstLineInfo.charStart,
           );
           cursorRect ??= this.wasm.getCursorRectByPath(
             pos.sectionIndex,
@@ -1784,13 +1785,13 @@ export class InputHandler {
             pos.charOffset,
           );
         } else {
-          lineStartRect = this.wasm.getCursorRectInCell(
+          firstLineStartRect = this.wasm.getCursorRectInCell(
             pos.sectionIndex,
             pos.parentParaIndex,
             controlIndex,
             cellIndex,
             cellParaIndex,
-            lineInfo.charStart,
+            firstLineInfo.charStart,
           );
           cursorRect ??= this.wasm.getCursorRectInCell(
             pos.sectionIndex,
@@ -1802,7 +1803,7 @@ export class InputHandler {
           );
         }
 
-        const hangingPx = Math.max(0, cursorRect.x - lineStartRect.x);
+        const hangingPx = computeHangingIndentPx(cursorRect.x, firstLineStartRect.x);
         this.executeParaFormatCommand(
           [{
             kind: 'cell',
@@ -1817,15 +1818,15 @@ export class InputHandler {
         return true;
       }
 
-      const lineInfo = this.wasm.getLineInfo(pos.sectionIndex, pos.paragraphIndex, pos.charOffset);
-      lineStartRect = this.wasm.getCursorRect(
+      const firstLineInfo = this.wasm.getLineInfo(pos.sectionIndex, pos.paragraphIndex, 0);
+      firstLineStartRect = this.wasm.getCursorRect(
         pos.sectionIndex,
         pos.paragraphIndex,
-        lineInfo.charStart,
+        firstLineInfo.charStart,
       );
       cursorRect ??= this.wasm.getCursorRect(pos.sectionIndex, pos.paragraphIndex, pos.charOffset);
 
-      const hangingPx = Math.max(0, cursorRect.x - lineStartRect.x);
+      const hangingPx = computeHangingIndentPx(cursorRect.x, firstLineStartRect.x);
       this.executeParaFormatCommand(
         [{ kind: 'body', sec: pos.sectionIndex, para: pos.paragraphIndex }],
         { indent: -pxToRaw2x(hangingPx) },

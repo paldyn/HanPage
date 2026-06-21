@@ -7,6 +7,7 @@ import { BookmarkDialog } from '@/ui/bookmark-dialog';
 import { EndnoteShapeDialog } from '@/ui/endnote-shape-dialog';
 import { FieldInsertDialog } from '@/ui/field-insert-dialog';
 import { showShapePicker } from '@/ui/shape-picker';
+import { showToast } from '@/ui/toast';
 import type { ShapeType } from '@/ui/shape-picker';
 import type { CellPathLike } from '@/core/types';
 
@@ -86,15 +87,38 @@ export const insertCommands: CommandDef[] = [
       input.onchange = async () => {
         const file = input.files?.[0];
         if (!file) return;
-        const data = new Uint8Array(await file.arrayBuffer());
-        const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
-        // Image 엘리먼트로 원본 크기 측정
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        await new Promise<void>(r => { img.onload = () => r(); });
-        URL.revokeObjectURL(img.src);
-        // 마우스 영역 지정 모드 진입
-        ih.enterImagePlacementMode(data, ext, img.naturalWidth, img.naturalHeight, file.name);
+        let objectUrl = '';
+        try {
+          const data = new Uint8Array(await file.arrayBuffer());
+          const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+          const img = new Image();
+          objectUrl = URL.createObjectURL(file);
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => {
+              if (img.naturalWidth <= 0 || img.naturalHeight <= 0) {
+                reject(new Error('이미지 크기를 확인할 수 없습니다.'));
+                return;
+              }
+              resolve();
+            };
+            img.onerror = () => reject(new Error('브라우저가 이 이미지 파일을 읽지 못했습니다.'));
+            img.src = objectUrl;
+          });
+          ih.enterImagePlacementMode(data, ext, img.naturalWidth, img.naturalHeight, file.name);
+          showToast({
+            message: '그림을 넣을 위치를 문서 본문 또는 표 셀 안에서 클릭하거나 드래그하세요.',
+            durationMs: 3500,
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn('[insert:image] 이미지 준비 실패:', err);
+          showToast({
+            message: `그림을 삽입할 수 없습니다.\n${msg}`,
+            durationMs: 6000,
+          });
+        } finally {
+          if (objectUrl) URL.revokeObjectURL(objectUrl);
+        }
       };
       input.click();
     },

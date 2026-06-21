@@ -873,10 +873,10 @@ export class WasmBridge {
    * 커서 위치에 그림을 삽입한다.
    *
    * @param cellPathJson 표 셀 안 삽입 시 cellPath JSON (#1151).
-   *   빈 문자열 또는 `'[]'` 면 본문 inline 삽입 (기존 동작, treat_as_char=true).
-   *   비어있지 않으면 셀 영역에 floating picture 삽입 (한컴 정합, tac=false,
-   *   wrap=Square, Page-relative offset). 셀 자체는 비어있는 채로 유지되어
-   *   클릭 시 cursor 가 정상 동작한다.
+   *   빈 문자열 또는 `'[]'` 면 본문 sibling floating picture 삽입
+   *   (한컴 정합, treat_as_char=false). 비어있지 않으면 셀 영역에 floating
+   *   picture 삽입 (tac=false, wrap=Square, Page-relative offset). 셀 자체는
+   *   비어있는 채로 유지되어 클릭 시 cursor 가 정상 동작한다.
    *   예: `JSON.stringify([{controlIndex:0, cellIndex:2, cellParaIndex:0}])`
    */
   insertPicture(sec: number, paraIdx: number, charOffset: number,

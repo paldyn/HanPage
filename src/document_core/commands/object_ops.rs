@@ -15,6 +15,28 @@ use crate::model::shape::{common_obj_offsets, ShapeObject};
 const MIN_SHAPE_SIZE: u32 = 200;
 
 impl DocumentCore {
+    const COMMON_OBJ_ATTR_KNOWN_MASK: u32 = 0x01
+        | (0x03 << 3)
+        | (0x07 << 5)
+        | (0x03 << 8)
+        | (0x07 << 10)
+        | (1 << 13)
+        | (1 << 14)
+        | (0x07 << 15)
+        | (0x03 << 18)
+        | (1 << 20)
+        | (0x07 << 21)
+        | (0x03 << 24)
+        | (1 << 26)
+        | (1 << 28);
+
+    fn sync_common_obj_attr_known_bits(c: &mut crate::model::shape::CommonObjAttr) {
+        let packed =
+            crate::document_core::converters::common_obj_attr_writer::pack_common_attr_bits(c);
+        c.attr = (c.attr & !Self::COMMON_OBJ_ATTR_KNOWN_MASK)
+            | (packed & Self::COMMON_OBJ_ATTR_KNOWN_MASK);
+    }
+
     fn resolve_shape_control_ref(
         &self,
         section_idx: usize,
@@ -1258,6 +1280,7 @@ impl DocumentCore {
         if let Some(v) = json_i32(props_json, "horzOffset") {
             pic.common.horizontal_offset = v as u32;
         }
+        Self::sync_common_obj_attr_known_bits(&mut pic.common);
         if transform_changed {
             pic.shape_attr.raw_rendering.clear();
             pic.shape_attr.render_tx = pic.shape_attr.offset_x as f64;
@@ -2952,6 +2975,7 @@ impl DocumentCore {
         if let Some(v) = json_i16(props_json, "outerMarginBottom") {
             c.margin.bottom = v;
         }
+        Self::sync_common_obj_attr_known_bits(c);
     }
 
     /// 글상자(Shape) 속성 조회 (네이티브).
@@ -7646,6 +7670,76 @@ mod issue_1151_cell_picture_insert_tests {
             1,
             "본문 picture 삽입 시 새 paragraph 생성 안 함 (sibling control)"
         );
+    }
+
+    #[test]
+    fn issue1452_picture_text_wrap_updates_hwp_attr_bits() {
+        let mut core = make_test_core();
+        let image = minimal_png();
+        core.insert_picture_native(
+            0,
+            0,
+            0,
+            &[],
+            &image,
+            5000,
+            5000,
+            1,
+            1,
+            "png",
+            "test",
+            None,
+            None,
+        )
+        .expect("insert picture body");
+
+        {
+            let pic = match &mut core.document.sections[0].paragraphs[0].controls[0] {
+                Control::Picture(p) => p.as_mut(),
+                _ => panic!("expected picture"),
+            };
+            pic.common.attr |= 1 << 30;
+        }
+
+        let cases = [
+            (
+                "InFrontOfText",
+                crate::model::shape::TextWrap::InFrontOfText,
+                3u32,
+            ),
+            (
+                "BehindText",
+                crate::model::shape::TextWrap::BehindText,
+                2u32,
+            ),
+            (
+                "TopAndBottom",
+                crate::model::shape::TextWrap::TopAndBottom,
+                1u32,
+            ),
+            ("Square", crate::model::shape::TextWrap::Square, 0u32),
+        ];
+
+        for (name, expected_wrap, expected_bits) in cases {
+            let json = format!(r#"{{"textWrap":"{}"}}"#, name);
+            core.set_picture_properties_native(0, 0, 0, &json)
+                .unwrap_or_else(|err| panic!("set textWrap={name} failed: {err}"));
+            let pic = match &core.document.sections[0].paragraphs[0].controls[0] {
+                Control::Picture(p) => p.as_ref(),
+                _ => panic!("expected picture"),
+            };
+            assert_eq!(pic.common.text_wrap, expected_wrap);
+            assert_eq!(
+                (pic.common.attr >> 21) & 0x07,
+                expected_bits,
+                "HWP 저장용 attr textWrap bit가 stale이면 안 된다: {name}"
+            );
+            assert_ne!(
+                pic.common.attr & (1 << 30),
+                0,
+                "알 수 없는 원본 attr 비트는 보존되어야 한다"
+            );
+        }
     }
 
     #[test]
