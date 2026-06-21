@@ -4,7 +4,7 @@
 //! - 세로/가로 막대, 꺾은선, 원형
 //! - **콤보 차트** (bar + line) 및 **이중 Y축** 지원
 
-use super::{OoxmlChart, OoxmlChartType, OoxmlSeries};
+use super::{BarGrouping, OoxmlChart, OoxmlChartType, OoxmlSeries};
 
 /// 기본 시리즈 색상 팔레트 (시리즈 색상 미지정 시 순환 사용)
 const DEFAULT_PALETTE: &[u32] = &[
@@ -245,7 +245,12 @@ fn render_bars(
     ph: f64,
     horizontal: bool,
 ) {
-    let (vmin, vmax) = value_range(chart);
+    let stacked = matches!(
+        chart.grouping,
+        BarGrouping::Stacked | BarGrouping::PercentStacked
+    );
+    let percent = chart.grouping == BarGrouping::PercentStacked;
+
     let cat_count = chart.categories.len().max(
         chart
             .series
@@ -258,6 +263,18 @@ fn render_bars(
         return;
     }
     let ser_count = chart.series.len().max(1);
+
+    // 값축 범위: clustered=개별값, stacked=카테고리 합의 최대, percent=0~100%
+    let (vmin, vmax) = if percent {
+        (0.0, 100.0)
+    } else if stacked {
+        let max_sum = (0..cat_count)
+            .map(|ci| category_positive_sum(chart, ci))
+            .fold(0.0_f64, f64::max);
+        nice_range(0.0, max_sum.max(1.0), 5)
+    } else {
+        value_range(chart)
+    };
 
     svg.push_str(&format!(
         "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#ffffff\" stroke=\"#cccccc\" stroke-width=\"0.5\"/>\n",
@@ -275,6 +292,7 @@ fn render_bars(
         chart.series.first().and_then(|s| s.format_code.as_deref()),
         horizontal,
         false,
+        percent,
     );
 
     let (cat_span, bar_span_total) = if horizontal {
@@ -284,43 +302,92 @@ fn render_bars(
         let span = pw / cat_count as f64;
         (span, span * 0.7)
     };
-    let bar_w = bar_span_total / ser_count as f64;
 
-    for ci in 0..cat_count {
-        for (si, ser) in chart.series.iter().enumerate() {
-            let v = *ser.values.get(ci).unwrap_or(&0.0);
-            let t = if vmax > vmin {
-                (v - vmin) / (vmax - vmin)
+    if stacked {
+        // 누적: 카테고리당 단일 막대, 시리즈를 아래/왼쪽부터 쌓음.
+        // percent → 카테고리 합으로 정규화(전체 길이 = 100%), stacked → vmax로 정규화.
+        for ci in 0..cat_count {
+            let denom = if percent {
+                let s = category_positive_sum(chart, ci);
+                if s > 0.0 {
+                    s
+                } else {
+                    1.0
+                }
             } else {
-                0.0
+                (vmax - vmin).max(1e-9)
             };
-            let color = series_color(ser, si);
-            if horizontal {
-                let cy = py
-                    + cat_span * ci as f64
-                    + (cat_span - bar_span_total) / 2.0
-                    + bar_w * si as f64;
-                let bw = pw * t;
-                svg.push_str(&format!(
-                    "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"{}\"/>\n",
-                    px, cy, bw.max(0.0), bar_w * 0.95, color
-                ));
-            } else {
-                let cx = px
-                    + cat_span * ci as f64
-                    + (cat_span - bar_span_total) / 2.0
-                    + bar_w * si as f64;
-                let bh = ph * t;
-                let by = py + ph - bh;
-                svg.push_str(&format!(
-                    "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"{}\"/>\n",
-                    cx, by, bar_w * 0.95, bh.max(0.0), color
-                ));
+            let mut acc = 0.0_f64; // 지금까지 쌓인 픽셀 길이
+            for (si, ser) in chart.series.iter().enumerate() {
+                let v = ser.values.get(ci).copied().unwrap_or(0.0).max(0.0);
+                let color = series_color(ser, si);
+                let base = px;
+                let cell = py + cat_span * ci as f64 + (cat_span - bar_span_total) / 2.0;
+                if horizontal {
+                    let seg = pw * (v / denom);
+                    svg.push_str(&format!(
+                        "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"{}\"/>\n",
+                        base + acc, cell, seg.max(0.0), bar_span_total, color
+                    ));
+                    acc += seg;
+                } else {
+                    let seg = ph * (v / denom);
+                    let by = py + ph - acc - seg;
+                    svg.push_str(&format!(
+                        "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"{}\"/>\n",
+                        cell, by, bar_span_total, seg.max(0.0), color
+                    ));
+                    acc += seg;
+                }
+            }
+        }
+    } else {
+        let bar_w = bar_span_total / ser_count as f64;
+        for ci in 0..cat_count {
+            for (si, ser) in chart.series.iter().enumerate() {
+                let v = *ser.values.get(ci).unwrap_or(&0.0);
+                let t = if vmax > vmin {
+                    (v - vmin) / (vmax - vmin)
+                } else {
+                    0.0
+                };
+                let color = series_color(ser, si);
+                if horizontal {
+                    let cy = py
+                        + cat_span * ci as f64
+                        + (cat_span - bar_span_total) / 2.0
+                        + bar_w * si as f64;
+                    let bw = pw * t;
+                    svg.push_str(&format!(
+                        "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"{}\"/>\n",
+                        px, cy, bw.max(0.0), bar_w * 0.95, color
+                    ));
+                } else {
+                    let cx = px
+                        + cat_span * ci as f64
+                        + (cat_span - bar_span_total) / 2.0
+                        + bar_w * si as f64;
+                    let bh = ph * t;
+                    let by = py + ph - bh;
+                    svg.push_str(&format!(
+                        "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"{}\"/>\n",
+                        cx, by, bar_w * 0.95, bh.max(0.0), color
+                    ));
+                }
             }
         }
     }
 
     render_category_labels(svg, chart, px, py, pw, ph, cat_count, horizontal);
+}
+
+/// 한 카테고리의 (양수) 시리즈 값 합. 누적 막대 축/정규화에 사용.
+fn category_positive_sum(chart: &OoxmlChart, ci: usize) -> f64 {
+    chart
+        .series
+        .iter()
+        .map(|s| s.values.get(ci).copied().unwrap_or(0.0).max(0.0))
+        .sum()
 }
 
 // ---------------- Line (단일 축) ----------------
@@ -350,6 +417,7 @@ fn render_line(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f64, 
         vmin,
         vmax,
         chart.series.first().and_then(|s| s.format_code.as_deref()),
+        false,
         false,
         false,
     );
@@ -451,12 +519,12 @@ fn render_combo(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f64,
 
     // 기본축 격자 (좌측)
     let pri_fmt = pri.first().and_then(|s| s.format_code.as_deref());
-    render_value_grid(svg, px, py, pw, ph, pri_min, pri_max, pri_fmt, false, false);
+    render_value_grid(svg, px, py, pw, ph, pri_min, pri_max, pri_fmt, false, false, false);
 
     // 보조축 격자 (우측, 눈금만)
     if !sec.is_empty() {
         let sec_fmt = sec.first().and_then(|s| s.format_code.as_deref());
-        render_value_grid(svg, px, py, pw, ph, sec_min, sec_max, sec_fmt, false, true);
+        render_value_grid(svg, px, py, pw, ph, sec_min, sec_max, sec_fmt, false, true, false);
     }
 
     // 막대 시리즈만 추려서 그룹화 렌더 (카테고리별 여러 바는 나란히)
@@ -570,6 +638,7 @@ fn render_combo(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f64,
 
 // ---------------- 공통: 값 격자/라벨 ----------------
 
+#[allow(clippy::too_many_arguments)]
 fn render_value_grid(
     svg: &mut String,
     px: f64,
@@ -581,7 +650,15 @@ fn render_value_grid(
     format_code: Option<&str>,
     horizontal: bool,
     secondary: bool,
+    percent: bool,
 ) {
+    let label = |v: f64| -> String {
+        if percent {
+            format!("{}%", v.round() as i64)
+        } else {
+            format_num(v, format_code)
+        }
+    };
     let grid_lines = 5;
     for i in 0..=grid_lines {
         let t = i as f64 / grid_lines as f64;
@@ -597,7 +674,7 @@ fn render_value_grid(
             let v = vmin + (vmax - vmin) * t;
             svg.push_str(&format!(
                 "<text x=\"{:.2}\" y=\"{:.2}\" font-family=\"sans-serif\" font-size=\"10\" fill=\"#666\" text-anchor=\"middle\">{}</text>\n",
-                gx, py + ph + 12.0, xml_escape(&format_num(v, format_code))
+                gx, py + ph + 12.0, xml_escape(&label(v))
             ));
         } else {
             let gy = py + ph - ph * t;
@@ -615,7 +692,7 @@ fn render_value_grid(
             };
             svg.push_str(&format!(
                 "<text x=\"{:.2}\" y=\"{:.2}\" font-family=\"sans-serif\" font-size=\"10\" fill=\"#666\" text-anchor=\"{}\">{}</text>\n",
-                tx, gy + 3.0, anchor, xml_escape(&format_num(v, format_code))
+                tx, gy + 3.0, anchor, xml_escape(&label(v))
             ));
         }
     }
