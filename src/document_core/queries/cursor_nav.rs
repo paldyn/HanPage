@@ -1653,19 +1653,54 @@ impl DocumentCore {
             node: &RenderNode,
             sec: usize,
             para: usize,
+            render_para: Option<&Paragraph>,
             offset: usize,
             page: u32,
             bias: CursorBias,
         ) -> Option<CursorHit> {
+            let control_positions = render_para
+                .map(find_logical_control_positions)
+                .unwrap_or_default();
+
             fn visit(
                 node: &RenderNode,
                 sec: usize,
                 para: usize,
+                control_positions: &[usize],
                 offset: usize,
                 page: u32,
                 bias: CursorBias,
                 best: &mut Option<(u8, CursorHit)>,
             ) {
+                if let RenderNodeType::Equation(ref eq) = node.node_type {
+                    if eq.section_index == Some(sec)
+                        && eq.para_index == Some(para)
+                        && eq.cell_index.is_none()
+                    {
+                        if let Some(ci) = eq.control_index {
+                            if let Some(pos) = control_positions.get(ci).copied() {
+                                if offset == pos || offset == pos + 1 {
+                                    let x = if offset == pos {
+                                        node.bbox.x
+                                    } else {
+                                        node.bbox.x + node.bbox.width
+                                    };
+                                    update_best_cursor(
+                                        best,
+                                        0,
+                                        CursorHit {
+                                            page,
+                                            x,
+                                            y: node.bbox.y,
+                                            h: node.bbox.height.max(10.0),
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if let RenderNodeType::TextRun(ref tr) = node.node_type {
                     if tr.section_index == Some(sec)
                         && tr.para_index == Some(para)
@@ -1697,12 +1732,30 @@ impl DocumentCore {
                     }
                 }
                 for child in &node.children {
-                    visit(child, sec, para, offset, page, bias, best);
+                    visit(
+                        child,
+                        sec,
+                        para,
+                        control_positions,
+                        offset,
+                        page,
+                        bias,
+                        best,
+                    );
                 }
             }
 
             let mut best = None;
-            visit(node, sec, para, offset, page, bias, &mut best);
+            visit(
+                node,
+                sec,
+                para,
+                &control_positions,
+                offset,
+                page,
+                bias,
+                &mut best,
+            );
             best.map(|(_, hit)| hit)
         }
 
@@ -1852,7 +1905,15 @@ impl DocumentCore {
                     let hit = if let Some((ppi, ci, cei)) = cell_ctx {
                         find_cell_cursor(&tree.root, ppi, ci, cei, $para_idx, $offset, *pn, $bias)
                     } else {
-                        find_body_cursor(&tree.root, section_idx, $para_idx, $offset, *pn, $bias)
+                        find_body_cursor(
+                            &tree.root,
+                            section_idx,
+                            $para_idx,
+                            self.get_render_paragraph_ref(section_idx, $para_idx).ok(),
+                            $offset,
+                            *pn,
+                            $bias,
+                        )
                     };
                     if hit.is_some() {
                         result = hit;

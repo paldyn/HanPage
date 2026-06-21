@@ -525,6 +525,52 @@ impl DocumentCore {
             }
             inline_controls.sort_by_key(|&(ci, raw_pos, pos, _, _)| (raw_pos, pos, ci));
 
+            if para.text.is_empty()
+                && para
+                    .controls
+                    .iter()
+                    .all(|ctrl| matches!(ctrl, Control::Equation(_)))
+            {
+                let mut equation_controls = para
+                    .controls
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(ci, ctrl)| {
+                        if !matches!(ctrl, Control::Equation(_)) {
+                            return None;
+                        }
+                        let (x, y, w, h) = control_bboxes.get(&ci).copied()?;
+                        let raw_pos = raw_ctrl_positions.get(ci).copied().unwrap_or(ci);
+                        let pos = ctrl_positions.get(ci).copied().unwrap_or(ci);
+                        Some((ci, raw_pos, pos, x, y, w, h))
+                    })
+                    .collect::<Vec<_>>();
+                equation_controls.sort_by_key(|&(ci, raw_pos, pos, _, _, _, _)| (raw_pos, pos, ci));
+
+                for (slot, (_, _, _, x, y, w, h)) in equation_controls.iter().enumerate() {
+                    let fallback_h = 12.0;
+                    let baseline = *h * 0.85;
+                    let ascent = fallback_h * 0.8;
+                    let caret_y = *y + (baseline - ascent).max(0.0);
+                    if offset == slot * 2 {
+                        return Some(CursorHit {
+                            page_index,
+                            x: *x,
+                            y: caret_y,
+                            height: fallback_h,
+                        });
+                    }
+                    if offset == slot * 2 + 1 {
+                        return Some(CursorHit {
+                            page_index,
+                            x: *x + *w,
+                            y: caret_y,
+                            height: fallback_h,
+                        });
+                    }
+                }
+            }
+
             let para_chars: Vec<char> = para.text.chars().collect();
             for pair in inline_controls.windows(2) {
                 let (_, prev_raw, prev_pos, _, prev_right) = pair[0];

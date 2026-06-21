@@ -815,11 +815,7 @@ impl Paragraph {
 
         // 7. has_para_text: 빈 문단(텍스트 없고 컨트롤 없음)이면 PARA_TEXT 불필요
         //    HWP 프로그램은 cc=1(빈 문단)에 PARA_TEXT가 있으면 파일 손상으로 판단
-        if self.text.is_empty() && self.controls.is_empty() {
-            self.has_para_text = false;
-        } else {
-            self.has_para_text = true;
-        }
+        self.has_para_text = !(self.text.is_empty() && self.controls.is_empty());
         let new_has_para_text = !new_text.is_empty() || !new_controls.is_empty();
 
         self.control_mask =

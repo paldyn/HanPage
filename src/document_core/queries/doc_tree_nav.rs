@@ -99,6 +99,48 @@ fn is_equation_only_navigation_paragraph(para: &Paragraph) -> bool {
     has_equation && para.text.chars().all(|ch| ch == '\u{fffc}')
 }
 
+fn equation_only_virtual_last_offset(para: &Paragraph) -> Option<usize> {
+    if !is_equation_only_navigation_paragraph(para) {
+        return None;
+    }
+
+    let equation_count = para
+        .controls
+        .iter()
+        .filter(|ctrl| matches!(ctrl, Control::Equation(_)))
+        .count();
+    if equation_count == 0 {
+        None
+    } else {
+        Some(equation_count * 2 - 1)
+    }
+}
+
+fn equation_only_next_offset(para: &Paragraph, char_offset: usize, forward: bool) -> Option<usize> {
+    let last_offset = equation_only_virtual_last_offset(para)?;
+    if forward {
+        if char_offset >= last_offset {
+            return None;
+        }
+        let next = if char_offset.is_multiple_of(2) {
+            char_offset + 1
+        } else {
+            char_offset + 2
+        };
+        Some(next.min(last_offset))
+    } else {
+        if char_offset == 0 {
+            return None;
+        }
+        let prev = if char_offset % 2 == 1 {
+            char_offset - 1
+        } else {
+            char_offset.saturating_sub(2)
+        };
+        Some(prev)
+    }
+}
+
 fn equation_control_at_position(
     para: &Paragraph,
     ctrl_positions: &[usize],
@@ -130,9 +172,11 @@ fn should_skip_equation_only_duplicate_boundary(
                 .copied()
                 .is_some_and(|pos| pos + 1 == char_offset)
     });
+    let current_equation_starts_here =
+        equation_control_at_position(para, ctrl_positions, char_offset);
     let next_equation_starts_here = equation_control_at_position(para, ctrl_positions, next_offset);
 
-    previous_equation_ends_here && next_equation_starts_here
+    previous_equation_ends_here && (current_equation_starts_here || next_equation_starts_here)
 }
 
 /// context 스택을 따라 현재 컨테이너의 paragraphs를 반환한다.
@@ -347,6 +391,30 @@ impl DocumentCore {
                 // Forward: char_offset 이후의 컨트롤 또는 텍스트 끝 확인
                 let next_offset = char_offset + 1;
 
+                if let Some(next) = equation_only_next_offset(current_para, char_offset, true) {
+                    return NavResult::Text {
+                        sec,
+                        para,
+                        char_offset: next,
+                        context: context.to_vec(),
+                    };
+                }
+
+                if should_skip_equation_only_duplicate_boundary(
+                    current_para,
+                    &ctrl_positions,
+                    char_offset,
+                    next_offset,
+                    text_len,
+                ) {
+                    return NavResult::Text {
+                        sec,
+                        para,
+                        char_offset: next_offset + 1,
+                        context: context.to_vec(),
+                    };
+                }
+
                 // char_offset 위치 또는 그 이후에 있는 편집 가능 컨트롤 탐색
                 for (ci, ctrl) in current_para.controls.iter().enumerate() {
                     let cpos = ctrl_positions.get(ci).copied().unwrap_or(text_len);
@@ -413,22 +481,6 @@ impl DocumentCore {
                     }
                 }
 
-                // 다음 offset에 컨트롤이 있는지도 확인
-                if should_skip_equation_only_duplicate_boundary(
-                    current_para,
-                    &ctrl_positions,
-                    char_offset,
-                    next_offset,
-                    text_len,
-                ) {
-                    return NavResult::Text {
-                        sec,
-                        para,
-                        char_offset: next_offset + 1,
-                        context: context.to_vec(),
-                    };
-                }
-
                 for (ci, ctrl) in current_para.controls.iter().enumerate() {
                     let cpos = ctrl_positions.get(ci).copied().unwrap_or(text_len);
                     if cpos == next_offset {
@@ -468,6 +520,15 @@ impl DocumentCore {
                 // 문단 끝 도달 → Step 2
             } else {
                 // Backward: char_offset 이전의 컨트롤 또는 텍스트 시작 확인
+                if let Some(prev) = equation_only_next_offset(current_para, char_offset, false) {
+                    return NavResult::Text {
+                        sec,
+                        para,
+                        char_offset: prev,
+                        context: context.to_vec(),
+                    };
+                }
+
                 if char_offset == 0 {
                     // 문단 시작 도달 → Step 2 (이전 문단/컨테이너)
                 } else {
