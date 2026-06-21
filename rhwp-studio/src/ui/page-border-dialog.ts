@@ -16,6 +16,7 @@ function mmToHwp(value: number): number {
 
 type Side = 'Left' | 'Right' | 'Top' | 'Bottom';
 
+const ALL_SIDES: Side[] = ['Left', 'Right', 'Top', 'Bottom'];
 const DOC_PAPER_COLOR = 'var(--doc-paper)';
 const DOC_PREVIEW_GUIDE_STROKE = '#d0d0d0';
 
@@ -151,7 +152,7 @@ export class PageBorderDialog extends ModalDialog {
     this.immediateCheck = this.checkbox('선 모양 바로 적용');
     this.immediateCheck.checked = true;
     this.borderNoneCheck = this.checkbox('테두리 사용 안 함');
-    this.borderNoneCheck.addEventListener('change', () => this.updateBorderPreview());
+    this.borderNoneCheck.addEventListener('change', () => this.handleBorderNoneChange());
     controls.append(lineRow, colorRow, this.checkboxRow(this.immediateCheck), this.checkboxRow(this.borderNoneCheck));
 
     const previewWrap = document.createElement('div');
@@ -401,7 +402,7 @@ export class PageBorderDialog extends ModalDialog {
       this.lineTypeSelect.appendChild(option);
     });
     this.lineTypeSelect.addEventListener('change', () => {
-      if (this.immediateCheck.checked) this.applyToSides(['Left', 'Right', 'Top', 'Bottom']);
+      if (this.immediateCheck.checked) this.applyToActiveSides();
     });
     return this.lineTypeSelect;
   }
@@ -416,7 +417,7 @@ export class PageBorderDialog extends ModalDialog {
       this.lineWidthSelect.appendChild(option);
     });
     this.lineWidthSelect.addEventListener('change', () => {
-      if (this.immediateCheck.checked) this.applyToSides(['Left', 'Right', 'Top', 'Bottom']);
+      if (this.immediateCheck.checked) this.applyToActiveSides();
     });
     return this.lineWidthSelect;
   }
@@ -427,7 +428,7 @@ export class PageBorderDialog extends ModalDialog {
     this.lineColorInput.value = '#000000';
     this.lineColorInput.style.colorScheme = 'inherit';
     this.lineColorInput.addEventListener('change', () => {
-      if (this.immediateCheck.checked) this.applyToSides(['Left', 'Right', 'Top', 'Bottom']);
+      if (this.immediateCheck.checked) this.applyToActiveSides();
     });
     return this.lineColorInput;
   }
@@ -462,9 +463,9 @@ export class PageBorderDialog extends ModalDialog {
     ].join(';');
     button.addEventListener('click', () => {
       if (side === 'All') {
-        this.applyToSides(['Left', 'Right', 'Top', 'Bottom']);
+        this.toggleAllSides();
       } else {
-        this.applyToSides([side]);
+        this.toggleSide(side);
       }
     });
     return button;
@@ -536,8 +537,56 @@ export class PageBorderDialog extends ModalDialog {
     sides.forEach(side => {
       this.borderEdits[side] = { ...next };
     });
-    this.borderNoneCheck.checked = false;
+    this.syncBorderNoneCheck();
     this.updateBorderPreview();
+  }
+
+  private applyToActiveSides(): void {
+    const activeSides = ALL_SIDES.filter(side => this.isSideActive(side));
+    if (activeSides.length === 0) return;
+    this.applyToSides(activeSides);
+  }
+
+  private handleBorderNoneChange(): void {
+    if (this.borderNoneCheck.checked) {
+      this.clearAllSides();
+    }
+    this.updateBorderPreview();
+  }
+
+  private toggleSide(side: Side): void {
+    if (this.isSideActive(side)) {
+      this.borderEdits[side] = noneBorder();
+    } else {
+      this.borderEdits[side] = { ...this.currentBorder() };
+    }
+    this.syncBorderNoneCheck();
+    this.updateBorderPreview();
+  }
+
+  private toggleAllSides(): void {
+    const next = ALL_SIDES.every(side => this.isSideActive(side))
+      ? noneBorder()
+      : this.currentBorder();
+    ALL_SIDES.forEach(side => {
+      this.borderEdits[side] = { ...next };
+    });
+    this.syncBorderNoneCheck();
+    this.updateBorderPreview();
+  }
+
+  private clearAllSides(): void {
+    ALL_SIDES.forEach(side => {
+      this.borderEdits[side] = noneBorder();
+    });
+  }
+
+  private isSideActive(side: Side): boolean {
+    return this.borderEdits[side].type !== 0;
+  }
+
+  private syncBorderNoneCheck(): void {
+    this.borderNoneCheck.checked = !ALL_SIDES.some(side => this.isSideActive(side));
   }
 
   private currentBorder(): BorderLineProps {
