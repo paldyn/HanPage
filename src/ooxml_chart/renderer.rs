@@ -519,12 +519,16 @@ fn render_combo(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f64,
 
     // 기본축 격자 (좌측)
     let pri_fmt = pri.first().and_then(|s| s.format_code.as_deref());
-    render_value_grid(svg, px, py, pw, ph, pri_min, pri_max, pri_fmt, false, false, false);
+    render_value_grid(
+        svg, px, py, pw, ph, pri_min, pri_max, pri_fmt, false, false, false,
+    );
 
     // 보조축 격자 (우측, 눈금만)
     if !sec.is_empty() {
         let sec_fmt = sec.first().and_then(|s| s.format_code.as_deref());
-        render_value_grid(svg, px, py, pw, ph, sec_min, sec_max, sec_fmt, false, true, false);
+        render_value_grid(
+            svg, px, py, pw, ph, sec_min, sec_max, sec_fmt, false, true, false,
+        );
     }
 
     // 막대 시리즈만 추려서 그룹화 렌더 (카테고리별 여러 바는 나란히)
@@ -943,14 +947,22 @@ mod tests {
     fn test_stacked_bars_share_x_per_category() {
         // 누적: 카테고리(2)당 단일 컬럼 → 서로 다른 x = 2개 (시리즈가 같은 x 공유)
         let svg = render_chart_svg(&bars_chart(BarGrouping::Stacked), 0.0, 0.0, 400.0, 300.0);
-        assert_eq!(distinct(data_bar_xs(&svg)), 2, "stacked는 카테고리당 단일 x");
+        assert_eq!(
+            distinct(data_bar_xs(&svg)),
+            2,
+            "stacked는 카테고리당 단일 x"
+        );
     }
 
     #[test]
     fn test_clustered_bars_distinct_x() {
         // 묶은: 카테고리(2) × 시리즈(3) = 6개 서로 다른 x (무회귀 가드)
         let svg = render_chart_svg(&bars_chart(BarGrouping::Clustered), 0.0, 0.0, 400.0, 300.0);
-        assert_eq!(distinct(data_bar_xs(&svg)), 6, "clustered는 시리즈별 x 분리");
+        assert_eq!(
+            distinct(data_bar_xs(&svg)),
+            6,
+            "clustered는 시리즈별 x 분리"
+        );
     }
 
     #[test]
@@ -965,6 +977,10 @@ mod tests {
         );
         assert!(svg.contains("100%"), "percentStacked는 % 축 라벨");
         assert!(svg.contains("0%"));
-        assert_eq!(distinct(data_bar_xs(&svg)), 2, "percent도 카테고리당 단일 x");
+        assert_eq!(
+            distinct(data_bar_xs(&svg)),
+            2,
+            "percent도 카테고리당 단일 x"
+        );
     }
 }
