@@ -488,6 +488,34 @@ export class WasmBridge {
     return JSON.parse(this.doc.getCursorRect(sec, para, charOffset));
   }
 
+  getCursorRectOnLine(
+    sec: number,
+    para: number,
+    lineIndex: number,
+    atEnd: boolean,
+    parentPara: number,
+    controlIdx: number,
+    cellIdx: number,
+    cellParaIdx: number,
+  ): CursorRect {
+    if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
+    const getRectOnLine = (this.doc as any).getCursorRectOnLine;
+    if (typeof getRectOnLine !== 'function') {
+      throw new Error('getCursorRectOnLine API를 사용할 수 없습니다');
+    }
+    return JSON.parse(getRectOnLine.call(
+      this.doc,
+      sec,
+      para,
+      lineIndex,
+      atEnd,
+      parentPara,
+      controlIdx,
+      cellIdx,
+      cellParaIdx,
+    ));
+  }
+
   hitTest(pageNum: number, x: number, y: number): HitTestResult {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
     return JSON.parse(this.doc.hitTest(pageNum, x, y));

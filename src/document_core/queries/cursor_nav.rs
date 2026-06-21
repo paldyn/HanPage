@@ -38,6 +38,12 @@ fn control_only_caret_utf16_to_char_idx(para: &Paragraph, caret_utf16: u32) -> u
         .count()
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct LineCursorHit {
+    pub offset: usize,
+    pub rect: Option<(u32, f64, f64, f64)>,
+}
+
 impl DocumentCore {
     pub(crate) fn get_line_info_native(
         &self,
@@ -188,7 +194,8 @@ impl DocumentCore {
     /// 문단의 line_segs에서 각 줄의 시작 char index 배열을 구한다.
     pub(crate) fn build_line_char_starts(para: &crate::model::paragraph::Paragraph) -> Vec<usize> {
         let char_offsets = &para.char_offsets;
-        para.line_segs
+        let mut starts: Vec<usize> = para
+            .line_segs
             .iter()
             .map(|ls| {
                 if ls.text_start == 0 {
@@ -199,7 +206,18 @@ impl DocumentCore {
                     utf16_pos_to_char_idx(char_offsets, ls.text_start)
                 }
             })
-            .collect()
+            .collect();
+
+        if char_offsets.is_empty() && starts.len() > 1 {
+            let char_count = navigable_text_len(para);
+            for i in 1..starts.len() {
+                if starts[i] <= starts[i - 1] && starts[i - 1] < char_count {
+                    starts[i] = starts[i - 1] + 1;
+                }
+            }
+        }
+
+        starts
     }
 
     /// 특정 줄의 문자 범위(charStart, charEnd)를 반환한다.
@@ -303,6 +321,7 @@ impl DocumentCore {
         // ═══ PHASE 3: 목표 위치 결정 ═══
         // 결과: (sec, para, char_offset, cell_ctx)
         let new_pos: (usize, usize, usize, Option<(usize, usize, usize, usize)>);
+        let mut rect_override: Option<(u32, f64, f64, f64)> = None;
 
         if target_line >= 0 && (target_line as usize) < line_info.line_count {
             // CASE A: 같은 문단 내 다른 줄
@@ -322,9 +341,15 @@ impl DocumentCore {
                 actual_px
             };
             let target_range = Self::get_line_char_range(current_para, target_line as usize);
-            let new_offset =
-                self.find_char_at_x_on_line(sec, para, cell_ctx, target_range, px_for_target)?;
-            new_pos = (sec, para, new_offset, cell_ctx);
+            let hit = self.find_cursor_hit_at_x_on_line(
+                sec,
+                para,
+                cell_ctx,
+                target_range,
+                px_for_target,
+            )?;
+            rect_override = hit.rect;
+            new_pos = (sec, para, hit.offset, cell_ctx);
         } else if cell_ctx.is_some() {
             // CASE C: 셀 내부 경계
             new_pos = self.handle_cell_boundary(
@@ -341,11 +366,14 @@ impl DocumentCore {
         }
 
         // ═══ PHASE 4: 최종 커서 좌표 계산 + 결과 포맷 ═══
-        let (rect_valid, page_idx, fx, fy, fh) =
+        let (rect_valid, page_idx, fx, fy, fh) = if let Some((p, x, y, h)) = rect_override {
+            (true, p, x, y, h)
+        } else {
             match self.get_cursor_rect_values(new_pos.0, new_pos.1, new_pos.2, new_pos.3) {
                 Ok((p, x, y, h)) => (true, p, x, y, h),
                 Err(_) => (false, 0, 0.0, 0.0, 16.0),
-            };
+            }
+        };
 
         // JSON 직렬화
         let pos_json = if let Some((ppi, ci, cei, cpi)) = new_pos.3 {
@@ -379,6 +407,39 @@ impl DocumentCore {
         Ok(format!(
             "{{{},\"pageIndex\":{},\"x\":{:.1},\"y\":{:.1},\"height\":{:.1},\"preferredX\":{:.1}{}}}",
             pos_json, page_idx, fx, fy, fh, actual_px, rect_valid_str
+        ))
+    }
+
+    pub(crate) fn get_cursor_rect_on_line_native(
+        &self,
+        sec: usize,
+        para: usize,
+        line_index: usize,
+        at_end: bool,
+        cell_ctx: Option<(usize, usize, usize, usize)>,
+    ) -> Result<String, HwpError> {
+        let current_para = self.resolve_paragraph(sec, para, cell_ctx)?;
+        let line_count = Self::build_line_char_starts(current_para).len().max(1);
+        let target_line = line_index.min(line_count - 1);
+        let target_range = Self::get_line_char_range(current_para, target_line);
+        let preferred_x = if at_end { 1.0e12 } else { -1.0e12 };
+        let hit =
+            self.find_cursor_hit_at_x_on_line(sec, para, cell_ctx, target_range, preferred_x)?;
+
+        let (page_idx, x, y, height) = if let Some((p, x, y, h)) = hit.rect {
+            (p, x, y, h)
+        } else {
+            let fallback_offset = if at_end {
+                target_range.1
+            } else {
+                target_range.0
+            };
+            self.get_cursor_rect_values(sec, para, fallback_offset, cell_ctx)?
+        };
+
+        Ok(format!(
+            "{{\"pageIndex\":{},\"x\":{:.1},\"y\":{:.1},\"height\":{:.1}}}",
+            page_idx, x, y, height
         ))
     }
 
@@ -826,15 +887,15 @@ impl DocumentCore {
         Ok((page_idx, x, y, height))
     }
 
-    /// 렌더 트리에서 특정 줄(char_range)의 TextRun/ImageNode를 찾아 preferredX에 가장 가까운 문자를 반환한다.
-    pub(crate) fn find_char_at_x_on_line(
+    /// 렌더 트리에서 특정 줄(char_range)의 TextRun/ImageNode를 찾아 preferredX에 가장 가까운 커서 위치를 반환한다.
+    pub(crate) fn find_cursor_hit_at_x_on_line(
         &self,
         sec: usize,
         para: usize,
         cell_ctx: Option<(usize, usize, usize, usize)>,
         char_range: (usize, usize),
         preferred_x: f64,
-    ) -> Result<usize, HwpError> {
+    ) -> Result<LineCursorHit, HwpError> {
         use crate::renderer::layout::compute_char_positions;
         use crate::renderer::render_tree::{RenderNode, RenderNodeType};
 
@@ -850,12 +911,17 @@ impl DocumentCore {
             char_count: usize,
             char_positions: Vec<f64>,
             bbox_x: f64,
+            bbox_y: f64,
+            bbox_h: f64,
         }
 
         #[derive(Clone, Copy)]
         struct PositionCandidate {
             offset: usize,
+            page_index: u32,
             x: f64,
+            y: f64,
+            height: f64,
         }
 
         fn node_matches_context(
@@ -877,6 +943,13 @@ impl DocumentCore {
             } else {
                 node_sec == Some(sec) && node_para == Some(para) && node_cell_ctx.is_none()
             }
+        }
+
+        fn inline_image_caret_metrics(y: f64, h: f64) -> (f64, f64) {
+            let fallback_h = 12.0;
+            let baseline = h * 0.85;
+            let ascent = fallback_h * 0.8;
+            (y + (baseline - ascent).max(0.0), fallback_h)
         }
 
         fn collect_matching_runs(
@@ -907,6 +980,8 @@ impl DocumentCore {
                             char_count: cc,
                             char_positions: positions,
                             bbox_x: node.bbox.x,
+                            bbox_y: node.bbox.y,
+                            bbox_h: node.bbox.height,
                         });
                     }
                 }
@@ -923,6 +998,7 @@ impl DocumentCore {
             cell_ctx: Option<(usize, usize, usize, usize)>,
             char_range: (usize, usize),
             control_positions: &[usize],
+            page_index: u32,
             result: &mut Vec<PositionCandidate>,
         ) {
             if let RenderNodeType::Image(ref img) = node.node_type {
@@ -938,16 +1014,26 @@ impl DocumentCore {
                     if let Some(ci) = img.control_index {
                         if let Some(pos) = control_positions.get(ci).copied() {
                             if pos >= char_range.0 && pos <= char_range.1 {
+                                let (caret_y, caret_h) =
+                                    inline_image_caret_metrics(node.bbox.y, node.bbox.height);
                                 result.push(PositionCandidate {
                                     offset: pos,
+                                    page_index,
                                     x: node.bbox.x,
+                                    y: caret_y,
+                                    height: caret_h,
                                 });
                             }
                             let after = pos + 1;
                             if after >= char_range.0 && after <= char_range.1 {
+                                let (caret_y, caret_h) =
+                                    inline_image_caret_metrics(node.bbox.y, node.bbox.height);
                                 result.push(PositionCandidate {
                                     offset: after,
+                                    page_index,
                                     x: node.bbox.x + node.bbox.width,
+                                    y: caret_y,
+                                    height: caret_h,
                                 });
                             }
                         }
@@ -962,6 +1048,7 @@ impl DocumentCore {
                     cell_ctx,
                     char_range,
                     control_positions,
+                    page_index,
                     result,
                 );
             }
@@ -985,6 +1072,7 @@ impl DocumentCore {
                 cell_ctx,
                 char_range,
                 &control_positions,
+                page_num,
                 &mut candidates,
             );
 
@@ -1008,7 +1096,10 @@ impl DocumentCore {
                             };
                         candidates.push(PositionCandidate {
                             offset: global_offset,
+                            page_index: page_num,
                             x,
+                            y: run.bbox_y,
+                            height: run.bbox_h,
                         });
                     }
                 }
@@ -1024,12 +1115,32 @@ impl DocumentCore {
                         best_dist = dist;
                     }
                 }
-                return Ok(best.offset);
+                return Ok(LineCursorHit {
+                    offset: best.offset,
+                    rect: Some((best.page_index, best.x, best.y, best.height)),
+                });
             }
         }
 
         // 렌더 트리에서 못 찾은 경우 → 줄 시작으로 폴백
-        Ok(char_range.0)
+        Ok(LineCursorHit {
+            offset: char_range.0,
+            rect: None,
+        })
+    }
+
+    /// 렌더 트리에서 특정 줄(char_range)의 TextRun/ImageNode를 찾아 preferredX에 가장 가까운 문자 offset을 반환한다.
+    pub(crate) fn find_char_at_x_on_line(
+        &self,
+        sec: usize,
+        para: usize,
+        cell_ctx: Option<(usize, usize, usize, usize)>,
+        char_range: (usize, usize),
+        preferred_x: f64,
+    ) -> Result<usize, HwpError> {
+        Ok(self
+            .find_cursor_hit_at_x_on_line(sec, para, cell_ctx, char_range, preferred_x)?
+            .offset)
     }
 
     /// 본문 문단/구역 경계를 넘어 이동한다.

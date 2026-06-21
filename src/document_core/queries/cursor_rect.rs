@@ -1555,6 +1555,64 @@ impl DocumentCore {
             }
         }
 
+        fn inline_image_caret_metrics(y: f64, h: f64) -> (f64, f64) {
+            let fallback_h = 12.0;
+            let baseline = h * 0.85;
+            let ascent = fallback_h * 0.8;
+            (y + (baseline - ascent).max(0.0), fallback_h)
+        }
+
+        fn collect_body_inline_image_hits(
+            core: &DocumentCore,
+            node: &RenderNode,
+            hits: &mut Vec<(usize, usize, usize, f64, f64, f64, f64)>,
+        ) {
+            if let RenderNodeType::Image(ref img) = node.node_type {
+                if img.cell_context.is_none() {
+                    if let (Some(si), Some(pi), Some(ci)) =
+                        (img.section_index, img.para_index, img.control_index)
+                    {
+                        let char_offset = core
+                            .document
+                            .sections
+                            .get(si)
+                            .and_then(|section| section.paragraphs.get(pi))
+                            .and_then(|para| find_logical_control_positions(para).get(ci).copied());
+                        if let Some(char_offset) = char_offset {
+                            hits.push((
+                                si,
+                                pi,
+                                char_offset,
+                                node.bbox.x,
+                                node.bbox.y,
+                                node.bbox.width,
+                                node.bbox.height,
+                            ));
+                        }
+                    }
+                }
+            }
+
+            for child in &node.children {
+                collect_body_inline_image_hits(core, child, hits);
+            }
+        }
+
+        fn format_body_inline_image_hit(
+            page_num: u32,
+            si: usize,
+            pi: usize,
+            offset: usize,
+            x: f64,
+            y: f64,
+            h: f64,
+        ) -> String {
+            format!(
+                "{{\"sectionIndex\":{},\"paragraphIndex\":{},\"charOffset\":{},\"cursorRect\":{{\"pageIndex\":{},\"x\":{:.1},\"y\":{:.1},\"height\":{:.1}}}}}",
+                si, pi, offset, page_num, x, y, h
+            )
+        }
+
         let mut runs: Vec<RunInfo> = Vec::new();
         let mut guide_runs: Vec<GuideRunInfo> = Vec::new();
         let mut cell_bboxes: Vec<CellBboxInfo> = Vec::new();
@@ -1640,6 +1698,46 @@ impl DocumentCore {
                 cb.parent_para_index = ctx.parent_para_index;
                 cb.control_index = outer.control_index;
                 cb.cell_index = ctx.innermost().cell_index;
+            }
+        }
+
+        let mut inline_image_hits = Vec::new();
+        collect_body_inline_image_hits(self, &tree.root, &mut inline_image_hits);
+        for (si, pi, char_offset, ix, iy, iw, ih) in inline_image_hits {
+            let (caret_y, caret_h) = inline_image_caret_metrics(iy, ih);
+            let right = ix + iw;
+            if x >= ix && x <= right && y >= iy && y <= iy + ih {
+                let offset = if x > ix + iw / 2.0 {
+                    char_offset + 1
+                } else {
+                    char_offset
+                };
+                let caret_x = if offset == char_offset { ix } else { right };
+                return Ok(format_body_inline_image_hit(
+                    page_num, si, pi, offset, caret_x, caret_y, caret_h,
+                ));
+            }
+            if x >= right && x <= right + caret_h && y >= caret_y && y <= caret_y + caret_h {
+                return Ok(format_body_inline_image_hit(
+                    page_num,
+                    si,
+                    pi,
+                    char_offset + 1,
+                    right,
+                    caret_y,
+                    caret_h,
+                ));
+            }
+            if x <= ix && x >= ix - caret_h && y >= caret_y && y <= caret_y + caret_h {
+                return Ok(format_body_inline_image_hit(
+                    page_num,
+                    si,
+                    pi,
+                    char_offset,
+                    ix,
+                    caret_y,
+                    caret_h,
+                ));
             }
         }
 
