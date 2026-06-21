@@ -519,7 +519,7 @@ impl DocumentCore {
                 "\"horzRelTo\":\"{}\",\"horzAlign\":\"{}\",",
                 "\"vertOffset\":{},\"horzOffset\":{},",
                 "\"textWrap\":\"{}\",\"restrictInPage\":{},\"allowOverlap\":{},\"sizeProtect\":{},",
-                "\"brightness\":{},\"contrast\":{},\"effect\":\"{}\",",
+                "\"brightness\":{},\"contrast\":{},\"effect\":\"{}\",\"transparency\":{},",
                 "\"description\":\"{}\",",
                 // 회전/대칭
                 "\"rotationAngle\":{},\"horzFlip\":{},\"vertFlip\":{},",
@@ -542,7 +542,10 @@ impl DocumentCore {
             horz_rel, horz_align,
             c.vertical_offset as i32, c.horizontal_offset as i32,
             text_wrap, c.flow_with_text, c.allow_overlap, c.size_protect,
-            pic.image_attr.brightness, pic.image_attr.contrast, effect,
+            pic.image_attr.brightness,
+            pic.image_attr.contrast,
+            effect,
+            pic.image_attr.clamped_transparency(),
             desc_escaped,
             // 회전/대칭
             sa.rotation_angle, sa.horz_flip, sa.vert_flip,
@@ -1297,6 +1300,9 @@ impl DocumentCore {
         }
         if let Some(v) = json_i32(props_json, "contrast") {
             pic.image_attr.contrast = v as i8;
+        }
+        if let Some(v) = json_i32(props_json, "transparency") {
+            pic.image_attr.transparency = v.clamp(0, 100) as u8;
         }
         if let Some(v) = json_str(props_json, "effect") {
             pic.image_attr.effect = match v.as_str() {
@@ -2375,6 +2381,7 @@ impl DocumentCore {
             brightness: 0,
             contrast: 0,
             effect: ImageEffect::RealPic,
+            transparency: 0,
             external_path: None,
         };
 
@@ -7529,6 +7536,90 @@ mod issue_1151_cell_picture_insert_tests {
         ]
     }
 
+    fn collect_picture_transparencies(doc: &Document) -> Vec<u8> {
+        let mut values = Vec::new();
+        for section in &doc.sections {
+            collect_picture_transparencies_from_paragraphs(&section.paragraphs, &mut values);
+        }
+        values
+    }
+
+    fn collect_picture_transparencies_from_paragraphs(
+        paragraphs: &[Paragraph],
+        values: &mut Vec<u8>,
+    ) {
+        for para in paragraphs {
+            for control in &para.controls {
+                collect_picture_transparencies_from_control(control, values);
+            }
+        }
+    }
+
+    fn collect_picture_transparencies_from_control(control: &Control, values: &mut Vec<u8>) {
+        match control {
+            Control::Picture(pic) => {
+                values.push(pic.image_attr.clamped_transparency());
+                if let Some(caption) = &pic.caption {
+                    collect_picture_transparencies_from_paragraphs(&caption.paragraphs, values);
+                }
+            }
+            Control::Table(table) => {
+                for cell in &table.cells {
+                    collect_picture_transparencies_from_paragraphs(&cell.paragraphs, values);
+                }
+            }
+            Control::Shape(shape) => collect_picture_transparencies_from_shape(shape, values),
+            Control::Header(header) => {
+                collect_picture_transparencies_from_paragraphs(&header.paragraphs, values);
+            }
+            Control::Footer(footer) => {
+                collect_picture_transparencies_from_paragraphs(&footer.paragraphs, values);
+            }
+            Control::Footnote(footnote) => {
+                collect_picture_transparencies_from_paragraphs(&footnote.paragraphs, values);
+            }
+            Control::Endnote(endnote) => {
+                collect_picture_transparencies_from_paragraphs(&endnote.paragraphs, values);
+            }
+            _ => {}
+        }
+    }
+
+    fn collect_picture_transparencies_from_shape(
+        shape: &crate::model::shape::ShapeObject,
+        values: &mut Vec<u8>,
+    ) {
+        match shape {
+            crate::model::shape::ShapeObject::Picture(pic) => {
+                values.push(pic.image_attr.clamped_transparency());
+                if let Some(caption) = &pic.caption {
+                    collect_picture_transparencies_from_paragraphs(&caption.paragraphs, values);
+                }
+            }
+            crate::model::shape::ShapeObject::Group(group) => {
+                for child in &group.children {
+                    collect_picture_transparencies_from_shape(child, values);
+                }
+                if let Some(caption) = &group.caption {
+                    collect_picture_transparencies_from_paragraphs(&caption.paragraphs, values);
+                }
+            }
+            _ => {
+                if let Some(drawing) = shape.drawing() {
+                    if let Some(text_box) = &drawing.text_box {
+                        collect_picture_transparencies_from_paragraphs(
+                            &text_box.paragraphs,
+                            values,
+                        );
+                    }
+                    if let Some(caption) = &drawing.caption {
+                        collect_picture_transparencies_from_paragraphs(&caption.paragraphs, values);
+                    }
+                }
+            }
+        }
+    }
+
     fn parse_idx(res: &str, key: &str) -> usize {
         res.split(&format!("\"{}\":", key))
             .nth(1)
@@ -7738,6 +7829,77 @@ mod issue_1151_cell_picture_insert_tests {
                 pic.common.attr & (1 << 30),
                 0,
                 "알 수 없는 원본 attr 비트는 보존되어야 한다"
+            );
+        }
+    }
+
+    #[test]
+    fn issue1452_picture_transparency_props_roundtrip() {
+        let mut core = make_test_core();
+        let image = minimal_png();
+        core.insert_picture_native(
+            0,
+            0,
+            0,
+            &[],
+            &image,
+            5000,
+            5000,
+            1,
+            1,
+            "png",
+            "test",
+            None,
+            None,
+        )
+        .expect("insert picture body");
+
+        core.set_picture_properties_native(0, 0, 0, r#"{"transparency":50}"#)
+            .expect("set transparency");
+        let props = core
+            .get_picture_properties_native(0, 0, 0)
+            .expect("get picture properties");
+        assert!(
+            props.contains(r#""transparency":50"#),
+            "그림 속성 JSON은 투명도 50%를 반환해야 한다: {props}"
+        );
+
+        let pic = match &core.document.sections[0].paragraphs[0].controls[0] {
+            Control::Picture(p) => p.as_ref(),
+            _ => panic!("expected picture"),
+        };
+        assert_eq!(pic.image_attr.clamped_transparency(), 50);
+        assert!((pic.image_attr.opacity() - 0.5).abs() < f64::EPSILON);
+
+        core.set_picture_properties_native(0, 0, 0, r#"{"transparency":200}"#)
+            .expect("set clamped transparency");
+        let pic = match &core.document.sections[0].paragraphs[0].controls[0] {
+            Control::Picture(p) => p.as_ref(),
+            _ => panic!("expected picture"),
+        };
+        assert_eq!(
+            pic.image_attr.clamped_transparency(),
+            100,
+            "속성 API로 들어온 범위 밖 투명도는 0~100으로 clamp되어야 한다"
+        );
+    }
+
+    #[test]
+    fn issue1452_picture_transparency_samples_parse_as_ui_percent() {
+        for path in ["samples/투명도0-50.hwp", "samples/투명도0-50.hwpx"] {
+            let data =
+                std::fs::read(path).unwrap_or_else(|err| panic!("fixture 읽기 실패 {path}: {err}"));
+            let core =
+                DocumentCore::from_bytes(&data).unwrap_or_else(|err| panic!("parse {path}: {err}"));
+            let transparencies = collect_picture_transparencies(&core.document);
+            assert!(
+                transparencies.len() >= 2,
+                "샘플에는 최소 두 개의 그림이 있어야 한다: {path}, got {transparencies:?}"
+            );
+            assert_eq!(
+                &transparencies[..2],
+                &[0, 50],
+                "샘플 첫 번째/두 번째 그림 투명도는 각각 0%, 50%여야 한다: {path}"
             );
         }
     }

@@ -1520,6 +1520,11 @@ impl SvgRenderer {
             self.output
                 .push_str(&format!("<g filter=\"url(#{})\">\n", fid));
         }
+        let object_opacity = img.opacity.clamp(0.0, 1.0);
+        if object_opacity < 1.0 {
+            self.output
+                .push_str(&format!("<g opacity=\"{:.3}\">\n", object_opacity));
+        }
         // 밝기/대비 → SVG 필터 래핑
         // [Issue #677] 한컴 워터마크 효과 (effect != RealPic 이고 brightness/contrast 가
         // 비-zero) 는 저장값을 그대로 brightness/contrast 필터로 적용한다. JPEG 워터마크는
@@ -1650,6 +1655,9 @@ impl SvgRenderer {
             self.output.push_str("</g>\n");
         }
         if bc_filter_id.is_some() {
+            self.output.push_str("</g>\n");
+        }
+        if object_opacity < 1.0 {
             self.output.push_str("</g>\n");
         }
         if effect_filter_id.is_some() {

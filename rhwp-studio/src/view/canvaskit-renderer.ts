@@ -665,11 +665,12 @@ export class CanvasKitLayerRenderer {
     }
 
     const crop = canvasKitImageSourceRect(imageWidth, imageHeight, op.crop);
+    const opacity = Number.isFinite(op.opacity) ? Math.max(0, Math.min(1, op.opacity ?? 1)) : 1;
     const drawImage = (dstX: number, dstY: number, dstW: number, dstH: number) => {
       const src = crop
         ? this.canvasKit.XYWHRect(crop.x, crop.y, crop.width, crop.height)
         : this.canvasKit.XYWHRect(0, 0, imageWidth, imageHeight);
-      this.drawImageRect(canvas, image, src, this.canvasKit.XYWHRect(dstX, dstY, dstW, dstH));
+      this.drawImageRect(canvas, image, src, this.canvasKit.XYWHRect(dstX, dstY, dstW, dstH), opacity);
     };
 
     const fillMode = op.fillMode ?? 'fitToSize';
@@ -697,9 +698,12 @@ export class CanvasKitLayerRenderer {
     }
   }
 
-  private drawImageRect(canvas: SkCanvas, image: SkImage, source: Rect, dest: Rect): void {
+  private drawImageRect(canvas: SkCanvas, image: SkImage, source: Rect, dest: Rect, opacity = 1): void {
     const paint = new this.canvasKit.Paint();
     paint.setAntiAlias?.(true);
+    if (opacity < 1) {
+      paint.setAlphaf(opacity);
+    }
     try {
       canvas.drawImageRect(image, source, dest, paint);
     } finally {

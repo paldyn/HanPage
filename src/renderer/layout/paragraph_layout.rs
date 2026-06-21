@@ -5351,6 +5351,7 @@ fn make_picture_image_node(
             effect: pic.image_attr.effect,
             brightness: pic.image_attr.brightness,
             contrast: pic.image_attr.contrast,
+            opacity: pic.image_attr.opacity(),
             text_wrap: Some(pic.common.text_wrap),
             transform: extract_shape_transform(&pic.shape_attr),
             external_path: pic.image_attr.external_path.clone(),

@@ -759,6 +759,10 @@ impl DocumentCore {
                 image.brightness, image.contrast
             );
             write_json_str(buf, wrap_str(wrap));
+            let opacity = image.opacity.clamp(0.0, 1.0);
+            if opacity < 1.0 {
+                let _ = write!(buf, ",\"opacity\":{:.6}", opacity);
+            }
 
             if let Some((left, top, right, bottom)) = image.crop {
                 let _ = write!(
@@ -773,6 +777,7 @@ impl DocumentCore {
                 contrast: image.contrast,
                 effect: image.effect,
                 bin_data_id: image.bin_data_id,
+                transparency: 0,
                 external_path: None,
             };
             if let Some(preset) = attr.watermark_preset() {

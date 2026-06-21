@@ -6256,6 +6256,7 @@ impl LayoutEngine {
                                     effect: pic.image_attr.effect,
                                     brightness: pic.image_attr.brightness,
                                     contrast: pic.image_attr.contrast,
+                                    opacity: pic.image_attr.opacity(),
                                     transform: utils::extract_shape_transform(&pic.shape_attr),
                                     // [Issue #1167] wrap 모드 보존 — SVG plane multi-pass z-order
                                     // 판별에 사용 (BehindText 워터마크가 본문 뒤로). PaintOp

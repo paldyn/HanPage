@@ -819,13 +819,19 @@ impl WebCanvasRenderer {
             }
             let needs_watermark_opacity =
                 preserve_color_watermark || (is_watermark_image && !baked_watermark);
-            if needs_watermark_opacity {
-                let opacity = if preserve_color_watermark {
+            let watermark_opacity = if needs_watermark_opacity {
+                if preserve_color_watermark {
                     REAL_PICTURE_WATERMARK_FILL_OPACITY
                 } else {
                     LEGACY_IMAGE_WATERMARK_OPACITY
-                };
-                self.ctx.set_global_alpha(opacity);
+                }
+            } else {
+                1.0
+            };
+            let combined_opacity =
+                (img.opacity.clamp(0.0, 1.0) * watermark_opacity).clamp(0.0, 1.0);
+            if combined_opacity < 1.0 {
+                self.ctx.set_global_alpha(combined_opacity);
             }
             self.draw_image_with_fill_mode(
                 render_data.as_ref(),
@@ -835,7 +841,7 @@ impl WebCanvasRenderer {
                 img.crop,
                 img.original_size_hu,
             );
-            if needs_watermark_opacity {
+            if combined_opacity < 1.0 {
                 self.ctx.set_global_alpha(1.0);
             }
             if filter_str.is_some() {
