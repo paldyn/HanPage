@@ -147,8 +147,10 @@ export class CanvasKitLayerRenderer {
       canvas.save();
       canvas.clear(this.color(hasPageBackground ? 'rgba(0,0,0,0)' : '#ffffff'));
       canvas.scale(scale, scale);
+      const rightOverflowSlop =
+        tree.outputOptions?.showParagraphMarks || tree.outputOptions?.showControlCodes ? 48 : undefined;
       for (const replayPlane of CANVASKIT_REPLAY_PLANES) {
-        this.renderNode(canvas, tree.root, tree.profile ?? 'screen', replayPlane);
+        this.renderNode(canvas, tree.root, tree.profile ?? 'screen', replayPlane, null, rightOverflowSlop);
       }
       if (pageInfo) {
         const paint = this.makeStrokePaint('#c0c0c0', 0.3);
@@ -233,16 +235,17 @@ export class CanvasKitLayerRenderer {
     profile: LayerRenderProfile,
     replayPlane: CanvasKitReplayPlane,
     inheritedLayer: LayerInfo | null = null,
+    rightOverflowSlop?: number,
   ): void {
     const activeLayer = node.layer ?? inheritedLayer;
     if (node.kind === 'group') {
       for (const child of node.children) {
-        this.renderNode(canvas, child, profile, replayPlane, activeLayer);
+        this.renderNode(canvas, child, profile, replayPlane, activeLayer, rightOverflowSlop);
       }
       return;
     }
     if (node.kind === 'clipRect') {
-      this.renderClipNode(canvas, node, profile, replayPlane, activeLayer);
+      this.renderClipNode(canvas, node, profile, replayPlane, activeLayer, rightOverflowSlop);
       return;
     }
     this.renderLeaf(canvas, node, replayPlane, activeLayer);
@@ -254,15 +257,16 @@ export class CanvasKitLayerRenderer {
     profile: LayerRenderProfile,
     replayPlane: CanvasKitReplayPlane,
     inheritedLayer: LayerInfo | null,
+    rightOverflowSlop?: number,
   ): void {
-    const pad = canvaskitClipRightPad(this.renderMode, profile, node.clipKind);
+    const pad = canvaskitClipRightPad(this.renderMode, profile, node.clipKind, rightOverflowSlop);
     const clip = {
       ...node.clip,
       width: node.clip.width + pad,
     };
     canvas.save();
     canvas.clipRect(this.rect(clip), this.canvasKit.ClipOp?.Intersect ?? 0, true);
-    this.renderNode(canvas, node.child, profile, replayPlane, inheritedLayer);
+    this.renderNode(canvas, node.child, profile, replayPlane, inheritedLayer, rightOverflowSlop);
     canvas.restore();
   }
 
@@ -665,11 +669,12 @@ export class CanvasKitLayerRenderer {
     }
 
     const crop = canvasKitImageSourceRect(imageWidth, imageHeight, op.crop);
+    const opacity = Number.isFinite(op.opacity) ? Math.max(0, Math.min(1, op.opacity ?? 1)) : 1;
     const drawImage = (dstX: number, dstY: number, dstW: number, dstH: number) => {
       const src = crop
         ? this.canvasKit.XYWHRect(crop.x, crop.y, crop.width, crop.height)
         : this.canvasKit.XYWHRect(0, 0, imageWidth, imageHeight);
-      this.drawImageRect(canvas, image, src, this.canvasKit.XYWHRect(dstX, dstY, dstW, dstH));
+      this.drawImageRect(canvas, image, src, this.canvasKit.XYWHRect(dstX, dstY, dstW, dstH), opacity);
     };
 
     const fillMode = op.fillMode ?? 'fitToSize';
@@ -697,9 +702,12 @@ export class CanvasKitLayerRenderer {
     }
   }
 
-  private drawImageRect(canvas: SkCanvas, image: SkImage, source: Rect, dest: Rect): void {
+  private drawImageRect(canvas: SkCanvas, image: SkImage, source: Rect, dest: Rect, opacity = 1): void {
     const paint = new this.canvasKit.Paint();
     paint.setAntiAlias?.(true);
+    if (opacity < 1) {
+      paint.setAlphaf(opacity);
+    }
     try {
       canvas.drawImageRect(image, source, dest, paint);
     } finally {

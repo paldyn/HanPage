@@ -488,6 +488,34 @@ export class WasmBridge {
     return JSON.parse(this.doc.getCursorRect(sec, para, charOffset));
   }
 
+  getCursorRectOnLine(
+    sec: number,
+    para: number,
+    lineIndex: number,
+    atEnd: boolean,
+    parentPara: number,
+    controlIdx: number,
+    cellIdx: number,
+    cellParaIdx: number,
+  ): CursorRect {
+    if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
+    const getRectOnLine = (this.doc as any).getCursorRectOnLine;
+    if (typeof getRectOnLine !== 'function') {
+      throw new Error('getCursorRectOnLine API를 사용할 수 없습니다');
+    }
+    return JSON.parse(getRectOnLine.call(
+      this.doc,
+      sec,
+      para,
+      lineIndex,
+      atEnd,
+      parentPara,
+      controlIdx,
+      cellIdx,
+      cellParaIdx,
+    ));
+  }
+
   hitTest(pageNum: number, x: number, y: number): HitTestResult {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
     return JSON.parse(this.doc.hitTest(pageNum, x, y));
@@ -873,10 +901,10 @@ export class WasmBridge {
    * 커서 위치에 그림을 삽입한다.
    *
    * @param cellPathJson 표 셀 안 삽입 시 cellPath JSON (#1151).
-   *   빈 문자열 또는 `'[]'` 면 본문 inline 삽입 (기존 동작, treat_as_char=true).
-   *   비어있지 않으면 셀 영역에 floating picture 삽입 (한컴 정합, tac=false,
-   *   wrap=Square, Page-relative offset). 셀 자체는 비어있는 채로 유지되어
-   *   클릭 시 cursor 가 정상 동작한다.
+   *   빈 문자열 또는 `'[]'` 면 본문 sibling floating picture 삽입
+   *   (한컴 정합, treat_as_char=false). 비어있지 않으면 셀 영역에 floating
+   *   picture 삽입 (tac=false, wrap=Square, Page-relative offset). 셀 자체는
+   *   비어있는 채로 유지되어 클릭 시 cursor 가 정상 동작한다.
    *   예: `JSON.stringify([{controlIndex:0, cellIndex:2, cellParaIndex:0}])`
    */
   insertPicture(sec: number, paraIdx: number, charOffset: number,
@@ -886,7 +914,7 @@ export class WasmBridge {
                 extension: string, description: string = '',
                 // [Task #1151 v8 결함 C] 사용자 클릭/드래그 paper-relative 좌표 (HU).
                 // 셀 floating 분기에서 사용. undefined 면 셀 좌상단 default (기존 동작).
-                paperOffsetXHu?: number, paperOffsetYHu?: number): { ok: boolean; paraIdx: number; controlIdx: number } {
+                paperOffsetXHu?: number, paperOffsetYHu?: number): { ok: boolean; paraIdx: number; controlIdx: number; logicalOffset?: number } {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
     return JSON.parse((this.doc as any).insertPicture(
       sec, paraIdx, charOffset, cellPathJson, imageData,
@@ -1598,6 +1626,12 @@ export class WasmBridge {
   setShowParagraphMarks(enabled: boolean): void {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
     this.doc.setShowParagraphMarks(enabled);
+  }
+
+  /** 문단부호 표시 여부 반환 */
+  getShowParagraphMarks(): boolean {
+    if (!this.doc) return false;
+    return (this.doc as any).getShowParagraphMarks();
   }
 
   /** 조판부호 표시 여부 반환 */

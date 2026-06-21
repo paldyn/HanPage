@@ -207,6 +207,7 @@ export class PicturePropsDialog {
   private picBrightnessInput!: HTMLInputElement;
   private picContrastInput!: HTMLInputElement;
   private picWatermarkCheck!: HTMLInputElement;
+  private picTransparencyInput!: HTMLInputElement;
 
   // ── 그림자 탭 컨트롤 ──
   private shadowTypeBtns: HTMLButtonElement[] = [];
@@ -1555,6 +1556,7 @@ export class PicturePropsDialog {
       if (this.picEffectRadios[0]) this.picEffectRadios[0].checked = true;
       this.picBrightnessInput.value = '0';
       this.picContrastInput.value = '0';
+      this.picTransparencyInput.value = '0';
     });
     this.sizeLockControls.push(resetBtn);
     ratioRow.appendChild(resetBtn);
@@ -1724,10 +1726,9 @@ export class PicturePropsDialog {
     panel.appendChild(transFs);
     const transRow = this.row();
     transRow.appendChild(this.label('투명도'));
-    const transInput = this.numberInput(0, 100, 1);
-    transInput.value = '0';
-    transInput.disabled = true;
-    transRow.appendChild(transInput);
+    this.picTransparencyInput = this.numberInput(0, 100, 1);
+    this.picTransparencyInput.value = '0';
+    transRow.appendChild(this.picTransparencyInput);
     transRow.appendChild(this.unit('%'));
     transFs.appendChild(transRow);
 
@@ -2204,6 +2205,10 @@ export class PicturePropsDialog {
         const ct = parseInt(this.picContrastInput.value) || 0;
         if (ct !== (pp.contrast ?? 0)) updated['contrast'] = ct;
       }
+      if (this.picTransparencyInput) {
+        const transparency = Math.max(0, Math.min(100, parseInt(this.picTransparencyInput.value) || 0));
+        if (transparency !== (pp.transparency ?? 0)) updated['transparency'] = transparency;
+      }
     }
 
     if (Object.keys(updated).length > 0) {
@@ -2494,6 +2499,10 @@ export class PicturePropsDialog {
       if (this.picContrastInput) this.picContrastInput.value = String(pp.contrast ?? 0);
       if (this.picWatermarkCheck) {
         this.picWatermarkCheck.checked = (pp.brightness === 70 && pp.contrast === -50);
+      }
+      if (this.picTransparencyInput) {
+        this.picTransparencyInput.value = String(pp.transparency ?? 0);
+        this.picTransparencyInput.disabled = false;
       }
     }
     this.updateSizeProtectControls();

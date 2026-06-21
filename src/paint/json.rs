@@ -865,12 +865,17 @@ impl PaintOp {
                     image.brightness,
                     image.contrast
                 );
+                let opacity = image.opacity.clamp(0.0, 1.0);
+                if opacity < 1.0 {
+                    let _ = write!(buf, ",\"opacity\":{:.6}", opacity);
+                }
                 // 워터마크 메타정보 (Task #516, AI 활용)
                 let attr = crate::model::image::ImageAttr {
                     brightness: image.brightness,
                     contrast: image.contrast,
                     effect: image.effect,
                     bin_data_id: image.bin_data_id,
+                    transparency: 0,
                     external_path: None,
                 };
                 if let Some(preset) = attr.watermark_preset() {

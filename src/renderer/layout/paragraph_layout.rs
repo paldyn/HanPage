@@ -267,6 +267,50 @@ fn tac_offsets_for_line(
         .collect()
 }
 
+fn repeated_empty_tac_line_offset(
+    comp: &ComposedParagraph,
+    tac_offsets_px: &[(usize, f64, usize)],
+    line_idx: usize,
+) -> Option<Vec<(usize, f64, usize)>> {
+    let line = comp.lines.get(line_idx)?;
+    if !line.runs.is_empty() {
+        return None;
+    }
+
+    let start = line.char_start;
+    let repeated_empty_line_count = comp
+        .lines
+        .iter()
+        .filter(|candidate| candidate.runs.is_empty() && candidate.char_start == start)
+        .count();
+    if repeated_empty_line_count <= 1 {
+        return None;
+    }
+
+    let line_ordinal = comp
+        .lines
+        .iter()
+        .take(line_idx)
+        .filter(|candidate| candidate.runs.is_empty() && candidate.char_start == start)
+        .count();
+    let line_tac_sequence = tac_offsets_px
+        .iter()
+        .copied()
+        .filter(|(pos, _, _)| *pos >= start && *pos < start + repeated_empty_line_count)
+        .collect::<Vec<_>>();
+
+    // 텍스트 없는 HWP 문단은 LINE_SEG 여러 줄이 같은 text_start 를 가질 수 있다.
+    // 이때 TAC 개수와 빈 줄 수가 정확히 맞으면 한 줄에 하나씩 순서대로 배정한다.
+    if line_tac_sequence.len() == repeated_empty_line_count {
+        line_tac_sequence
+            .get(line_ordinal)
+            .copied()
+            .map(|offset| vec![offset])
+    } else {
+        None
+    }
+}
+
 fn tac_picture_or_shape_height_px(ctrl: &Control, dpi: f64) -> Option<f64> {
     let height_hu = match ctrl {
         Control::Picture(pic) if pic.common.treat_as_char => pic.common.height as i32,
@@ -1759,7 +1803,12 @@ impl LayoutEngine {
                     }
                 })
                 .fold(0.0f64, f64::max);
-            let line_tac_offsets = tac_offsets_for_line(composed, &tac_offsets_px, line_idx);
+            let mut line_tac_offsets = tac_offsets_for_line(composed, &tac_offsets_px, line_idx);
+            if let Some(offsets) =
+                repeated_empty_tac_line_offset(composed, &tac_offsets_px, line_idx)
+            {
+                line_tac_offsets = offsets;
+            }
             let runs_all_whitespace = comp_line.runs.iter().all(|r| r.text.trim().is_empty());
             let mut line_tac_offsets_for_width = line_tac_offsets.clone();
             if cell_ctx.is_some()
@@ -3793,6 +3842,7 @@ impl LayoutEngine {
                         }
                         // tac 폭만큼 x 전진
                         x += tac_w;
+                        sub_char_offset += 1;
                         seg_start = tac_rel;
                     }
 
@@ -4030,6 +4080,8 @@ impl LayoutEngine {
 
             // runs가 비어있으면 빈 TextRun 생성 (빈 셀 편집용)
             if comp_line.runs.is_empty() {
+                let mut empty_line_mark_x = x_start;
+                let mut empty_line_logical_end = char_offset;
                 // runs가 없는 빈 줄에서 treat_as_char 이미지 렌더링
                 // 테이블 셀 내부에서는 table_layout.rs가 layout_picture로 이미 처리하므로 스킵.
                 // 셀 외부에서 해당 줄 범위에 걸린 TAC만 여기서 렌더링.
@@ -4066,6 +4118,8 @@ impl LayoutEngine {
                                         shape_y,
                                     );
                                     img_x += tac_w;
+                                    empty_line_mark_x = img_x;
+                                    empty_line_logical_end += 1;
                                     continue;
                                 }
                                 if let Control::Picture(pic) = ctrl {
@@ -4150,6 +4204,8 @@ impl LayoutEngine {
                                         img_y,
                                     );
                                     img_x += tac_w;
+                                    empty_line_mark_x = img_x;
+                                    empty_line_logical_end += 1;
                                 }
                             }
                         }
@@ -4168,7 +4224,7 @@ impl LayoutEngine {
                         para_shape_id: Some(composed.para_style_id),
                         section_index: Some(section_index),
                         para_index: Some(para_index),
-                        char_start: Some(char_offset),
+                        char_start: Some(empty_line_logical_end),
                         cell_context: cell_ctx.clone(),
                         is_para_end: is_last_line_of_para && !defer_empty_line_control_marker,
                         is_line_break_end: comp_line.has_line_break
@@ -4180,7 +4236,16 @@ impl LayoutEngine {
                         baseline,
                         field_marker: FieldMarkerType::None,
                     }),
-                    BoundingBox::new(x_start, y, available_width, line_flow_height),
+                    BoundingBox::new(
+                        empty_line_mark_x,
+                        y,
+                        if empty_line_mark_x > x_start {
+                            0.0
+                        } else {
+                            available_width
+                        },
+                        line_flow_height,
+                    ),
                 );
                 line_node.children.push(run_node);
             }
@@ -5351,6 +5416,7 @@ fn make_picture_image_node(
             effect: pic.image_attr.effect,
             brightness: pic.image_attr.brightness,
             contrast: pic.image_attr.contrast,
+            opacity: pic.image_attr.opacity(),
             text_wrap: Some(pic.common.text_wrap),
             transform: extract_shape_transform(&pic.shape_attr),
             external_path: pic.image_attr.external_path.clone(),

@@ -383,6 +383,17 @@ impl DocumentCore {
                     let ascent = font_size * 0.8;
                     let caret_y = node.bbox.y + text_run.baseline - ascent;
 
+                    if text_run.text.is_empty() && effective_char_count(text_run) == 0 {
+                        if let Some(char_start) = text_run.char_start {
+                            stops.entry(char_start).or_insert(CursorHit {
+                                page_index,
+                                x: node.bbox.x,
+                                y: caret_y,
+                                height: font_size.max(10.0),
+                            });
+                        }
+                    }
+
                     for (idx, ch) in run_chars.iter().enumerate() {
                         if *ch == '\u{fffc}' {
                             continue;
@@ -489,7 +500,12 @@ impl DocumentCore {
                         let text_mid = *text_y + *text_h / 2.0;
                         text_mid >= y && text_mid <= y + h
                     })
-                    .unwrap_or((y, h.max(10.0)));
+                    .unwrap_or_else(|| {
+                        let fallback_h = 12.0;
+                        let baseline = h * 0.85;
+                        let ascent = fallback_h * 0.8;
+                        (y + (baseline - ascent).max(0.0), fallback_h)
+                    });
 
                 stops.insert(
                     pos,
@@ -500,17 +516,60 @@ impl DocumentCore {
                         height: line_metrics.1,
                     },
                 );
-                stops.insert(
-                    pos + 1,
-                    CursorHit {
-                        page_index,
-                        x: x + w,
-                        y: line_metrics.0,
-                        height: line_metrics.1,
-                    },
-                );
+                stops.entry(pos + 1).or_insert(CursorHit {
+                    page_index,
+                    x: x + w,
+                    y: line_metrics.0,
+                    height: line_metrics.1,
+                });
             }
             inline_controls.sort_by_key(|&(ci, raw_pos, pos, _, _)| (raw_pos, pos, ci));
+
+            if para.text.is_empty()
+                && para
+                    .controls
+                    .iter()
+                    .all(|ctrl| matches!(ctrl, Control::Equation(_)))
+            {
+                let mut equation_controls = para
+                    .controls
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(ci, ctrl)| {
+                        if !matches!(ctrl, Control::Equation(_)) {
+                            return None;
+                        }
+                        let (x, y, w, h) = control_bboxes.get(&ci).copied()?;
+                        let raw_pos = raw_ctrl_positions.get(ci).copied().unwrap_or(ci);
+                        let pos = ctrl_positions.get(ci).copied().unwrap_or(ci);
+                        Some((ci, raw_pos, pos, x, y, w, h))
+                    })
+                    .collect::<Vec<_>>();
+                equation_controls.sort_by_key(|&(ci, raw_pos, pos, _, _, _, _)| (raw_pos, pos, ci));
+
+                for (slot, (_, _, _, x, y, w, h)) in equation_controls.iter().enumerate() {
+                    let fallback_h = 12.0;
+                    let baseline = *h * 0.85;
+                    let ascent = fallback_h * 0.8;
+                    let caret_y = *y + (baseline - ascent).max(0.0);
+                    if offset == slot * 2 {
+                        return Some(CursorHit {
+                            page_index,
+                            x: *x,
+                            y: caret_y,
+                            height: fallback_h,
+                        });
+                    }
+                    if offset == slot * 2 + 1 {
+                        return Some(CursorHit {
+                            page_index,
+                            x: *x + *w,
+                            y: caret_y,
+                            height: fallback_h,
+                        });
+                    }
+                }
+            }
 
             let para_chars: Vec<char> = para.text.chars().collect();
             for pair in inline_controls.windows(2) {
@@ -1542,6 +1601,64 @@ impl DocumentCore {
             }
         }
 
+        fn inline_image_caret_metrics(y: f64, h: f64) -> (f64, f64) {
+            let fallback_h = 12.0;
+            let baseline = h * 0.85;
+            let ascent = fallback_h * 0.8;
+            (y + (baseline - ascent).max(0.0), fallback_h)
+        }
+
+        fn collect_body_inline_image_hits(
+            core: &DocumentCore,
+            node: &RenderNode,
+            hits: &mut Vec<(usize, usize, usize, f64, f64, f64, f64)>,
+        ) {
+            if let RenderNodeType::Image(ref img) = node.node_type {
+                if img.cell_context.is_none() {
+                    if let (Some(si), Some(pi), Some(ci)) =
+                        (img.section_index, img.para_index, img.control_index)
+                    {
+                        let char_offset = core
+                            .document
+                            .sections
+                            .get(si)
+                            .and_then(|section| section.paragraphs.get(pi))
+                            .and_then(|para| find_logical_control_positions(para).get(ci).copied());
+                        if let Some(char_offset) = char_offset {
+                            hits.push((
+                                si,
+                                pi,
+                                char_offset,
+                                node.bbox.x,
+                                node.bbox.y,
+                                node.bbox.width,
+                                node.bbox.height,
+                            ));
+                        }
+                    }
+                }
+            }
+
+            for child in &node.children {
+                collect_body_inline_image_hits(core, child, hits);
+            }
+        }
+
+        fn format_body_inline_image_hit(
+            page_num: u32,
+            si: usize,
+            pi: usize,
+            offset: usize,
+            x: f64,
+            y: f64,
+            h: f64,
+        ) -> String {
+            format!(
+                "{{\"sectionIndex\":{},\"paragraphIndex\":{},\"charOffset\":{},\"cursorRect\":{{\"pageIndex\":{},\"x\":{:.1},\"y\":{:.1},\"height\":{:.1}}}}}",
+                si, pi, offset, page_num, x, y, h
+            )
+        }
+
         let mut runs: Vec<RunInfo> = Vec::new();
         let mut guide_runs: Vec<GuideRunInfo> = Vec::new();
         let mut cell_bboxes: Vec<CellBboxInfo> = Vec::new();
@@ -1627,6 +1744,46 @@ impl DocumentCore {
                 cb.parent_para_index = ctx.parent_para_index;
                 cb.control_index = outer.control_index;
                 cb.cell_index = ctx.innermost().cell_index;
+            }
+        }
+
+        let mut inline_image_hits = Vec::new();
+        collect_body_inline_image_hits(self, &tree.root, &mut inline_image_hits);
+        for (si, pi, char_offset, ix, iy, iw, ih) in inline_image_hits {
+            let (caret_y, caret_h) = inline_image_caret_metrics(iy, ih);
+            let right = ix + iw;
+            if x >= ix && x <= right && y >= iy && y <= iy + ih {
+                let offset = if x > ix + iw / 2.0 {
+                    char_offset + 1
+                } else {
+                    char_offset
+                };
+                let caret_x = if offset == char_offset { ix } else { right };
+                return Ok(format_body_inline_image_hit(
+                    page_num, si, pi, offset, caret_x, caret_y, caret_h,
+                ));
+            }
+            if x >= right && x <= right + caret_h && y >= caret_y && y <= caret_y + caret_h {
+                return Ok(format_body_inline_image_hit(
+                    page_num,
+                    si,
+                    pi,
+                    char_offset + 1,
+                    right,
+                    caret_y,
+                    caret_h,
+                ));
+            }
+            if x <= ix && x >= ix - caret_h && y >= caret_y && y <= caret_y + caret_h {
+                return Ok(format_body_inline_image_hit(
+                    page_num,
+                    si,
+                    pi,
+                    char_offset,
+                    ix,
+                    caret_y,
+                    caret_h,
+                ));
             }
         }
 

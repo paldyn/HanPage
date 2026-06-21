@@ -669,6 +669,8 @@ export interface PictureProperties {
   brightness: number;
   contrast: number;
   effect: string;
+  /** 그림 개체 전체 투명도. 한컴 UI 기준 0=불투명, 100=완전 투명. */
+  transparency?: number;
   description: string;
   rotationAngle: number;
   horzFlip: boolean;
@@ -1079,6 +1081,7 @@ export interface LayerImageOp {
   effect?: string;
   brightness?: number;
   contrast?: number;
+  opacity?: number;
   bakedWatermark?: boolean;
   wrap?: 'behindText' | 'inFrontOfText' | string;
   transform?: LayerPathTransform;

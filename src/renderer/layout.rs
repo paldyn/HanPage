@@ -6184,6 +6184,10 @@ impl LayoutEngine {
                         // 이미 ImageNode 가 emit 되어 inline_shape_position 이 등록된 경우,
                         // 여기서 또 push 하면 이중 emit 이 된다. 등록된 경우 push 를 스킵하고
                         // result_y 만 갱신한다.
+                        //
+                        // [Task #1452 Stage 6] FullParagraph 가 있는 문단은 paragraph_layout 이
+                        // TAC 그림을 줄 안에 배치한다. 위치 등록이 아직 안 보이는 순서여도
+                        // Shape fallback 을 그리면 같은 투명 그림이 한 번 더 합성된다.
                         let registered_inline_pos = tree.get_inline_shape_position(
                             page_content.section_index,
                             para_index,
@@ -6222,7 +6226,7 @@ impl LayoutEngine {
                             }
                         }
 
-                        if !already_registered {
+                        if !already_registered && !has_full_para_item {
                             let bin_data_id = pic.image_attr.bin_data_id;
                             let image_data = find_bin_data(bin_data_content, bin_data_id)
                                 .map(|c| c.data.clone());
@@ -6256,6 +6260,7 @@ impl LayoutEngine {
                                     effect: pic.image_attr.effect,
                                     brightness: pic.image_attr.brightness,
                                     contrast: pic.image_attr.contrast,
+                                    opacity: pic.image_attr.opacity(),
                                     transform: utils::extract_shape_transform(&pic.shape_attr),
                                     // [Issue #1167] wrap 모드 보존 — SVG plane multi-pass z-order
                                     // 판별에 사용 (BehindText 워터마크가 본문 뒤로). PaintOp
@@ -6322,7 +6327,7 @@ impl LayoutEngine {
                                     // 중간 picture: result_y = y_offset (그대로 유지, line 4527 의 default)
                                 }
                             }
-                        } else if !has_real_text && already_registered && !has_full_para_item {
+                        } else if !has_real_text && !has_full_para_item {
                             // [Task #418/#376] paragraph_layout 가 이미 emit 함 — push 스킵, result_y 만 갱신
                             // [Task #462] 동일하게 LINE_SEG 기반 advance 사용
                             // [Task #1151 v9 결함 D] 가로 분배 시퀀스의 중간 picture 는 result_y

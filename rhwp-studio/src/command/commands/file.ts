@@ -10,6 +10,7 @@ import {
   type PrintPage,
 } from '@/command/print-pages';
 import {
+  canUseOpenFilePicker,
   pickOpenFileHandle,
   readFileFromHandle,
   saveDocumentToFileSystem,
@@ -196,8 +197,13 @@ export const fileCommands: CommandDef[] = [
         const canReplace = await confirmSaveBeforeReplacingDocument(services);
         if (!canReplace) return;
 
-        const handle = await pickOpenFileHandle(window as FileSystemWindowLike);
+        const windowLike = window as FileSystemWindowLike;
+        const nativeOpenPickerAvailable = canUseOpenFilePicker(windowLike);
+        const handle = await pickOpenFileHandle(windowLike);
         if (!handle) {
+          // File System Access API picker가 있었다면 null은 사용자 취소(예: Esc)다.
+          // 이때 숨김 input fallback을 다시 열면 파일 선택창이 곧바로 재오픈된다.
+          if (nativeOpenPickerAvailable) return;
           const fileInput = document.getElementById('file-input') as HTMLInputElement | null;
           if (fileInput) {
             fileInput.dataset.skipUnsavedGuard = 'true';

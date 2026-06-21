@@ -21995,7 +21995,9 @@ fn test_create_inline_tac_table() {
         .unwrap();
 
     // Enter → pi=2
-    let pi1_len = doc.document.sections[0].paragraphs[1].text.chars().count();
+    let pi1_len = crate::document_core::helpers::logical_paragraph_length(
+        &doc.document.sections[0].paragraphs[1],
+    );
     doc.split_paragraph_native(0, 1, pi1_len).unwrap();
     // pi=2에 텍스트
     doc.insert_text_native(0, 2, 0, "tacglkj 가나 옮").unwrap();

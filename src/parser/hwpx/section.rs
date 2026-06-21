@@ -2397,6 +2397,10 @@ fn parse_picture(
                                 }
                                 b"bright" => img_attr.brightness = parse_i8(&attr),
                                 b"contrast" => img_attr.contrast = parse_i8(&attr),
+                                b"alpha" => {
+                                    img_attr.transparency =
+                                        parse_picture_transparency_attr(&attr_str(&attr));
+                                }
                                 b"effect" => {
                                     img_attr.effect = match attr_str(&attr).as_str() {
                                         "REAL_PIC" => ImageEffect::RealPic,
@@ -2535,6 +2539,21 @@ fn parse_picture_shadow(
     }
 
     Ok(shadow)
+}
+
+fn parse_picture_transparency_attr(raw: &str) -> u8 {
+    let Ok(value) = raw.trim().parse::<f64>() else {
+        return 0;
+    };
+    if !value.is_finite() {
+        return 0;
+    }
+    if value <= 1.0 {
+        (value * 100.0).round().clamp(0.0, 100.0) as u8
+    } else {
+        let alpha = value.clamp(0.0, 255.0).round() as u8;
+        crate::model::image::alpha_byte_to_transparency_percent(alpha)
+    }
 }
 
 fn parse_picture_shadow_attrs(e: &quick_xml::events::BytesStart<'_>) -> PictureShadow {

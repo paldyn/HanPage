@@ -5,6 +5,7 @@ import { MoveTableCommand, MovePictureCommand, MoveShapeCommand } from './comman
 import { getObjectProperties, setObjectProperties } from './input-handler-picture';
 import type { CellBbox } from '@/core/types';
 import type { BorderEdge } from './table-resize-renderer';
+import { showToast } from '@/ui/toast';
 
 const MIN_TABLE_CELL_SIZE_HWP = 200;
 
@@ -1081,7 +1082,15 @@ export function finishImagePlacement(this: any, e: MouseEvent): void {
 
   // 클릭 위치에서 hitTest → 삽입할 문단 결정
   const hit = this.hitTestFromEvent(e);
-  if (!hit) { this.cancelImagePlacement(); return; }
+  if (!hit) {
+    this.imagePlacementDrag = null;
+    this.container.style.cursor = 'crosshair';
+    showToast({
+      message: '그림을 넣을 문단을 찾지 못했습니다.\n문서 본문이나 표 셀 안쪽을 다시 클릭하세요.',
+      durationMs: 5000,
+    });
+    return;
+  }
 
   const sec = hit.sectionIndex;
   // 표 셀/글상자 안 클릭: cellPath 와 parentParaIndex (= 소유 본문 paragraph) 를 사용한다.
@@ -1187,9 +1196,21 @@ export function finishImagePlacement(this: any, e: MouseEvent): void {
     );
     if (result.ok) {
       this.eventBus.emit('document-changed');
+    } else {
+      const msg = (result as any).error || '삽입 위치 또는 이미지 정보를 확인할 수 없습니다.';
+      console.warn('[InputHandler] 그림 삽입 실패:', result);
+      showToast({
+        message: `그림 삽입에 실패했습니다.\n${msg}`,
+        durationMs: 6000,
+      });
     }
   } catch (err) {
     console.warn('[InputHandler] 그림 삽입 실패:', err);
+    const msg = err instanceof Error ? err.message : String(err);
+    showToast({
+      message: `그림 삽입에 실패했습니다.\n${msg}`,
+      durationMs: 6000,
+    });
   }
 
   // 모드 종료
