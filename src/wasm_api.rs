@@ -290,6 +290,12 @@ impl HwpDocument {
         self.invalidate_page_tree_cache();
     }
 
+    /// 문단부호(¶) 표시 여부를 반환한다.
+    #[wasm_bindgen(js_name = getShowParagraphMarks)]
+    pub fn get_show_paragraph_marks(&self) -> bool {
+        self.show_paragraph_marks
+    }
+
     /// 조판부호 표시 여부를 반환한다.
     #[wasm_bindgen(js_name = getShowControlCodes)]
     pub fn get_show_control_codes(&self) -> bool {
@@ -1858,6 +1864,43 @@ impl HwpDocument {
             section_idx as usize,
             para_idx as usize,
             char_offset as usize,
+        )
+        .map_err(|e| e.into())
+    }
+
+    /// 줄 경계 offset을 특정 시각 줄 기준으로 해석한 커서 좌표를 반환한다.
+    ///
+    /// `at_end=false`이면 lineIndex 줄의 시작, `at_end=true`이면 lineIndex 줄의 끝을 반환한다.
+    /// soft-wrap 경계에서는 같은 charOffset이 이전 줄 끝과 다음 줄 시작을 동시에 뜻할 수 있어
+    /// Home/End가 이 API로 시각 줄 affinity를 명시한다.
+    #[wasm_bindgen(js_name = getCursorRectOnLine)]
+    pub fn get_cursor_rect_on_line(
+        &self,
+        section_idx: u32,
+        para_idx: u32,
+        line_index: u32,
+        at_end: bool,
+        parent_para_idx: u32,
+        control_idx: u32,
+        cell_idx: u32,
+        cell_para_idx: u32,
+    ) -> Result<String, JsValue> {
+        let cell_ctx = if parent_para_idx == u32::MAX {
+            None
+        } else {
+            Some((
+                parent_para_idx as usize,
+                control_idx as usize,
+                cell_idx as usize,
+                cell_para_idx as usize,
+            ))
+        };
+        self.get_cursor_rect_on_line_native(
+            section_idx as usize,
+            para_idx as usize,
+            line_index as usize,
+            at_end,
+            cell_ctx,
         )
         .map_err(|e| e.into())
     }

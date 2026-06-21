@@ -3,7 +3,7 @@
 use super::super::helpers::{
     border_line_type_to_u8_val, clipboard_color_to_css, clipboard_escape_html, color_ref_to_css,
     detect_clipboard_image_mime, get_textbox_from_shape, get_textbox_from_shape_mut,
-    utf16_pos_to_char_idx,
+    text_to_logical_offset, utf16_pos_to_char_idx,
 };
 use super::super::queries::field_query::rebuild_char_offsets;
 use crate::document_core::{ClipboardData, DocumentCore};
@@ -103,7 +103,8 @@ fn clip_paragraph_text_range_for_clipboard(
 
     let mut clipped = source.clone();
     if end < text_len {
-        let _ = clipped.split_at(end);
+        let end_logical = text_to_logical_offset(&clipped, end);
+        let _ = clipped.split_at(end_logical);
     }
     if start == 0 {
         return clipped;
@@ -114,7 +115,8 @@ fn clip_paragraph_text_range_for_clipboard(
     let old_records = clipped.ctrl_data_records.clone();
     let old_ranges = clipped.field_ranges.clone();
 
-    let mut suffix = clipped.split_at(start);
+    let start_logical = text_to_logical_offset(&clipped, start);
+    let mut suffix = clipped.split_at(start_logical);
     let mut keep_control = vec![false; old_controls.len()];
 
     for range in &old_ranges {

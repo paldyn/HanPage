@@ -18,6 +18,7 @@ import type {
   FormObjectHitResult,
   LayerNode,
   LayerTextRunOp,
+  PageInfo,
 } from '@/core/types';
 import type { CommandDispatcher } from '@/command/dispatcher';
 import type { EditorEditMode } from '@/command/types';
@@ -34,6 +35,7 @@ import * as _table from './input-handler-table';
 import * as _keyboard from './input-handler-keyboard';
 import * as _text from './input-handler-text';
 import * as _picture from './input-handler-picture';
+import { computeHangingIndentPx } from './hanging-indent';
 import { isPageLocalTextEditCommand } from './input-edit-invalidation';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -41,11 +43,18 @@ const DRAG_SCROLL_EDGE_PX = 48;
 const DRAG_SCROLL_MIN_STEP_PX = 2;
 const DRAG_SCROLL_MAX_STEP_PX = 20;
 const PX_TO_RAW_2X = 150;
+const PX_TO_HWPUNIT = 75;
 
 type FormatCopyState = {
   charProps: Partial<CharProperties>;
   paraProps: Partial<ParaProperties>;
   cellProps?: Partial<CellProperties>;
+};
+
+type PagePoint = {
+  pageIdx: number;
+  pageX: number;
+  pageY: number;
 };
 
 const FORMAT_COPY_CHAR_KEYS: Array<keyof CharProperties> = [
@@ -135,7 +144,49 @@ function pxToRaw2x(px: number): number {
 }
 
 function pxToRaw(px: number): number {
-  return Math.round(px * 75);
+  return Math.round(px * PX_TO_HWPUNIT);
+}
+
+function availableDropWidthPx(pageInfo: PageInfo, pageX: number): number {
+  const bodyWidth = Math.max(1, pageInfo.width - pageInfo.marginLeft - pageInfo.marginRight);
+  const columns = pageInfo.columns?.filter((column) => column.width > 0) ?? [];
+  if (columns.length === 0) return bodyWidth;
+
+  const containing = columns.find((column) => pageX >= column.x && pageX <= column.x + column.width);
+  if (containing) return Math.min(containing.width, bodyWidth);
+
+  const nearest = columns.reduce((best, column) => {
+    const bestCenter = best.x + best.width / 2;
+    const columnCenter = column.x + column.width / 2;
+    return Math.abs(columnCenter - pageX) < Math.abs(bestCenter - pageX) ? column : best;
+  }, columns[0]);
+  return Math.min(nearest.width, bodyWidth);
+}
+
+function fitDroppedImageSizeRaw(
+  naturalWidth: number,
+  naturalHeight: number,
+  pageInfo: PageInfo | null,
+  pageX: number,
+): { width: number; height: number } {
+  const originalWidth = Math.round(naturalWidth * PX_TO_HWPUNIT);
+  const originalHeight = Math.round(naturalHeight * PX_TO_HWPUNIT);
+  if (!pageInfo || originalWidth <= 0 || originalHeight <= 0) {
+    return { width: originalWidth, height: originalHeight };
+  }
+
+  const maxWidth = Math.floor(availableDropWidthPx(pageInfo, pageX) * PX_TO_HWPUNIT);
+  const maxHeight = Math.floor(
+    Math.max(1, pageInfo.height - pageInfo.marginTop - pageInfo.marginBottom) * PX_TO_HWPUNIT,
+  );
+  const scale = Math.min(1, maxWidth / originalWidth, maxHeight / originalHeight);
+  if (!Number.isFinite(scale) || scale <= 0) {
+    return { width: originalWidth, height: originalHeight };
+  }
+  return {
+    width: Math.max(1, Math.round(originalWidth * scale)),
+    height: Math.max(1, Math.round(originalHeight * scale)),
+  };
 }
 
 function normalizeFormatCopyParaProps(props: Partial<ParaProperties>): Partial<ParaProperties> {
@@ -530,6 +581,11 @@ export class InputHandler {
       }
     });
 
+    eventBus.on('document-view-changed', () => {
+      if (!this.active) return;
+      requestAnimationFrame(() => this.updateCaret(true));
+    });
+
     // 표 객체 선택 변경 시 렌더링
     eventBus.on('table-object-selection-changed', (selected) => {
       if (selected) {
@@ -646,6 +702,112 @@ export class InputHandler {
     this.imagePlacementData = { data, ext, fileName, naturalWidth, naturalHeight };
     this.imagePlacementDrag = null;
     this.container.style.cursor = 'crosshair';
+  }
+
+  /** 외부 파일 드롭 그림 삽입: 한컴처럼 원본 크기, 글자처럼 취급으로 바로 넣는다. */
+  insertDroppedImageAtClientPoint(
+    data: Uint8Array,
+    ext: string,
+    naturalWidth: number,
+    naturalHeight: number,
+    fileName: string,
+    clientX: number,
+    clientY: number,
+  ): { ok: boolean; error?: string } {
+    const pagePoint = this.pagePointFromClientPoint(clientX, clientY);
+    if (!pagePoint) {
+      return { ok: false, error: '그림을 넣을 문단을 찾지 못했습니다.' };
+    }
+    if (naturalWidth <= 0 || naturalHeight <= 0) {
+      return { ok: false, error: '이미지 크기를 확인할 수 없습니다.' };
+    }
+
+    let hit: DocumentPosition | null = null;
+    try {
+      hit = this.wasm.hitTest(pagePoint.pageIdx, pagePoint.pageX, pagePoint.pageY);
+    } catch {
+      hit = null;
+    }
+    if (!hit) {
+      return { ok: false, error: '그림을 넣을 문단을 찾지 못했습니다.' };
+    }
+
+    const sec = hit.sectionIndex;
+    const isTextBoxHit = hit.isTextBox === true;
+    const hasPath = (hit.cellPath?.length ?? 0) > 0 && hit.parentParaIndex !== undefined;
+    const inCell = hasPath && !isTextBoxHit;
+    const inTextBox = hasPath && isTextBoxHit;
+    const paraIdx = (inCell || inTextBox) && hit.parentParaIndex !== undefined
+      ? hit.parentParaIndex
+      : hit.paragraphIndex;
+    const cellPath = (inCell || inTextBox) ? hit.cellPath ?? [] : [];
+    const cellPathJson = cellPath.length > 0 ? JSON.stringify(cellPath) : '';
+    const pageInfo = this.getPageInfoForDrop(pagePoint.pageIdx);
+    const { width, height } = fitDroppedImageSizeRaw(naturalWidth, naturalHeight, pageInfo, pagePoint.pageX);
+    const desc =
+      `그림입니다.\r\n원본 그림의 이름: ${fileName}\r\n원본 그림의 크기: 가로 ${naturalWidth}pixel, 세로 ${naturalHeight}pixel`;
+
+    try {
+      const result = this.wasm.insertPicture(
+        sec,
+        paraIdx,
+        hit.charOffset,
+        cellPathJson,
+        data,
+        width,
+        height,
+        naturalWidth,
+        naturalHeight,
+        ext,
+        desc,
+        undefined,
+        undefined,
+      );
+      if (!result.ok) {
+        return {
+          ok: false,
+          error: (result as any).error || '삽입 위치 또는 이미지 정보를 확인할 수 없습니다.',
+        };
+      }
+
+      const logicalOffset = typeof result.logicalOffset === 'number'
+        ? result.logicalOffset
+        : hit.charOffset + 1;
+      const cursorAfter: DocumentPosition = inTextBox
+        ? { ...hit, charOffset: logicalOffset }
+        : {
+            sectionIndex: sec,
+            paragraphIndex: result.paraIdx ?? paraIdx,
+            charOffset: logicalOffset,
+          };
+
+      if (inTextBox && cellPath.length > 0) {
+        this.wasm.setCellPicturePropertiesByPath(
+          sec,
+          paraIdx,
+          cellPath,
+          result.controlIdx,
+          { treatAsChar: true },
+        );
+      } else {
+        this.wasm.setPictureProperties(
+          sec,
+          result.paraIdx ?? paraIdx,
+          result.controlIdx,
+          { treatAsChar: true },
+        );
+      }
+      this.cursor.clearSelection();
+      this.cursor.moveTo(cursorAfter);
+      this.cursor.resetPreferredX();
+      this.active = true;
+      this.afterEdit();
+      this.focusTextarea();
+      return { ok: true };
+    } catch (err) {
+      console.warn('[InputHandler] 드롭 그림 삽입 실패:', err);
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
   }
 
   /** 그림 배치 모드 취소 */
@@ -1152,6 +1314,16 @@ export class InputHandler {
 
   /** 화면 좌표에서 hitTest 결과를 반환한다 */
   private hitTestFromClientPoint(clientX: number, clientY: number): DocumentPosition | null {
+    const pagePoint = this.pagePointFromClientPoint(clientX, clientY);
+    if (!pagePoint) return null;
+    try {
+      return this.wasm.hitTest(pagePoint.pageIdx, pagePoint.pageX, pagePoint.pageY);
+    } catch {
+      return null;
+    }
+  }
+
+  private pagePointFromClientPoint(clientX: number, clientY: number): PagePoint | null {
     const zoom = this.viewportManager.getZoom();
     const scrollContent = this.container.querySelector('#scroll-content');
     if (!scrollContent) return null;
@@ -1162,12 +1334,15 @@ export class InputHandler {
     const contentY = clientY - contentRect.top;
     const pageIdx = this.virtualScroll.getPageAtPoint(contentX, contentY);
     const pageOffset = this.virtualScroll.getPageOffset(pageIdx);
-    const pageDisplayWidth = this.virtualScroll.getPageWidth(pageIdx);
     const pageLeft = this.virtualScroll.getPageLeftResolved(pageIdx, scrollContent.clientWidth);
     const pageX = (contentX - pageLeft) / zoom;
     const pageY = (contentY - pageOffset) / zoom;
+    return { pageIdx, pageX, pageY };
+  }
+
+  private getPageInfoForDrop(pageIdx: number): PageInfo | null {
     try {
-      return this.wasm.hitTest(pageIdx, pageX, pageY);
+      return this.wasm.getPageInfo(pageIdx);
     } catch {
       return null;
     }
@@ -1732,7 +1907,7 @@ export class InputHandler {
     return targets;
   }
 
-  /** 한컴식 Shift+Tab: 현재 커서 x 위치를 기준으로 문단 내어쓰기를 설정한다. */
+  /** 한컴식 Shift+Tab: 첫 줄 시작 위치를 기준으로 문단 내어쓰기를 설정한다. */
   applyHangingIndentAtCursor(): boolean {
     if (this.cursor.isInHeaderFooter() || this.cursor.isInFootnote()) {
       console.info('[InputHandler] Shift+Tab hanging indent: unsupported note/header context');
@@ -1747,7 +1922,7 @@ export class InputHandler {
 
     try {
       let cursorRect: CursorRect | null = this.cursor.getRect();
-      let lineStartRect: CursorRect;
+      let firstLineStartRect: CursorRect;
 
       if (pos.parentParaIndex !== undefined) {
         const pathEntry = pos.cellPath?.[0];
@@ -1760,22 +1935,22 @@ export class InputHandler {
           return false;
         }
 
-        const lineInfo = this.wasm.getLineInfoInCell(
+        const firstLineInfo = this.wasm.getLineInfoInCell(
           pos.sectionIndex,
           pos.parentParaIndex,
           controlIndex,
           cellIndex,
           cellParaIndex,
-          pos.charOffset,
+          0,
         );
 
         if (pos.cellPath?.length === 1) {
           const pathJson = JSON.stringify(pos.cellPath);
-          lineStartRect = this.wasm.getCursorRectByPath(
+          firstLineStartRect = this.wasm.getCursorRectByPath(
             pos.sectionIndex,
             pos.parentParaIndex,
             pathJson,
-            lineInfo.charStart,
+            firstLineInfo.charStart,
           );
           cursorRect ??= this.wasm.getCursorRectByPath(
             pos.sectionIndex,
@@ -1784,13 +1959,13 @@ export class InputHandler {
             pos.charOffset,
           );
         } else {
-          lineStartRect = this.wasm.getCursorRectInCell(
+          firstLineStartRect = this.wasm.getCursorRectInCell(
             pos.sectionIndex,
             pos.parentParaIndex,
             controlIndex,
             cellIndex,
             cellParaIndex,
-            lineInfo.charStart,
+            firstLineInfo.charStart,
           );
           cursorRect ??= this.wasm.getCursorRectInCell(
             pos.sectionIndex,
@@ -1802,7 +1977,7 @@ export class InputHandler {
           );
         }
 
-        const hangingPx = Math.max(0, cursorRect.x - lineStartRect.x);
+        const hangingPx = computeHangingIndentPx(cursorRect.x, firstLineStartRect.x);
         this.executeParaFormatCommand(
           [{
             kind: 'cell',
@@ -1817,15 +1992,15 @@ export class InputHandler {
         return true;
       }
 
-      const lineInfo = this.wasm.getLineInfo(pos.sectionIndex, pos.paragraphIndex, pos.charOffset);
-      lineStartRect = this.wasm.getCursorRect(
+      const firstLineInfo = this.wasm.getLineInfo(pos.sectionIndex, pos.paragraphIndex, 0);
+      firstLineStartRect = this.wasm.getCursorRect(
         pos.sectionIndex,
         pos.paragraphIndex,
-        lineInfo.charStart,
+        firstLineInfo.charStart,
       );
       cursorRect ??= this.wasm.getCursorRect(pos.sectionIndex, pos.paragraphIndex, pos.charOffset);
 
-      const hangingPx = Math.max(0, cursorRect.x - lineStartRect.x);
+      const hangingPx = computeHangingIndentPx(cursorRect.x, firstLineStartRect.x);
       this.executeParaFormatCommand(
         [{ kind: 'body', sec: pos.sectionIndex, para: pos.paragraphIndex }],
         { indent: -pxToRaw2x(hangingPx) },
