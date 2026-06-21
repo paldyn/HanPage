@@ -8,11 +8,13 @@
 //! - `c:barChart` (세로/가로 막대)
 //! - `c:lineChart` (꺾은선)
 //! - `c:pieChart` (원형)
+//! - `c:bar3DChart`·`c:pie3DChart`·`c:ofPieChart` — **2D 근사 라우팅** (C1a #1453):
+//!   3D막대→평면 막대, 3D원형/ofPie→단일 원형. 입체감·보조플롯은 미표현(후속 C2).
 //! - **콤보 차트** (barChart + lineChart 혼합) — 시리즈별 타입 보존
 //! - **이중 Y축** (primary + secondary) — 시리즈별 축 그룹 매핑
 //!
 //! ## 범위 외
-//! - 3D 차트, 영역/산점도, 추세선, 애니메이션, 세밀 스타일
+//! - 3D 입체감·ofPie 보조플롯, 영역/산점도, stock(HLC), 추세선, 애니메이션, 세밀 스타일
 
 pub mod parser;
 pub mod renderer;
