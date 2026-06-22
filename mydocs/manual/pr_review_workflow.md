@@ -10,10 +10,11 @@
 
 rhwp 는 v0.2.1 사이클부터 외부 기여자 PR 이 급증했다. 하이퍼-워터폴 방법론에 맞춰 **PR 처리도 표준화된 절차** 로 운영한다. 본 매뉴얼의 기본 경로는 외부 PR 도착 시 메인테이너가 따르는 순서를 기록한다.
 
-운영 경로는 다음 두 가지로 구분한다.
+운영 경로는 다음 세 가지로 구분한다.
 
 - **maintainer 일반 경로**: 메인테이너가 외부 기여자 PR 을 검토, merge, 후속 보고한다. 이 문서의 기본 절차다.
 - **collaborator self-merge 후보 예외 경로**: collaborator 가 본인 PR 을 merge 후보로 준비하면서 review 문서를 PR head 에 포함하는 경우다. 이 경로는 8장 조건을 만족할 때만 적용한다.
+- **collaborator-mediated 외부 PR 경로**: 외부 contributor PR 을 repository collaborator 가 검토·merge 준비하면서 review 문서를 PR head 에 포함하는 경우다. 이 경로는 9장 조건을 만족할 때만 적용한다.
 
 명령 예시는 원본 저장소 remote 가 `upstream` 인 현재 로컬 checkout 기준이다. 원본 저장소를 `origin` 으로 둔 maintainer checkout 에서는 같은 명령의 remote 이름만 `origin` 으로 치환한다.
 
@@ -52,8 +53,9 @@ mydocs/pr/pr_{N}_review.md
 mydocs/pr/pr_{N}_review_impl.md
 ```
 
-처리 완료 후 7.5 절에서 `mydocs/pr/archives/` 로 이동한다. collaborator self-merge 후보처럼
-처음부터 archive 경로에 작성하는 방식은 8장 예외 경로에서만 사용한다.
+처리 완료 후 7.5 절에서 `mydocs/pr/archives/` 로 이동한다. collaborator self-merge 후보 또는
+collaborator-mediated 외부 PR 처럼 처음부터 archive 경로에 작성하는 방식은 8장·9장 예외 경로에서만
+사용한다.
 
 ### 3.1 리뷰 문서 (`pr_N_review.md`)
 
@@ -312,7 +314,92 @@ collaborator self-merge 후보라도 최종 merge 판단은 다음 조건을 모
 `draft`, `mergeable`, `head SHA`, `CI 상태`는 3.3 절에 따라 작성 시점 참고값 또는 merge 전 최신 확인
 조건으로만 기록한다.
 
-## 9. 재작업 요청 패턴
+## 9. Collaborator-Mediated 외부 PR 처리 경로
+
+이 절은 외부 contributor PR 을 repository collaborator 가 검토하고 merge 준비하는 경우에 적용한다.
+maintainer 일반 경로를 대체하지 않으며, 별도 문서 PR 을 만들지 않기 위해 review 문서를 해당 PR head 에
+포함하는 예외 경로다.
+
+이 경로가 필요한 이유는 collaborator 권한 모델 때문이다. collaborator 는 원본 저장소 `devel` 에 직접
+문서 커밋을 push 하지 않고 PR 을 통해서만 변경을 반영한다. 따라서 외부 PR 을 merge 한 뒤
+`pr_{N}_report.md` 만 별도 문서 PR 로 올리는 방식은 PR 처리 비용을 불필요하게 늘린다. 또한 문서만 있는 PR 은
+CI `paths-ignore` 조건 때문에 핵심 검증이 실행되지 않을 수 있어, "처리 후 report 작성 -> 별도 문서 PR merge" 를
+기본 흐름으로 삼지 않는다.
+
+실제 선례:
+
+- PR #1376: `mrshinds` 외부 PR 에 maintainer 보정·review 문서·오늘할일을 PR head 에 포함한 뒤 merge
+- PR #1429: `seo-rii` 외부 PR 에 review 문서·오늘할일을 PR head 에 포함한 뒤 merge
+- PR #1447: `seo-rii` 외부 PR 에 review/report 문서·오늘할일을 PR head 에 포함한 뒤 merge
+
+### 9.1 적용 조건
+
+- PR 작성자는 외부 contributor 이다.
+- repository collaborator 가 리뷰, 문서화, merge 준비를 담당한다.
+- GitHub PR 의 `maintainer_can_modify` 가 `true` 이거나, contributor 가 collaborator 의 문서 커밋 push 를
+  명시적으로 허용한다.
+- review 문서만 별도 PR 로 만들지 않기 위해 PR head 에 운영 문서를 포함하는 편이 더 단순하다.
+- 작업지시자 승인 전에는 GitHub review approval, ready 전환, merge 판단을 완료하지 않는다.
+
+`maintainer_can_modify=false` 이면 이 경로를 쓰지 않는다. 이 경우 maintainer 일반 경로로 active review 문서를
+작성하거나, 작업지시자 지시에 따라 별도 문서 커밋/PR 로 처리한다.
+
+### 9.2 문서 경로
+
+collaborator-mediated 외부 PR 에서는 PR head 에 다음 문서를 직접 포함할 수 있다.
+
+```text
+mydocs/pr/archives/pr_{N}_review.md
+mydocs/pr/archives/pr_{N}_review_impl.md   # 필요 시
+mydocs/pr/archives/pr_{N}_report.md        # 필요 시, 사전 처리 판단 보고서로 작성
+```
+
+오늘할일 갱신이 필요한 경우 `mydocs/orders/{yyyymmdd}.md` 도 같은 PR head 에 포함한다.
+
+단순·소형 PR 은 `pr_{N}_review.md` 안에 처리 계획을 포함하고 별도 `review_impl` 을 생략할 수 있다.
+`pr_{N}_report.md` 를 함께 포함할 때는 merge 완료 후 사후 보고서가 아니라 **사전 처리 판단 보고서**로 작성한다.
+따라서 아직 확정되지 않은 merge SHA, 실제 merge 시각, 이슈 close 완료 여부를 단정하지 않는다. 대신 다음을
+기록한다.
+
+- merge 수용/보류/재작업 권고와 사유
+- merge 전 최종 조건
+- merge 후 확인해야 할 이슈 close, 감사 코멘트, 후속 작업
+
+merge 완료 사실과 이슈 close 결과는 GitHub PR/Issue metadata 를 원천 기록으로 삼고, 별도 문서 PR 을 만들지
+않는다. 사후에 반드시 장기 보관 보고서가 필요한 예외는 작업지시자 승인 후 별도 PR 로 처리한다.
+
+### 9.3 PR head push 규칙
+
+외부 contributor 브랜치에 collaborator 가 커밋을 얹을 때는 다음을 지킨다.
+
+- contributor 의 원 코드 커밋을 rewrite 하지 않는다.
+- review 문서, 오늘할일, maintainer 보정 코드는 별도 커밋으로 분리한다.
+- maintainer 보정 코드가 포함되면 review 문서에 contributor 원 변경과 collaborator 추가 변경을 구분한다.
+- 문서 커밋 push 후 GitHub Actions 재실행을 기다린다.
+
+예시:
+
+```bash
+git fetch upstream pull/N/head:local/prN
+git checkout local/prN
+# review 문서 작성 및 검증
+git commit -m "docs: PR #N 검토 기록"
+git push https://github.com/{contributor}/rhwp.git HEAD:{head-branch}
+```
+
+### 9.4 merge 전 최종 조건
+
+- PR head 최신 커밋 기준 GitHub Actions 통과
+- review 문서가 PR diff 에 포함됨
+- `pr_{N}_report.md` 를 작성한 경우 사전 판단 보고서 형식이며, merge 후 사실을 미리 단정하지 않음
+- GitHub review 또는 PR comment 로 검토 결과를 contributor 에게 남김
+- merge 전 최신 `mergeable` / `mergeStateStatus` 재확인
+- 작업지시자 승인
+
+이 경로로 merge 한 뒤에는 7장 후속 처리를 동일하게 수행한다. 특히 `devel` 이 default branch 가 아니어서
+`closes #N` 자동 close 가 실패할 수 있으므로 관련 이슈 state 를 반드시 확인한다.
+
+## 10. 재작업 요청 패턴
 
 리뷰 결과 **재작업이 필요**한 PR (예: base 가 main, 메타 변경 혼입, 관련 이슈 없음 등):
 
@@ -328,15 +415,15 @@ collaborator self-merge 후보라도 최종 merge 판단은 다음 조건을 모
 - **재제출 경로는 명확**: "feature 브랜치에서 devel 타깃으로 재제출 부탁드립니다"
 - **크레딧 약속**: "재제출 시 PR description / commit author 보존 그대로"
 
-## 10. 예외 케이스
+## 11. 예외 케이스
 
-### 10.1 Dependabot PR
+### 11.1 Dependabot PR
 
 `dependabot/npm_and_yarn/...` 브랜치 PR:
 - 보통 base 가 `main` (설정 이슈) → `.github/dependabot.yml` 에 `target-branch: devel` 추가로 해결
 - 현재 main 타깃 PR 은 close + 수동으로 devel 에 버전 bump 커밋
 
-### 10.2 오래된 base PR (대량 커밋 혼입)
+### 11.2 오래된 base PR (대량 커밋 혼입)
 
 예: PR #213 같이 수십 커밋 전의 base 에서 분기 → diff 에 이미 머지된 과거 커밋들이 포함됨
 
@@ -345,13 +432,13 @@ collaborator self-merge 후보라도 최종 merge 판단은 다음 조건을 모
 - PR 은 close + 설명 코멘트 ("이번 기여 2 커밋만 cherry-pick 반영했습니다")
 - 중복 PR (같은 브랜치 main 타깃) 도 함께 close
 
-### 10.3 대형 PR (>1000 라인)
+### 11.3 대형 PR (>1000 라인)
 
 - 즉시 admin merge 불가
 - 코드 검토 + 사전 시뮬레이션 충분히 수행 후 결정
 - 예: PR #165 (skia renderer · +100K 라인) — 장기 보류
 
-## 11. 메모리 등록 항목 (자동 참조)
+## 12. 메모리 등록 항목 (자동 참조)
 
 다음 상황은 `~/.claude/.../memory/` 에 등록되어 있다:
 
@@ -359,7 +446,7 @@ collaborator self-merge 후보라도 최종 merge 판단은 다음 조건을 모
 - `feedback_external_docs_self_censor.md` — 외부 공개 문서 자기검열
 - (신규 제안) `feedback_golden_regen_after_render_pr.md` — 렌더 PR 머지 후 golden 재생성
 
-## 12. 참고 아카이브
+## 13. 참고 아카이브
 
 - `mydocs/pr/archives/pr_234_review.md` — 재작업 요청 사례
 - `mydocs/pr/archives/pr_235_review.md` · `pr_237_review.md` — 다양한 리뷰 패턴
