@@ -383,6 +383,29 @@ fn issue_1470_count_rendered_tables(
         .count()
 }
 
+fn issue_1470_table_caption_number(doc: &HwpDocument, control_idx: usize) -> Option<(u16, u16)> {
+    use crate::model::control::Control;
+
+    let table = match doc.document.sections[0].paragraphs[0]
+        .controls
+        .get(control_idx)?
+    {
+        Control::Table(t) => t,
+        _ => return None,
+    };
+    table
+        .caption
+        .as_ref()?
+        .paragraphs
+        .first()?
+        .controls
+        .iter()
+        .find_map(|c| match c {
+            Control::AutoNumber(an) => Some((an.assigned_number, an.number)),
+            _ => None,
+        })
+}
+
 #[test]
 fn issue_1470_create_table_ex_tac_renders_once() {
     let mut doc = HwpDocument::create_empty();
@@ -452,9 +475,9 @@ fn issue_1470_table_caption_keeps_autonumber_and_can_be_removed() {
     };
     let caption = table.caption.as_ref().expect("캡션 존재");
     let cap_para = caption.paragraphs.first().expect("캡션 문단");
-    assert_eq!(cap_para.text, "  ");
-    assert_eq!(cap_para.char_count, 10);
-    assert_eq!(cap_para.char_offsets, vec![0, 8]);
+    assert_eq!(cap_para.text, "표  ");
+    assert_eq!(cap_para.char_count, 13);
+    assert_eq!(cap_para.char_offsets, vec![0, 1, 2, 11]);
     assert!(
         cap_para
             .controls
@@ -474,6 +497,95 @@ fn issue_1470_table_caption_keeps_autonumber_and_can_be_removed() {
         "hasCaption=false가 기존 캡션을 삭제해야 한다"
     );
     assert_eq!(table.attr & (1 << 29), 0, "캡션 attr bit도 내려야 한다");
+}
+
+#[test]
+fn issue_1470_table_caption_renumbers_after_delete() {
+    let mut doc = HwpDocument::create_empty();
+    for _ in 0..3 {
+        doc.create_table_ex_native(0, 0, 0, 1, 1, true, None, None)
+            .expect("표 생성");
+    }
+    for control_idx in 0..3 {
+        doc.set_table_properties_native(0, 0, control_idx, r#"{"hasCaption":true}"#)
+            .expect("캡션 생성");
+    }
+
+    assert_eq!(issue_1470_table_caption_number(&doc, 0), Some((1, 1)));
+    assert_eq!(issue_1470_table_caption_number(&doc, 1), Some((2, 2)));
+    assert_eq!(issue_1470_table_caption_number(&doc, 2), Some((3, 3)));
+
+    doc.set_table_properties_native(0, 0, 1, r#"{"hasCaption":false}"#)
+        .expect("중간 캡션 삭제");
+    doc.set_table_properties_native(
+        0,
+        0,
+        2,
+        r#"{"captionDirection":0,"captionVertAlign":1,"captionWidth":2400,"captionSpacing":600}"#,
+    )
+    .expect("뒤 캡션 속성 수정");
+
+    assert_eq!(
+        issue_1470_table_caption_number(&doc, 0),
+        Some((1, 1)),
+        "앞 표 캡션 번호는 1을 유지해야 한다"
+    );
+    assert_eq!(
+        issue_1470_table_caption_number(&doc, 1),
+        None,
+        "삭제한 중간 표 캡션은 없어야 한다"
+    );
+    assert_eq!(
+        issue_1470_table_caption_number(&doc, 2),
+        Some((2, 2)),
+        "중간 캡션 삭제 후 뒤 표 캡션의 assigned_number/number가 2로 재배정되어야 한다"
+    );
+
+    let svg = doc.render_page_svg_native(0).expect("SVG 렌더링");
+    assert!(
+        svg.contains(">표<") && svg.contains(">1<") && svg.contains(">2<") && !svg.contains(">3<"),
+        "렌더링 결과도 중간 캡션 삭제 후 표 1, 표 2만 표시해야 한다"
+    );
+}
+
+#[test]
+fn issue_1470_table_caption_edit_keeps_autonumber() {
+    use crate::model::control::Control;
+    use crate::model::shape::{CaptionDirection, CaptionVertAlign};
+
+    let mut doc = HwpDocument::create_empty();
+    doc.create_table_ex_native(0, 0, 0, 1, 1, true, None, None)
+        .expect("표 생성");
+    doc.set_table_properties_native(0, 0, 0, r#"{"hasCaption":true}"#)
+        .expect("캡션 생성");
+
+    doc.set_table_properties_native(
+        0,
+        0,
+        0,
+        r#"{"captionDirection":0,"captionVertAlign":1,"captionWidth":2400,"captionSpacing":600}"#,
+    )
+    .expect("캡션 속성 수정");
+
+    let table = match &doc.document.sections[0].paragraphs[0].controls[0] {
+        Control::Table(t) => t,
+        other => panic!("표가 아님: {other:?}"),
+    };
+    let caption = table.caption.as_ref().expect("캡션 존재");
+    assert_eq!(caption.direction, CaptionDirection::Left);
+    assert_eq!(caption.vert_align, CaptionVertAlign::Center);
+    assert_eq!(caption.width, 2400);
+    assert_eq!(caption.spacing, 600);
+
+    let cap_para = caption.paragraphs.first().expect("캡션 문단");
+    assert_eq!(cap_para.text, "표  ");
+    assert_eq!(cap_para.char_offsets, vec![0, 1, 2, 11]);
+    assert!(
+        cap_para.controls.iter().any(
+            |c| matches!(c, Control::AutoNumber(an) if an.assigned_number == 1 && an.number == 1)
+        ),
+        "캡션 속성 수정 후에도 AutoNumber 컨트롤과 번호가 유지되어야 한다"
+    );
 }
 
 #[test]

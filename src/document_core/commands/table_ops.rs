@@ -1618,11 +1618,12 @@ impl DocumentCore {
                     ..Default::default()
                 };
                 let mut cap_para = crate::model::paragraph::Paragraph::new_empty();
-                cap_para.text = "  ".to_string();
-                cap_para.char_count = 10;
+                // 한컴 표 캡션은 AutoNumber 앞에 "표" 접두어를 함께 표시한다.
+                cap_para.text = "표  ".to_string();
+                cap_para.char_count = 13;
                 cap_para.char_count_msb = true;
                 cap_para.control_mask = 1u32 << 0x12;
-                cap_para.char_offsets = vec![0, 8];
+                cap_para.char_offsets = vec![0, 1, 2, 11];
                 cap_para.style_id = caption_style_id;
                 cap_para.para_shape_id = caption_para_shape_id;
                 cap_para.char_shapes = vec![crate::model::paragraph::CharShapeRef {
@@ -1708,8 +1709,9 @@ impl DocumentCore {
             table.dirty = true;
         }
 
-        // 캡션 생성 시 AutoNumber 번호를 확정하되 컨트롤은 유지한다.
-        if caption_created {
+        // 캡션 생성/수정/삭제 후에는 문서 전체 AutoNumber를 다시 배정한다.
+        // 중간 표 캡션 삭제 시 남은 표 번호가 한컴처럼 1부터 이어지도록 보장한다.
+        if caption_created || caption_changed {
             crate::parser::assign_auto_numbers(&mut self.document);
             if let Some(crate::model::control::Control::Table(ref mut tbl)) =
                 self.document.sections[section_idx].paragraphs[parent_para_idx]
@@ -1717,8 +1719,17 @@ impl DocumentCore {
                     .get_mut(control_idx)
             {
                 if let Some(ref mut cap) = tbl.caption {
+                    let available_width_hu = if matches!(
+                        cap.direction,
+                        crate::model::shape::CaptionDirection::Left
+                            | crate::model::shape::CaptionDirection::Right
+                    ) {
+                        cap.width
+                    } else {
+                        cap.max_width
+                    };
                     let available_width_px =
-                        crate::renderer::hwpunit_to_px(cap.max_width as i32, self.dpi);
+                        crate::renderer::hwpunit_to_px(available_width_hu as i32, self.dpi);
                     crate::renderer::composer::reflow_line_segs(
                         &mut cap.paragraphs[0],
                         available_width_px,
