@@ -142,6 +142,80 @@ fn issue_1470_create_table_ex_applies_size_options() {
     assert_eq!(table.cells[2].height, 5000);
 }
 
+fn issue_1470_count_rendered_tables(
+    doc: &HwpDocument,
+    para_idx: usize,
+    control_idx: usize,
+) -> usize {
+    let layout = doc
+        .get_page_control_layout_native(0)
+        .expect("페이지 컨트롤 레이아웃");
+    let parsed: Value = serde_json::from_str(&layout).expect("레이아웃 JSON");
+    parsed["controls"]
+        .as_array()
+        .expect("controls 배열")
+        .iter()
+        .filter(|control| {
+            control["type"] == "table"
+                && control["paraIdx"].as_u64() == Some(para_idx as u64)
+                && control["controlIdx"].as_u64() == Some(control_idx as u64)
+        })
+        .count()
+}
+
+#[test]
+fn issue_1470_create_table_ex_tac_renders_once() {
+    let mut doc = HwpDocument::create_empty();
+    doc.insert_text_native(0, 0, 0, "본문 앞")
+        .expect("본문 텍스트 입력");
+    let insert_at = doc
+        .get_paragraph_length_native(0, 0)
+        .expect("문단 길이 조회");
+    let created = doc
+        .create_table_ex_native(
+            0,
+            0,
+            insert_at,
+            2,
+            2,
+            true,
+            Some(&[4000, 6000]),
+            Some(&[3000, 5000]),
+        )
+        .expect("TAC 표 생성");
+    let created: Value = serde_json::from_str(&created).expect("생성 결과 JSON");
+    let control_idx = created["controlIdx"].as_u64().expect("controlIdx") as usize;
+
+    assert_eq!(
+        issue_1470_count_rendered_tables(&doc, 0, control_idx),
+        1,
+        "문단 레이아웃에서 이미 그린 TAC 표를 PageItem 경로가 다시 그리면 안 된다"
+    );
+}
+
+#[test]
+fn issue_1470_create_table_ex_tac_caption_renders_once() {
+    let mut doc = HwpDocument::create_empty();
+    doc.insert_text_native(0, 0, 0, "캡션 표")
+        .expect("본문 텍스트 입력");
+    let insert_at = doc
+        .get_paragraph_length_native(0, 0)
+        .expect("문단 길이 조회");
+    let created = doc
+        .create_table_ex_native(0, 0, insert_at, 1, 1, true, None, None)
+        .expect("TAC 표 생성");
+    let created: Value = serde_json::from_str(&created).expect("생성 결과 JSON");
+    let control_idx = created["controlIdx"].as_u64().expect("controlIdx") as usize;
+    doc.set_table_properties_native(0, 0, control_idx, r#"{"hasCaption":true}"#)
+        .expect("캡션 생성");
+
+    assert_eq!(
+        issue_1470_count_rendered_tables(&doc, 0, control_idx),
+        1,
+        "캡션이 있는 TAC 표도 같은 컨트롤이 한 번만 렌더되어야 한다"
+    );
+}
+
 #[test]
 fn issue_1470_table_caption_keeps_autonumber_and_can_be_removed() {
     use crate::model::control::Control;
