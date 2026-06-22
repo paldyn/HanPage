@@ -603,6 +603,79 @@ fn issue_1481_delete_column_keeps_create_table_height() {
     );
 }
 
+#[test]
+fn issue_1481_resize_bottom_row_keeps_create_table_display_height() {
+    use crate::model::control::Control;
+
+    let mut doc = HwpDocument::create_empty();
+    doc.create_table_native(0, 0, 0, 3, 5)
+        .expect("일반 표 생성");
+
+    let (original_height, original_raw_height, original_row_height_sum, last_row_cells) = {
+        let table = doc.document.sections[0].paragraphs[0]
+            .controls
+            .iter()
+            .find_map(|control| match control {
+                Control::Table(table) => Some(table),
+                _ => None,
+            })
+            .expect("표 컨트롤");
+        let raw_common = parse_common_obj_attr(&table.raw_ctrl_data);
+        let last_row = table.row_count - 1;
+        (
+            table.common.height,
+            raw_common.height,
+            table.get_row_heights().iter().sum::<u32>(),
+            table
+                .cells
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, cell)| (cell.row == last_row).then_some(idx))
+                .collect::<Vec<_>>(),
+        )
+    };
+
+    assert!(
+        original_height > original_row_height_sum,
+        "일반 표는 셀 저장 height 합보다 큰 외곽 height를 가진다"
+    );
+    assert_eq!(original_height, original_raw_height);
+    assert_eq!(last_row_cells.len(), 5);
+
+    let updates = last_row_cells
+        .iter()
+        .map(|cell_idx| format!(r#"{{"cellIdx":{},"heightDelta":300}}"#, cell_idx))
+        .collect::<Vec<_>>()
+        .join(",");
+    doc.resize_table_cells_native(0, 0, 0, &format!("[{}]", updates))
+        .expect("하단 행 resize");
+
+    let table = doc.document.sections[0].paragraphs[0]
+        .controls
+        .iter()
+        .find_map(|control| match control {
+            Control::Table(table) => Some(table),
+            _ => None,
+        })
+        .expect("표 컨트롤");
+    let raw_common = parse_common_obj_attr(&table.raw_ctrl_data);
+    let row_height_sum = table.get_row_heights().iter().sum::<u32>();
+
+    assert_eq!(
+        table.common.height,
+        original_height + 300,
+        "하단선 resize는 기존 표시 height에 실제 행 높이 변화량만 반영해야 한다"
+    );
+    assert!(
+        table.common.height > row_height_sum,
+        "resize 후에도 생성 직후 표의 표시 height가 셀 저장 height 합으로 붕괴하면 안 된다"
+    );
+    assert_eq!(
+        raw_common.height, table.common.height,
+        "raw height와 in-memory common height는 동기화되어야 한다"
+    );
+}
+
 fn issue_1470_count_rendered_tables(
     doc: &HwpDocument,
     para_idx: usize,
