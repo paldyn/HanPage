@@ -278,7 +278,7 @@ export const tableCommands: CommandDef[] = [
   {
     id: 'table:insert-row-col',
     label: '줄/칸 추가하기(I)...',
-    shortcutLabel: 'Alt+Insert',
+    shortcutLabel: 'Alt+Enter',
     canExecute: inTable,
     execute(services) {
       const ih = services.getInputHandler();

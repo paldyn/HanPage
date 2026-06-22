@@ -7,21 +7,20 @@
 
 ## 목표
 
-Stage 2 커밋 이후 남은 macOS `Option+Insert` 입력 인식 문제를 실제 입력 이벤트 기준으로 진단하고, macOS 단축키를 `Option+Enter`로 변경한다.
+Stage 2 커밋 이후 남은 `Alt/Option+Insert` 입력 인식 문제를 실제 입력 이벤트 기준으로 진단하고, 줄/칸 추가 단축키를 플랫폼 공통 `Alt/Option+Enter`로 변경한다.
 
 ## 배경
 
 - `Option+C`, `Option+Delete`는 인식된다.
 - `Option+Insert`는 메뉴 표시는 되지만 실제 입력이 대표 `table:insert-row-col` 명령으로 연결되지 않는다.
 - 작업지시자 확인 결과, `Option+Enter`를 처음부터 입력하면 줄/칸 추가 대화상자가 열린다.
-- `Option+Enter` 동작은 `Option+Insert` 해결로 보지 않는다. 실제 요구는 한컴 단축키인 `Option+Insert` 자체가 동작하는 것이다.
+- 이후 작업지시자 Windows 확인 결과, Windows에서도 `Alt+Insert`가 동작하지 않아 줄/칸 추가 단축키를 `Alt+Enter`로 통일한다.
 - macOS/브라우저/키보드 조합에 따라 Insert 계열 키가 `Insert`가 아닌 다른 `key`/`code` 조합으로 들어오거나, 브라우저까지 전달되지 않을 수 있으므로 실제 이벤트를 먼저 확인해야 한다.
 
 ## 범위
 
 - 실제 입력 이벤트 매핑 경로를 보정한다.
-- macOS에서는 줄/칸 추가 단축키를 `Option+Enter`로 변경한다.
-- Windows/Linux에서는 기존 `Alt+Insert`를 유지한다.
+- 줄/칸 추가 단축키를 플랫폼 공통 `Alt/Option+Enter`로 변경한다.
 - 기존 `Option+Delete` 및 다른 Alt/Option 단축키 동작은 유지한다.
 - 표 줄/칸 메뉴 표시 규칙은 Stage 2 상태를 유지한다.
 
@@ -54,18 +53,18 @@ git diff --check
 
 - `rhwp-studio/src/command/shortcut-map.ts`
   - 단축키 정의에 플랫폼 조건을 추가했다.
-  - macOS에서는 `Option+Enter`를 `table:insert-row-col`로 매핑한다.
-  - Windows/Linux에서는 기존 `Alt+Insert`/`Alt+Help` 계열을 유지한다.
+  - 플랫폼 공통으로 `Alt/Option+Enter`를 `table:insert-row-col`로 매핑한다.
+  - `Alt/Option+Insert`/`Help` 계열 매핑은 제거했다.
 - `rhwp-studio/src/engine/navigation-keymap.ts`
-  - macOS에서 `Alt+Insert` 표시 문자열을 실제 동작 단축키인 `⌥Enter`로 표시하도록 보정했다.
+  - macOS에서 `Alt+Enter` 표시 문자열을 `⌥Enter`로 표시한다.
 - `rhwp-studio/src/ui/dialog.ts`
   - `ModalDialog` 닫힘 후 훅 `afterClose`를 추가했다.
 - `rhwp-studio/src/command/commands/table.ts`
   - 줄/칸 추가·지우기 대화상자가 `Esc`, 취소, 닫기 버튼, 확인 후 닫힐 때 편집 textarea 포커스를 복원한다.
   - `Option+Enter → Esc → Option+Enter`, `Option+Delete → Esc → Option+Delete` 반복 입력 회귀를 막는다.
 - `rhwp-studio/tests/*`
-  - macOS `Option+Enter`/Windows `Alt+Insert` 플랫폼 분기 테스트를 추가했다.
-  - macOS 메뉴 표시 `⌥Enter` 회귀 테스트를 추가했다.
+  - 플랫폼 공통 `Alt/Option+Enter` 매핑 테스트를 추가했다.
+  - macOS 메뉴 표시 `⌥Enter`, Windows/Linux 메뉴 표시 `Alt+Enter` 회귀 테스트를 추가했다.
   - 표 대표 대화상자 닫힘 후 포커스 복원 연결을 정적 회귀 가드로 고정했다.
 
 ## 검증 결과
@@ -80,7 +79,7 @@ cd rhwp-studio && npm test
 # 120 passed
 ```
 
-## IAB 확인 메모
+## Pages 확인 메모
 
-- 현재 IAB 탭은 변경 전 번들을 유지하고 있어 표 메뉴 단축키가 아직 `⌥Insert`로 보인다.
-- 변경분 기준 수동 확인을 위해서는 IAB 탭 새로고침이 필요하다.
+- 작업지시자 수동 검증을 위해 `https://jangster77.github.io/rhwp/`에 배포한다.
+- 배포 ref는 `task_m100_1481`이다.
