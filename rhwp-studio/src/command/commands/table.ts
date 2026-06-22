@@ -277,7 +277,7 @@ export const tableCommands: CommandDef[] = [
   },
   {
     id: 'table:insert-row-col',
-    label: '줄/칸 추가하기',
+    label: '줄/칸 추가하기(I)...',
     shortcutLabel: 'Alt+Insert',
     canExecute: inTable,
     execute(services) {
@@ -288,7 +288,7 @@ export const tableCommands: CommandDef[] = [
   },
   {
     id: 'table:delete-row-col',
-    label: '줄/칸 지우기',
+    label: '줄/칸 지우기(E)...',
     shortcutLabel: 'Alt+Delete',
     canExecute: inTable,
     execute(services) {

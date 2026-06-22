@@ -190,14 +190,45 @@ test('상단 메뉴 하드코딩 단축키와 registry shortcutLabel의 누락 �
 test('표 줄/칸 추가·지우기 대표 메뉴에 한컴 단축키를 표시한다', () => {
   const table = source('src/command/commands/table.ts');
   const html = source('index.html');
+  const inputHandler = source('src/engine/input-handler.ts');
 
   assertCommandShortcut(table, 'table:insert-row-col', 'Alt+Insert');
   assertCommandShortcut(table, 'table:delete-row-col', 'Alt+Delete');
-  assert.match(html, /data-cmd="table:insert-row-col"[\s\S]*?<span class="md-label">줄\/칸 추가하기<\/span>[\s\S]*?<span class="md-shortcut">Alt\+Insert<\/span>/);
-  assert.match(html, /data-cmd="table:delete-row-col"[\s\S]*?<span class="md-label">줄\/칸 지우기<\/span>[\s\S]*?<span class="md-shortcut">Alt\+Delete<\/span>/);
+  assert.match(table, /id: 'table:insert-row-col'[\s\S]*?label: '줄\/칸 추가하기\(I\)\.\.\.'/);
+  assert.match(table, /id: 'table:delete-row-col'[\s\S]*?label: '줄\/칸 지우기\(E\)\.\.\.'/);
+  assert.match(html, /data-cmd="table:insert-row-col"[\s\S]*?<span class="md-label">줄\/칸 추가하기\(I\)\.\.\.<\/span>[\s\S]*?<span class="md-shortcut">Alt\+Insert<\/span>/);
+  assert.match(html, /data-cmd="table:delete-row-col"[\s\S]*?<span class="md-label">줄\/칸 지우기\(E\)\.\.\.<\/span>[\s\S]*?<span class="md-shortcut">Alt\+Delete<\/span>/);
+  assert.match(inputHandler, /commandId: 'table:insert-row-col'/);
+  assert.match(inputHandler, /commandId: 'table:delete-row-col'/);
 
-  const leftColItem = html.match(/<div class="md-item disabled" data-cmd="table:insert-col-left"[\s\S]*?<\/div>/)?.[0] ?? '';
-  const deleteColItem = html.match(/<div class="md-item disabled" data-cmd="table:delete-col"[\s\S]*?<\/div>/)?.[0] ?? '';
-  assert.doesNotMatch(leftColItem, /Alt\+Insert/);
-  assert.doesNotMatch(deleteColItem, /Alt\+Delete/);
+  assert.doesNotMatch(html, /data-cmd="table:insert-row-above"/);
+  assert.doesNotMatch(html, /data-cmd="table:insert-row-below"/);
+  assert.doesNotMatch(html, /data-cmd="table:insert-col-left"/);
+  assert.doesNotMatch(html, /data-cmd="table:insert-col-right"/);
+  assert.doesNotMatch(html, /data-cmd="table:delete-row"/);
+  assert.doesNotMatch(html, /data-cmd="table:delete-col"/);
+  assert.doesNotMatch(inputHandler, /commandId: 'table:insert-row-above'/);
+  assert.doesNotMatch(inputHandler, /commandId: 'table:insert-row-below'/);
+  assert.doesNotMatch(inputHandler, /commandId: 'table:insert-col-left'/);
+  assert.doesNotMatch(inputHandler, /commandId: 'table:insert-col-right'/);
+  assert.doesNotMatch(inputHandler, /commandId: 'table:delete-row'/);
+  assert.doesNotMatch(inputHandler, /commandId: 'table:delete-col'/);
+});
+
+test('표 줄/칸 메뉴는 macOS에서 Option 기호로 표시한다', () => {
+  withPlatform('mac', () => {
+    const insertItem = new FakeMenuItem('table:insert-row-col', 'Alt+OLD');
+    const deleteItem = new FakeMenuItem('table:delete-row-col', 'Alt+OLD');
+    const registry = new CommandRegistry();
+    registry.register({ id: 'table:insert-row-col', label: '줄/칸 추가하기(I)...', shortcutLabel: 'Alt+Insert', execute: () => {} });
+    registry.register({ id: 'table:delete-row-col', label: '줄/칸 지우기(E)...', shortcutLabel: 'Alt+Delete', execute: () => {} });
+
+    syncMenuShortcutLabels(
+      new FakeContainer([insertItem, deleteItem]) as unknown as HTMLElement,
+      registry,
+    );
+
+    assert.equal(insertItem.shortcut?.textContent, '⌥Insert');
+    assert.equal(deleteItem.shortcut?.textContent, '⌥Delete');
+  });
 });
