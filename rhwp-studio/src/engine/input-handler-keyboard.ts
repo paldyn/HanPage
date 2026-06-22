@@ -1178,11 +1178,20 @@ export function onKeyDown(this: any, e: KeyboardEvent): void {
         this.moveToAdjacentFormField?.(e.shiftKey ? -1 : 1);
         return;
       }
+      if (this.cursor.isInCell() && !this.cursor.isInTextBox()) {
+        if (e.shiftKey) {
+          this.cursor.moveToCellPrev();
+        } else {
+          this.cursor.moveToCellNext();
+        }
+        this.updateCaret();
+        break;
+      }
       if (e.shiftKey) {
         this.applyHangingIndentAtCursor();
         break;
       }
-      // 탭 문자 삽입 (본문·표 셀·글상자 공통)
+      // 탭 문자 삽입 (본문·글상자 공통)
       this.executeOperation({ kind: 'command', command: new InsertTabCommand(this.cursor.getPosition()) });
       break;
     }

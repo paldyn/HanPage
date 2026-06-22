@@ -937,7 +937,10 @@ impl DocumentCore {
         if updates.iter().any(|u| u.height_delta != 0)
             && !force_local_resize
             && original_height > original_row_height_sum
+            && table.row_count > 1
         {
+            // 여러 행 표에서 일부 행을 조절할 때만 생성 표의 표시 height 여유분을 보존한다.
+            // 1행 표는 조절한 셀 높이가 곧 표 높이라는 기존 TAC 전환 회귀 규칙을 유지해야 한다.
             let resized_row_height_sum: u32 = table.get_row_heights().iter().sum();
             let row_height_delta = resized_row_height_sum as i64 - original_row_height_sum as i64;
             let adjusted_height = if row_height_delta >= 0 {

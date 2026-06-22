@@ -2003,6 +2003,37 @@ impl DocumentCore {
             ..Default::default()
         };
 
+        let make_empty_neighbor_para = || {
+            let mut empty_raw_header_extra = vec![0u8; 10];
+            empty_raw_header_extra[0..2].copy_from_slice(&1u16.to_le_bytes());
+            empty_raw_header_extra[4..6].copy_from_slice(&1u16.to_le_bytes());
+            Paragraph {
+                text: String::new(),
+                char_count: 1,
+                char_count_msb: false,
+                control_mask: 0,
+                para_shape_id: default_para_shape_id,
+                style_id: 0,
+                char_shapes: vec![CharShapeRef {
+                    start_pos: 0,
+                    char_shape_id: default_char_shape_id,
+                }],
+                line_segs: vec![LineSeg {
+                    text_start: 0,
+                    line_height: 1000,
+                    text_height: 1000,
+                    baseline_distance: 850,
+                    line_spacing: 600,
+                    segment_width: content_width as i32,
+                    tag: LineSeg::TAG_SINGLE_SEGMENT_LINE,
+                    ..Default::default()
+                }],
+                has_para_text: false,
+                raw_header_extra: empty_raw_header_extra,
+                ..Default::default()
+            }
+        };
+
         // --- 5. 커서 위치에 삽입 ---
         self.document.sections[section_idx].raw_stream = None;
 
@@ -2011,7 +2042,7 @@ impl DocumentCore {
 
         let insert_para_idx;
         if is_empty_para && char_offset == 0 {
-            // 빈 문단이면 교체
+            // 빈 문단이면 같은 문단의 표 앞 조판부호를 유지한 채 표 문단으로 사용한다.
             self.document.sections[section_idx].paragraphs[para_idx] = table_para;
             insert_para_idx = para_idx;
         } else if char_offset == 0 && para.controls.is_empty() {
@@ -2043,37 +2074,9 @@ impl DocumentCore {
         }
 
         // 표 아래에 빈 문단 추가 (HWP 표준, 한컴 blank_h_saved.hwp 참조)
-        let mut empty_raw_header_extra = vec![0u8; 10];
-        empty_raw_header_extra[0..2].copy_from_slice(&1u16.to_le_bytes());
-        empty_raw_header_extra[4..6].copy_from_slice(&1u16.to_le_bytes());
-        let empty_para = Paragraph {
-            text: String::new(),
-            char_count: 1,
-            char_count_msb: false,
-            control_mask: 0,
-            para_shape_id: default_para_shape_id,
-            style_id: 0,
-            char_shapes: vec![CharShapeRef {
-                start_pos: 0,
-                char_shape_id: default_char_shape_id,
-            }],
-            line_segs: vec![LineSeg {
-                text_start: 0,
-                line_height: 1000,
-                text_height: 1000,
-                baseline_distance: 850,
-                line_spacing: 600,
-                segment_width: content_width as i32, // 한컴 표준: 편집 영역 폭
-                tag: LineSeg::TAG_SINGLE_SEGMENT_LINE,
-                ..Default::default()
-            }],
-            has_para_text: false,
-            raw_header_extra: empty_raw_header_extra,
-            ..Default::default()
-        };
         self.document.sections[section_idx]
             .paragraphs
-            .insert(insert_para_idx + 1, empty_para);
+            .insert(insert_para_idx + 1, make_empty_neighbor_para());
 
         // --- 6. 스타일 갱신 + 리플로우 + 페이지네이션 ---
         // 새 BorderFill 추가 시 styles.border_styles 갱신이 필요하므로 rebuild_section 사용

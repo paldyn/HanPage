@@ -53,6 +53,88 @@ fn test_create_empty_document_is_editable() {
     );
 }
 
+fn issue_1481_json_usize(json: &str, key: &str) -> usize {
+    let parsed: Value = serde_json::from_str(json).expect("JSON 파싱");
+    parsed[key].as_u64().expect("usize 값") as usize
+}
+
+fn issue_1481_table<'a>(doc: &'a HwpDocument, para_idx: usize) -> &'a crate::model::table::Table {
+    use crate::model::control::Control;
+
+    doc.document.sections[0].paragraphs[para_idx]
+        .controls
+        .iter()
+        .find_map(|control| match control {
+            Control::Table(table) => Some(table.as_ref()),
+            _ => None,
+        })
+        .expect("표 컨트롤")
+}
+
+fn issue_1481_first_page_render_tree(
+    doc: &HwpDocument,
+) -> crate::renderer::render_tree::PageRenderTree {
+    let dpi = 96.0;
+    let styles = crate::renderer::style_resolver::resolve_styles(&doc.document.doc_info, dpi);
+    let engine = crate::renderer::layout::LayoutEngine::new(dpi);
+    let section = &doc.document.sections[0];
+    let composed: Vec<_> = section
+        .paragraphs
+        .iter()
+        .map(crate::renderer::composer::compose_paragraph)
+        .collect();
+    let sec_mt = doc
+        .measured_tables
+        .first()
+        .map(|tables| tables.as_slice())
+        .unwrap_or(&[]);
+    let page = &doc.pagination[0].pages[0];
+
+    engine.build_render_tree(
+        page,
+        &section.paragraphs,
+        &section.paragraphs,
+        &section.paragraphs,
+        &composed,
+        &styles,
+        &section.section_def.footnote_shape,
+        &doc.document.bin_data_content,
+        None,
+        sec_mt,
+        Some(&section.section_def.page_border_fill),
+        section.section_def.outline_numbering_id,
+        &[],
+    )
+}
+
+fn issue_1481_find_table_and_host_mark_y(
+    node: &crate::renderer::render_tree::RenderNode,
+    para_idx: usize,
+    table_y: &mut Option<f64>,
+    mark_y: &mut Option<f64>,
+) {
+    use crate::renderer::render_tree::RenderNodeType;
+
+    match &node.node_type {
+        RenderNodeType::Table(table) if table.para_index == Some(para_idx) => {
+            *table_y = Some(node.bbox.y);
+        }
+        RenderNodeType::TextRun(run)
+            if run.para_index == Some(para_idx)
+                && run.cell_context.is_none()
+                && run.text.is_empty()
+                && run.is_para_end =>
+        {
+            *mark_y = Some(node.bbox.y);
+        }
+        _ => {}
+    }
+
+    for child in &node.children {
+        issue_1481_find_table_and_host_mark_y(child, para_idx, table_y, mark_y);
+    }
+}
+
 #[test]
 fn issue_1470_style_update_reflows_and_keeps_margin_unit() {
     use crate::model::style::{CharShape, ParaShape, Style};
@@ -363,22 +445,75 @@ fn issue_1470_create_table_ex_applies_size_options() {
 }
 
 #[test]
-fn issue_1481_insert_column_keeps_create_table_height() {
+fn issue_1481_create_table_keeps_first_line_mark_for_escape() {
     use crate::model::control::Control;
 
     let mut doc = HwpDocument::create_empty();
-    doc.create_table_native(0, 0, 0, 3, 5)
+    let table_result = doc
+        .create_table_native(0, 0, 0, 3, 5)
         .expect("일반 표 생성");
+    let table_para_idx = issue_1481_json_usize(&table_result, "paraIdx");
+    let section = &doc.document.sections[0];
+
+    assert_eq!(table_para_idx, 0, "새 문서 첫 표는 첫 줄에 만들어져야 한다");
+    assert!(
+        section.paragraphs.len() >= 2,
+        "표 뒤 빈 문단은 유지되어야 한다"
+    );
+    assert!(section.paragraphs[0].text.is_empty());
+    assert_eq!(section.paragraphs[0].char_count, 9);
+    assert!(section.paragraphs[0].has_para_text);
+    assert!(!section.paragraphs[0].line_segs.is_empty());
+    assert!(matches!(
+        section.paragraphs[table_para_idx].controls.first(),
+        Some(Control::Table(_))
+    ));
+    assert!(section.paragraphs[table_para_idx + 1].text.is_empty());
+    assert!(section.paragraphs[table_para_idx + 1].controls.is_empty());
+    assert_eq!(section.paragraphs[table_para_idx + 1].char_count, 1);
+    assert!(!section.paragraphs[table_para_idx + 1].line_segs.is_empty());
+
+    let moved = doc
+        .move_vertical(0, 0, 0, -1, 0.0, table_para_idx as u32, 0, 0, 0)
+        .expect("첫 셀에서 위쪽 이동");
+    let moved: Value = serde_json::from_str(&moved).expect("moveVertical JSON");
+    assert_eq!(
+        moved["paragraphIndex"].as_u64(),
+        Some(table_para_idx as u64)
+    );
+    assert_eq!(moved["charOffset"].as_u64(), Some(0));
+    assert!(
+        moved.get("parentParaIndex").is_none(),
+        "첫 셀 위쪽 이동은 같은 첫 줄의 표 밖 조판부호 위치로 나가야 한다"
+    );
+
+    let tree = issue_1481_first_page_render_tree(&doc);
+    let mut table_y = None;
+    let mut host_mark_y = None;
+    issue_1481_find_table_and_host_mark_y(
+        &tree.root,
+        table_para_idx,
+        &mut table_y,
+        &mut host_mark_y,
+    );
+    let table_y = table_y.expect("표 렌더 노드 y");
+    let host_mark_y = host_mark_y.expect("표 host 문단부호 y");
+    assert!(
+        (table_y - host_mark_y).abs() < 1.0,
+        "기본 자리차지 표의 첫 조판부호는 빈 줄이 아니라 표 상단과 겹쳐야 한다: table_y={table_y}, mark_y={host_mark_y}"
+    );
+}
+
+#[test]
+fn issue_1481_insert_column_keeps_create_table_height() {
+    let mut doc = HwpDocument::create_empty();
+    let table_result = doc
+        .create_table_native(0, 0, 0, 3, 5)
+        .expect("일반 표 생성");
+    let table_para_idx = issue_1481_json_usize(&table_result, "paraIdx");
 
     let (original_width, original_height, original_raw_height, row_height_sum) = {
-        let table = doc.document.sections[0].paragraphs[0]
-            .controls
-            .iter()
-            .find_map(|control| match control {
-                Control::Table(table) => Some(table),
-                _ => None,
-            })
-            .expect("표 컨트롤");
+        let table = issue_1481_table(&doc, table_para_idx);
         let raw_common = parse_common_obj_attr(&table.raw_ctrl_data);
         (
             table.common.width,
@@ -393,17 +528,10 @@ fn issue_1481_insert_column_keeps_create_table_height() {
         "일반 표는 셀 저장 height 합보다 큰 외곽 height를 가진다"
     );
 
-    doc.insert_table_column_native(0, 0, 0, 0, false)
+    doc.insert_table_column_native(0, table_para_idx, 0, 0, false)
         .expect("왼쪽 열 추가");
 
-    let table = doc.document.sections[0].paragraphs[0]
-        .controls
-        .iter()
-        .find_map(|control| match control {
-            Control::Table(table) => Some(table),
-            _ => None,
-        })
-        .expect("표 컨트롤");
+    let table = issue_1481_table(&doc, table_para_idx);
     let raw_common = parse_common_obj_attr(&table.raw_ctrl_data);
 
     assert_eq!(table.col_count, 6);
@@ -427,21 +555,14 @@ fn issue_1481_insert_column_keeps_create_table_height() {
 
 #[test]
 fn issue_1481_insert_row_keeps_create_table_display_height() {
-    use crate::model::control::Control;
-
     let mut doc = HwpDocument::create_empty();
-    doc.create_table_native(0, 0, 0, 3, 5)
+    let table_result = doc
+        .create_table_native(0, 0, 0, 3, 5)
         .expect("일반 표 생성");
+    let table_para_idx = issue_1481_json_usize(&table_result, "paraIdx");
 
     let (original_height, original_raw_height, original_row_height_sum) = {
-        let table = doc.document.sections[0].paragraphs[0]
-            .controls
-            .iter()
-            .find_map(|control| match control {
-                Control::Table(table) => Some(table),
-                _ => None,
-            })
-            .expect("표 컨트롤");
+        let table = issue_1481_table(&doc, table_para_idx);
         let raw_common = parse_common_obj_attr(&table.raw_ctrl_data);
         (
             table.common.height,
@@ -455,17 +576,10 @@ fn issue_1481_insert_row_keeps_create_table_display_height() {
         "일반 표는 셀 저장 height 합보다 큰 외곽 height를 가진다"
     );
 
-    doc.insert_table_row_native(0, 0, 0, 0, false)
+    doc.insert_table_row_native(0, table_para_idx, 0, 0, false)
         .expect("위쪽 줄 추가");
 
-    let table = doc.document.sections[0].paragraphs[0]
-        .controls
-        .iter()
-        .find_map(|control| match control {
-            Control::Table(table) => Some(table),
-            _ => None,
-        })
-        .expect("표 컨트롤");
+    let table = issue_1481_table(&doc, table_para_idx);
     let raw_common = parse_common_obj_attr(&table.raw_ctrl_data);
     let expected_height = original_height + (original_height / 3);
 
@@ -486,21 +600,14 @@ fn issue_1481_insert_row_keeps_create_table_display_height() {
 
 #[test]
 fn issue_1481_delete_row_keeps_create_table_display_height() {
-    use crate::model::control::Control;
-
     let mut doc = HwpDocument::create_empty();
-    doc.create_table_native(0, 0, 0, 3, 5)
+    let table_result = doc
+        .create_table_native(0, 0, 0, 3, 5)
         .expect("일반 표 생성");
+    let table_para_idx = issue_1481_json_usize(&table_result, "paraIdx");
 
     let (original_height, original_row_height_sum) = {
-        let table = doc.document.sections[0].paragraphs[0]
-            .controls
-            .iter()
-            .find_map(|control| match control {
-                Control::Table(table) => Some(table),
-                _ => None,
-            })
-            .expect("표 컨트롤");
+        let table = issue_1481_table(&doc, table_para_idx);
         (
             table.common.height,
             table.get_row_heights().iter().sum::<u32>(),
@@ -512,16 +619,10 @@ fn issue_1481_delete_row_keeps_create_table_display_height() {
         "일반 표는 셀 저장 height 합보다 큰 외곽 height를 가진다"
     );
 
-    doc.delete_table_row_native(0, 0, 0, 0).expect("줄 지우기");
+    doc.delete_table_row_native(0, table_para_idx, 0, 0)
+        .expect("줄 지우기");
 
-    let table = doc.document.sections[0].paragraphs[0]
-        .controls
-        .iter()
-        .find_map(|control| match control {
-            Control::Table(table) => Some(table),
-            _ => None,
-        })
-        .expect("표 컨트롤");
+    let table = issue_1481_table(&doc, table_para_idx);
     let raw_common = parse_common_obj_attr(&table.raw_ctrl_data);
     let expected_height = original_height - (original_height / 3);
 
@@ -542,21 +643,14 @@ fn issue_1481_delete_row_keeps_create_table_display_height() {
 
 #[test]
 fn issue_1481_delete_column_keeps_create_table_height() {
-    use crate::model::control::Control;
-
     let mut doc = HwpDocument::create_empty();
-    doc.create_table_native(0, 0, 0, 3, 5)
+    let table_result = doc
+        .create_table_native(0, 0, 0, 3, 5)
         .expect("일반 표 생성");
+    let table_para_idx = issue_1481_json_usize(&table_result, "paraIdx");
 
     let (original_width, original_height, original_raw_height, row_height_sum) = {
-        let table = doc.document.sections[0].paragraphs[0]
-            .controls
-            .iter()
-            .find_map(|control| match control {
-                Control::Table(table) => Some(table),
-                _ => None,
-            })
-            .expect("표 컨트롤");
+        let table = issue_1481_table(&doc, table_para_idx);
         let raw_common = parse_common_obj_attr(&table.raw_ctrl_data);
         (
             table.common.width,
@@ -571,17 +665,10 @@ fn issue_1481_delete_column_keeps_create_table_height() {
         "일반 표는 셀 저장 height 합보다 큰 외곽 height를 가진다"
     );
 
-    doc.delete_table_column_native(0, 0, 0, 0)
+    doc.delete_table_column_native(0, table_para_idx, 0, 0)
         .expect("칸 지우기");
 
-    let table = doc.document.sections[0].paragraphs[0]
-        .controls
-        .iter()
-        .find_map(|control| match control {
-            Control::Table(table) => Some(table),
-            _ => None,
-        })
-        .expect("표 컨트롤");
+    let table = issue_1481_table(&doc, table_para_idx);
     let raw_common = parse_common_obj_attr(&table.raw_ctrl_data);
 
     assert_eq!(table.col_count, 4);
@@ -605,21 +692,14 @@ fn issue_1481_delete_column_keeps_create_table_height() {
 
 #[test]
 fn issue_1481_resize_bottom_row_keeps_create_table_display_height() {
-    use crate::model::control::Control;
-
     let mut doc = HwpDocument::create_empty();
-    doc.create_table_native(0, 0, 0, 3, 5)
+    let table_result = doc
+        .create_table_native(0, 0, 0, 3, 5)
         .expect("일반 표 생성");
+    let table_para_idx = issue_1481_json_usize(&table_result, "paraIdx");
 
     let (original_height, original_raw_height, original_row_height_sum, last_row_cells) = {
-        let table = doc.document.sections[0].paragraphs[0]
-            .controls
-            .iter()
-            .find_map(|control| match control {
-                Control::Table(table) => Some(table),
-                _ => None,
-            })
-            .expect("표 컨트롤");
+        let table = issue_1481_table(&doc, table_para_idx);
         let raw_common = parse_common_obj_attr(&table.raw_ctrl_data);
         let last_row = table.row_count - 1;
         (
@@ -647,17 +727,10 @@ fn issue_1481_resize_bottom_row_keeps_create_table_display_height() {
         .map(|cell_idx| format!(r#"{{"cellIdx":{},"heightDelta":300}}"#, cell_idx))
         .collect::<Vec<_>>()
         .join(",");
-    doc.resize_table_cells_native(0, 0, 0, &format!("[{}]", updates))
+    doc.resize_table_cells_native(0, table_para_idx, 0, &format!("[{}]", updates))
         .expect("하단 행 resize");
 
-    let table = doc.document.sections[0].paragraphs[0]
-        .controls
-        .iter()
-        .find_map(|control| match control {
-            Control::Table(table) => Some(table),
-            _ => None,
-        })
-        .expect("표 컨트롤");
+    let table = issue_1481_table(&doc, table_para_idx);
     let raw_common = parse_common_obj_attr(&table.raw_ctrl_data);
     let row_height_sum = table.get_row_heights().iter().sum::<u32>();
 
