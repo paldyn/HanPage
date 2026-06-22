@@ -47,6 +47,30 @@ function extractMethodBody(source, methodName) {
   return extractBlockBody(source, signatureIndex, methodName);
 }
 
+function extractSwitchCaseClusterBody(methodBody, caseLabel) {
+  const casePattern = new RegExp(`^\\s*case '${caseLabel}':`, 'm');
+  const caseMatch = methodBody.match(casePattern);
+  assert.notEqual(caseMatch, null, `missing switch case ${caseLabel}`);
+
+  const startIndex = caseMatch.index;
+  let cursor = startIndex + caseMatch[0].length;
+  const labelPattern = /^\s*(case\s+'[^']+':|default:)/gm;
+  labelPattern.lastIndex = cursor;
+  for (
+    let match = labelPattern.exec(methodBody);
+    match !== null;
+    match = labelPattern.exec(methodBody)
+  ) {
+    const betweenLabels = methodBody.slice(cursor, match.index).trim();
+    if (betweenLabels !== '') {
+      return methodBody.slice(startIndex, match.index);
+    }
+    cursor = match.index + match[0].length;
+  }
+
+  return methodBody.slice(startIndex);
+}
+
 function caseLabels(methodBody) {
   return [...methodBody.matchAll(/case\s+'([^']+)':/g)].map((match) => match[1]);
 }
@@ -143,12 +167,12 @@ assert.deepEqual(
 
 requireSnippet(
   renderNodeBody,
-  /node\.kind === 'group'[\s\S]*?for \(const child of node\.children\)[\s\S]*?this\.renderNode\(canvas, child,/,
+  /node\.kind === 'group'[\s\S]*?for \(const child of node\.children\)[\s\S]*?this\.renderNode\(canvas, child,[\s\S]*?\}\s*return;/,
   'group nodes should recurse through children',
 );
 requireSnippet(
   renderNodeBody,
-  /node\.kind === 'clipRect'[\s\S]*?this\.renderClipNode\(canvas, node,/,
+  /node\.kind === 'clipRect'[\s\S]*?this\.renderClipNode\(canvas, node,[\s\S]*?\);\s*return;/,
   'clipRect nodes should go through renderClipNode',
 );
 requireSnippet(
@@ -158,16 +182,16 @@ requireSnippet(
 );
 
 const directReplayOps = [
-  'ellipse',
-  'footnoteMarker',
-  'formObject',
-  'image',
-  'line',
-  'pageBackground',
-  'path',
-  'placeholder',
-  'rectangle',
-  'textRun',
+  ['ellipse', 'renderEllipse'],
+  ['footnoteMarker', 'renderTextRun'],
+  ['formObject', 'renderFormObject'],
+  ['image', 'renderImage'],
+  ['line', 'renderLine'],
+  ['pageBackground', 'renderPageBackground'],
+  ['path', 'renderPath'],
+  ['placeholder', 'renderPlaceholder'],
+  ['rectangle', 'renderRectangle'],
+  ['textRun', 'renderTextRun'],
 ];
 const textRunFallbackOps = [
   'charOverlap',
@@ -179,25 +203,40 @@ const textRunFallbackOps = [
   'textDecoration',
 ];
 
-for (const op of directReplayOps) {
-  assert.match(
-    renderOpBody,
-    new RegExp(`case '${op}':[\\s\\S]*?this\\.render[A-Za-z0-9]+\\(canvas,`),
+for (const [op, renderMethod] of directReplayOps) {
+  const caseBody = extractSwitchCaseClusterBody(renderOpBody, op);
+  requireSnippet(
+    caseBody,
+    new RegExp(`this\\.${renderMethod}\\(canvas,`),
     `${op} should dispatch to a CanvasKit replay method`,
+  );
+  requireSnippet(caseBody, /\breturn;/, `${op} should terminate inside its own switch case`);
+  assert.doesNotMatch(
+    caseBody,
+    /unsupportedOps\.add/,
+    `${op} direct replay case should not mark the op unsupported`,
   );
 }
 
 for (const op of textRunFallbackOps) {
-  assert.match(
-    renderOpBody,
-    new RegExp(`case '${op}':[\\s\\S]*?this\\.unsupportedOps\\.add\\(op\\.type\\);[\\s\\S]*?return;`),
+  const caseBody = extractSwitchCaseClusterBody(renderOpBody, op);
+  requireSnippet(caseBody, new RegExp(`case '${op}':`), `${op} should remain in the fallback case group`);
+  requireSnippet(
+    caseBody,
+    /this\.unsupportedOps\.add\(op\.type\);\s*return;/,
     `${op} should stay on the declared unsupported/TextRun fallback path`,
+  );
+  assert.doesNotMatch(
+    caseBody,
+    /this\.render[A-Za-z0-9]+\(/,
+    `${op} fallback case should not direct-render before the fallback policy changes`,
   );
 }
 
+const glyphOutlineCaseBody = extractSwitchCaseClusterBody(renderOpBody, 'glyphOutline');
 requireSnippet(
-  renderOpBody,
-  /case 'glyphOutline':[\s\S]*?glyphOutlinePayloadStatus\(op,[\s\S]*?this\.renderGlyphOutline\(canvas, op\);[\s\S]*?this\.unsupportedOps\.add\(/,
+  glyphOutlineCaseBody,
+  /const status = glyphOutlinePayloadStatus\(op,[\s\S]*?if \(status\.supported && op\.payloadKind === 'colorLayers'\) \{[\s\S]*?this\.renderGlyphOutline\(canvas, op\);\s*return;\s*\}[\s\S]*?this\.unsupportedOps\.add\(status\.reason \? `glyphOutline:\$\{status\.reason\}` : 'glyphOutline'\);\s*return;/,
   'glyphOutline should stay guarded by payload status before direct replay',
 );
 
@@ -241,7 +280,17 @@ requireSnippet(
 );
 requireSnippet(
   renderColorPaintGraphNodeBody,
-  /visited\.has\(nodeId\)[\s\S]*?unsupportedColorGlyph[\s\S]*?node\.solidPath \?\? node\.linearGradientPath \?\? node\.radialGradientPath \?\? node\.sweepGradientPath/,
+  /visited\.has\(nodeId\)[\s\S]*?unsupportedColorGlyph[\s\S]*?return;[\s\S]*?visited\.add\(nodeId\);/,
+  'glyphOutline color graph replay should record visited nodes before recursion',
+);
+requireSnippet(
+  renderColorPaintGraphNodeBody,
+  /node\.kind === 'transform'[\s\S]*?transformNode\?\.childNodeId[\s\S]*?this\.renderColorPaintGraphNode\(canvas, nodesById, transformNode\.childNodeId, visited\)/,
+  'glyphOutline color graph replay should keep transform recursion explicit',
+);
+requireSnippet(
+  renderColorPaintGraphNodeBody,
+  /node\.solidPath \?\? node\.linearGradientPath \?\? node\.radialGradientPath \?\? node\.sweepGradientPath[\s\S]*?node\.kind === 'solidPath' && node\.solidPath\?\.fill[\s\S]*?node\.kind === 'linearGradientPath' && node\.linearGradientPath\?\.gradient[\s\S]*?node\.kind === 'radialGradientPath' && node\.radialGradientPath\?\.gradient[\s\S]*?node\.kind === 'sweepGradientPath' && node\.sweepGradientPath\?\.gradient/,
   'glyphOutline color graph replay should keep cycle guard and supported path families explicit',
 );
 
