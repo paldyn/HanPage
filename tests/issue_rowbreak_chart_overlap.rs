@@ -23,6 +23,14 @@ fn find_table_bbox(root: &RenderNode, target_pi: usize, target_ci: usize) -> Opt
         .find_map(|child| find_table_bbox(child, target_pi, target_ci))
 }
 
+fn find_body_bbox(root: &RenderNode) -> Option<BoundingBox> {
+    if matches!(root.node_type, RenderNodeType::Body { .. }) {
+        return Some(root.bbox);
+    }
+
+    root.children.iter().find_map(find_body_bbox)
+}
+
 fn find_textrun_bbox_containing(root: &RenderNode, needle: &str) -> Option<BoundingBox> {
     if let RenderNodeType::TextRun(run) = &root.node_type {
         if run.text.contains(needle) {
@@ -33,6 +41,29 @@ fn find_textrun_bbox_containing(root: &RenderNode, needle: &str) -> Option<Bound
     root.children
         .iter()
         .find_map(|child| find_textrun_bbox_containing(child, needle))
+}
+
+#[test]
+fn rowbreak_page11_partial_table_stays_inside_body() {
+    let repo_root = env!("CARGO_MANIFEST_DIR");
+    let sample_path = Path::new(repo_root).join(SAMPLE);
+    let bytes = fs::read(&sample_path).unwrap_or_else(|e| panic!("read {}: {}", SAMPLE, e));
+    let doc = rhwp::wasm_api::HwpDocument::from_bytes(&bytes)
+        .unwrap_or_else(|e| panic!("parse {}: {:?}", SAMPLE, e));
+    let tree = doc
+        .build_page_render_tree(10)
+        .unwrap_or_else(|e| panic!("render page 11: {e}"));
+
+    let body = find_body_bbox(&tree.root).expect("page 11 body should render");
+    let table =
+        find_table_bbox(&tree.root, 5, 0).expect("page 11 table pi=5 ci=0 should render");
+
+    let body_bottom = body.y + body.height;
+    let table_bottom = table.y + table.height;
+    assert!(
+        table_bottom <= body_bottom + 0.5,
+        "page 11 table is clipped: table bottom={table_bottom:.2}, body bottom={body_bottom:.2}"
+    );
 }
 
 fn collect_table_cells<'a>(

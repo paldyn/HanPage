@@ -9377,7 +9377,6 @@ impl TypesetEngine {
             .map(|a| a.width)
             .unwrap_or(st.layout.body_area.width);
         let fmt = self.format_paragraph(para, composed, styles, Some(host_col_w));
-
         // TAC 표 카운트 및 플러시 판단
         let tac_count = para
             .controls
@@ -10327,7 +10326,10 @@ impl TypesetEngine {
         let cs = mt.cell_spacing;
         let can_intra_split = !mt.cells.is_empty();
         let base_available = st.base_available_height();
-        let table_available = available; // 각주/존 오프셋 차감된 가용 높이
+        // Partial table borders are rendered against the visible body area. The paginator-level
+        // bottom tolerance is useful for text fit heuristics, but if row cuts spend it here the
+        // table fragment can be painted into the footer/body edge and get clipped.
+        let table_available = (available - st.layout.pagination_tolerance_px).max(0.0);
 
         // [Task #993] advance_row_cut 호출용 LayoutEngine — 컷 측정은 dpi 와
         // 셀 패딩/중첩 표 높이 계산에만 의존하므로 ad hoc 인스턴스로 충분하다.
