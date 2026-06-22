@@ -86,7 +86,7 @@ Mac Chrome 최소 재현에서 rhwp ON 상태는 `Downloads/<blob-uuid>.pdf`로 
 ## 6. 남은 운영 작업
 
 - 작업지시자 최종 승인
-- 커밋 생성
-- PR 생성
+- PR #1480 최신 head 기준 GitHub Actions 통과 확인
+- collaborator self-merge 후보 review 문서 PR diff 포함 확인
 - GitHub 이슈 #1471에 원인/수정 방향/검증 결과 코멘트 등록
 - PR merge 후 이슈 close는 작업지시자 승인 후 수행
