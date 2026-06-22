@@ -281,8 +281,11 @@ export const tableCommands: CommandDef[] = [
     shortcutLabel: 'Alt+Insert',
     canExecute: inTable,
     execute(services) {
+      const ih = services.getInputHandler();
+      if (!ih) return;
       const dialog = new TableInsertRowColumnDialog();
       dialog.onApply = ({ mode, count }) => applyTableInsertRowColumn(services, mode, count);
+      dialog.afterClose = () => restoreEditorFocus(ih);
       dialog.show();
     },
   },
@@ -292,8 +295,11 @@ export const tableCommands: CommandDef[] = [
     shortcutLabel: 'Alt+Delete',
     canExecute: inTable,
     execute(services) {
+      const ih = services.getInputHandler();
+      if (!ih) return;
       const dialog = new TableDeleteRowColumnDialog();
       dialog.onApply = ({ mode }) => applyTableDeleteRowColumn(services, mode);
+      dialog.afterClose = () => restoreEditorFocus(ih);
       dialog.show();
     },
   },

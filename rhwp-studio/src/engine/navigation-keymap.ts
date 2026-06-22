@@ -109,6 +109,8 @@ export function formatShortcutLabel(
   platform: PlatformKind = detectPlatformKind(),
 ): string {
   if (platform !== 'mac') return label;
+  // macOS 브라우저에서는 Option+Insert 물리 입력이 Insert 이벤트를 전달하지 않아 실제 단축키를 Option+Enter로 쓴다.
+  if (label === 'Alt+Insert') return '⌥Enter';
   return label
     .replace(/\bCtrl\+/g, '⌘')
     .replace(/\bAlt\+/g, '⌥')
