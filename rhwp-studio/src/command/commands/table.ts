@@ -155,6 +155,36 @@ function applyTableInsertRowColumn(
   restoreEditorFocus(ih);
 }
 
+/**
+ * 줄/칸 지우기 후 커서 셀 보정 (#1483).
+ *
+ * 삭제로 셀 수가 줄면 기존 cellIndex가 새 표 범위를 벗어나 updateRect가 "셀 인덱스 초과"로
+ * 실패한다. 삭제 후 표 크기(rowCount/colCount) 내로 (row,col)을 clamp하고, 해당 위치의
+ * cellIndex를 getTableCellBboxes로 역조회한다 (병합 셀은 rowSpan/colSpan 범위로 매칭).
+ * 표가 소멸(rowCount/colCount<=0)하면 null을 반환한다.
+ */
+function clampedCellAfterDelete(
+  wasm: CommandServices['wasm'],
+  sec: number,
+  parentPara: number,
+  controlIdx: number,
+  origRow: number,
+  origCol: number,
+  rowCount: number,
+  colCount: number,
+): { cellIndex: number; cellParaIndex: number } | null {
+  if (rowCount <= 0 || colCount <= 0) return null;
+  const row = Math.min(origRow, rowCount - 1);
+  const col = Math.min(origCol, colCount - 1);
+  const bboxes = wasm.getTableCellBboxes(sec, parentPara, controlIdx);
+  const hit = bboxes.find(
+    (b) =>
+      row >= b.row && row < b.row + b.rowSpan &&
+      col >= b.col && col < b.col + b.colSpan,
+  );
+  return { cellIndex: hit ? hit.cellIdx : 0, cellParaIndex: 0 };
+}
+
 function applyTableDeleteRowColumn(
   services: CommandServices,
   mode: TableDeleteRowColumnMode,
@@ -166,12 +196,20 @@ function applyTableDeleteRowColumn(
     kind: 'snapshot',
     operationType: mode === 'row' ? 'deleteTableRow' : 'deleteTableColumn',
     operation: (wasm) => {
-      if (mode === 'row') {
-        wasm.deleteTableRow(pos.sectionIndex, pos.parentParaIndex!, pos.controlIndex!, cellInfo.row);
-      } else {
-        wasm.deleteTableColumn(pos.sectionIndex, pos.parentParaIndex!, pos.controlIndex!, cellInfo.col);
+      const res = mode === 'row'
+        ? wasm.deleteTableRow(pos.sectionIndex, pos.parentParaIndex!, pos.controlIndex!, cellInfo.row)
+        : wasm.deleteTableColumn(pos.sectionIndex, pos.parentParaIndex!, pos.controlIndex!, cellInfo.col);
+      if (!res.ok) return pos;
+      // 삭제 후 셀 수가 줄면 기존 cellIndex가 범위를 벗어날 수 있어 보정한다 (#1483).
+      const corrected = clampedCellAfterDelete(
+        wasm, pos.sectionIndex, pos.parentParaIndex!, pos.controlIndex!,
+        cellInfo.row, cellInfo.col, res.rowCount, res.colCount,
+      );
+      if (!corrected) {
+        // 표 소멸 → 표 밖 본문 위치로 폴백.
+        return { sectionIndex: pos.sectionIndex, paragraphIndex: pos.parentParaIndex ?? 0, charOffset: 0 };
       }
-      return pos;
+      return { ...pos, charOffset: 0, ...corrected };
     },
   }), '줄/칸 지우기');
   restoreEditorFocus(ih);
