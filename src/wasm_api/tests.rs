@@ -54,6 +54,135 @@ fn test_create_empty_document_is_editable() {
 }
 
 #[test]
+fn issue_1470_style_update_reflows_and_keeps_margin_unit() {
+    use crate::model::style::{CharShape, ParaShape, Style};
+
+    let mut doc = HwpDocument::create_empty();
+    doc.document.doc_info.char_shapes.push(CharShape::default());
+    doc.document.doc_info.para_shapes.push(ParaShape::default());
+    doc.document.doc_info.styles.push(Style {
+        local_name: "바탕글".to_string(),
+        english_name: "Normal".to_string(),
+        lang_id: 1042,
+        para_shape_id: 0,
+        char_shape_id: 0,
+        ..Default::default()
+    });
+    doc.insert_text_native(0, 0, 0, "스타일 줄간격 검증")
+        .expect("텍스트 입력");
+
+    let style_id = doc.create_style(
+        r#"{"name":"검증 스타일","englishName":"Issue1470","type":0,"nextStyleId":0,"baseParaShapeId":0,"baseCharShapeId":0}"#,
+    );
+    assert!(style_id >= 0, "스타일 생성");
+    doc.apply_style_native(0, 0, style_id as usize)
+        .expect("스타일 적용");
+
+    let before_spacing = doc.document.sections[0].paragraphs[0]
+        .line_segs
+        .first()
+        .map(|ls| ls.line_spacing)
+        .unwrap_or_default();
+
+    assert!(
+        doc.update_style_shapes(
+            style_id as u32,
+            "{}",
+            r#"{"marginLeft":3000,"lineSpacing":300,"lineSpacingType":"Percent"}"#,
+        ),
+        "스타일 문단 모양 수정"
+    );
+
+    let para = &doc.document.sections[0].paragraphs[0];
+    let ps = &doc.document.doc_info.para_shapes[para.para_shape_id as usize];
+    assert_eq!(para.style_id, style_id as u8);
+    assert_eq!(
+        ps.margin_left, 3000,
+        "15pt raw(2x) 여백이 30pt로 중복 변환되면 안 됨"
+    );
+    assert_eq!(ps.line_spacing, 300);
+    let after_spacing = para
+        .line_segs
+        .first()
+        .map(|ls| ls.line_spacing)
+        .unwrap_or_default();
+    assert_ne!(
+        after_spacing, before_spacing,
+        "스타일 줄간격 변경 후 LineSeg가 즉시 재계산되어야 한다"
+    );
+}
+
+#[test]
+fn issue_1470_create_table_ex_applies_size_options() {
+    use crate::model::control::Control;
+
+    let mut doc = HwpDocument::create_empty();
+    let col_widths = [4000, 6000];
+    let row_heights = [3000, 5000];
+    doc.create_table_ex_native(0, 0, 0, 2, 2, true, Some(&col_widths), Some(&row_heights))
+        .expect("확장 표 생성");
+
+    let table = doc.document.sections[0].paragraphs[0]
+        .controls
+        .iter()
+        .find_map(|c| match c {
+            Control::Table(t) => Some(t),
+            _ => None,
+        })
+        .expect("표 컨트롤");
+    assert!(
+        table.common.treat_as_char,
+        "상세 옵션의 글자처럼 취급이 반영되어야 한다"
+    );
+    assert_eq!(table.common.width, 10000);
+    assert_eq!(table.common.height, 8000);
+    assert_eq!(table.cells[0].width, 4000);
+    assert_eq!(table.cells[1].width, 6000);
+    assert_eq!(table.cells[0].height, 3000);
+    assert_eq!(table.cells[2].height, 5000);
+}
+
+#[test]
+fn issue_1470_table_caption_keeps_autonumber_and_can_be_removed() {
+    use crate::model::control::Control;
+
+    let mut doc = HwpDocument::create_empty();
+    doc.create_table_ex_native(0, 0, 0, 1, 1, true, None, None)
+        .expect("표 생성");
+
+    doc.set_table_properties_native(0, 0, 0, r#"{"hasCaption":true}"#)
+        .expect("캡션 생성");
+    let table = match &doc.document.sections[0].paragraphs[0].controls[0] {
+        Control::Table(t) => t,
+        other => panic!("표가 아님: {other:?}"),
+    };
+    let caption = table.caption.as_ref().expect("캡션 존재");
+    let cap_para = caption.paragraphs.first().expect("캡션 문단");
+    assert_eq!(cap_para.text, "  ");
+    assert_eq!(cap_para.char_count, 10);
+    assert_eq!(cap_para.char_offsets, vec![0, 8]);
+    assert!(
+        cap_para
+            .controls
+            .iter()
+            .any(|c| matches!(c, Control::AutoNumber(_))),
+        "표 캡션 번호는 literal 텍스트가 아니라 AutoNumber 컨트롤로 유지되어야 한다"
+    );
+
+    doc.set_table_properties_native(0, 0, 0, r#"{"hasCaption":false}"#)
+        .expect("캡션 삭제");
+    let table = match &doc.document.sections[0].paragraphs[0].controls[0] {
+        Control::Table(t) => t,
+        other => panic!("표가 아님: {other:?}"),
+    };
+    assert!(
+        table.caption.is_none(),
+        "hasCaption=false가 기존 캡션을 삭제해야 한다"
+    );
+    assert_eq!(table.attr & (1 << 29), 0, "캡션 attr bit도 내려야 한다");
+}
+
+#[test]
 fn test_empty_document_info() {
     let doc = HwpDocument::create_empty();
     let info = doc.get_document_info();
@@ -2155,7 +2284,7 @@ fn test_paste_picture_into_table_cell() {
     doc.document.sections[0].paragraphs[0].ctrl_data_records = vec![Some(vec![7, 7, 7])];
     doc.copy_control_native(0, 0, &[], 0).expect("그림 복사");
 
-    doc.create_table_ex_native(0, 1, 0, 2, 2, true, None)
+    doc.create_table_ex_native(0, 1, 0, 2, 2, true, None, None)
         .expect("표 생성");
     let (t_para, t_ctrl) = find_table_pos(&doc);
 
@@ -2190,7 +2319,7 @@ fn test_paste_picture_into_cell_by_path() {
     let mut doc = create_doc_with_floating_picture(true, 0, 0);
     doc.copy_control_native(0, 0, &[], 0).expect("그림 복사");
 
-    doc.create_table_ex_native(0, 1, 0, 2, 2, true, None)
+    doc.create_table_ex_native(0, 1, 0, 2, 2, true, None, None)
         .expect("표 생성");
     let (t_para, t_ctrl) = find_table_pos(&doc);
 
@@ -2297,7 +2426,7 @@ fn test_merge_paragraph_in_cell_preserves_controls() {
     use crate::model::control::Control;
 
     let mut doc = create_doc_with_floating_picture(true, 0, 0);
-    doc.create_table_ex_native(0, 1, 0, 2, 2, true, None)
+    doc.create_table_ex_native(0, 1, 0, 2, 2, true, None, None)
         .expect("표 생성");
     let (t_para, t_ctrl) = find_table_pos(&doc);
 
@@ -2339,7 +2468,7 @@ fn test_paste_picture_into_table_cell_hwp5_roundtrip() {
 
     let mut doc = create_doc_with_floating_picture(true, 0, 0);
     doc.copy_control_native(0, 0, &[], 0).expect("그림 복사");
-    doc.create_table_ex_native(0, 1, 0, 2, 2, true, None)
+    doc.create_table_ex_native(0, 1, 0, 2, 2, true, None, None)
         .expect("표 생성");
     let (t_para, t_ctrl) = find_table_pos(&doc);
     doc.paste_internal_in_cell_native(0, t_para, t_ctrl, 0, 0, 0)
@@ -2430,7 +2559,7 @@ fn test_paste_picture_into_cell_and_textbox_renders_in_svg() {
         .paragraphs
         .push(Paragraph::default());
     let empty_para = doc.document.sections[0].paragraphs.len() - 1;
-    doc.create_table_ex_native(0, empty_para, 0, 2, 2, true, None)
+    doc.create_table_ex_native(0, empty_para, 0, 2, 2, true, None, None)
         .expect("표 생성");
     let (t_para, t_ctrl) = find_table_pos(&doc);
     doc.paste_internal_in_cell_native(0, t_para, t_ctrl, 0, 0, 0)
@@ -21832,7 +21961,7 @@ fn test_logical_offset_insert_after_inline_table() {
 
     // offset=3 위치에 인라인 TAC 2×2 표 삽입
     let result = doc
-        .create_table_ex_native(0, 1, 3, 2, 2, true, Some(&[6777, 6777]))
+        .create_table_ex_native(0, 1, 3, 2, 2, true, Some(&[6777, 6777]), None)
         .unwrap();
     eprintln!("  createTableEx result: {}", result);
     // logicalOffset: "abc"(3) + [표](1) = 4
@@ -21899,7 +22028,7 @@ fn test_logical_offset_insert_after_inline_table() {
     // 새 문서에서 "가나다" + [표] 구조 생성, charOffset=4로 삽입
     doc.split_paragraph_native(0, 1, 6).unwrap(); // pi=2 생성
     doc.insert_text_native(0, 2, 0, "가나다").unwrap();
-    doc.create_table_ex_native(0, 2, 3, 1, 1, true, Some(&[5000]))
+    doc.create_table_ex_native(0, 2, 3, 1, 1, true, Some(&[5000]), None)
         .unwrap();
     let para2 = &doc.document.sections[0].paragraphs[2];
     let tl = para2.text.chars().count();
@@ -21947,7 +22076,7 @@ fn test_create_inline_tac_table() {
     // 4. pi=1, char_offset=text_len 위치에 인라인 TAC 2×2 표 생성
     // 열 폭: 6777 HU × 2 = 13554 HU (tac-case-001.hwp과 동일)
     let result = doc
-        .create_table_ex_native(0, 1, text_len, 2, 2, true, Some(&[6777, 6777]))
+        .create_table_ex_native(0, 1, text_len, 2, 2, true, Some(&[6777, 6777]), None)
         .unwrap();
     eprintln!("  createTableEx result: {}", result);
     assert!(

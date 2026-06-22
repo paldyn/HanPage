@@ -11,7 +11,7 @@ use crate::model::event::DocumentEvent;
 use crate::model::paragraph::Paragraph;
 use crate::renderer::composer::reflow_line_segs;
 use crate::renderer::page_layout::PageLayoutInfo;
-use crate::renderer::style_resolver::resolve_styles;
+use crate::renderer::style_resolver::{resolve_styles, ResolvedStyleSet};
 
 fn char_shape_mods_affect_text_flow(mods: &crate::model::style::CharShapeMods) -> bool {
     mods.base_size.is_some()
@@ -20,6 +20,29 @@ fn char_shape_mods_affect_text_flow(mods: &crate::model::style::CharShapeMods) -
         || mods.spacings.is_some()
         || mods.relative_sizes.is_some()
         || mods.char_offsets.is_some()
+}
+
+fn body_available_width_for_para_shape(
+    core: &DocumentCore,
+    sec_idx: usize,
+    para_shape_id: u16,
+    styles: &ResolvedStyleSet,
+) -> f64 {
+    let Some(section) = core.document.sections.get(sec_idx) else {
+        return 1.0;
+    };
+    let page_def = &section.section_def.page_def;
+    let column_def = DocumentCore::find_initial_column_def(&section.paragraphs);
+    let layout = PageLayoutInfo::from_page_def(page_def, &column_def, core.dpi);
+    let col_width = layout
+        .column_areas
+        .first()
+        .map(|a| a.width)
+        .unwrap_or(layout.body_area.width);
+    let para_style = styles.para_styles.get(para_shape_id as usize);
+    let margin_left = para_style.map(|s| s.margin_left).unwrap_or(0.0);
+    let margin_right = para_style.map(|s| s.margin_right).unwrap_or(0.0);
+    (col_width - margin_left - margin_right).max(1.0)
 }
 
 impl DocumentCore {
@@ -1633,12 +1656,8 @@ impl DocumentCore {
         }
 
         // ── 현재 문단에 번호가 없는 경우 (바탕글 등) ──
-        // 기존 참조 문단 방식
-        if let Some(ref_psid) = self.find_reference_para_shape_for_style(style_id) {
-            return ref_psid;
-        }
-
-        // 기존 문단이 없는 경우 → 스타일 기본값 기반
+        // 일반 스타일은 기존 문단의 실효 ParaShape가 아니라 스타일 정의값을 따른다.
+        // 참조 문단을 우선하면 직접 서식이 섞인 문단 값이 스타일 적용값으로 번질 수 있다.
         let style = match self.document.doc_info.styles.get(style_id) {
             Some(s) => s.clone(),
             None => return 0,
@@ -1659,6 +1678,31 @@ impl DocumentCore {
 
         // 일반 스타일 → 기본 ParaShape 사용
         base_psid
+    }
+
+    /// 본문 문단의 LineSeg를 현재 CharShape/ParaShape 기준으로 다시 계산한다.
+    pub(crate) fn reflow_body_paragraph(&mut self, sec_idx: usize, para_idx: usize) {
+        let para_shape_id = match self
+            .document
+            .sections
+            .get(sec_idx)
+            .and_then(|s| s.paragraphs.get(para_idx))
+        {
+            Some(para) => para.para_shape_id,
+            None => return,
+        };
+        let styles = resolve_styles(&self.document.doc_info, self.dpi);
+        let available_width =
+            body_available_width_for_para_shape(self, sec_idx, para_shape_id, &styles);
+        if let Some(para) = self
+            .document
+            .sections
+            .get_mut(sec_idx)
+            .and_then(|s| s.paragraphs.get_mut(para_idx))
+        {
+            para.line_segs.clear();
+            reflow_line_segs(para, available_width, &styles, self.dpi);
+        }
     }
 
     /// 스타일 적용 (네이티브) — 본문 문단
@@ -1709,6 +1753,7 @@ impl DocumentCore {
                 char_shape_id: new_char_shape_id,
             });
 
+        self.reflow_body_paragraph(sec_idx, para_idx);
         self.document.sections[sec_idx].raw_stream = None;
         self.rebuild_section(sec_idx);
         self.event_log.push(DocumentEvent::ParaFormatChanged {
@@ -1770,6 +1815,14 @@ impl DocumentCore {
                 });
         }
 
+        self.reflow_cell_paragraph(
+            sec_idx,
+            parent_para_idx,
+            control_idx,
+            cell_idx,
+            cell_para_idx,
+        );
+        self.mark_cell_control_dirty(sec_idx, parent_para_idx, control_idx);
         self.document.sections[sec_idx].raw_stream = None;
         self.rebuild_section(sec_idx);
         self.event_log.push(DocumentEvent::ParaFormatChanged {

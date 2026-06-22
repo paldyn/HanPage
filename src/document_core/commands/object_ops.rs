@@ -2106,6 +2106,7 @@ impl DocumentCore {
         col_count: u16,
         treat_as_char: bool,
         col_widths_hu: Option<&[u32]>,
+        row_heights_hu: Option<&[u32]>,
     ) -> Result<String, HwpError> {
         use crate::model::paragraph::{CharShapeRef, LineSeg};
         use crate::model::style::{BorderFill, BorderLine, BorderLineType, DiagonalLine, Fill};
@@ -2169,9 +2170,17 @@ impl DocumentCore {
             top: 141,
             bottom: 141,
         };
-        let cell_height: u32 = (cell_pad.top + cell_pad.bottom) as u32;
-        let rendered_row_height: u32 = cell_pad.top as u32 + 1000 + cell_pad.bottom as u32;
-        let total_height = rendered_row_height * row_count as u32;
+        let min_row_height: u32 = cell_pad.top as u32 + 1000 + cell_pad.bottom as u32;
+        let row_heights: Vec<u32> = if let Some(heights) = row_heights_hu {
+            if heights.len() == row_count as usize {
+                heights.iter().map(|h| (*h).max(min_row_height)).collect()
+            } else {
+                vec![min_row_height; row_count as usize]
+            }
+        } else {
+            vec![min_row_height; row_count as usize]
+        };
+        let total_height: u32 = row_heights.iter().sum();
 
         // BorderFill
         let cell_border_fill_id = {
@@ -2216,9 +2225,10 @@ impl DocumentCore {
         // 셀 생성
         let mut cells = Vec::with_capacity((row_count as usize) * (col_count as usize));
         for r in 0..row_count {
+            let row_height = row_heights[r as usize];
             for c in 0..col_count {
                 let col_w = col_ws[c as usize];
-                let mut cell = Cell::new_empty(c, r, col_w, cell_height, cell_border_fill_id);
+                let mut cell = Cell::new_empty(c, r, col_w, row_height, cell_border_fill_id);
                 cell.padding = cell_pad;
                 cell.vertical_align = crate::model::table::VerticalAlign::Center;
                 for cp in &mut cell.paragraphs {
@@ -2231,11 +2241,13 @@ impl DocumentCore {
                         cp.raw_header_extra = rhe;
                     }
                     let seg_w = (col_w as i32) - 141 - 141;
+                    let text_height =
+                        row_height.saturating_sub((cell_pad.top + cell_pad.bottom) as u32);
                     cp.line_segs = vec![LineSeg {
                         text_start: 0,
-                        line_height: 1000,
-                        text_height: 1000,
-                        baseline_distance: 850,
+                        line_height: text_height as i32,
+                        text_height: text_height as i32,
+                        baseline_distance: (text_height as f64 * 0.85) as i32,
                         line_spacing: 600,
                         segment_width: seg_w,
                         tag: LineSeg::TAG_SINGLE_SEGMENT_LINE,

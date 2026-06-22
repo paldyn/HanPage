@@ -3996,17 +3996,28 @@ export class InputHandler {
 
   /** 스타일 적용 (커맨드 시스템용) */
   applyStyle(styleId: number): void {
-    const pos = this.cursor.getPosition();
     try {
-      if (pos.parentParaIndex !== undefined) {
-        this.wasm.applyCellStyle(
-          pos.sectionIndex, pos.parentParaIndex, pos.controlIndex!,
-          pos.cellIndex!, pos.cellParaIndex!, styleId,
-        );
-      } else {
-        this.wasm.applyStyle(pos.sectionIndex, pos.paragraphIndex, styleId);
-      }
-      this.afterEdit();
+      const targets = this.getParaFormatTargetsAtCursor();
+      if (targets.length === 0) return;
+      const cursorBefore = this.cursor.getPosition();
+      const operation = (wasm: WasmBridge): DocumentPosition => {
+        for (const target of targets) {
+          if (target.kind === 'body') {
+            wasm.applyStyle(target.sec, target.para, styleId);
+            continue;
+          }
+          wasm.applyCellStyle(
+            target.sec,
+            target.parentPara,
+            target.controlIdx,
+            target.cellIdx,
+            target.cellParaIdx,
+            styleId,
+          );
+        }
+        return { ...cursorBefore };
+      };
+      this.executeOperation({ kind: 'snapshot', operationType: 'applyStyle', operation });
     } catch (err) {
       console.warn('[InputHandler] applyStyle 실패:', err);
     }
