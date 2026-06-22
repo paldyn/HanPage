@@ -4519,6 +4519,26 @@ fn diff_common_obj(
     }
 }
 
+/// `tab_extended`(`[u16; 7]`) 두 인라인 탭 레코드가 **의미 있는** 필드에서 다른지 판정.
+///
+/// HWPX 파서(`parse_tab_extension`)는 인라인 탭을 `ext[0]`=width,
+/// `ext[2]`=`type<<8 | leader`(leader 는 low byte), `ext[6]`=0x0009 마커로만 채우고
+/// `ext[1]`·`ext[3]`·`ext[4]`·`ext[5]`는 0 으로 둔다. HWPX 직렬화(`render_hp_t_content`)도
+/// width/leader/type 를 오직 `ext[0]`·`ext[2]`에서만 읽는다. 반면 HWP5 인라인 탭(8 WCHAR
+/// 블록)은 `ext[1]`을 leader/fill 슬롯으로, `ext[3]`·`ext[4]`·`ext[5]`를 WCHAR 4~6 원본
+/// 바이트(보통 0x20)로 채운다 — 이들은 HWPX `<hp:tab>`에 대응 속성이 없어 HWPX 쪽이 항상
+/// 0 이라, HWPX↔HWP5 parity 비교에서 거의 모든 탭에 거짓 차이(0 vs leader, 0 vs 32)를 만들어
+/// 실제 차이(width/type/leader)를 가린다. 따라서 두 포맷이 공통으로 쓰는 필드
+/// [0]=width, [2]=type/leader 팩, [6]=마커만 비교하고 [1],[3],[4],[5]는 제외한다.
+/// (HWP5 직렬화는 [1],[3..6]을 그대로 보존하므로 self-roundtrip 충실도에는 영향 없음 —
+/// 도구 비교에서만 제외.)
+fn tab_ext_semantic_differs(a: &[u16; 7], b: &[u16; 7]) -> bool {
+    // 두 포맷 공통 필드만: [0]=width, [2]=type<<8|leader, [6]=0x0009 마커.
+    // [1](HWP5 leader/fill 슬롯, HWPX=0)·[3]·[4]·[5](HWP5 예약 바이트, HWPX=0)는 제외.
+    const SEMANTIC: [usize; 3] = [0, 2, 6];
+    SEMANTIC.iter().any(|&k| a[k] != b[k])
+}
+
 fn ir_diff(args: &[String]) {
     if args.len() < 2 {
         eprintln!("사용법: rhwp ir-diff <파일A> <파일B> [-s <구역>] [-p <문단>] [--summary] [--max-lines <N>]");
@@ -4757,7 +4777,7 @@ fn ir_diff(args: &[String]) {
                     .zip(pb.tab_extended.iter())
                     .enumerate()
                 {
-                    if ta != tb {
+                    if tab_ext_semantic_differs(ta, tb) {
                         diffs.push(format!("tab_ext[{}]: A={:?} vs B={:?}", ti, ta, tb));
                         break;
                     }
@@ -5089,5 +5109,38 @@ fn extract_thumbnail(args: &[String]) {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tab_ext_semantic_differs;
+
+    #[test]
+    fn tab_ext_reserved_fields_ignored() {
+        // 같은 문서의 HWPX(파서가 [1],[3..6]=0) vs HWP5([1]=leader/fill 슬롯, [3..6]=원본 바이트).
+        // 이 포맷 비대칭 슬롯들은 모두 무시 → 의미 차이 없음.
+        let hwpx = [1640, 0, 256, 0, 0, 0, 9];
+        let hwp5 = [1640, 5, 256, 32, 32, 32, 9];
+        assert!(!tab_ext_semantic_differs(&hwpx, &hwp5));
+    }
+
+    #[test]
+    fn tab_ext_semantic_fields_detected() {
+        let base = [1640, 0, 256, 0, 0, 0, 9];
+        assert!(!tab_ext_semantic_differs(&base, &base));
+        // width([0]) 차이 검출
+        assert!(tab_ext_semantic_differs(&base, &[1641, 0, 256, 0, 0, 0, 9]));
+        // type([2] high byte) 차이 검출 — 256(0x0100)→512(0x0200)
+        assert!(tab_ext_semantic_differs(&base, &[1640, 0, 512, 0, 0, 0, 9]));
+        // leader([2] low byte, 두 포맷 공통) 차이 검출 — 256(0x0100)→257(0x0101)
+        assert!(tab_ext_semantic_differs(&base, &[1640, 0, 257, 0, 0, 0, 9]));
+        // HWP5 leader/fill 슬롯([1], HWPX는 항상 0)은 포맷 비대칭이라 무시 — 차이로 치지 않음
+        assert!(!tab_ext_semantic_differs(
+            &base,
+            &[1640, 1, 256, 0, 0, 0, 9]
+        ));
+        // marker([6]) 차이 검출
+        assert!(tab_ext_semantic_differs(&base, &[1640, 0, 256, 0, 0, 0, 0]));
     }
 }
