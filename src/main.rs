@@ -4519,6 +4519,22 @@ fn diff_common_obj(
     }
 }
 
+/// `tab_extended`(`[u16; 7]`) 두 인라인 탭 레코드가 **의미 있는** 필드에서 다른지 판정.
+///
+/// 인덱스 [3],[4],[5]는 HWP5 인라인 탭(8 WCHAR 블록)의 WCHAR 4~6 원본 바이트(보통
+/// 0x20)로, HWPX `<hp:tab>`(width/leader/type만 보유)에는 대응 속성이 없어 파서가 0으로
+/// 두고, 렌더러·직렬화·레이아웃 어디서도 읽지 않는 비의미(reserved) 값이다. 따라서
+/// HWPX↔HWP5 parity 비교에서 이 세 필드는 거의 모든 탭에서 거짓 차이(0 vs 32)를 만들어
+/// 실제 차이(width/leader/type)를 가린다. 의미 필드 [0]=width, [1]=leader/fill,
+/// [2]=type<<8|fill, [6]=0x0009 마커만 비교한다. (HWP5 직렬화는 [3..6]을 그대로 보존하므로
+/// self-roundtrip 충실도에는 영향 없음 — 도구 비교에서만 제외.)
+fn tab_ext_semantic_differs(a: &[u16; 7], b: &[u16; 7]) -> bool {
+    // 의미 필드만: [0]=width, [1]=leader/fill, [2]=type<<8|fill, [6]=0x0009 마커.
+    // [3],[4],[5]는 비의미 예약 필드라 제외.
+    const SEMANTIC: [usize; 4] = [0, 1, 2, 6];
+    SEMANTIC.iter().any(|&k| a[k] != b[k])
+}
+
 fn ir_diff(args: &[String]) {
     if args.len() < 2 {
         eprintln!("사용법: rhwp ir-diff <파일A> <파일B> [-s <구역>] [-p <문단>] [--summary] [--max-lines <N>]");
@@ -4757,7 +4773,7 @@ fn ir_diff(args: &[String]) {
                     .zip(pb.tab_extended.iter())
                     .enumerate()
                 {
-                    if ta != tb {
+                    if tab_ext_semantic_differs(ta, tb) {
                         diffs.push(format!("tab_ext[{}]: A={:?} vs B={:?}", ti, ta, tb));
                         break;
                     }
@@ -5089,5 +5105,32 @@ fn extract_thumbnail(args: &[String]) {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tab_ext_semantic_differs;
+
+    #[test]
+    fn tab_ext_reserved_fields_ignored() {
+        // 같은 문서의 HWPX(예약 필드 0) vs HWP5(예약 필드 32) — 의미 차이 없음.
+        let hwpx = [1640, 0, 256, 0, 0, 0, 9];
+        let hwp5 = [1640, 0, 256, 32, 32, 32, 9];
+        assert!(!tab_ext_semantic_differs(&hwpx, &hwp5));
+    }
+
+    #[test]
+    fn tab_ext_semantic_fields_detected() {
+        let base = [1640, 0, 256, 0, 0, 0, 9];
+        assert!(!tab_ext_semantic_differs(&base, &base));
+        // width([0]) 차이 검출
+        assert!(tab_ext_semantic_differs(&base, &[1641, 0, 256, 0, 0, 0, 9]));
+        // leader/fill([1]) 차이 검출
+        assert!(tab_ext_semantic_differs(&base, &[1640, 1, 256, 0, 0, 0, 9]));
+        // type+fill([2]) 차이 검출
+        assert!(tab_ext_semantic_differs(&base, &[1640, 0, 512, 0, 0, 0, 9]));
+        // marker([6]) 차이 검출
+        assert!(tab_ext_semantic_differs(&base, &[1640, 0, 256, 0, 0, 0, 0]));
     }
 }
