@@ -78,9 +78,31 @@ function layerPaintOpTypes() {
   }).sort();
 }
 
+function layerNodeKinds() {
+  const unionMatch = layerTypesSource.match(/export type LayerNode =([\s\S]*?);/);
+  assert.notEqual(unionMatch, null, 'missing LayerNode union');
+  const interfaceNames = unionMatch[1].split('|')
+    .map((item) => item.trim().replace(/;$/, ''))
+    .filter(Boolean);
+  assert.ok(interfaceNames.length > 0, 'LayerNode union has no variants');
+
+  return interfaceNames.map((interfaceName) => {
+    const interfacePattern = new RegExp(`export interface ${interfaceName} \\{[\\s\\S]*?kind:\\s*'([^']+)'`);
+    const interfaceMatch = layerTypesSource.match(interfacePattern);
+    assert.notEqual(interfaceMatch, null, `missing kind literal for ${interfaceName}`);
+    return interfaceMatch[1];
+  }).sort();
+}
+
+function requireSnippet(source, pattern, message) {
+  assert.match(source, pattern, message);
+}
+
 const renderOpBody = extractMethodBody(canvaskitSource, 'renderOp');
+const renderNodeBody = extractMethodBody(canvaskitSource, 'renderNode');
 const renderOpCases = caseLabels(renderOpBody).sort();
 const layerOpTypes = layerPaintOpTypes();
+const layerNodeKindSet = layerNodeKinds();
 const canvaskitSourceFiles = [
   { label: path.relative(studioRoot, canvaskitPath), source: canvaskitSource },
   ...tsFilesUnder(canvaskitDirectory).map((filePath) => ({
@@ -112,6 +134,27 @@ assert.deepEqual(
   renderOpCases,
   layerOpTypes,
   'CanvasKit renderOp must explicitly mention every LayerPaintOp variant',
+);
+assert.deepEqual(
+  layerNodeKindSet,
+  ['clipRect', 'group', 'leaf'],
+  'renderer contract guard should know every LayerNode kind',
+);
+
+requireSnippet(
+  renderNodeBody,
+  /node\.kind === 'group'[\s\S]*?for \(const child of node\.children\)[\s\S]*?this\.renderNode\(canvas, child,/,
+  'group nodes should recurse through children',
+);
+requireSnippet(
+  renderNodeBody,
+  /node\.kind === 'clipRect'[\s\S]*?this\.renderClipNode\(canvas, node,/,
+  'clipRect nodes should go through renderClipNode',
+);
+requireSnippet(
+  renderNodeBody,
+  /this\.renderLeaf\(canvas, node, replayPlane, activeLayer\);/,
+  'leaf nodes should go through renderLeaf',
 );
 
 const directReplayOps = [
@@ -152,10 +195,54 @@ for (const op of textRunFallbackOps) {
   );
 }
 
-assert.match(
+requireSnippet(
   renderOpBody,
   /case 'glyphOutline':[\s\S]*?glyphOutlinePayloadStatus\(op,[\s\S]*?this\.renderGlyphOutline\(canvas, op\);[\s\S]*?this\.unsupportedOps\.add\(/,
   'glyphOutline should stay guarded by payload status before direct replay',
+);
+
+const renderRectangleBody = extractMethodBody(canvaskitSource, 'renderRectangle');
+const renderEllipseBody = extractMethodBody(canvaskitSource, 'renderEllipse');
+const renderPathBody = extractMethodBody(canvaskitSource, 'renderPath');
+const renderLineBody = extractMethodBody(canvaskitSource, 'renderLine');
+const renderFormObjectBody = extractMethodBody(canvaskitSource, 'renderFormObject');
+const renderGlyphOutlineBody = extractMethodBody(canvaskitSource, 'renderGlyphOutline');
+const renderColorPaintGraphNodeBody = extractMethodBody(canvaskitSource, 'renderColorPaintGraphNode');
+
+requireSnippet(
+  renderRectangleBody,
+  /this\.drawStyledShape\(canvas, op\.bbox, op\.style,[\s\S]*?drawRRect[\s\S]*?drawRect/,
+  'rectangle replay should stay on drawStyledShape and handle rounded and plain rectangles',
+);
+requireSnippet(
+  renderEllipseBody,
+  /this\.drawStyledShape\(canvas, op\.bbox, op\.style,[\s\S]*?drawOval/,
+  'ellipse replay should stay on drawStyledShape',
+);
+requireSnippet(
+  renderPathBody,
+  /new this\.canvasKit\.Path\(\)[\s\S]*?this\.applyPathCommand[\s\S]*?this\.drawStyledPath/,
+  'path replay should build CanvasKit paths through applyPathCommand and drawStyledPath',
+);
+requireSnippet(
+  renderLineBody,
+  /this\.makeStrokePaint\(op\.style\?\.color[\s\S]*?canvas\.drawLine\(op\.x1, op\.y1, op\.x2, op\.y2, paint\)/,
+  'line replay should draw a CanvasKit line with stroke paint',
+);
+requireSnippet(
+  renderFormObjectBody,
+  /op\.formType === 'checkbox' \|\| op\.formType === 'radio'[\s\S]*?canvas\.drawLine[\s\S]*?const label = op\.caption \|\| op\.text[\s\S]*?this\.renderTextRun/,
+  'form object replay should keep checkbox/radio mark and caption text branches explicit',
+);
+requireSnippet(
+  renderGlyphOutlineBody,
+  /op\.colorLayers\?\.paintGraph[\s\S]*?graph\.rootNodeId[\s\S]*?this\.renderColorPaintGraphNode/,
+  'glyphOutline replay should require a colorLayers paint graph root',
+);
+requireSnippet(
+  renderColorPaintGraphNodeBody,
+  /visited\.has\(nodeId\)[\s\S]*?unsupportedColorGlyph[\s\S]*?node\.solidPath \?\? node\.linearGradientPath \?\? node\.radialGradientPath \?\? node\.sweepGradientPath/,
+  'glyphOutline color graph replay should keep cycle guard and supported path families explicit',
 );
 
 for (const { label, source } of canvaskitSourceFiles) {
