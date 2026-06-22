@@ -148,13 +148,17 @@ Stage 4 변경과 Stage 5 변경은 커밋을 분리했다.
 - 편집 메뉴에 `모양 붙여넣기` 항목을 복구했다.
 - 기본/표 셀 컨텍스트 메뉴에 `모양 붙여넣기` 항목을 복구했다.
 - 기존 `Alt+C` 일회성 토글 동작과 툴바 `모양 복사` 버튼은 유지했다.
+- `format-paste-availability.ts`와 `format-paste-command.test.ts`를 추가해 다음 회귀를 `npm test`로 고정했다.
+  - 복사 상태/적용 대상/form mode에 따른 `모양 붙여넣기` 활성 조건
+  - `edit:format-paste` 커맨드가 붙여넣기 전용 경로에 연결되는지
+  - 메뉴/컨텍스트 메뉴/컨텍스트 상태 경로가 유지되는지
 
 ## 7. 검증 결과
 
 - `cd rhwp-studio && npx tsc --noEmit`
   - 통과
 - `cd rhwp-studio && npm test`
-  - 통과: 107 passed
+  - 통과: 110 passed
 - 사용자 직접 검증
   - 완료
 
