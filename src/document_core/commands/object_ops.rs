@@ -37,6 +37,15 @@ impl DocumentCore {
             | (packed & Self::COMMON_OBJ_ATTR_KNOWN_MASK);
     }
 
+    fn is_structure_only_empty_paragraph(para: &Paragraph) -> bool {
+        para.text.is_empty()
+            && !para.controls.is_empty()
+            && para
+                .controls
+                .iter()
+                .all(|ctrl| matches!(ctrl, Control::SectionDef(_) | Control::ColumnDef(_)))
+    }
+
     fn resolve_shape_control_ref(
         &self,
         section_idx: usize,
@@ -2039,11 +2048,39 @@ impl DocumentCore {
 
         let para = &self.document.sections[section_idx].paragraphs[para_idx];
         let is_empty_para = para.text.is_empty() && para.controls.is_empty();
+        let is_structure_only_empty_para = Self::is_structure_only_empty_paragraph(para);
 
         let insert_para_idx;
-        if is_empty_para && char_offset == 0 {
-            // 빈 문단이면 같은 문단의 표 앞 조판부호를 유지한 채 표 문단으로 사용한다.
+        let table_control_idx;
+        if is_empty_para {
+            // 빈 문단이면 UI에서 넘어온 offset과 무관하게 현재 줄을 표 host로 사용한다.
             self.document.sections[section_idx].paragraphs[para_idx] = table_para;
+            insert_para_idx = para_idx;
+            table_control_idx = 0;
+        } else if is_structure_only_empty_para {
+            // blank2010 첫 문단처럼 SectionDef/ColumnDef만 있는 빈 줄은 구조 컨트롤을
+            // 보존하되, 줄 배치는 표 host 문단 기준으로 교체해 표 위 빈 줄을 만들지 않는다.
+            let old_para = self.document.sections[section_idx].paragraphs[para_idx].clone();
+            let mut merged_para = table_para;
+            let table_control = merged_para
+                .controls
+                .pop()
+                .ok_or_else(|| HwpError::RenderError("표 컨트롤 생성 실패".to_string()))?;
+            let table_ctrl_data = merged_para.ctrl_data_records.pop().unwrap_or(None);
+
+            merged_para.controls = old_para.controls;
+            merged_para.ctrl_data_records = old_para.ctrl_data_records;
+            while merged_para.ctrl_data_records.len() < merged_para.controls.len() {
+                merged_para.ctrl_data_records.push(None);
+            }
+            table_control_idx = merged_para.controls.len();
+            merged_para.controls.push(table_control);
+            merged_para.ctrl_data_records.push(table_ctrl_data);
+            merged_para.char_count = merged_para.controls.len() as u32 * 8 + 1;
+            merged_para.control_mask = old_para.control_mask | 0x0000_0800;
+            merged_para.has_para_text = true;
+
+            self.document.sections[section_idx].paragraphs[para_idx] = merged_para;
             insert_para_idx = para_idx;
         } else if char_offset == 0 && para.controls.is_empty() {
             // 문단 맨 앞이면 바로 앞에 삽입
@@ -2051,6 +2088,7 @@ impl DocumentCore {
                 .paragraphs
                 .insert(para_idx, table_para);
             insert_para_idx = para_idx;
+            table_control_idx = 0;
         } else {
             // 문단 중간이면 분할 후 삽입
             if char_offset > 0 && !para.text.is_empty() {
@@ -2064,12 +2102,14 @@ impl DocumentCore {
                     .paragraphs
                     .insert(para_idx + 1, table_para);
                 insert_para_idx = para_idx + 1;
+                table_control_idx = 0;
             } else {
                 // char_offset == 0이지만 컨트롤이 있는 경우 → 뒤에 삽입
                 self.document.sections[section_idx]
                     .paragraphs
                     .insert(para_idx + 1, table_para);
                 insert_para_idx = para_idx + 1;
+                table_control_idx = 0;
             }
         }
 
@@ -2085,11 +2125,11 @@ impl DocumentCore {
         self.event_log.push(DocumentEvent::TableRowInserted {
             section: section_idx,
             para: insert_para_idx,
-            ctrl: 0,
+            ctrl: table_control_idx,
         });
         Ok(super::super::helpers::json_ok_with(&format!(
-            "\"paraIdx\":{},\"controlIdx\":0",
-            insert_para_idx
+            "\"paraIdx\":{},\"controlIdx\":{}",
+            insert_para_idx, table_control_idx
         )))
     }
 

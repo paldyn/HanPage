@@ -135,6 +135,63 @@ fn issue_1481_find_table_and_host_mark_y(
     }
 }
 
+fn issue_1481_collect_outside_empty_para_marks(
+    node: &crate::renderer::render_tree::RenderNode,
+    marks: &mut Vec<(usize, f64)>,
+) {
+    use crate::renderer::render_tree::RenderNodeType;
+
+    if let RenderNodeType::TextRun(run) = &node.node_type {
+        if let Some(para_idx) = run.para_index {
+            if run.cell_context.is_none() && run.text.is_empty() && run.is_para_end {
+                marks.push((para_idx, node.bbox.y));
+            }
+        }
+    }
+
+    for child in &node.children {
+        issue_1481_collect_outside_empty_para_marks(child, marks);
+    }
+}
+
+fn issue_1481_collect_layer_control_mark_y(value: &Value, marks: &mut Vec<f64>) {
+    match value {
+        Value::Object(map) => {
+            if map.get("type").and_then(Value::as_str) == Some("textControlMark")
+                && map.get("isParaEnd").and_then(Value::as_bool) == Some(true)
+            {
+                if let Some(y) = map
+                    .get("bbox")
+                    .and_then(|bbox| bbox.get("y"))
+                    .and_then(Value::as_f64)
+                {
+                    marks.push(y);
+                }
+            }
+            for child in map.values() {
+                issue_1481_collect_layer_control_mark_y(child, marks);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                issue_1481_collect_layer_control_mark_y(item, marks);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn issue_1481_layer_control_mark_y(doc: &HwpDocument) -> Vec<f64> {
+    let json = doc
+        .get_page_layer_tree_native(0)
+        .expect("PageLayerTree JSON");
+    let parsed: Value = serde_json::from_str(&json).expect("PageLayerTree JSON 파싱");
+    let mut marks = Vec::new();
+    issue_1481_collect_layer_control_mark_y(&parsed, &mut marks);
+    marks.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    marks
+}
+
 #[test]
 fn issue_1470_style_update_reflows_and_keeps_margin_unit() {
     use crate::model::style::{CharShape, ParaShape, Style};
@@ -450,8 +507,8 @@ fn issue_1481_create_table_keeps_first_line_mark_for_escape() {
 
     let mut doc = HwpDocument::create_empty();
     let table_result = doc
-        .create_table_native(0, 0, 0, 3, 5)
-        .expect("일반 표 생성");
+        .create_table_ex_native(0, 0, 1, 3, 5, false, None, None)
+        .expect("상세 대화상자 경로의 일반 표 생성");
     let table_para_idx = issue_1481_json_usize(&table_result, "paraIdx");
     let section = &doc.document.sections[0];
 
@@ -502,6 +559,212 @@ fn issue_1481_create_table_keeps_first_line_mark_for_escape() {
         (table_y - host_mark_y).abs() < 1.0,
         "기본 자리차지 표의 첫 조판부호는 빈 줄이 아니라 표 상단과 겹쳐야 한다: table_y={table_y}, mark_y={host_mark_y}"
     );
+    doc.set_show_paragraph_marks(true);
+    let layer_marks = issue_1481_layer_control_mark_y(&doc);
+    let layer_marks_above_table = layer_marks
+        .iter()
+        .filter(|y| **y < table_y - 1.0)
+        .copied()
+        .collect::<Vec<_>>();
+    assert!(
+        layer_marks_above_table.is_empty(),
+        "새 문서 빈 문단 끝에서 표를 만들 때 생성 경로가 빈 줄을 남기면 안 된다: table_y={table_y}, layer_marks_above={layer_marks_above_table:?}, all={layer_marks:?}"
+    );
+    doc.set_show_paragraph_marks(false);
+
+    let mut outside_marks = Vec::new();
+    issue_1481_collect_outside_empty_para_marks(&tree.root, &mut outside_marks);
+    let marks_above_table = outside_marks
+        .iter()
+        .filter(|(_, y)| *y < table_y - 1.0)
+        .copied()
+        .collect::<Vec<_>>();
+    assert!(
+        marks_above_table.is_empty(),
+        "표 생성 직후 표 위에 별도 빈 줄 조판부호가 있으면 안 된다: table_y={table_y}, marks={marks_above_table:?}, all={outside_marks:?}"
+    );
+
+    let enter_result = doc
+        .split_paragraph_native(0, table_para_idx, 0)
+        .expect("표 앞 조판부호 위치 Enter");
+    let enter_para_idx = issue_1481_json_usize(&enter_result, "paraIdx");
+    assert_eq!(
+        enter_para_idx,
+        table_para_idx + 1,
+        "자리차지 표 앞 Enter는 표 아래 문단으로 커서를 보내야 한다"
+    );
+    let section_after_enter = &doc.document.sections[0];
+    assert!(matches!(
+        section_after_enter.paragraphs[table_para_idx]
+            .controls
+            .first(),
+        Some(Control::Table(_))
+    ));
+    assert_eq!(
+        section_after_enter.paragraphs[table_para_idx].char_count, 9,
+        "Enter 후에도 표 host 문단은 빈 문단으로 분리되면 안 된다"
+    );
+    assert!(section_after_enter.paragraphs[enter_para_idx]
+        .text
+        .is_empty());
+    assert!(section_after_enter.paragraphs[enter_para_idx]
+        .controls
+        .is_empty());
+    assert_eq!(section_after_enter.paragraphs[enter_para_idx].char_count, 1);
+    assert!(section_after_enter
+        .paragraphs
+        .get(enter_para_idx + 1)
+        .map(|p| p.text.is_empty() && p.controls.is_empty())
+        .unwrap_or(false));
+
+    let tree_after_enter = issue_1481_first_page_render_tree(&doc);
+    let mut table_y_after = None;
+    let mut host_mark_y_after = None;
+    issue_1481_find_table_and_host_mark_y(
+        &tree_after_enter.root,
+        table_para_idx,
+        &mut table_y_after,
+        &mut host_mark_y_after,
+    );
+    let table_y_after = table_y_after.expect("Enter 후 표 렌더 노드 y");
+    let host_mark_y_after = host_mark_y_after.expect("Enter 후 표 host 문단부호 y");
+    assert!(
+        (table_y_after - host_mark_y_after).abs() < 1.0,
+        "Enter 후에도 표 host 조판부호는 표 상단과 겹쳐야 한다: table_y={table_y_after}, mark_y={host_mark_y_after}"
+    );
+    let mut outside_marks_after = Vec::new();
+    issue_1481_collect_outside_empty_para_marks(&tree_after_enter.root, &mut outside_marks_after);
+    let marks_above_table_after = outside_marks_after
+        .iter()
+        .filter(|(_, y)| *y < table_y_after - 1.0)
+        .copied()
+        .collect::<Vec<_>>();
+    assert!(
+        marks_above_table_after.is_empty(),
+        "Enter 후에도 표 위에 별도 빈 줄 조판부호가 있으면 안 된다: table_y={table_y_after}, marks={marks_above_table_after:?}, all={outside_marks_after:?}"
+    );
+}
+
+#[test]
+fn issue_1481_create_table_preserves_user_blank_line_above() {
+    use crate::model::control::Control;
+
+    let mut doc = HwpDocument::create_empty();
+    doc.split_paragraph_native(0, 0, 0)
+        .expect("사용자가 만든 빈 줄");
+    let table_result = doc
+        .create_table_ex_native(0, 1, 1, 3, 5, false, None, None)
+        .expect("두 번째 빈 문단에 일반 표 생성");
+    let table_para_idx = issue_1481_json_usize(&table_result, "paraIdx");
+    let section = &doc.document.sections[0];
+
+    assert_eq!(
+        table_para_idx, 1,
+        "사용자가 표 위에 만든 빈 문단은 삭제하지 않고 현재 빈 문단만 표 host로 교체해야 한다"
+    );
+    assert!(section.paragraphs[0].text.is_empty());
+    assert!(section.paragraphs[0].controls.is_empty());
+    assert_eq!(section.paragraphs[0].char_count, 1);
+    assert!(matches!(
+        section.paragraphs[table_para_idx].controls.first(),
+        Some(Control::Table(_))
+    ));
+}
+
+#[test]
+fn issue_1481_create_table_empty_para_ignores_stale_offset() {
+    use crate::model::control::Control;
+
+    let mut doc = HwpDocument::create_empty();
+    let table_result = doc
+        .create_table_ex_native(0, 0, 2, 3, 5, false, None, None)
+        .expect("빈 문단의 초과 offset에서 일반 표 생성");
+    let table_para_idx = issue_1481_json_usize(&table_result, "paraIdx");
+    let section = &doc.document.sections[0];
+
+    assert_eq!(
+        table_para_idx, 0,
+        "빈 문단 offset이 초과되어도 표 위에 생성 경로의 빈 줄을 남기면 안 된다"
+    );
+    assert!(matches!(
+        section.paragraphs[table_para_idx].controls.first(),
+        Some(Control::Table(_))
+    ));
+
+    let tree = issue_1481_first_page_render_tree(&doc);
+    let mut table_y = None;
+    let mut host_mark_y = None;
+    issue_1481_find_table_and_host_mark_y(
+        &tree.root,
+        table_para_idx,
+        &mut table_y,
+        &mut host_mark_y,
+    );
+    let table_y = table_y.expect("표 렌더 노드 y");
+    let host_mark_y = host_mark_y.expect("표 host 문단부호 y");
+    assert!(
+        (table_y - host_mark_y).abs() < 1.0,
+        "빈 문단 초과 offset에서도 첫 조판부호는 표 상단과 겹쳐야 한다: table_y={table_y}, mark_y={host_mark_y}"
+    );
+}
+
+#[test]
+fn issue_1481_blank_template_create_table_has_no_generated_blank_above() {
+    use crate::model::control::Control;
+
+    let mut doc = HwpDocument::create_empty();
+    doc.create_blank_document_native()
+        .expect("Studio 새 문서 템플릿 생성");
+    let table_result = doc
+        .create_table_ex_native(0, 0, 2, 3, 5, false, None, None)
+        .expect("blank2010 기반 빈 문단 초과 offset에서 일반 표 생성");
+    let table_para_idx = issue_1481_json_usize(&table_result, "paraIdx");
+    let table_control_idx = issue_1481_json_usize(&table_result, "controlIdx");
+    let section = &doc.document.sections[0];
+
+    assert_eq!(
+        table_para_idx, 0,
+        "Studio 새 문서 템플릿에서도 첫 표는 첫 줄에 만들어져야 한다"
+    );
+    assert_eq!(
+        table_control_idx, 2,
+        "blank2010의 SectionDef/ColumnDef 구조 컨트롤 뒤에 표 컨트롤이 보존되어야 한다"
+    );
+    assert!(matches!(
+        section.paragraphs[table_para_idx]
+            .controls
+            .get(table_control_idx),
+        Some(Control::Table(_))
+    ));
+
+    let tree = issue_1481_first_page_render_tree(&doc);
+    let mut table_y = None;
+    let mut host_mark_y = None;
+    issue_1481_find_table_and_host_mark_y(
+        &tree.root,
+        table_para_idx,
+        &mut table_y,
+        &mut host_mark_y,
+    );
+    let table_y = table_y.expect("표 렌더 노드 y");
+    let host_mark_y = host_mark_y.expect("표 host 문단부호 y");
+    assert!(
+        (table_y - host_mark_y).abs() < 1.0,
+        "blank2010 경로에서도 첫 조판부호는 표 상단과 겹쳐야 한다: table_y={table_y}, mark_y={host_mark_y}"
+    );
+
+    doc.set_show_paragraph_marks(true);
+    let layer_marks = issue_1481_layer_control_mark_y(&doc);
+    let layer_marks_above_table = layer_marks
+        .iter()
+        .filter(|y| **y < table_y - 1.0)
+        .copied()
+        .collect::<Vec<_>>();
+    assert!(
+        layer_marks_above_table.is_empty(),
+        "blank2010 경로에서도 표 위에 생성 경로 빈 줄을 남기면 안 된다: table_y={table_y}, layer_marks_above={layer_marks_above_table:?}, all={layer_marks:?}"
+    );
+    doc.set_show_paragraph_marks(false);
 }
 
 #[test]

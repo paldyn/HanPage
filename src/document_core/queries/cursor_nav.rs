@@ -1486,7 +1486,7 @@ impl DocumentCore {
             // 문서 끝 — 표 마지막 위치 유지
             Ok((sec, 0, 0, None))
         } else {
-            return Ok((sec, ppi, 0, None));
+            Ok((sec, ppi, 0, None))
         }
     }
 
