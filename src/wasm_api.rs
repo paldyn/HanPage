@@ -5235,6 +5235,9 @@ impl HwpDocument {
             Some(s) => s.clone(),
             None => return false,
         };
+        let old_csid = style.char_shape_id as u32;
+        let old_psid = style.para_shape_id;
+        let style_type = style.style_type;
 
         // CharShape 수정
         if !char_mods_json.is_empty() && char_mods_json != "{}" {
@@ -5316,13 +5319,10 @@ impl HwpDocument {
                 .get_mut(sec_idx)
                 .and_then(|s| s.paragraphs.get_mut(para_idx))
             {
-                para.para_shape_id = new_psid;
-                para.char_shapes.clear();
-                para.char_shapes
-                    .push(crate::model::paragraph::CharShapeRef {
-                        start_pos: 0,
-                        char_shape_id: new_csid,
-                    });
+                if style_type == 0 && para.para_shape_id == old_psid {
+                    para.para_shape_id = new_psid;
+                }
+                para.replace_style_char_shape_preserving_overrides(old_csid, new_csid);
             }
             self.core.reflow_body_paragraph(sec_idx, para_idx);
             if let Some(section) = self.core.document.sections.get_mut(sec_idx) {
@@ -5338,14 +5338,10 @@ impl HwpDocument {
                 cell_idx,
                 cell_para_idx,
             ) {
-                cpara.para_shape_id = new_psid;
-                cpara.char_shapes.clear();
-                cpara
-                    .char_shapes
-                    .push(crate::model::paragraph::CharShapeRef {
-                        start_pos: 0,
-                        char_shape_id: new_csid,
-                    });
+                if style_type == 0 && cpara.para_shape_id == old_psid {
+                    cpara.para_shape_id = new_psid;
+                }
+                cpara.replace_style_char_shape_preserving_overrides(old_csid, new_csid);
             }
             self.core.reflow_cell_paragraph(
                 sec_idx,

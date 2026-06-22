@@ -1717,21 +1717,57 @@ impl DocumentCore {
             .doc_info
             .styles
             .get(style_id)
+            .cloned()
             .ok_or_else(|| HwpError::RenderError(format!("스타일 {} 범위 초과", style_id)))?;
         let new_char_shape_id = style.char_shape_id as u32;
 
-        // 현재 문단의 para_shape_id를 먼저 읽어서 번호 문맥 보존
-        let current_psid = self
+        // 현재 문단의 기존 스타일/문단 모양을 먼저 읽어서 직접 서식 여부를 판단한다.
+        let (current_style_id, current_psid) = self
             .document
             .sections
             .get(sec_idx)
             .and_then(|s| s.paragraphs.get(para_idx))
-            .map(|p| p.para_shape_id)
+            .map(|p| (p.style_id, p.para_shape_id))
             .ok_or_else(|| {
                 HwpError::RenderError(format!("문단 {}/{} 범위 초과", sec_idx, para_idx))
             })?;
+        let old_style = self
+            .document
+            .doc_info
+            .styles
+            .get(current_style_id as usize)
+            .cloned();
 
-        let new_para_shape_id = self.resolve_style_para_shape_id(style_id, current_psid);
+        if style.style_type == 1 {
+            let text_len = {
+                let para = self
+                    .document
+                    .sections
+                    .get_mut(sec_idx)
+                    .and_then(|s| s.paragraphs.get_mut(para_idx))
+                    .ok_or_else(|| {
+                        HwpError::RenderError(format!("문단 {}/{} 범위 초과", sec_idx, para_idx))
+                    })?;
+                para.apply_char_shape_to_entire_text(new_char_shape_id);
+                para.text.chars().count()
+            };
+
+            self.reflow_body_paragraph(sec_idx, para_idx);
+            self.document.sections[sec_idx].raw_stream = None;
+            self.rebuild_section(sec_idx);
+            self.event_log.push(DocumentEvent::CharFormatChanged {
+                section: sec_idx,
+                para: para_idx,
+                start: 0,
+                end: text_len,
+            });
+            return Ok("{\"ok\":true}".to_string());
+        }
+
+        let new_para_shape_id = match old_style.as_ref() {
+            Some(old) if current_psid != old.para_shape_id => current_psid,
+            _ => self.resolve_style_para_shape_id(style_id, current_psid),
+        };
 
         let para = self
             .document
@@ -1744,14 +1780,14 @@ impl DocumentCore {
 
         para.style_id = style_id as u8;
         para.para_shape_id = new_para_shape_id;
-
-        // char_shape: 모든 로컬 오버라이드를 제거하고 스타일 CharShape 단일 항목으로 통일
-        para.char_shapes.clear();
-        para.char_shapes
-            .push(crate::model::paragraph::CharShapeRef {
-                start_pos: 0,
-                char_shape_id: new_char_shape_id,
-            });
+        if let Some(old) = old_style {
+            para.replace_style_char_shape_preserving_overrides(
+                old.char_shape_id as u32,
+                new_char_shape_id,
+            );
+        } else {
+            para.set_single_char_shape(new_char_shape_id);
+        }
 
         self.reflow_body_paragraph(sec_idx, para_idx);
         self.document.sections[sec_idx].raw_stream = None;
@@ -1778,11 +1814,12 @@ impl DocumentCore {
             .doc_info
             .styles
             .get(style_id)
+            .cloned()
             .ok_or_else(|| HwpError::RenderError(format!("스타일 {} 범위 초과", style_id)))?;
         let new_char_shape_id = style.char_shape_id as u32;
 
-        // 현재 셀 문단의 para_shape_id를 먼저 읽어서 번호 문맥 보존
-        let current_psid = self
+        // 현재 셀 문단의 기존 스타일/문단 모양을 먼저 읽어서 직접 서식 여부를 판단한다.
+        let (current_style_id, current_psid) = self
             .get_cell_paragraph_ref(
                 sec_idx,
                 parent_para_idx,
@@ -1790,10 +1827,51 @@ impl DocumentCore {
                 cell_idx,
                 cell_para_idx,
             )
-            .map(|p| p.para_shape_id)
+            .map(|p| (p.style_id, p.para_shape_id))
             .ok_or_else(|| HwpError::RenderError("셀 문단을 찾을 수 없음".to_string()))?;
+        let old_style = self
+            .document
+            .doc_info
+            .styles
+            .get(current_style_id as usize)
+            .cloned();
 
-        let new_para_shape_id = self.resolve_style_para_shape_id(style_id, current_psid);
+        if style.style_type == 1 {
+            let text_len = {
+                let cell_para = self.get_cell_paragraph_mut(
+                    sec_idx,
+                    parent_para_idx,
+                    control_idx,
+                    cell_idx,
+                    cell_para_idx,
+                )?;
+                cell_para.apply_char_shape_to_entire_text(new_char_shape_id);
+                cell_para.text.chars().count()
+            };
+
+            self.reflow_cell_paragraph(
+                sec_idx,
+                parent_para_idx,
+                control_idx,
+                cell_idx,
+                cell_para_idx,
+            );
+            self.mark_cell_control_dirty(sec_idx, parent_para_idx, control_idx);
+            self.document.sections[sec_idx].raw_stream = None;
+            self.rebuild_section(sec_idx);
+            self.event_log.push(DocumentEvent::CharFormatChanged {
+                section: sec_idx,
+                para: parent_para_idx,
+                start: 0,
+                end: text_len,
+            });
+            return Ok("{\"ok\":true}".to_string());
+        }
+
+        let new_para_shape_id = match old_style.as_ref() {
+            Some(old) if current_psid != old.para_shape_id => current_psid,
+            _ => self.resolve_style_para_shape_id(style_id, current_psid),
+        };
 
         {
             let cell_para = self.get_cell_paragraph_mut(
@@ -1805,14 +1883,14 @@ impl DocumentCore {
             )?;
             cell_para.style_id = style_id as u8;
             cell_para.para_shape_id = new_para_shape_id;
-            // 모든 로컬 오버라이드를 제거하고 스타일 CharShape 단일 항목으로 통일
-            cell_para.char_shapes.clear();
-            cell_para
-                .char_shapes
-                .push(crate::model::paragraph::CharShapeRef {
-                    start_pos: 0,
-                    char_shape_id: new_char_shape_id,
-                });
+            if let Some(old) = old_style {
+                cell_para.replace_style_char_shape_preserving_overrides(
+                    old.char_shape_id as u32,
+                    new_char_shape_id,
+                );
+            } else {
+                cell_para.set_single_char_shape(new_char_shape_id);
+            }
         }
 
         self.reflow_cell_paragraph(

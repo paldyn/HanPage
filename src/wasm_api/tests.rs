@@ -113,6 +113,226 @@ fn issue_1470_style_update_reflows_and_keeps_margin_unit() {
 }
 
 #[test]
+fn issue_1470_style_apply_preserves_direct_char_shape() {
+    use crate::model::paragraph::CharShapeRef;
+    use crate::model::style::{CharShape, ParaShape, Style};
+
+    let mut doc = HwpDocument::create_empty();
+    doc.document.doc_info.char_shapes = vec![
+        CharShape {
+            base_size: 1000,
+            ..Default::default()
+        },
+        CharShape {
+            base_size: 1200,
+            ..Default::default()
+        },
+        CharShape {
+            bold: true,
+            ..Default::default()
+        },
+    ];
+    doc.document.doc_info.para_shapes = vec![
+        ParaShape::default(),
+        ParaShape {
+            margin_left: 1000,
+            ..Default::default()
+        },
+    ];
+    doc.document.doc_info.styles = vec![
+        Style {
+            local_name: "바탕글".to_string(),
+            english_name: "Normal".to_string(),
+            lang_id: 1042,
+            para_shape_id: 0,
+            char_shape_id: 0,
+            ..Default::default()
+        },
+        Style {
+            local_name: "새 문단 스타일".to_string(),
+            english_name: "Issue1470Apply".to_string(),
+            lang_id: 1042,
+            para_shape_id: 1,
+            char_shape_id: 1,
+            ..Default::default()
+        },
+    ];
+    doc.insert_text_native(0, 0, 0, "가나다라")
+        .expect("텍스트 입력");
+
+    let para = &mut doc.document.sections[0].paragraphs[0];
+    para.style_id = 0;
+    para.para_shape_id = 0;
+    para.char_shapes = vec![CharShapeRef {
+        start_pos: 0,
+        char_shape_id: 0,
+    }];
+    para.apply_char_shape_range(1, 3, 2);
+
+    doc.apply_style_native(0, 0, 1).expect("문단 스타일 적용");
+
+    let para = &doc.document.sections[0].paragraphs[0];
+    assert_eq!(para.style_id, 1);
+    assert_eq!(para.para_shape_id, 1);
+    let refs: Vec<(u32, u32)> = para
+        .char_shapes
+        .iter()
+        .map(|cs| (cs.start_pos, cs.char_shape_id))
+        .collect();
+    assert_eq!(
+        refs,
+        vec![(0, 1), (1, 2), (3, 1)],
+        "스타일 기본 글자 모양만 새 스타일로 바뀌고 직접 글자 모양 range는 유지되어야 한다"
+    );
+}
+
+#[test]
+fn issue_1470_style_update_preserves_direct_char_shape() {
+    use crate::model::paragraph::CharShapeRef;
+    use crate::model::style::{CharShape, ParaShape, Style};
+
+    let mut doc = HwpDocument::create_empty();
+    doc.document.doc_info.char_shapes = vec![
+        CharShape {
+            base_size: 1000,
+            ..Default::default()
+        },
+        CharShape {
+            base_size: 1200,
+            ..Default::default()
+        },
+        CharShape {
+            bold: true,
+            ..Default::default()
+        },
+    ];
+    doc.document.doc_info.para_shapes = vec![
+        ParaShape::default(),
+        ParaShape {
+            margin_left: 1000,
+            ..Default::default()
+        },
+    ];
+    doc.document.doc_info.styles = vec![
+        Style {
+            local_name: "바탕글".to_string(),
+            english_name: "Normal".to_string(),
+            lang_id: 1042,
+            para_shape_id: 0,
+            char_shape_id: 0,
+            ..Default::default()
+        },
+        Style {
+            local_name: "편집 대상 스타일".to_string(),
+            english_name: "Issue1470Update".to_string(),
+            lang_id: 1042,
+            para_shape_id: 1,
+            char_shape_id: 1,
+            ..Default::default()
+        },
+    ];
+    doc.insert_text_native(0, 0, 0, "가나다라")
+        .expect("텍스트 입력");
+
+    let para = &mut doc.document.sections[0].paragraphs[0];
+    para.style_id = 1;
+    para.para_shape_id = 1;
+    para.char_shapes = vec![CharShapeRef {
+        start_pos: 0,
+        char_shape_id: 1,
+    }];
+    para.apply_char_shape_range(1, 3, 2);
+
+    assert!(
+        doc.update_style_shapes(1, r#"{"fontSize":1400}"#, "{}"),
+        "스타일 글자 모양 수정"
+    );
+
+    let updated_csid = doc.document.doc_info.styles[1].char_shape_id as u32;
+    assert_ne!(
+        updated_csid, 1,
+        "스타일 CharShape가 새 ID로 갱신되어야 한다"
+    );
+
+    let para = &doc.document.sections[0].paragraphs[0];
+    let refs: Vec<(u32, u32)> = para
+        .char_shapes
+        .iter()
+        .map(|cs| (cs.start_pos, cs.char_shape_id))
+        .collect();
+    assert_eq!(
+        refs,
+        vec![(0, updated_csid), (1, 2), (3, updated_csid)],
+        "스타일 편집 전파 시 직접 글자 모양 range는 유지되어야 한다"
+    );
+}
+
+#[test]
+fn issue_1470_character_style_does_not_replace_para_style() {
+    use crate::model::paragraph::CharShapeRef;
+    use crate::model::style::{CharShape, ParaShape, Style};
+
+    let mut doc = HwpDocument::create_empty();
+    doc.document.doc_info.char_shapes = vec![
+        CharShape {
+            base_size: 1000,
+            ..Default::default()
+        },
+        CharShape {
+            italic: true,
+            ..Default::default()
+        },
+    ];
+    doc.document.doc_info.para_shapes = vec![ParaShape::default()];
+    doc.document.doc_info.styles = vec![
+        Style {
+            local_name: "바탕글".to_string(),
+            english_name: "Normal".to_string(),
+            lang_id: 1042,
+            para_shape_id: 0,
+            char_shape_id: 0,
+            ..Default::default()
+        },
+        Style {
+            local_name: "글자 스타일".to_string(),
+            english_name: "Issue1470Char".to_string(),
+            style_type: 1,
+            lang_id: 1042,
+            para_shape_id: 0,
+            char_shape_id: 1,
+            ..Default::default()
+        },
+    ];
+    doc.insert_text_native(0, 0, 0, "글자스타일")
+        .expect("텍스트 입력");
+
+    let para = &mut doc.document.sections[0].paragraphs[0];
+    para.style_id = 0;
+    para.para_shape_id = 0;
+    para.char_shapes = vec![CharShapeRef {
+        start_pos: 0,
+        char_shape_id: 0,
+    }];
+
+    doc.apply_style_native(0, 0, 1).expect("글자 스타일 적용");
+
+    let para = &doc.document.sections[0].paragraphs[0];
+    assert_eq!(
+        para.style_id, 0,
+        "글자 스타일은 문단 스타일 ID를 바꾸지 않는다"
+    );
+    assert_eq!(
+        para.para_shape_id, 0,
+        "글자 스타일은 문단 모양 ID를 바꾸지 않는다"
+    );
+    assert_eq!(
+        para.char_shape_id_at(0),
+        Some(1),
+        "글자 스타일 CharShape는 글자 모양에 적용되어야 한다"
+    );
+}
+
+#[test]
 fn issue_1470_create_table_ex_applies_size_options() {
     use crate::model::control::Control;
 
