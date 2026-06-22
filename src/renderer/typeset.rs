@@ -9453,8 +9453,20 @@ impl TypesetEngine {
                 _ => 0,
             }
         };
+        let table_flow_tiebreak = |ctrl: &Control| -> u8 {
+            match ctrl {
+                Control::Table(t) if !self.is_effective_tac_table(para, t, &fmt) => 0,
+                Control::Table(t) if self.is_effective_tac_table(para, t, &fmt) => 1,
+                _ => 1,
+            }
+        };
         let mut ctrl_order: Vec<usize> = (0..para.controls.len()).collect();
-        ctrl_order.sort_by_key(|&i| float_table_voffset(&para.controls[i]));
+        ctrl_order.sort_by_key(|&i| {
+            (
+                float_table_voffset(&para.controls[i]),
+                table_flow_tiebreak(&para.controls[i]),
+            )
+        });
         // is_first_table/is_last_table 는 배열순서가 아닌 "놓이는 순서(ctrl_order)"
         // 기준으로 잡아, pre/post 텍스트와 spacing 이 실제 배치 첫/마지막 표에 붙도록 한다.
         let first_placed_table = ctrl_order

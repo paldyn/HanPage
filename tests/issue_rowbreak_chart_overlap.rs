@@ -23,6 +23,18 @@ fn find_table_bbox(root: &RenderNode, target_pi: usize, target_ci: usize) -> Opt
         .find_map(|child| find_table_bbox(child, target_pi, target_ci))
 }
 
+fn find_table_node(root: &RenderNode, target_pi: usize, target_ci: usize) -> Option<&RenderNode> {
+    if let RenderNodeType::Table(t) = &root.node_type {
+        if t.para_index == Some(target_pi) && t.control_index == Some(target_ci) {
+            return Some(root);
+        }
+    }
+
+    root.children
+        .iter()
+        .find_map(|child| find_table_node(child, target_pi, target_ci))
+}
+
 fn find_body_bbox(root: &RenderNode) -> Option<BoundingBox> {
     if matches!(root.node_type, RenderNodeType::Body { .. }) {
         return Some(root.bbox);
@@ -43,6 +55,33 @@ fn find_textrun_bbox_containing(root: &RenderNode, needle: &str) -> Option<Bound
         .find_map(|child| find_textrun_bbox_containing(child, needle))
 }
 
+fn max_text_line_bottom(root: &RenderNode) -> Option<f64> {
+    let own_bottom = if matches!(root.node_type, RenderNodeType::TextLine(_)) {
+        Some(root.bbox.y + root.bbox.height)
+    } else {
+        None
+    };
+
+    root.children
+        .iter()
+        .filter_map(max_text_line_bottom)
+        .fold(own_bottom, |acc, bottom| {
+            Some(acc.map_or(bottom, |current| current.max(bottom)))
+        })
+}
+
+fn collect_rectangles_with_text<'a>(root: &'a RenderNode, out: &mut Vec<&'a RenderNode>) {
+    if matches!(root.node_type, RenderNodeType::Rectangle(_))
+        && max_text_line_bottom(root).is_some()
+    {
+        out.push(root);
+    }
+
+    for child in &root.children {
+        collect_rectangles_with_text(child, out);
+    }
+}
+
 #[test]
 fn rowbreak_page11_partial_table_stays_inside_body() {
     let repo_root = env!("CARGO_MANIFEST_DIR");
@@ -55,8 +94,7 @@ fn rowbreak_page11_partial_table_stays_inside_body() {
         .unwrap_or_else(|e| panic!("render page 11: {e}"));
 
     let body = find_body_bbox(&tree.root).expect("page 11 body should render");
-    let table =
-        find_table_bbox(&tree.root, 5, 0).expect("page 11 table pi=5 ci=0 should render");
+    let table = find_table_bbox(&tree.root, 5, 0).expect("page 11 table pi=5 ci=0 should render");
 
     let body_bottom = body.y + body.height;
     let table_bottom = table.y + table.height;
@@ -64,6 +102,66 @@ fn rowbreak_page11_partial_table_stays_inside_body() {
         table_bottom <= body_bottom + 0.5,
         "page 11 table is clipped: table bottom={table_bottom:.2}, body bottom={body_bottom:.2}"
     );
+}
+
+#[test]
+fn rowbreak_page13_following_reference_strip_stays_below_table() {
+    let repo_root = env!("CARGO_MANIFEST_DIR");
+    let sample_path = Path::new(repo_root).join(SAMPLE);
+    let bytes = fs::read(&sample_path).unwrap_or_else(|e| panic!("read {}: {}", SAMPLE, e));
+    let doc = rhwp::wasm_api::HwpDocument::from_bytes(&bytes)
+        .unwrap_or_else(|e| panic!("parse {}: {:?}", SAMPLE, e));
+    let tree = doc
+        .build_page_render_tree(12)
+        .unwrap_or_else(|e| panic!("render page 13: {e}"));
+
+    let reference_strip =
+        find_table_bbox(&tree.root, 11, 0).expect("page 13 reference strip pi=11 ci=0");
+    let table = find_table_bbox(&tree.root, 11, 1).expect("page 13 table pi=11 ci=1");
+
+    let table_bottom = table.y + table.height;
+    assert!(
+        reference_strip.y >= table_bottom - 0.5,
+        "page 13 reference strip overlaps table: table=[{:.2}..{:.2}], strip_y={:.2}",
+        table.y,
+        table_bottom,
+        reference_strip.y
+    );
+}
+
+#[test]
+fn rowbreak_page13_textbox_shapes_cover_their_text() {
+    let repo_root = env!("CARGO_MANIFEST_DIR");
+    let sample_path = Path::new(repo_root).join(SAMPLE);
+    let bytes = fs::read(&sample_path).unwrap_or_else(|e| panic!("read {}: {}", SAMPLE, e));
+    let doc = rhwp::wasm_api::HwpDocument::from_bytes(&bytes)
+        .unwrap_or_else(|e| panic!("parse {}: {:?}", SAMPLE, e));
+    let tree = doc
+        .build_page_render_tree(12)
+        .unwrap_or_else(|e| panic!("render page 13: {e}"));
+    let table = find_table_node(&tree.root, 13, 0).expect("page 13 excerpt table pi=13 ci=0");
+
+    let mut rectangles = Vec::new();
+    collect_rectangles_with_text(table, &mut rectangles);
+    let wide_text_rectangles: Vec<_> = rectangles
+        .into_iter()
+        .filter(|node| node.bbox.width > 300.0 && node.bbox.height > 20.0)
+        .collect();
+
+    assert!(
+        !wide_text_rectangles.is_empty(),
+        "page 13 should render textbox-backed rectangles inside the excerpt table"
+    );
+    for rect in wide_text_rectangles {
+        let rect_bottom = rect.bbox.y + rect.bbox.height;
+        let text_bottom = max_text_line_bottom(rect).expect("rectangle should contain text lines");
+        assert!(
+            rect_bottom >= text_bottom - 0.5,
+            "textbox-backed rectangle clips text: rect=[{:.2}..{:.2}], text_bottom={text_bottom:.2}",
+            rect.bbox.y,
+            rect_bottom
+        );
+    }
 }
 
 fn collect_table_cells<'a>(
