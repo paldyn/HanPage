@@ -635,6 +635,7 @@ impl LayoutEngine {
                 &composed_paras,
                 &cell.paragraphs,
                 styles,
+                cell.apply_inner_margin,
             );
             pad_left = new_pl;
             pad_right = new_pr;
@@ -798,6 +799,7 @@ impl LayoutEngine {
                                     effect: pic.image_attr.effect,
                                     brightness: pic.image_attr.brightness,
                                     contrast: pic.image_attr.contrast,
+                                    opacity: pic.image_attr.opacity(),
                                     text_wrap: None,
                                     external_path: pic.image_attr.external_path.clone(),
                                     header_footer_ref: None,

@@ -2,7 +2,7 @@
 
 use super::super::helpers::{
     color_ref_to_css, find_char_at_x, find_logical_control_positions, has_table_control,
-    navigable_text_len, utf16_pos_to_char_idx, LineInfoResult,
+    is_treat_as_char_object_control, navigable_text_len, utf16_pos_to_char_idx, LineInfoResult,
 };
 use crate::document_core::DocumentCore;
 use crate::error::HwpError;
@@ -240,11 +240,7 @@ impl DocumentCore {
         }
 
         fn is_inline_cursor_control(ctrl: &Control) -> bool {
-            match ctrl {
-                Control::Shape(_) | Control::Picture(_) | Control::Equation(_) => true,
-                Control::Table(table) => table.common.treat_as_char,
-                _ => false,
-            }
+            is_treat_as_char_object_control(ctrl)
         }
 
         fn text_offset_after_same_pos_inline_controls(
@@ -383,6 +379,17 @@ impl DocumentCore {
                     let ascent = font_size * 0.8;
                     let caret_y = node.bbox.y + text_run.baseline - ascent;
 
+                    if text_run.text.is_empty() && effective_char_count(text_run) == 0 {
+                        if let Some(char_start) = text_run.char_start {
+                            stops.entry(char_start).or_insert(CursorHit {
+                                page_index,
+                                x: node.bbox.x,
+                                y: caret_y,
+                                height: font_size.max(10.0),
+                            });
+                        }
+                    }
+
                     for (idx, ch) in run_chars.iter().enumerate() {
                         if *ch == '\u{fffc}' {
                             continue;
@@ -489,7 +496,12 @@ impl DocumentCore {
                         let text_mid = *text_y + *text_h / 2.0;
                         text_mid >= y && text_mid <= y + h
                     })
-                    .unwrap_or((y, h.max(10.0)));
+                    .unwrap_or_else(|| {
+                        let fallback_h = 12.0;
+                        let baseline = h * 0.85;
+                        let ascent = fallback_h * 0.8;
+                        (y + (baseline - ascent).max(0.0), fallback_h)
+                    });
 
                 stops.insert(
                     pos,
@@ -500,17 +512,61 @@ impl DocumentCore {
                         height: line_metrics.1,
                     },
                 );
-                stops.insert(
-                    pos + 1,
-                    CursorHit {
-                        page_index,
-                        x: x + w,
-                        y: line_metrics.0,
-                        height: line_metrics.1,
-                    },
-                );
+                stops.entry(pos + 1).or_insert(CursorHit {
+                    page_index,
+                    x: x + w,
+                    y: line_metrics.0,
+                    height: line_metrics.1,
+                });
             }
             inline_controls.sort_by_key(|&(ci, raw_pos, pos, _, _)| (raw_pos, pos, ci));
+
+            if para.text.is_empty()
+                && para.controls.iter().all(|ctrl| {
+                    matches!(ctrl, Control::Equation(_)) && is_treat_as_char_object_control(ctrl)
+                })
+            {
+                let mut equation_controls = para
+                    .controls
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(ci, ctrl)| {
+                        if !matches!(ctrl, Control::Equation(_))
+                            || !is_treat_as_char_object_control(ctrl)
+                        {
+                            return None;
+                        }
+                        let (x, y, w, h) = control_bboxes.get(&ci).copied()?;
+                        let raw_pos = raw_ctrl_positions.get(ci).copied().unwrap_or(ci);
+                        let pos = ctrl_positions.get(ci).copied().unwrap_or(ci);
+                        Some((ci, raw_pos, pos, x, y, w, h))
+                    })
+                    .collect::<Vec<_>>();
+                equation_controls.sort_by_key(|&(ci, raw_pos, pos, _, _, _, _)| (raw_pos, pos, ci));
+
+                for (slot, (_, _, _, x, y, w, h)) in equation_controls.iter().enumerate() {
+                    let fallback_h = 12.0;
+                    let baseline = *h * 0.85;
+                    let ascent = fallback_h * 0.8;
+                    let caret_y = *y + (baseline - ascent).max(0.0);
+                    if offset == slot * 2 {
+                        return Some(CursorHit {
+                            page_index,
+                            x: *x,
+                            y: caret_y,
+                            height: fallback_h,
+                        });
+                    }
+                    if offset == slot * 2 + 1 {
+                        return Some(CursorHit {
+                            page_index,
+                            x: *x + *w,
+                            y: caret_y,
+                            height: fallback_h,
+                        });
+                    }
+                }
+            }
 
             let para_chars: Vec<char> = para.text.chars().collect();
             for pair in inline_controls.windows(2) {
@@ -832,20 +888,16 @@ impl DocumentCore {
 
                 // char_offset 위치에 인라인 컨트롤이 있는지 확인
                 let inline_ctrl = para.controls.iter().enumerate().find(|(ci, ctrl)| {
-                    matches!(
-                        ctrl,
-                        Control::Shape(_) | Control::Picture(_) | Control::Equation(_)
-                    ) && ctrl_positions.get(*ci).copied() == Some(char_offset)
+                    is_inline_cursor_control(ctrl)
+                        && ctrl_positions.get(*ci).copied() == Some(char_offset)
                         && char_offset != text_len
                 });
                 // 텍스트 범위 밖이지만 navigable 범위 내 (도형이 텍스트 뒤에 있을 때)
                 let beyond_ctrl =
                     if char_offset > text_len && char_offset <= navigable_text_len(para) {
                         para.controls.iter().enumerate().find(|(ci, ctrl)| {
-                            matches!(
-                                ctrl,
-                                Control::Shape(_) | Control::Picture(_) | Control::Equation(_)
-                            ) && ctrl_positions.get(*ci).copied() == Some(char_offset)
+                            is_inline_cursor_control(ctrl)
+                                && ctrl_positions.get(*ci).copied() == Some(char_offset)
                         })
                     } else {
                         None
@@ -1036,42 +1088,66 @@ impl DocumentCore {
                     node: &RenderNode,
                     sec: usize,
                     para: usize,
+                    render_para: Option<&Paragraph>,
                     bboxes: &mut Vec<(f64, f64)>,
                 ) {
+                    fn is_caret_control(
+                        render_para: Option<&Paragraph>,
+                        control_index: Option<usize>,
+                    ) -> bool {
+                        let Some(ci) = control_index else {
+                            return false;
+                        };
+                        render_para
+                            .and_then(|para| para.controls.get(ci))
+                            .is_some_and(is_treat_as_char_object_control)
+                    }
+
                     match &node.node_type {
                         RenderNodeType::Line(ln)
                             if ln.section_index == Some(sec) && ln.para_index == Some(para) =>
                         {
-                            bboxes.push((node.bbox.x, node.bbox.x + node.bbox.width));
+                            if is_caret_control(render_para, ln.control_index) {
+                                bboxes.push((node.bbox.x, node.bbox.x + node.bbox.width));
+                            }
                         }
                         RenderNodeType::Rectangle(rn)
                             if rn.section_index == Some(sec) && rn.para_index == Some(para) =>
                         {
-                            bboxes.push((node.bbox.x, node.bbox.x + node.bbox.width));
+                            if is_caret_control(render_para, rn.control_index) {
+                                bboxes.push((node.bbox.x, node.bbox.x + node.bbox.width));
+                            }
                         }
                         RenderNodeType::Ellipse(en)
                             if en.section_index == Some(sec) && en.para_index == Some(para) =>
                         {
-                            bboxes.push((node.bbox.x, node.bbox.x + node.bbox.width));
+                            if is_caret_control(render_para, en.control_index) {
+                                bboxes.push((node.bbox.x, node.bbox.x + node.bbox.width));
+                            }
                         }
                         RenderNodeType::Table(tn)
                             if tn.section_index == Some(sec) && tn.para_index == Some(para) =>
                         {
-                            bboxes.push((node.bbox.x, node.bbox.x + node.bbox.width));
+                            if is_caret_control(render_para, tn.control_index) {
+                                bboxes.push((node.bbox.x, node.bbox.x + node.bbox.width));
+                            }
                         }
                         RenderNodeType::Image(im)
                             if im.section_index == Some(sec) && im.para_index == Some(para) =>
                         {
-                            bboxes.push((node.bbox.x, node.bbox.x + node.bbox.width));
+                            if is_caret_control(render_para, im.control_index) {
+                                bboxes.push((node.bbox.x, node.bbox.x + node.bbox.width));
+                            }
                         }
                         _ => {}
                     }
                     for child in &node.children {
-                        collect_inline_bboxes(child, sec, para, bboxes);
+                        collect_inline_bboxes(child, sec, para, render_para, bboxes);
                     }
                 }
                 let mut bboxes = Vec::new();
-                collect_inline_bboxes(&tree.root, section_idx, para_idx, &mut bboxes);
+                let render_para = self.get_render_paragraph_ref(section_idx, para_idx).ok();
+                collect_inline_bboxes(&tree.root, section_idx, para_idx, render_para, &mut bboxes);
                 bboxes.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
                 if char_offset <= bboxes.len() && !bboxes.is_empty() {
@@ -1542,6 +1618,70 @@ impl DocumentCore {
             }
         }
 
+        fn inline_image_caret_metrics(y: f64, h: f64) -> (f64, f64) {
+            let fallback_h = 12.0;
+            let baseline = h * 0.85;
+            let ascent = fallback_h * 0.8;
+            (y + (baseline - ascent).max(0.0), fallback_h)
+        }
+
+        fn collect_body_inline_image_hits(
+            core: &DocumentCore,
+            node: &RenderNode,
+            hits: &mut Vec<(usize, usize, usize, f64, f64, f64, f64)>,
+        ) {
+            if let RenderNodeType::Image(ref img) = node.node_type {
+                if img.cell_context.is_none() {
+                    if let (Some(si), Some(pi), Some(ci)) =
+                        (img.section_index, img.para_index, img.control_index)
+                    {
+                        let char_offset = core
+                            .document
+                            .sections
+                            .get(si)
+                            .and_then(|section| section.paragraphs.get(pi))
+                            .and_then(|para| {
+                                let ctrl = para.controls.get(ci)?;
+                                if !is_treat_as_char_object_control(ctrl) {
+                                    return None;
+                                }
+                                find_logical_control_positions(para).get(ci).copied()
+                            });
+                        if let Some(char_offset) = char_offset {
+                            hits.push((
+                                si,
+                                pi,
+                                char_offset,
+                                node.bbox.x,
+                                node.bbox.y,
+                                node.bbox.width,
+                                node.bbox.height,
+                            ));
+                        }
+                    }
+                }
+            }
+
+            for child in &node.children {
+                collect_body_inline_image_hits(core, child, hits);
+            }
+        }
+
+        fn format_body_inline_image_hit(
+            page_num: u32,
+            si: usize,
+            pi: usize,
+            offset: usize,
+            x: f64,
+            y: f64,
+            h: f64,
+        ) -> String {
+            format!(
+                "{{\"sectionIndex\":{},\"paragraphIndex\":{},\"charOffset\":{},\"cursorRect\":{{\"pageIndex\":{},\"x\":{:.1},\"y\":{:.1},\"height\":{:.1}}}}}",
+                si, pi, offset, page_num, x, y, h
+            )
+        }
+
         let mut runs: Vec<RunInfo> = Vec::new();
         let mut guide_runs: Vec<GuideRunInfo> = Vec::new();
         let mut cell_bboxes: Vec<CellBboxInfo> = Vec::new();
@@ -1627,6 +1767,46 @@ impl DocumentCore {
                 cb.parent_para_index = ctx.parent_para_index;
                 cb.control_index = outer.control_index;
                 cb.cell_index = ctx.innermost().cell_index;
+            }
+        }
+
+        let mut inline_image_hits = Vec::new();
+        collect_body_inline_image_hits(self, &tree.root, &mut inline_image_hits);
+        for (si, pi, char_offset, ix, iy, iw, ih) in inline_image_hits {
+            let (caret_y, caret_h) = inline_image_caret_metrics(iy, ih);
+            let right = ix + iw;
+            if x >= ix && x <= right && y >= iy && y <= iy + ih {
+                let offset = if x > ix + iw / 2.0 {
+                    char_offset + 1
+                } else {
+                    char_offset
+                };
+                let caret_x = if offset == char_offset { ix } else { right };
+                return Ok(format_body_inline_image_hit(
+                    page_num, si, pi, offset, caret_x, caret_y, caret_h,
+                ));
+            }
+            if x >= right && x <= right + caret_h && y >= caret_y && y <= caret_y + caret_h {
+                return Ok(format_body_inline_image_hit(
+                    page_num,
+                    si,
+                    pi,
+                    char_offset + 1,
+                    right,
+                    caret_y,
+                    caret_h,
+                ));
+            }
+            if x <= ix && x >= ix - caret_h && y >= caret_y && y <= caret_y + caret_h {
+                return Ok(format_body_inline_image_hit(
+                    page_num,
+                    si,
+                    pi,
+                    char_offset,
+                    ix,
+                    caret_y,
+                    caret_h,
+                ));
             }
         }
 
@@ -1755,6 +1935,11 @@ impl DocumentCore {
                             if shape_has_textbox {
                                 // 글상자는 메인 매칭에서 처리 — 0.5 분기 break.
                                 break;
+                            }
+                            if !is_treat_as_char_object_control(ctrl) {
+                                // 자리차지/글 앞으로/글 뒤로 개체는 본문 문자 슬롯이 아니므로
+                                // 그림 bbox 클릭을 커서 앞/뒤 offset으로 변환하지 않는다.
+                                continue;
                             }
                             let ctrl_positions =
                                 crate::document_core::helpers::find_logical_control_positions(para);

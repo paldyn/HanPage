@@ -105,9 +105,11 @@ jobs:
       - name: Check render diff script syntax
         working-directory: rhwp-studio
         run: |
+          node --check e2e/renderer-contract.test.mjs
           node --check e2e/canvas-render-diff.test.mjs
           node --check e2e/pdf-render-diff-report.mjs
           node --check e2e/run-render-diff.mjs
+          npm run e2e:renderer-contract
 
       - name: Run canvas visual diff and PDF report
         working-directory: rhwp-studio

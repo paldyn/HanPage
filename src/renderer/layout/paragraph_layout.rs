@@ -267,6 +267,50 @@ fn tac_offsets_for_line(
         .collect()
 }
 
+fn repeated_empty_tac_line_offset(
+    comp: &ComposedParagraph,
+    tac_offsets_px: &[(usize, f64, usize)],
+    line_idx: usize,
+) -> Option<Vec<(usize, f64, usize)>> {
+    let line = comp.lines.get(line_idx)?;
+    if !line.runs.is_empty() {
+        return None;
+    }
+
+    let start = line.char_start;
+    let repeated_empty_line_count = comp
+        .lines
+        .iter()
+        .filter(|candidate| candidate.runs.is_empty() && candidate.char_start == start)
+        .count();
+    if repeated_empty_line_count <= 1 {
+        return None;
+    }
+
+    let line_ordinal = comp
+        .lines
+        .iter()
+        .take(line_idx)
+        .filter(|candidate| candidate.runs.is_empty() && candidate.char_start == start)
+        .count();
+    let line_tac_sequence = tac_offsets_px
+        .iter()
+        .copied()
+        .filter(|(pos, _, _)| *pos >= start && *pos < start + repeated_empty_line_count)
+        .collect::<Vec<_>>();
+
+    // 텍스트 없는 HWP 문단은 LINE_SEG 여러 줄이 같은 text_start 를 가질 수 있다.
+    // 이때 TAC 개수와 빈 줄 수가 정확히 맞으면 한 줄에 하나씩 순서대로 배정한다.
+    if line_tac_sequence.len() == repeated_empty_line_count {
+        line_tac_sequence
+            .get(line_ordinal)
+            .copied()
+            .map(|offset| vec![offset])
+    } else {
+        None
+    }
+}
+
 fn tac_picture_or_shape_height_px(ctrl: &Control, dpi: f64) -> Option<f64> {
     let height_hu = match ctrl {
         Control::Picture(pic) if pic.common.treat_as_char => pic.common.height as i32,
@@ -1759,7 +1803,12 @@ impl LayoutEngine {
                     }
                 })
                 .fold(0.0f64, f64::max);
-            let line_tac_offsets = tac_offsets_for_line(composed, &tac_offsets_px, line_idx);
+            let mut line_tac_offsets = tac_offsets_for_line(composed, &tac_offsets_px, line_idx);
+            if let Some(offsets) =
+                repeated_empty_tac_line_offset(composed, &tac_offsets_px, line_idx)
+            {
+                line_tac_offsets = offsets;
+            }
             let runs_all_whitespace = comp_line.runs.iter().all(|r| r.text.trim().is_empty());
             let mut line_tac_offsets_for_width = line_tac_offsets.clone();
             if cell_ctx.is_some()
@@ -2447,6 +2496,8 @@ impl LayoutEngine {
                 .iter()
                 .map(|r| r.text.chars().filter(|c| *c != '\t').count())
                 .sum();
+            let suppress_cell_overflow_spacing =
+                cell_ctx.is_some() && total_text_width > available_width * 1.15;
 
             // Task #352: 라인 내 dash leader (3+ 연속 '-') 글자 수 카운트.
             // visible_count 까지의 chars 에서만 카운트 (후행 공백 제외).
@@ -2508,6 +2559,10 @@ impl LayoutEngine {
                         // dash 가 흡수 (PDF elastic leader 동작 모방). 공백·일반
                         // 글자 자연 폭 유지.
                         (0.0, 0.0, slack / leader_dashes as f64)
+                    } else if suppress_cell_overflow_spacing && slack < 0.0 {
+                        // 셀 내부 폭이 글자 자연 폭보다 작아도 한컴처럼 글자를 압축하지 않는다.
+                        // 줄바꿈은 LINE_SEG/리플로우가 결정하고, 그린 글자는 셀 경계에서만 클리핑한다.
+                        (0.0, 0.0, 0.0)
                     } else {
                         // 양쪽 정렬: 단어 간격 분배 (또는 음수 슬랙 시 압축)
                         let raw_ews = slack / interior_spaces as f64;
@@ -2527,6 +2582,9 @@ impl LayoutEngine {
                     let slack = available_width - total_text_width;
                     if leader_dashes > 0 && slack > 0.0 {
                         (0.0, 0.0, slack / leader_dashes as f64)
+                    } else if suppress_cell_overflow_spacing && slack < 0.0 {
+                        // 셀의 좁은 내부 폭은 줄바꿈 기준일 뿐, 숫자/문자를 수평 압축하지 않는다.
+                        (0.0, 0.0, 0.0)
                     } else {
                         let raw = slack / total_char_count as f64;
                         let avg_char_w = total_text_width / total_char_count as f64;
@@ -2539,15 +2597,23 @@ impl LayoutEngine {
             } else if needs_distribute && total_char_count > 1 {
                 // 배분/나눔 정렬: 모든 글자에 균등 분배
                 let raw = (available_width - total_text_width) / total_char_count as f64;
-                let avg_char_w = total_text_width / total_char_count as f64;
-                let min_sp = -avg_char_w * 0.5;
-                (0.0, raw.max(min_sp), 0.0)
+                if suppress_cell_overflow_spacing && raw < 0.0 {
+                    (0.0, 0.0, 0.0)
+                } else {
+                    let avg_char_w = total_text_width / total_char_count as f64;
+                    let min_sp = -avg_char_w * 0.5;
+                    (0.0, raw.max(min_sp), 0.0)
+                }
             } else if total_text_width > available_width && total_char_count > 1 && !has_tabs {
                 // 비정렬(왼쪽/오른쪽/가운데) 텍스트가 오버플로우할 때 글자 간격 압축
-                let raw = (available_width - total_text_width) / total_char_count as f64;
-                let avg_char_w = total_text_width / total_char_count as f64;
-                let min_sp = -avg_char_w * 0.5;
-                (0.0, raw.max(min_sp), 0.0)
+                if suppress_cell_overflow_spacing {
+                    (0.0, 0.0, 0.0)
+                } else {
+                    let raw = (available_width - total_text_width) / total_char_count as f64;
+                    let avg_char_w = total_text_width / total_char_count as f64;
+                    let min_sp = -avg_char_w * 0.5;
+                    (0.0, raw.max(min_sp), 0.0)
+                }
             } else if cell_ctx.is_some()
                 && total_char_count > 1
                 && !has_tabs
@@ -3479,13 +3545,17 @@ impl LayoutEngine {
                             if let Some(ctrl) = p.controls.get(tac_ci) {
                                 if let Control::Picture(pic) = ctrl {
                                     let pic_h = hwpunit_to_px(pic.common.height as i32, self.dpi);
-                                    // [Task #1151 v3] sibling wrap=TopAndBottom 표 (tac=false) 가
-                                    // 차지하는 vertical 영역만큼 picture y 보정. 한컴 정합
-                                    // (samples/tac-verify/scenario-{a..d}-after.hwp).
-                                    let sibling_table_reserved_hu =
-                                        calc_sibling_topandbottom_table_reserved_hu(&p.controls);
-                                    let sibling_table_reserved_px =
-                                        hwpunit_to_px(sibling_table_reserved_hu, self.dpi);
+                                    // LINE_SEG vpos가 TopAndBottom 흐름 위치를 이미 담고 있으면
+                                    // sibling 예약 높이를 다시 더하지 않는다.
+                                    let sibling_reserved_px =
+                                        if para_topbottom_line_vpos_base.is_some() {
+                                            0.0
+                                        } else {
+                                            hwpunit_to_px(
+                                                calc_sibling_topandbottom_reserved_hu(&p.controls),
+                                                self.dpi,
+                                            )
+                                        };
                                     if raw_lh + 4.0 >= pic_h {
                                         current_line_reserved_tac_picture_height = Some(pic_h);
                                     }
@@ -3502,7 +3572,7 @@ impl LayoutEngine {
                                     } else {
                                         (y + baseline - pic_h).max(y)
                                     };
-                                    let img_y = base_img_y + sibling_table_reserved_px;
+                                    let img_y = base_img_y + sibling_reserved_px;
                                     let bin_data_id = pic.image_attr.bin_data_id;
                                     let image_data =
                                         find_bin_data(bdc, bin_data_id).map(|c| c.data.clone());
@@ -3699,7 +3769,32 @@ impl LayoutEngine {
                         // 표 하단 = 베이스라인 + outer_margin_bottom
                         if let (Some(p), Some(bdc)) = (para, bin_data_content) {
                             if let Some(Control::Table(t)) = p.controls.get(tac_ci) {
-                                if t.common.treat_as_char {
+                                let raw_seg_width =
+                                    p.line_segs.first().map(|s| s.segment_width).unwrap_or(0);
+                                let seg_width = if raw_seg_width > 0 {
+                                    raw_seg_width
+                                } else {
+                                    px_to_hwpunit(col_area.width, self.dpi)
+                                };
+                                let should_render_inline = cell_ctx.is_some()
+                                    || crate::renderer::height_measurer::is_tac_table_inline(
+                                        t,
+                                        seg_width,
+                                        &p.text,
+                                        &p.controls,
+                                    );
+                                let already_rendered = tree
+                                    .get_inline_shape_position(
+                                        section_index,
+                                        para_index,
+                                        tac_ci,
+                                        cell_ctx.as_ref(),
+                                    )
+                                    .is_some();
+                                if t.common.treat_as_char
+                                    && should_render_inline
+                                    && !already_rendered
+                                {
                                     let table_h = hwpunit_to_px(t.common.height as i32, self.dpi);
                                     let om_bottom =
                                         hwpunit_to_px(t.outer_margin_bottom as i32, self.dpi);
@@ -3776,6 +3871,7 @@ impl LayoutEngine {
                         }
                         // tac 폭만큼 x 전진
                         x += tac_w;
+                        sub_char_offset += 1;
                         seg_start = tac_rel;
                     }
 
@@ -4013,6 +4109,8 @@ impl LayoutEngine {
 
             // runs가 비어있으면 빈 TextRun 생성 (빈 셀 편집용)
             if comp_line.runs.is_empty() {
+                let mut empty_line_mark_x = x_start;
+                let mut empty_line_logical_end = char_offset;
                 // runs가 없는 빈 줄에서 treat_as_char 이미지 렌더링
                 // 테이블 셀 내부에서는 table_layout.rs가 layout_picture로 이미 처리하므로 스킵.
                 // 셀 외부에서 해당 줄 범위에 걸린 TAC만 여기서 렌더링.
@@ -4049,19 +4147,23 @@ impl LayoutEngine {
                                         shape_y,
                                     );
                                     img_x += tac_w;
+                                    empty_line_mark_x = img_x;
+                                    empty_line_logical_end += 1;
                                     continue;
                                 }
                                 if let Control::Picture(pic) = ctrl {
                                     let pic_h = hwpunit_to_px(pic.common.height as i32, self.dpi);
-                                    // [Task #1151 v3] 같은 paragraph 의 sibling wrap=TopAndBottom
-                                    // 표 (tac=false) 가 차지하는 vertical 영역만큼 picture y 보정.
-                                    // 한컴 정합 (samples/tac-verify/scenario-{a..d}-after.hwp): picture
-                                    // 가 표 아래에 그려져 오버랩 차단. sibling 표가 없으면 reserved=0
-                                    // → 기존 동작 보존 (회귀 0).
-                                    let sibling_table_reserved_hu =
-                                        calc_sibling_topandbottom_table_reserved_hu(&p.controls);
-                                    let sibling_table_reserved_px =
-                                        hwpunit_to_px(sibling_table_reserved_hu, self.dpi);
+                                    // LINE_SEG vpos가 TopAndBottom 흐름 위치를 이미 담고 있으면
+                                    // sibling 예약 높이를 다시 더하지 않는다.
+                                    let sibling_reserved_px =
+                                        if para_topbottom_line_vpos_base.is_some() {
+                                            0.0
+                                        } else {
+                                            hwpunit_to_px(
+                                                calc_sibling_topandbottom_reserved_hu(&p.controls),
+                                                self.dpi,
+                                            )
+                                        };
                                     if raw_lh + 4.0 >= pic_h {
                                         current_line_reserved_tac_picture_height = Some(pic_h);
                                     }
@@ -4078,7 +4180,7 @@ impl LayoutEngine {
                                     } else {
                                         (y + baseline - pic_h).max(y)
                                     };
-                                    let img_y = base_img_y + sibling_table_reserved_px;
+                                    let img_y = base_img_y + sibling_reserved_px;
                                     let bin_data_id = pic.image_attr.bin_data_id;
                                     let image_data =
                                         find_bin_data(bdc, bin_data_id).map(|c| c.data.clone());
@@ -4133,6 +4235,8 @@ impl LayoutEngine {
                                         img_y,
                                     );
                                     img_x += tac_w;
+                                    empty_line_mark_x = img_x;
+                                    empty_line_logical_end += 1;
                                 }
                             }
                         }
@@ -4151,7 +4255,7 @@ impl LayoutEngine {
                         para_shape_id: Some(composed.para_style_id),
                         section_index: Some(section_index),
                         para_index: Some(para_index),
-                        char_start: Some(char_offset),
+                        char_start: Some(empty_line_logical_end),
                         cell_context: cell_ctx.clone(),
                         is_para_end: is_last_line_of_para && !defer_empty_line_control_marker,
                         is_line_break_end: comp_line.has_line_break
@@ -4163,7 +4267,16 @@ impl LayoutEngine {
                         baseline,
                         field_marker: FieldMarkerType::None,
                     }),
-                    BoundingBox::new(x_start, y, available_width, line_flow_height),
+                    BoundingBox::new(
+                        empty_line_mark_x,
+                        y,
+                        if empty_line_mark_x > x_start {
+                            0.0
+                        } else {
+                            available_width
+                        },
+                        line_flow_height,
+                    ),
                 );
                 line_node.children.push(run_node);
             }
@@ -5266,17 +5379,17 @@ impl LayoutEngine {
     }
 }
 
-/// [Task #1151 v3] paragraph 의 sibling controls 중 `wrap=TopAndBottom` +
-/// `treat_as_char=false` 인 표가 차지하는 vertical 영역 (HWPUNIT) 합산.
+/// paragraph 의 sibling controls 중 `wrap=TopAndBottom` +
+/// `treat_as_char=false` 인 개체가 차지하는 vertical 영역 (HWPUNIT) 합산.
 ///
 /// 한컴 layout 정합 (`mydocs/tech/topandbottom_table_inline_picture_layout.md` H1):
 /// 같은 paragraph 의 sibling tac picture 가 표 아래 영역에 그려지도록 picture
-/// 의 y 위치 보정값을 계산한다. 표가 없으면 0 반환 (회귀 0 보장).
+/// 의 y 위치 보정값을 계산한다. 예약 개체가 없으면 0 반환 (회귀 0 보장).
 ///
-/// 합산 공식: `table.common.height + outer_margin_top + outer_margin_bottom`
-/// (한컴 산출물 `samples/tac-verify/scenario-a-after.hwp` 의 표 outer_margin
-/// 1.0mm 정합).
-pub(crate) fn calc_sibling_topandbottom_table_reserved_hu(
+/// 합산 공식:
+/// - 표: `common.height + outer_margin_top + outer_margin_bottom`
+/// - 그림/도형: `common.height + common.margin.top + common.margin.bottom`
+pub(crate) fn calc_sibling_topandbottom_reserved_hu(
     controls: &[crate::model::control::Control],
 ) -> i32 {
     use crate::model::control::Control;
@@ -5289,6 +5402,19 @@ pub(crate) fn calc_sibling_topandbottom_table_reserved_hu(
                     && !t.common.treat_as_char =>
             {
                 t.common.height as i32 + t.outer_margin_top as i32 + t.outer_margin_bottom as i32
+            }
+            Control::Picture(p)
+                if matches!(p.common.text_wrap, TextWrap::TopAndBottom)
+                    && !p.common.treat_as_char =>
+            {
+                p.common.height as i32 + p.common.margin.top as i32 + p.common.margin.bottom as i32
+            }
+            Control::Shape(s)
+                if matches!(s.common().text_wrap, TextWrap::TopAndBottom)
+                    && !s.common().treat_as_char =>
+            {
+                let common = s.common();
+                common.height as i32 + common.margin.top as i32 + common.margin.bottom as i32
             }
             _ => 0,
         })
@@ -5334,6 +5460,7 @@ fn make_picture_image_node(
             effect: pic.image_attr.effect,
             brightness: pic.image_attr.brightness,
             contrast: pic.image_attr.contrast,
+            opacity: pic.image_attr.opacity(),
             text_wrap: Some(pic.common.text_wrap),
             transform: extract_shape_transform(&pic.shape_attr),
             external_path: pic.image_attr.external_path.clone(),
@@ -5381,13 +5508,12 @@ pub(crate) struct ParaInlineState {
 
 #[cfg(test)]
 mod issue_1151_v3_helper_tests {
-    //! Issue #1151 v3: calc_sibling_topandbottom_table_reserved_hu helper 단위 검증.
+    //! Issue #1151 v3/#1459: sibling TopAndBottom 예약 높이 helper 단위 검증.
     //!
-    //! 한컴 정합 (samples/tac-verify/scenario-{a..d}-after.hwp): wrap=TopAndBottom +
-    //! tac=false 인 표만 vertical 영역 reservation 으로 합산. 그 외 (TAC 표 / Square
-    //! wrap / picture 등) 은 0.
+    //! 한컴 정합: wrap=TopAndBottom + tac=false 인 개체가 vertical 영역
+    //! reservation 으로 합산된다. TAC 개체와 Square wrap 은 제외한다.
 
-    use super::calc_sibling_topandbottom_table_reserved_hu;
+    use super::calc_sibling_topandbottom_reserved_hu;
     use crate::model::control::Control;
     use crate::model::image::Picture;
     use crate::model::shape::{CommonObjAttr, TextWrap};
@@ -5416,38 +5542,49 @@ mod issue_1151_v3_helper_tests {
         // 합산 = 12498 + 283 + 283 = 13064 HU.
         let table = make_table(13630, 12498, TextWrap::TopAndBottom, false);
         let controls = vec![Control::Table(Box::new(table))];
-        assert_eq!(
-            calc_sibling_topandbottom_table_reserved_hu(&controls),
-            13064
-        );
+        assert_eq!(calc_sibling_topandbottom_reserved_hu(&controls), 13064);
     }
 
     #[test]
     fn topandbottom_table_reserved_none_when_no_table() {
         let controls: Vec<Control> = vec![];
-        assert_eq!(calc_sibling_topandbottom_table_reserved_hu(&controls), 0);
+        assert_eq!(calc_sibling_topandbottom_reserved_hu(&controls), 0);
     }
 
     #[test]
     fn topandbottom_table_reserved_excludes_tac_table() {
         let table = make_table(13630, 12498, TextWrap::TopAndBottom, true); // tac=true 제외
         let controls = vec![Control::Table(Box::new(table))];
-        assert_eq!(calc_sibling_topandbottom_table_reserved_hu(&controls), 0);
+        assert_eq!(calc_sibling_topandbottom_reserved_hu(&controls), 0);
     }
 
     #[test]
     fn topandbottom_table_reserved_excludes_square_wrap() {
         let table = make_table(13630, 12498, TextWrap::Square, false); // wrap=Square 제외
         let controls = vec![Control::Table(Box::new(table))];
-        assert_eq!(calc_sibling_topandbottom_table_reserved_hu(&controls), 0);
+        assert_eq!(calc_sibling_topandbottom_reserved_hu(&controls), 0);
     }
 
     #[test]
-    fn topandbottom_table_reserved_ignores_picture_control() {
-        // Picture 는 합산 대상 아님 (sibling Picture 자체는 inline 글리프).
-        let pic = Picture::default();
+    fn topandbottom_reserved_includes_non_tac_picture_control() {
+        let mut pic = Picture::default();
+        pic.common.text_wrap = TextWrap::TopAndBottom;
+        pic.common.treat_as_char = false;
+        pic.common.height = 7733;
+        pic.common.margin.top = 100;
+        pic.common.margin.bottom = 200;
         let controls = vec![Control::Picture(Box::new(pic))];
-        assert_eq!(calc_sibling_topandbottom_table_reserved_hu(&controls), 0);
+        assert_eq!(calc_sibling_topandbottom_reserved_hu(&controls), 8033);
+    }
+
+    #[test]
+    fn topandbottom_reserved_excludes_tac_picture_control() {
+        let mut pic = Picture::default();
+        pic.common.text_wrap = TextWrap::TopAndBottom;
+        pic.common.treat_as_char = true;
+        pic.common.height = 7733;
+        let controls = vec![Control::Picture(Box::new(pic))];
+        assert_eq!(calc_sibling_topandbottom_reserved_hu(&controls), 0);
     }
 
     #[test]
@@ -5456,10 +5593,7 @@ mod issue_1151_v3_helper_tests {
         let t2 = make_table(13630, 5000, TextWrap::TopAndBottom, false);
         let controls = vec![Control::Table(Box::new(t1)), Control::Table(Box::new(t2))];
         // (10000 + 283 + 283) + (5000 + 283 + 283) = 10566 + 5566 = 16132
-        assert_eq!(
-            calc_sibling_topandbottom_table_reserved_hu(&controls),
-            16132
-        );
+        assert_eq!(calc_sibling_topandbottom_reserved_hu(&controls), 16132);
     }
 }
 

@@ -11,7 +11,7 @@ import { CommandDispatcher } from '@/command/dispatcher';
 import type { EditorContext, CommandServices, EditorEditMode } from '@/command/types';
 import { confirmSaveBeforeReplacingDocument, fileCommands } from '@/command/commands/file';
 import { editCommands } from '@/command/commands/edit';
-import { viewCommands } from '@/command/commands/view';
+import { syncTextMarkMenu, viewCommands } from '@/command/commands/view';
 import { formatCommands } from '@/command/commands/format';
 import { insertCommands } from '@/command/commands/insert';
 import { tableCommands } from '@/command/commands/table';
@@ -21,11 +21,19 @@ import { installPwaFileHandling, type FileHandlingWindowLike } from '@/command/p
 import { ContextMenu } from '@/ui/context-menu';
 import { CommandPalette } from '@/ui/command-palette';
 import { showValidationModalIfNeeded } from '@/ui/validation-modal';
+import { showLocalFontsModalIfNeeded } from '@/ui/local-fonts-modal';
 import { showToast } from '@/ui/toast';
 import { showDropConfirmDialog } from '@/ui/drop-confirm-dialog';
 import { initRhwpDev } from '@/core/rhwp-dev';
 import { DocumentDirtyState } from '@/core/document-dirty-state';
 import { initThemeSync, setThemeMode, getThemeMode, getEffectiveTheme } from '@/core/theme';
+import { analyzeDocumentFonts } from '@/core/document-font-status';
+import { detectLocalFonts, getLocalFontState, loadStoredLocalFonts } from '@/core/local-fonts';
+import { userSettings } from '@/core/user-settings';
+import { AutosaveManager } from '@/recovery/autosave-manager';
+import { clearAutosaveDrafts, deleteAutosaveDraft, listAutosaveDrafts, type AutosaveDraft } from '@/recovery/autosave-store';
+import { recoveryFileName } from '@/recovery/recovery-format';
+import { showAutosaveRecoveryDialog } from '@/recovery/recovery-ui';
 import { CellSelectionRenderer } from '@/engine/cell-selection-renderer';
 import { TableObjectRenderer } from '@/engine/table-object-renderer';
 import { TableResizeRenderer } from '@/engine/table-resize-renderer';
@@ -42,6 +50,10 @@ const wasm = new WasmBridge();
 const eventBus = new EventBus();
 const documentState = new DocumentDirtyState(eventBus);
 documentState.installBeforeUnload(window);
+const autosaveManager = new AutosaveManager({
+  exportBytes: () => wasm.exportHwp(),
+});
+autosaveManager.connect(eventBus);
 initThemeSync((effective, mode) => {
   eventBus.emit('theme-changed', { mode, effective });
   eventBus.emit('command-state-changed');
@@ -52,6 +64,7 @@ if (import.meta.env.DEV) {
   (window as any).__wasm = wasm;
   (window as any).__eventBus = eventBus;
   (window as any).__documentState = documentState;
+  (window as any).__autosaveManager = autosaveManager;
   (window as any).__theme = { getThemeMode, getEffectiveTheme, setThemeMode };
   initRhwpDev(wasm);
 }
@@ -72,6 +85,7 @@ function getContext(): EditorContext {
   return {
     hasDocument: hasDoc,
     hasSelection: inputHandler?.hasSelection() ?? false,
+    hasCopiedFormat: inputHandler?.hasCopiedFormat() ?? false,
     inTable: inputHandler?.isInTable() ?? false,
     inCellSelectionMode: inputHandler?.isInCellSelectionMode() ?? false,
     inTableObjectSelection: inputHandler?.isInTableObjectSelection() ?? false,
@@ -85,6 +99,7 @@ function getContext(): EditorContext {
     canRedo: inputHandler?.canRedo() ?? false,
     zoom: canvasView?.getViewportManager().getZoom() ?? 1.0,
     showControlCodes: wasm.getShowControlCodes(),
+    showParagraphMarks: wasm.getShowParagraphMarks(),
     isDirty: documentState.isDirty(),
     sourceFormat: hasDoc ? (wasm.getSourceFormat() as 'hwp' | 'hwpx') : undefined,
   };
@@ -212,7 +227,7 @@ async function initialize(): Promise<void> {
       new TableObjectRenderer(container, canvasView.getVirtualScroll(), true),
     );
 
-    new MenuBar(document.getElementById('menu-bar')!, eventBus, dispatcher);
+    new MenuBar(document.getElementById('menu-bar')!, eventBus, dispatcher, registry);
 
     // 툴바 내 data-cmd 버튼 클릭 → 커맨드 디스패치
     document.querySelectorAll('.tb-btn[data-cmd]').forEach(btn => {
@@ -266,7 +281,8 @@ async function initialize(): Promise<void> {
     setupZoomControls();
     setupEventListeners();
     setupGlobalShortcuts();
-    loadFromUrlParam();
+    void loadFromUrlParam();
+    void offerAutosaveRecoveryIfIdle();
     installPwaFileHandling(window as FileHandlingWindowLike, {
       openDocumentBytes(payload) {
         eventBus.emit('open-document-bytes', payload);
@@ -390,9 +406,27 @@ function setupFileInput(): void {
       try {
         img.src = url;
         await img.decode();
-        inputHandler.enterImagePlacementMode(data, ext, img.naturalWidth, img.naturalHeight, file.name);
+        const result = inputHandler.insertDroppedImageAtClientPoint(
+          data,
+          ext,
+          img.naturalWidth,
+          img.naturalHeight,
+          file.name,
+          e.clientX,
+          e.clientY,
+        );
+        if (!result.ok) {
+          showToast({
+            message: `그림 삽입에 실패했습니다.\n${result.error ?? '삽입 위치 또는 이미지 정보를 확인할 수 없습니다.'}`,
+            durationMs: 6000,
+          });
+        }
       } catch {
         console.warn('[drop] 이미지 디코딩 실패:', file.name);
+        showToast({
+          message: '그림을 삽입할 수 없습니다.\n브라우저가 이 이미지 파일을 읽지 못했습니다.',
+          durationMs: 6000,
+        });
       } finally {
         URL.revokeObjectURL(url);
       }
@@ -505,6 +539,12 @@ function setupEventListeners(): void {
     eventBus.emit('command-state-changed');
   });
 
+  eventBus.on('local-fonts-changed', () => {
+    if (wasm.pageCount > 0) {
+      canvasView?.loadDocument();
+    }
+  });
+
   // 필드 정보 표시
   const sbField = document.getElementById('sb-field');
   eventBus.on('field-info-changed', (info) => {
@@ -576,6 +616,13 @@ function setupEventListeners(): void {
 }
 
 /** 문서 초기화 공통 시퀀스 (loadFile, createNewDocument 양쪽에서 사용) */
+function applySavedTextMarkSettings(): void {
+  const view = userSettings.getViewSettings();
+  wasm.setShowControlCodes(view.showControlCodes);
+  wasm.setShowParagraphMarks(view.showParagraphMarks);
+  syncTextMarkMenu(view.showControlCodes, view.showParagraphMarks);
+}
+
 async function initializeDocument(docInfo: DocumentInfo, displayName: string): Promise<void> {
   const msg = sbMessage();
   let normalizedDuringLoad = false;
@@ -590,6 +637,7 @@ async function initializeDocument(docInfo: DocumentInfo, displayName: string): P
     msg.textContent = displayName;
     totalSections = docInfo.sectionCount ?? 1;
     sbSection().textContent = `구역: 1 / ${totalSections}`;
+    applySavedTextMarkSettings();
     console.log('[initDoc] 3. inputHandler deactivate');
     inputHandler?.deactivate();
     console.log('[initDoc] 4. canvasView loadDocument');
@@ -622,6 +670,9 @@ async function initializeDocument(docInfo: DocumentInfo, displayName: string): P
     } catch (e) {
       console.warn('[validation] 감지/보정 실패 (치명적이지 않음):', e);
     }
+
+    await promptLocalFontsIfNeeded(docInfo, displayName);
+
     if (normalizedDuringLoad) {
       documentState.markDirty('validation-auto-fix');
     } else {
@@ -630,6 +681,43 @@ async function initializeDocument(docInfo: DocumentInfo, displayName: string): P
   } catch (error) {
     console.error('[initDoc] 오류:', error);
     if (window.innerWidth < 768) alert(`초기화 오류: ${error}`);
+  }
+}
+
+async function promptLocalFontsIfNeeded(docInfo: DocumentInfo, displayName: string): Promise<void> {
+  if (!docInfo.fontsUsed?.length) return;
+
+  const msg = sbMessage();
+  try {
+    await loadStoredLocalFonts();
+    const report = analyzeDocumentFonts(docInfo.fontsUsed);
+    if (!report.shouldPromptLocalAccess) return;
+
+    const choice = await showLocalFontsModalIfNeeded(report);
+    if (choice !== 'detect') return;
+
+    msg.textContent = '로컬 글꼴 감지 중...';
+    const fonts = await detectLocalFonts({
+      force: true,
+      includeRegistered: true,
+      candidateFamilies: docInfo.fontsUsed,
+    });
+    const nextReport = analyzeDocumentFonts(docInfo.fontsUsed);
+    eventBus.emit('local-fonts-changed', { fonts, report: nextReport });
+    const state = getLocalFontState();
+    const resultLabel = state.source === 'font-presence-probe' ? '확인됨' : '감지됨';
+    msg.textContent = `${displayName} (로컬 글꼴 ${fonts.length}개 ${resultLabel})`;
+    showToast({
+      message: `로컬 글꼴 ${fonts.length}개를 ${resultLabel.replace('됨', '')}하고 저장했습니다.\n다음 문서 로드부터 감지 결과를 재사용합니다.`,
+      durationMs: 5000,
+    });
+  } catch (error) {
+    console.warn('[local-fonts] 감지 안내/실행 실패 (치명적이지 않음):', error);
+    msg.textContent = displayName;
+    showToast({
+      message: '로컬 글꼴 감지에 실패했습니다.\n웹 대체 글꼴로 계속 표시합니다.',
+      durationMs: 8000,
+    });
   }
 }
 
@@ -659,11 +747,59 @@ async function loadBytes(
 ): Promise<void> {
   const docInfo = wasm.loadDocument(data, fileName);
   wasm.currentFileHandle = fileHandle;
+  await autosaveManager.beginDocument(
+    { fileName: wasm.fileName, sourceFormat: wasm.getSourceFormat() },
+    { discardPreviousDraft: true },
+  );
   const elapsed = performance.now() - startTime;
   // initializeDocument 안에서 #177 validation 모달이 표시될 수 있음.
   // HWPX 토스트는 모달과의 이벤트 충돌을 피하기 위해 모달 닫힌 후 표시.
   await initializeDocument(docInfo, `${fileName} — ${docInfo.pageCount}페이지 (${elapsed.toFixed(1)}ms)`);
   notifyHwpxSaveModeIfNeeded();
+}
+
+function shouldSkipInitialAutosaveRecovery(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  return params.has('url');
+}
+
+async function offerAutosaveRecoveryIfIdle(): Promise<void> {
+  if (shouldSkipInitialAutosaveRecovery()) return;
+
+  try {
+    const drafts = (await listAutosaveDrafts()).filter((draft) => draft.data.byteLength > 0);
+    if (drafts.length === 0) return;
+    if (wasm.pageCount > 0 || documentState.isDirty()) return;
+
+    const choice = await showAutosaveRecoveryDialog(drafts);
+    if (choice.action === 'later') return;
+    if (choice.action === 'delete-all') {
+      await clearAutosaveDrafts();
+      showToast({ message: '복구 후보를 삭제했습니다.', durationMs: 2200 });
+      return;
+    }
+
+    const draft = drafts.find((item) => item.id === choice.draftId);
+    if (!draft) return;
+    try {
+      await restoreAutosaveDraft(draft);
+    } catch (error) {
+      showLoadError(error);
+    }
+  } catch (error) {
+    console.warn('[autosave] 복구 후보 확인 실패:', error);
+  }
+}
+
+async function restoreAutosaveDraft(draft: AutosaveDraft): Promise<void> {
+  const fileName = recoveryFileName(draft.fileName, draft.sourceFormat);
+  await loadBytes(new Uint8Array(draft.data), fileName, null);
+  await deleteAutosaveDraft(draft.id);
+  documentState.markDirty('autosave-recovered');
+  showToast({
+    message: `"${fileName}" 복구본을 열었습니다.\n원본 파일은 자동으로 덮어쓰지 않습니다.`,
+    durationMs: 5000,
+  });
 }
 
 /**
@@ -739,6 +875,10 @@ async function createNewDocument(): Promise<void> {
   try {
     msg.textContent = '새 문서 생성 중...';
     const docInfo = wasm.createNewDocument();
+    await autosaveManager.beginDocument(
+      { fileName: wasm.fileName, sourceFormat: wasm.getSourceFormat() },
+      { discardPreviousDraft: true },
+    );
     await initializeDocument(docInfo, `새 문서.hwp — ${docInfo.pageCount}페이지`);
   } catch (error) {
     msg.textContent = `새 문서 생성 실패: ${error}`;

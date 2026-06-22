@@ -12,6 +12,8 @@ export interface EditorContext {
   hasDocument: boolean;
   /** 선택 영역이 있는가? */
   hasSelection: boolean;
+  /** 모양 복사 상태가 있는가? */
+  hasCopiedFormat: boolean;
   /** 커서가 표 셀 내부인가? */
   inTable: boolean;
   /** F5 셀 선택 모드인가? */
@@ -38,6 +40,8 @@ export interface EditorContext {
   zoom: number;
   /** 조판부호 보이기 모드인가? */
   showControlCodes: boolean;
+  /** 문단부호 보이기 모드인가? */
+  showParagraphMarks: boolean;
   /** 저장되지 않은 문서 변경사항이 있는가? */
   isDirty: boolean;
   /** 원본 파일 형식 (#888 — HWPX 출처는 HWP 변환 저장) */

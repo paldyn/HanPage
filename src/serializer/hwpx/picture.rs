@@ -285,6 +285,7 @@ fn write_img<W: Write>(
     let bright = p.image_attr.brightness.to_string();
     let contrast = p.image_attr.contrast.to_string();
     let effect = image_effect_str(p.image_attr.effect);
+    let alpha = picture_alpha_str(p.image_attr.clamped_transparency());
     empty_tag(
         w,
         "hc:img",
@@ -293,9 +294,13 @@ fn write_img<W: Write>(
             ("bright", &bright),
             ("contrast", &contrast),
             ("effect", effect),
-            ("alpha", "0"),
+            ("alpha", &alpha),
         ],
     )
+}
+
+fn picture_alpha_str(transparency: u8) -> String {
+    crate::model::image::transparency_percent_to_alpha_byte(transparency).to_string()
 }
 
 fn write_effects<W: Write>(w: &mut Writer<W>, pic: &Picture) -> Result<(), SerializeError> {
@@ -536,6 +541,7 @@ mod tests {
             brightness: 0,
             contrast: 0,
             effect: ImageEffect::RealPic,
+            transparency: 0,
             external_path: None,
         };
         pic.common.width = 1000;
@@ -597,6 +603,27 @@ mod tests {
                 r#"<hp:imgRect><hc:pt0 x="0" y="0"/><hc:pt1 x="49380" y="0"/><hc:pt2 x="49380" y="45840"/><hc:pt3 x="0" y="45840"/></hp:imgRect>"#
             ),
             "imgRect 는 border 스칼라 레이아웃 역매핑: {xml}"
+        );
+    }
+
+    #[test]
+    fn issue1452_img_alpha_uses_hwp_alpha_byte() {
+        let doc = make_doc_with_bin(1, "png");
+        let mut ctx = SerializeContext::collect_from_document(&doc);
+        let mut pic = make_picture(1);
+
+        pic.image_attr.transparency = 50;
+        let xml = serialize(&pic, &mut ctx);
+        assert!(
+            xml.contains(r#"alpha="127""#),
+            "그림 투명도 50%는 한컴 HWPX alpha byte 127로 저장되어야 한다: {xml}"
+        );
+
+        pic.image_attr.transparency = 100;
+        let xml = serialize(&pic, &mut ctx);
+        assert!(
+            xml.contains(r#"alpha="255""#),
+            "그림 투명도 100%는 한컴 HWPX alpha byte 255로 저장되어야 한다: {xml}"
         );
     }
 

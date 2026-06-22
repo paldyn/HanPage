@@ -1,9 +1,29 @@
 /* ── 개체 속성 대화상자 (picture-props, pp-) ─── */
 .pp-dialog {
-  width: 580px;
+  width: min(675px, calc(100vw - 32px));
+  height: min(720px, calc(100vh - 32px));
+  display: flex;
+  flex-direction: column;
+}
+.pp-dialog .cs-main-row {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.pp-dialog .cs-left-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 .pp-dialog .dialog-body {
-  min-height: 400px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.pp-dialog .dialog-tab-panel {
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 .pp-dialog .dialog-label {
   min-width: 60px;

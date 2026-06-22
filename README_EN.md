@@ -71,6 +71,47 @@ Foundation  Typeset   Collab    Complete
 - Web editor + hwpctl-compatible API (30 Actions, Field API)
 - 1,100+ tests
 
+#### v0.7.17 Cycle (2026-06-23)
+
+> Patch after v0.7.16 — first OOXML chart render-fidelity work, legacy-shape shapeComment
+> serialization, WASM options-object APIs, rhwp-studio table/picture/cursor editing fixes,
+> and a dependency bump batch
+
+**Rendering · charts**
+- 2D-approximation routing for 7 OOXML chart types (3D-bar/3D-pie/ofPie) + bar stacking/percent (C1a)
+- Keep v2 font authority on fallback, expand CanvasKit replay contract guards
+
+**Save contract · API**
+- Fixed missing shapeComment serialization on legacy shapes (ellipse/arc/polygon/curve/chart/ole)
+- Added 26 WASM options-object APIs (`*Ex`, backward-compatible) + consumer README/manual
+
+**rhwp-studio · extension**
+- Table row/column insert-delete regression fix, autosave/recovery, local-font consent, picture/cursor fidelity, table-cell editing/protection
+- Browser extension 0.2.6: viewer CSP fix, Chrome download interceptor side-effect removal
+
+#### v0.7.16 Cycle (2026-06-19)
+
+> Patch after v0.7.15 — HWPX save-contract (serializer fidelity) refinements, ClickHere
+> guide-text Hancom compatibility, rhwp-studio drag-and-drop security gate, and rendering/
+> table/picture fixes with many external contributor PRs
+
+**HWPX Save Contract (serializer fidelity)**
+- Preserved cell/text-box controls, linesegs, and captions; emit secPr margins and body
+  column (colPr) from the IR instead of template hardcoding
+- Preserved picture sizes, MEMO, shapeComment, registration axis, table pageBreak; lossless
+  roundtrip for DocInfo/numbering and more
+- Made parser autoNum width consistent, fixed newNum slot position, added enum-token surface check
+
+**Hancom Compatibility · rhwp-studio**
+- Fixed ClickHere (click-to-type) guide-text command format — resolves guide text not binding
+  in the Hancom editor
+- Drag-and-drop local file loading security gate (modal opt-in, extension/web common); ClickHere
+  editing and dark theme
+
+**Rendering · Other**
+- Native PDF export API, Text IR v2 font-proof gates, endnote height SSOT, rotated-cell picture placement
+- 27-sample chart corpus verification fixture; preserve mixed page sizes when printing
+
 #### v0.7.15 Cycle (2026-06-06)
 
 > Security patch — browser-extension service-worker fetch hardening, equation TAC flow/caret fixes,
@@ -334,7 +375,7 @@ See the [roadmap document](mydocs/eng/report/rhwp-milestone.md) for details.
 
 ## npm Packages — Use in Your Web Project
 
-Current release: `@rhwp/core` / `@rhwp/editor` v0.7.15.
+Current release: `@rhwp/core` / `@rhwp/editor` v0.7.17.
 
 ### Embed a Full Editor (3 lines)
 

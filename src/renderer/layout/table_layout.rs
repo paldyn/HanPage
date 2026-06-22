@@ -4,7 +4,7 @@ use super::super::composer::{compose_paragraph, ComposedLine, ComposedParagraph}
 use super::super::height_measurer::MeasuredTable;
 use super::super::page_layout::LayoutRect;
 use super::super::render_tree::*;
-use super::super::style_resolver::ResolvedStyleSet;
+use super::super::style_resolver::{ResolvedBorderStyle, ResolvedStyleSet};
 use crate::model::bin_data::BinDataContent;
 use crate::model::control::Control;
 use crate::model::paragraph::Paragraph;
@@ -38,8 +38,8 @@ fn effective_margin_left_line(margin_left: f64, indent: f64, line_n: usize) -> f
 use super::super::composer::effective_text_for_metrics;
 use super::super::{hwpunit_to_px, ShapeStyle};
 use super::border_rendering::{
-    build_row_col_x, collect_cell_borders, render_cell_diagonal, render_edge_borders,
-    render_transparent_borders,
+    build_row_col_x, collect_cell_borders, create_border_line_nodes, render_cell_diagonal,
+    render_edge_borders, render_transparent_borders,
 };
 use super::text_measurement::{estimate_text_width, resolved_to_text_style};
 use super::utils::find_bin_data;
@@ -47,6 +47,105 @@ use super::{CellContext, CellPathEntry, LayoutEngine};
 
 // 표 수평 정렬: model::shape 타입 사용
 use crate::model::shape::{CommonObjAttr, HorzAlign, HorzRelTo, TextWrap, VertRelTo};
+
+fn build_col_row_y_from_cell_heights(
+    table: &crate::model::table::Table,
+    row_heights: &[f64],
+    row_y: &[f64],
+    col_count: usize,
+    row_count: usize,
+    cell_spacing: f64,
+    dpi: f64,
+) -> Vec<Vec<f64>> {
+    let mut cell_height_grid = vec![vec![None::<f64>; row_count]; col_count];
+    for cell in &table.cells {
+        if cell.row_span == 1
+            && cell.col_span == 1
+            && cell.height < 0x8000_0000
+            && (cell.col as usize) < col_count
+            && (cell.row as usize) < row_count
+        {
+            cell_height_grid[cell.col as usize][cell.row as usize] =
+                Some(hwpunit_to_px(cell.height as i32, dpi));
+        }
+    }
+
+    let fallback_h = hwpunit_to_px(400, dpi);
+    let target_total = if table.common.height > 0 {
+        hwpunit_to_px(table.common.height as i32, dpi)
+            + cell_spacing * row_count.saturating_sub(1) as f64
+    } else {
+        row_y.last().copied().unwrap_or(0.0)
+    };
+    let mut col_row_y = vec![vec![0.0f64; row_count + 1]; col_count];
+    for c in 0..col_count {
+        for r in 0..row_count {
+            let h = cell_height_grid[c][r]
+                .or_else(|| row_heights.get(r).copied())
+                .unwrap_or(fallback_h);
+            col_row_y[c][r + 1] =
+                col_row_y[c][r] + h + if r + 1 < row_count { cell_spacing } else { 0.0 };
+        }
+        // 저장 파일의 cell.height는 표 전체 높이와 맞지 않는 보조값일 수 있다.
+        // 열별 누적 높이가 표 외곽과 맞을 때만 독립 horizontal segment로 해석한다.
+        if (col_row_y[c][row_count] - target_total).abs() > 0.5 && row_y.len() == row_count + 1 {
+            col_row_y[c].clone_from_slice(row_y);
+        }
+    }
+    col_row_y
+}
+
+fn has_independent_col_row_y(col_row_y: &[Vec<f64>], row_y: &[f64]) -> bool {
+    col_row_y.iter().any(|cy| {
+        cy.iter()
+            .zip(row_y.iter())
+            .any(|(a, b)| (a - b).abs() > 0.01)
+    })
+}
+
+fn render_cell_box_borders(
+    tree: &mut PageRenderTree,
+    bs: &ResolvedBorderStyle,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) -> Vec<RenderNode> {
+    let mut nodes = Vec::new();
+    nodes.extend(create_border_line_nodes(
+        tree,
+        &bs.borders[2],
+        x,
+        y,
+        x + w,
+        y,
+    ));
+    nodes.extend(create_border_line_nodes(
+        tree,
+        &bs.borders[3],
+        x,
+        y + h,
+        x + w,
+        y + h,
+    ));
+    nodes.extend(create_border_line_nodes(
+        tree,
+        &bs.borders[0],
+        x,
+        y,
+        x,
+        y + h,
+    ));
+    nodes.extend(create_border_line_nodes(
+        tree,
+        &bs.borders[1],
+        x + w,
+        y,
+        x + w,
+        y + h,
+    ));
+    nodes
+}
 
 /// [Task #993] 분할 표 행 컷 — 행에 속한 셀(col 오름차순)별 "소비한 콘텐츠 유닛 수".
 /// 빈 Vec = 처음부터(아무것도 소비 안 함).
@@ -241,6 +340,10 @@ impl LayoutEngine {
                 return 0.0;
             }
         }
+        let header_footer_padding_compat = matches!(
+            col_node.node_type,
+            RenderNodeType::Header | RenderNodeType::Footer | RenderNodeType::MasterPage
+        );
         // 1x1 래퍼 표 감지: 외곽 표를 무시하고 내부 표를 직접 렌더링.
         // (Task #688) 셀 paragraphs 가 2개 이상이면 첫 nested 표만 unwrap 시 나머지
         // paragraph 의 nested 표가 누락되므로 paragraphs.len() == 1 가드를 둔다.
@@ -442,12 +545,35 @@ impl LayoutEngine {
             cell_spacing,
             self.dpi,
         );
+        let independent_col_row_y = if split_row_range.is_none() && !table.common.treat_as_char {
+            let col_row_y = build_col_row_y_from_cell_heights(
+                table,
+                &row_heights,
+                &row_y,
+                col_count,
+                row_count,
+                cell_spacing,
+                self.dpi,
+            );
+            if has_independent_col_row_y(&col_row_y, &row_y) {
+                Some(col_row_y)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         let table_width = row_col_x
             .iter()
             .map(|rx| rx.last().copied().unwrap_or(0.0))
             .fold(col_x.last().copied().unwrap_or(0.0), f64::max);
-        let table_height = if let Some((_, er)) = split_row_range {
+        let table_height = if let Some(col_row_y) = independent_col_row_y.as_ref() {
+            col_row_y
+                .iter()
+                .filter_map(|cy| cy.last().copied())
+                .fold(row_y.last().copied().unwrap_or(0.0), f64::max)
+        } else if let Some((_, er)) = split_row_range {
             row_y[er].max(0.0)
         } else {
             row_y.last().copied().unwrap_or(0.0)
@@ -656,6 +782,7 @@ impl LayoutEngine {
             enclosing_cell_ctx,
             &row_col_x,
             &row_y,
+            independent_col_row_y.as_deref(),
             col_count,
             row_count,
             table_x,
@@ -666,6 +793,7 @@ impl LayoutEngine {
             row_y_shift,
             clamp_header_negative_para_offset,
             inline_table_flow_y_shift,
+            header_footer_padding_compat,
         );
 
         // ── 5-1. 표 전체 외곽 테두리 보충 ──
@@ -747,13 +875,15 @@ impl LayoutEngine {
         }
 
         // ── 6. 테두리 렌더링 ──
-        table_node.children.extend(render_edge_borders(
-            tree, &h_edges, &v_edges, &row_col_x, &row_y, table_x, table_y,
-        ));
-        if self.show_transparent_borders.get() {
-            table_node.children.extend(render_transparent_borders(
+        if independent_col_row_y.is_none() {
+            table_node.children.extend(render_edge_borders(
                 tree, &h_edges, &v_edges, &row_col_x, &row_y, table_x, table_y,
             ));
+            if self.show_transparent_borders.get() {
+                table_node.children.extend(render_transparent_borders(
+                    tree, &h_edges, &v_edges, &row_col_x, &row_y, table_x, table_y,
+                ));
+            }
         }
 
         col_node.children.push(table_node);
@@ -866,6 +996,9 @@ impl LayoutEngine {
         // 1단계: col_span==1인 셀에서 개별 열 폭 추출
         let mut col_widths = vec![0.0f64; col_count];
         for cell in &table.cells {
+            if table.local_resize_rows.contains(&cell.row) {
+                continue;
+            }
             if cell.col_span == 1 && (cell.col as usize) < col_count {
                 let w = hwpunit_to_px(cell.width as i32, self.dpi);
                 if w > col_widths[cell.col as usize] {
@@ -878,6 +1011,9 @@ impl LayoutEngine {
         {
             let mut constraints: Vec<(usize, usize, f64)> = Vec::new();
             for cell in &table.cells {
+                if table.local_resize_rows.contains(&cell.row) {
+                    continue;
+                }
                 let c = cell.col as usize;
                 let span = cell.col_span as usize;
                 if span > 1 && c + span <= col_count {
@@ -924,12 +1060,39 @@ impl LayoutEngine {
                     }
                 }
             }
+
+            // 병합 셀 제약이 이미 값이 있는 열들로만 구성되어도 총합이 더 클 수 있다.
+            // 한컴은 이 경우 뒤쪽 열을 확장해 병합 셀 폭을 만족시킨다.
+            for &(c, span, total_w) in &constraints {
+                let known_sum: f64 = (c..c + span).map(|i| col_widths[i]).sum();
+                let deficit = total_w - known_sum;
+                if deficit > 0.5 {
+                    let target_col = c + span - 1;
+                    if target_col < col_widths.len() {
+                        col_widths[target_col] += deficit;
+                    }
+                }
+            }
         }
 
         // 3단계: 여전히 폭이 0인 열에 기본값 할당
         for c in 0..col_count {
             if col_widths[c] <= 0.0 {
                 col_widths[c] = hwpunit_to_px(1800, self.dpi);
+            }
+        }
+        let target_width = if table.common.width > 0 {
+            hwpunit_to_px(table.common.width as i32, self.dpi)
+        } else {
+            0.0
+        };
+        if target_width > 0.0 {
+            let current: f64 = col_widths.iter().sum();
+            let residual = target_width - current;
+            if residual > 0.5 {
+                if let Some(last) = col_widths.last_mut() {
+                    *last += residual;
+                }
             }
         }
         col_widths
@@ -944,15 +1107,58 @@ impl LayoutEngine {
         measured_table: Option<&MeasuredTable>,
         styles: &ResolvedStyleSet,
     ) -> Vec<f64> {
+        self.resolve_row_heights_with_common_fit(
+            table,
+            col_count,
+            row_count,
+            measured_table,
+            styles,
+            true,
+        )
+    }
+
+    fn resolve_row_heights_for_content(
+        &self,
+        table: &crate::model::table::Table,
+        col_count: usize,
+        row_count: usize,
+        measured_table: Option<&MeasuredTable>,
+        styles: &ResolvedStyleSet,
+    ) -> Vec<f64> {
+        self.resolve_row_heights_with_common_fit(
+            table,
+            col_count,
+            row_count,
+            measured_table,
+            styles,
+            false,
+        )
+    }
+
+    fn resolve_row_heights_with_common_fit(
+        &self,
+        table: &crate::model::table::Table,
+        col_count: usize,
+        row_count: usize,
+        measured_table: Option<&MeasuredTable>,
+        styles: &ResolvedStyleSet,
+        fit_common_height: bool,
+    ) -> Vec<f64> {
         if let Some(mt) = measured_table {
             let mut rh = mt.row_heights.clone();
             rh.resize(row_count, hwpunit_to_px(400, self.dpi));
+            if fit_common_height {
+                self.fit_row_heights_to_common_height(table, &mut rh);
+            }
             return rh;
         }
 
         // 1단계: row_span==1인 셀에서 개별 행 높이 추출
         let mut row_heights = vec![0.0f64; row_count];
         for cell in &table.cells {
+            if table.local_resize_cols.contains(&cell.col) {
+                continue;
+            }
             if cell.row_span == 1 && (cell.row as usize) < row_count {
                 let r = cell.row as usize;
                 if cell.height < 0x80000000 {
@@ -992,6 +1198,9 @@ impl LayoutEngine {
         {
             let mut constraints: Vec<(usize, usize, f64)> = Vec::new();
             for cell in &table.cells {
+                if table.local_resize_cols.contains(&cell.col) {
+                    continue;
+                }
                 let r = cell.row as usize;
                 let span = cell.row_span as usize;
                 if span > 1 && r + span <= row_count && cell.height < 0x80000000 {
@@ -1066,7 +1275,34 @@ impl LayoutEngine {
                 row_heights[r] = hwpunit_to_px(400, self.dpi);
             }
         }
+        if fit_common_height {
+            self.fit_row_heights_to_common_height(table, &mut row_heights);
+        }
         row_heights
+    }
+
+    fn fit_row_heights_to_common_height(
+        &self,
+        table: &crate::model::table::Table,
+        row_heights: &mut [f64],
+    ) {
+        if row_heights.is_empty() {
+            return;
+        }
+        let target_height = if table.common.height > 0 {
+            hwpunit_to_px(table.common.height as i32, self.dpi)
+        } else {
+            0.0
+        };
+        if target_height > 0.0 {
+            let current: f64 = row_heights.iter().sum();
+            let residual = target_height - current;
+            if residual > 0.5 {
+                if let Some(last) = row_heights.last_mut() {
+                    *last += residual;
+                }
+            }
+        }
     }
 
     /// 셀 문단들의 콘텐츠 높이 합산 (spacing + line_height + line_spacing)
@@ -1223,42 +1459,66 @@ impl LayoutEngine {
         }
     }
 
-    /// 셀 패딩 계산 (cell.padding이 0이면 table.padding fallback)
+    /// 셀 패딩 계산
     pub(crate) fn resolve_cell_padding(
         &self,
         cell: &crate::model::table::Cell,
         table: &crate::model::table::Table,
     ) -> (f64, f64, f64, f64) {
+        self.resolve_cell_padding_for_context(cell, table, false)
+    }
+
+    fn resolve_cell_padding_for_context(
+        &self,
+        cell: &crate::model::table::Cell,
+        table: &crate::model::table::Table,
+        allow_saved_small_cell_margin: bool,
+    ) -> (f64, f64, f64, f64) {
         // HWP 스펙: aim(apply_inner_margin)=true → cell.padding,
         //           aim=false → table.padding 우선.
-        // Task #347: 단, aim=false에서도 cell.padding이 table.padding보다
-        // 큰 비대칭 값이면 작성자 의도(예: KTX 목차 R=1417 HU)로 보고 그 축만 cell 사용.
-        // (Task #279의 "전 축에서 cell 우선" 휴리스틱은 일반 박스 셀에서 표 padding을
-        // 무시해 텍스트가 왼쪽으로 붙어버리는 부작용이 있어 축소 적용.)
-        let prefer_cell_axis = |c: i16, t: i16| -> bool {
-            if cell.apply_inner_margin {
-                c != 0
-            } else {
-                // aim=false: cell이 table보다 명백히 큰 경우만 cell 우선 (의도된 비대칭)
-                (c as i32) > (t as i32)
-            }
-        };
-        let pad_left = if prefer_cell_axis(cell.padding.left, table.padding.left) {
+        // 한컴은 aim=false일 때 cell.padding 원값을 파일에 보존하더라도 렌더에는 쓰지 않는다.
+        // aim=true에서는 0mm도 사용자가 지정한 셀 고유 안 여백으로 존중한다.
+        let use_cell_left = Self::should_use_cell_padding_axis_for_context(
+            cell,
+            cell.padding.left,
+            table.padding.left,
+            allow_saved_small_cell_margin,
+        );
+        let use_cell_right = Self::should_use_cell_padding_axis_for_context(
+            cell,
+            cell.padding.right,
+            table.padding.right,
+            allow_saved_small_cell_margin,
+        );
+        let use_cell_top = Self::should_use_cell_padding_axis_for_context(
+            cell,
+            cell.padding.top,
+            table.padding.top,
+            allow_saved_small_cell_margin,
+        );
+        let use_cell_bottom = Self::should_use_cell_padding_axis_for_context(
+            cell,
+            cell.padding.bottom,
+            table.padding.bottom,
+            allow_saved_small_cell_margin,
+        );
+
+        let pad_left = if use_cell_left {
             hwpunit_to_px(cell.padding.left as i32, self.dpi)
         } else {
             hwpunit_to_px(table.padding.left as i32, self.dpi)
         };
-        let pad_right = if prefer_cell_axis(cell.padding.right, table.padding.right) {
+        let pad_right = if use_cell_right {
             hwpunit_to_px(cell.padding.right as i32, self.dpi)
         } else {
             hwpunit_to_px(table.padding.right as i32, self.dpi)
         };
-        let pad_top = if prefer_cell_axis(cell.padding.top, table.padding.top) {
+        let pad_top = if use_cell_top {
             hwpunit_to_px(cell.padding.top as i32, self.dpi)
         } else {
             hwpunit_to_px(table.padding.top as i32, self.dpi)
         };
-        let pad_bottom = if prefer_cell_axis(cell.padding.bottom, table.padding.bottom) {
+        let pad_bottom = if use_cell_bottom {
             hwpunit_to_px(cell.padding.bottom as i32, self.dpi)
         } else {
             hwpunit_to_px(table.padding.bottom as i32, self.dpi)
@@ -1283,6 +1543,30 @@ impl LayoutEngine {
         (pad_left, pad_right, pad_top, pad_bottom)
     }
 
+    fn should_use_cell_padding_axis_for_context(
+        cell: &crate::model::table::Cell,
+        cell_padding: i16,
+        table_padding: i16,
+        allow_saved_small_cell_margin: bool,
+    ) -> bool {
+        if cell.apply_inner_margin {
+            return cell_padding != 0;
+        }
+
+        if cell_padding <= table_padding {
+            return false;
+        }
+
+        // 오래된 HWP/HWPX에는 hasMargin=0이어도 셀별 안여백 보존값이 렌더링에
+        // 필요한 경우가 있다(KTX 목차, exam_kor 보기 박스 등). 다만 1443 샘플처럼
+        // 사용자가 10mm급 명시 여백을 껐다가 저장한 값은 한컴이 렌더링에 쓰지 않는다.
+        if !allow_saved_small_cell_margin && cell_padding >= 2500 {
+            return false;
+        }
+
+        true
+    }
+
     /// 셀 텍스트가 오버플로우할 때 좌우 패딩을 축소하여 공간을 확보한다.
     /// composed 문단의 각 줄 텍스트 폭을 측정하여 최대값이 가용 폭을 초과하면
     /// 패딩을 비례 축소한다 (최소 1px 보장).
@@ -1300,7 +1584,12 @@ impl LayoutEngine {
         composed_paras: &[ComposedParagraph],
         paragraphs: &[Paragraph],
         styles: &ResolvedStyleSet,
+        preserve_cell_padding: bool,
     ) -> (f64, f64) {
+        if preserve_cell_padding {
+            return (pad_left, pad_right);
+        }
+
         // [Task #617] 다중 줄(2 줄 이상) 단락이 line_segs 로 분배 완료된 경우,
         // HWP 가 가용 폭에 맞춰 자간을 분배하고 줄바꿈을 확정한 상태이므로
         // 자연 폭 추정으로 다시 깎으면 오버 페인팅. 단일 줄 셀(좁은 수치 셀
@@ -1664,6 +1953,7 @@ impl LayoutEngine {
         enclosing_cell_ctx: Option<CellContext>,
         row_col_x: &[Vec<f64>],
         row_y: &[f64],
+        independent_col_row_y: Option<&[Vec<f64>]>,
         col_count: usize,
         row_count: usize,
         table_x: f64,
@@ -1674,7 +1964,9 @@ impl LayoutEngine {
         row_y_shift: f64,
         clamp_header_negative_para_offset: bool,
         inline_table_flow_y_shift: f64,
+        header_footer_padding_compat: bool,
     ) {
+        let mut independent_border_nodes: Vec<RenderNode> = Vec::new();
         for (cell_idx, cell) in table.cells.iter().enumerate() {
             let c = cell.col as usize;
             let r = cell.row as usize;
@@ -1691,9 +1983,13 @@ impl LayoutEngine {
             }
 
             let cell_x = table_x + row_col_x[r][c];
-            // row_y는 이미 시프트된 상태이므로 음수일 수 있음 (start_row 이전 행)
-            // 행 스패닝 셀의 경우 table_y 이상으로 클램프
-            let raw_cell_y = table_y + row_y[r];
+            let cell_col_y = independent_col_row_y.and_then(|col_y| col_y.get(c));
+            // row_y는 이미 시프트된 상태이므로 음수일 수 있음 (start_row 이전 행).
+            // 독립 셀 높이가 있는 표는 해당 열의 누적 y를 사용한다.
+            let raw_cell_y = table_y
+                + cell_col_y
+                    .and_then(|cy| cy.get(r).copied())
+                    .unwrap_or(row_y[r]);
             let cell_y = if row_filter.is_some() {
                 raw_cell_y.max(table_y)
             } else {
@@ -1702,7 +1998,13 @@ impl LayoutEngine {
             let end_col = (c + cell.col_span as usize).min(col_count);
             let end_row = (r + cell.row_span as usize).min(row_count);
             let cell_w = row_col_x[r][end_col] - row_col_x[r][c];
-            let raw_cell_h = row_y[end_row] - row_y[r];
+            let raw_cell_h = cell_col_y
+                .and_then(|cy| {
+                    let start = cy.get(r).copied()?;
+                    let end = cy.get(end_row).copied()?;
+                    Some(end - start)
+                })
+                .unwrap_or_else(|| row_y[end_row] - row_y[r]);
             let cell_h = if row_filter.is_some() {
                 // 클램프된 y에 맞게 높이도 조정
                 (raw_cell_h - (cell_y - raw_cell_y)).max(0.0)
@@ -1748,7 +2050,7 @@ impl LayoutEngine {
 
             // 셀 패딩 (cell.padding이 0이면 table.padding fallback)
             let (mut pad_left, mut pad_right, pad_top, pad_bottom) =
-                self.resolve_cell_padding(cell, table);
+                self.resolve_cell_padding_for_context(cell, table, header_footer_padding_compat);
 
             let mut composed_paras: Vec<_> = cell
                 .paragraphs
@@ -1766,7 +2068,11 @@ impl LayoutEngine {
                 }
             }
 
-            // 텍스트 오버플로우 시 좌우 패딩 축소
+            // 텍스트 오버플로우 시 좌우 패딩 축소.
+            // 1443 셀 안여백 샘플처럼 큰 명시 좌우 여백은 한컴과 같이 보존하되,
+            // 기존 문서의 1~4mm급 일반 셀 여백은 종전 오버플로우 방어를 유지한다.
+            let preserve_explicit_horizontal_padding =
+                cell.apply_inner_margin && cell.padding.left.max(cell.padding.right) >= 1700;
             let (new_pl, new_pr) = self.shrink_cell_padding_for_overflow(
                 pad_left,
                 pad_right,
@@ -1774,6 +2080,7 @@ impl LayoutEngine {
                 &composed_paras,
                 &cell.paragraphs,
                 styles,
+                preserve_explicit_horizontal_padding,
             );
             pad_left = new_pl;
             pad_right = new_pr;
@@ -3177,17 +3484,24 @@ impl LayoutEngine {
                 self.add_footnote_superscripts(tree, &mut cell_node, para, styles);
             }
 
-            // (b) 셀 테두리를 엣지 그리드에 수집
+            // (b) 셀 테두리를 수집한다. 열별 높이가 다른 표는 row_y 격자로
+            // 테두리를 그릴 수 없으므로 셀 bbox 기준 라인을 별도로 생성한다.
             if let Some(bs) = border_style {
-                collect_cell_borders(
-                    h_edges,
-                    v_edges,
-                    c,
-                    r,
-                    cell.col_span as usize,
-                    cell.row_span as usize,
-                    &bs.borders,
-                );
+                if independent_col_row_y.is_some() {
+                    independent_border_nodes.extend(render_cell_box_borders(
+                        tree, bs, cell_x, cell_y, cell_w, cell_h,
+                    ));
+                } else {
+                    collect_cell_borders(
+                        h_edges,
+                        v_edges,
+                        c,
+                        r,
+                        cell.col_span as usize,
+                        cell.row_span as usize,
+                        &bs.borders,
+                    );
+                }
             }
 
             table_node.children.push(cell_node);
@@ -3198,6 +3512,9 @@ impl LayoutEngine {
                     tree, bs, cell_x, cell_y, cell_w, cell_h,
                 ));
             }
+        }
+        if !independent_border_nodes.is_empty() {
+            table_node.children.extend(independent_border_nodes);
         }
     }
 
@@ -3793,7 +4110,9 @@ impl LayoutEngine {
                     let nt = nested_tables[0];
                     let ncol = nt.col_count as usize;
                     let nrow = nt.row_count as usize;
-                    let rhs = self.resolve_row_heights(nt, ncol, nrow, None, styles);
+                    // 분할 컷은 저장된 표 높이보다 실제 콘텐츠 높이를 기준으로 잡아야
+                    // page-larger 중첩 표가 한컴처럼 행 단위로 이어진다.
+                    let rhs = self.resolve_row_heights_for_content(nt, ncol, nrow, None, styles);
                     let ncs = hwpunit_to_px(nt.cell_spacing as i32, self.dpi);
                     let om_top = hwpunit_to_px(nt.outer_margin_top as i32, self.dpi);
                     let om_bot = hwpunit_to_px(nt.outer_margin_bottom as i32, self.dpi);
@@ -4470,6 +4789,7 @@ mod row_cut_tests {
     use super::LayoutEngine;
     use crate::model::paragraph::{LineSeg, Paragraph};
     use crate::model::table::{Cell, Table};
+    use crate::renderer::composer::{ComposedLine, ComposedParagraph, ComposedTextRun};
     use crate::renderer::style_resolver::ResolvedStyleSet;
 
     /// line_height=1200 HU (=16 px @96dpi), line_spacing=0 인 N줄 텍스트 문단.
@@ -4509,6 +4829,67 @@ mod row_cut_tests {
             cells,
             ..Default::default()
         }
+    }
+
+    fn composed_text(text: &str) -> ComposedParagraph {
+        ComposedParagraph {
+            lines: vec![ComposedLine {
+                runs: vec![ComposedTextRun {
+                    text: text.to_string(),
+                    ..Default::default()
+                }],
+                line_height: 1000,
+                baseline_distance: 850,
+                segment_width: 1000,
+                column_start: 0,
+                line_spacing: 0,
+                has_line_break: false,
+                char_start: 0,
+            }],
+            para_style_id: 0,
+            inline_controls: Vec::new(),
+            numbering_text: None,
+            tac_controls: Vec::new(),
+            footnote_positions: Vec::new(),
+            tab_extended: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_shrink_cell_padding_preserves_explicit_cell_margin() {
+        let eng = LayoutEngine::new(96.0);
+        let styles = ResolvedStyleSet::default();
+        let composed = vec![composed_text("12345678901234567890")];
+        let paragraphs = vec![Paragraph::default()];
+
+        let shrunk = eng.shrink_cell_padding_for_overflow(
+            20.0,
+            20.0,
+            30.0,
+            &composed,
+            &paragraphs,
+            &styles,
+            false,
+        );
+        assert!(
+            shrunk.0 < 20.0 || shrunk.1 < 20.0,
+            "일반 셀의 기존 오버플로우 방어는 유지되어야 함: {shrunk:?}"
+        );
+
+        let preserved = eng.shrink_cell_padding_for_overflow(
+            20.0,
+            20.0,
+            30.0,
+            &composed,
+            &paragraphs,
+            &styles,
+            true,
+        );
+        assert_eq!(
+            preserved,
+            (20.0, 20.0),
+            "안 여백 지정 셀은 한컴처럼 입력한 좌우 여백을 렌더링에서도 보존해야 함"
+        );
     }
 
     #[test]

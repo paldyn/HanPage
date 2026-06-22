@@ -15,6 +15,37 @@ use crate::model::shape::{common_obj_offsets, ShapeObject};
 const MIN_SHAPE_SIZE: u32 = 200;
 
 impl DocumentCore {
+    const COMMON_OBJ_ATTR_KNOWN_MASK: u32 = 0x01
+        | (0x03 << 3)
+        | (0x07 << 5)
+        | (0x03 << 8)
+        | (0x07 << 10)
+        | (1 << 13)
+        | (1 << 14)
+        | (0x07 << 15)
+        | (0x03 << 18)
+        | (1 << 20)
+        | (0x07 << 21)
+        | (0x03 << 24)
+        | (1 << 26)
+        | (1 << 28);
+
+    fn sync_common_obj_attr_known_bits(c: &mut crate::model::shape::CommonObjAttr) {
+        let packed =
+            crate::document_core::converters::common_obj_attr_writer::pack_common_attr_bits(c);
+        c.attr = (c.attr & !Self::COMMON_OBJ_ATTR_KNOWN_MASK)
+            | (packed & Self::COMMON_OBJ_ATTR_KNOWN_MASK);
+    }
+
+    fn is_structure_only_empty_paragraph(para: &Paragraph) -> bool {
+        para.text.is_empty()
+            && !para.controls.is_empty()
+            && para
+                .controls
+                .iter()
+                .all(|ctrl| matches!(ctrl, Control::SectionDef(_) | Control::ColumnDef(_)))
+    }
+
     fn resolve_shape_control_ref(
         &self,
         section_idx: usize,
@@ -497,7 +528,7 @@ impl DocumentCore {
                 "\"horzRelTo\":\"{}\",\"horzAlign\":\"{}\",",
                 "\"vertOffset\":{},\"horzOffset\":{},",
                 "\"textWrap\":\"{}\",\"restrictInPage\":{},\"allowOverlap\":{},\"sizeProtect\":{},",
-                "\"brightness\":{},\"contrast\":{},\"effect\":\"{}\",",
+                "\"brightness\":{},\"contrast\":{},\"effect\":\"{}\",\"transparency\":{},",
                 "\"description\":\"{}\",",
                 // 회전/대칭
                 "\"rotationAngle\":{},\"horzFlip\":{},\"vertFlip\":{},",
@@ -520,7 +551,10 @@ impl DocumentCore {
             horz_rel, horz_align,
             c.vertical_offset as i32, c.horizontal_offset as i32,
             text_wrap, c.flow_with_text, c.allow_overlap, c.size_protect,
-            pic.image_attr.brightness, pic.image_attr.contrast, effect,
+            pic.image_attr.brightness,
+            pic.image_attr.contrast,
+            effect,
+            pic.image_attr.clamped_transparency(),
             desc_escaped,
             // 회전/대칭
             sa.rotation_angle, sa.horz_flip, sa.vert_flip,
@@ -565,21 +599,21 @@ impl DocumentCore {
     ) -> Result<String, HwpError> {
         // JSON 파싱 (serde_json 사용 대신 수동 파싱 — 기존 패턴)
         // [Task #825] 픽쳐 속성 mutation 은 helper 로 분리 (머리말/꼬리말 path 와 공유).
-        let (caption_created, should_migrate_to_inline) = {
+        let (caption_created, should_migrate_to_inline, should_migrate_to_floating) = {
             let pic =
                 self.resolve_picture_control_mut(section_idx, parent_para_idx, control_idx)?;
             // [Task #1151 v2] tac false→true migration 검출용 snapshot.
             let was_tac = pic.common.treat_as_char;
             let caption_created = Self::apply_picture_props_inner(pic, props_json);
             let now_tac = pic.common.treat_as_char;
-            (caption_created, !was_tac && now_tac)
+            (caption_created, !was_tac && now_tac, was_tac && !now_tac)
         };
 
         // [Task #1151 v2] floating → inline migration (H1 정합, samples/tac-verify/).
         // 한컴 산출물 Scenario A~D 분석: tac false→true 시 picture 의 control 위치는
         // 불변이고, 4 필드만 갱신 (treat_as_char / h/v_rel_to=Para / h/v_offset=0 /
         // parent line_segs[0]). text/char_offsets/paragraph 수 변화 없음.
-        if should_migrate_to_inline {
+        if should_migrate_to_inline || should_migrate_to_floating {
             let section = self.document.sections.get_mut(section_idx).ok_or_else(|| {
                 HwpError::RenderError(format!("구역 인덱스 {} 범위 초과", section_idx))
             })?;
@@ -606,21 +640,25 @@ impl DocumentCore {
                     HwpError::RenderError(format!("문단 인덱스 {} 범위 초과", parent_para_idx))
                 })?
             };
-            let crate::model::paragraph::Paragraph {
-                line_segs,
-                controls,
-                ..
-            } = &mut *para;
-            match controls.get_mut(control_idx) {
-                Some(Control::Picture(pic_box)) => {
-                    Self::migrate_picture_floating_to_inline(line_segs, pic_box.as_mut());
-                }
-                Some(Control::Shape(shape)) => {
-                    if let ShapeObject::Picture(pic) = shape.as_mut() {
-                        Self::migrate_picture_floating_to_inline(line_segs, pic);
+            if should_migrate_to_inline {
+                let crate::model::paragraph::Paragraph {
+                    line_segs,
+                    controls,
+                    ..
+                } = &mut *para;
+                match controls.get_mut(control_idx) {
+                    Some(Control::Picture(pic_box)) => {
+                        Self::migrate_picture_floating_to_inline(line_segs, pic_box.as_mut());
                     }
+                    Some(Control::Shape(shape)) => {
+                        if let ShapeObject::Picture(pic) = shape.as_mut() {
+                            Self::migrate_picture_floating_to_inline(line_segs, pic);
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
+            } else {
+                Self::migrate_empty_picture_para_inline_to_floating(para);
             }
         }
         // 캡션 생성 시 AutoNumber 재할당 + 텍스트 생성 (본문 path 만 — 머리말/꼬리말은 별도).
@@ -787,6 +825,124 @@ impl DocumentCore {
                 ..Default::default()
             });
         }
+    }
+
+    /// TAC 그림을 자리차지 개체로 되돌릴 때, 텍스트 없는 그림 전용 문단의
+    /// LINE_SEG를 남은 TAC 개체 수에 맞춰 재구성한다.
+    ///
+    /// 기존 false→true 마이그레이션은 첫 LINE_SEG를 그림 높이로 키운다. 반대로
+    /// true→false가 되면 그 그림은 더 이상 inline 글자 슬롯이 아니므로, 같은
+    /// 문단의 남은 TAC 그림만 빈 줄에 1개씩 매핑되어야 한다. 한컴 저장본
+    /// `투명도0-50-2nd그림글차처럼off.hwp`처럼 TopAndBottom 예약 높이는 첫 TAC
+    /// 줄의 `vertical_pos`에 반영한다.
+    pub(crate) fn migrate_empty_picture_para_inline_to_floating(
+        para: &mut crate::model::paragraph::Paragraph,
+    ) {
+        if !para.text.is_empty() || !para.char_offsets.is_empty() {
+            return;
+        }
+
+        let old_seg = para.line_segs.first().cloned().unwrap_or_default();
+        let line_spacing = if old_seg.line_spacing > 0 {
+            old_seg.line_spacing
+        } else {
+            600
+        };
+        let reserved_hu = Self::topbottom_reserved_height_for_empty_picture_para(&para.controls);
+        let tac_heights = para
+            .controls
+            .iter()
+            .filter_map(Self::tac_control_height_for_empty_picture_para)
+            .collect::<Vec<_>>();
+
+        if tac_heights.is_empty() {
+            para.line_segs = vec![crate::model::paragraph::LineSeg {
+                text_start: 0,
+                vertical_pos: reserved_hu,
+                line_height: 1000,
+                text_height: 1000,
+                baseline_distance: 850,
+                line_spacing,
+                segment_width: old_seg.segment_width,
+                column_start: old_seg.column_start,
+                tag: old_seg.tag,
+            }];
+            return;
+        }
+
+        let mut vpos = reserved_hu;
+        let mut rebuilt = Vec::with_capacity(tac_heights.len());
+        for (idx, height) in tac_heights.into_iter().enumerate() {
+            let line_height = height.max(1);
+            rebuilt.push(crate::model::paragraph::LineSeg {
+                text_start: (idx as u32) * 8,
+                vertical_pos: vpos,
+                line_height,
+                text_height: line_height,
+                baseline_distance: (line_height as f64 * 0.85).round() as i32,
+                line_spacing,
+                segment_width: old_seg.segment_width,
+                column_start: old_seg.column_start,
+                tag: old_seg.tag,
+            });
+            vpos += line_height + line_spacing;
+        }
+        para.line_segs = rebuilt;
+    }
+
+    fn tac_control_height_for_empty_picture_para(ctrl: &Control) -> Option<i32> {
+        match ctrl {
+            Control::Picture(pic) if pic.common.treat_as_char => Some(pic.common.height as i32),
+            Control::Shape(shape) if shape.common().treat_as_char => {
+                let common_h = shape.common().height as i32;
+                let current_h = shape.shape_attr().current_height as i32;
+                Some(common_h.max(current_h))
+            }
+            Control::Table(table) if table.common.treat_as_char => Some(table.common.height as i32),
+            Control::Equation(eq) if eq.common.treat_as_char => Some(eq.common.height as i32),
+            _ => None,
+        }
+    }
+
+    fn topbottom_reserved_height_for_empty_picture_para(controls: &[Control]) -> i32 {
+        controls
+            .iter()
+            .map(|ctrl| match ctrl {
+                Control::Picture(pic)
+                    if !pic.common.treat_as_char
+                        && matches!(
+                            pic.common.text_wrap,
+                            crate::model::shape::TextWrap::TopAndBottom
+                        ) =>
+                {
+                    pic.common.height as i32
+                        + pic.common.margin.top as i32
+                        + pic.common.margin.bottom as i32
+                }
+                Control::Shape(shape)
+                    if !shape.common().treat_as_char
+                        && matches!(
+                            shape.common().text_wrap,
+                            crate::model::shape::TextWrap::TopAndBottom
+                        ) =>
+                {
+                    let common = shape.common();
+                    common.height as i32 + common.margin.top as i32 + common.margin.bottom as i32
+                }
+                Control::Table(table)
+                    if !table.common.treat_as_char
+                        && matches!(
+                            table.common.text_wrap,
+                            crate::model::shape::TextWrap::TopAndBottom
+                        ) =>
+                {
+                    table.common.height as i32
+                        + table.outer_margin_top as i32
+                        + table.outer_margin_bottom as i32
+                }
+                _ => 0,
+            })
+            .sum()
     }
 
     /// [Task #1151 v7] cell_path JSON → Vec<(controlIdx, cellIdx, cellParaIdx)>.
@@ -1258,6 +1414,7 @@ impl DocumentCore {
         if let Some(v) = json_i32(props_json, "horzOffset") {
             pic.common.horizontal_offset = v as u32;
         }
+        Self::sync_common_obj_attr_known_bits(&mut pic.common);
         if transform_changed {
             pic.shape_attr.raw_rendering.clear();
             pic.shape_attr.render_tx = pic.shape_attr.offset_x as f64;
@@ -1274,6 +1431,9 @@ impl DocumentCore {
         }
         if let Some(v) = json_i32(props_json, "contrast") {
             pic.image_attr.contrast = v as i8;
+        }
+        if let Some(v) = json_i32(props_json, "transparency") {
+            pic.image_attr.transparency = v.clamp(0, 100) as u8;
         }
         if let Some(v) = json_str(props_json, "effect") {
             pic.image_attr.effect = match v.as_str() {
@@ -1808,6 +1968,10 @@ impl DocumentCore {
             raw_table_record_attr: 0x00000006, // 한컴 기본값 (bit1=셀분리금지, bit2=repeat_header)
             raw_table_record_extra: vec![0u8; 2],
             dirty: true,
+            local_resize_rows: Vec::new(),
+            local_resize_cols: Vec::new(),
+            local_resize_cell_widths: Vec::new(),
+            local_resize_cell_heights: Vec::new(),
         };
         table.rebuild_grid();
 
@@ -1848,16 +2012,75 @@ impl DocumentCore {
             ..Default::default()
         };
 
+        let make_empty_neighbor_para = || {
+            let mut empty_raw_header_extra = vec![0u8; 10];
+            empty_raw_header_extra[0..2].copy_from_slice(&1u16.to_le_bytes());
+            empty_raw_header_extra[4..6].copy_from_slice(&1u16.to_le_bytes());
+            Paragraph {
+                text: String::new(),
+                char_count: 1,
+                char_count_msb: false,
+                control_mask: 0,
+                para_shape_id: default_para_shape_id,
+                style_id: 0,
+                char_shapes: vec![CharShapeRef {
+                    start_pos: 0,
+                    char_shape_id: default_char_shape_id,
+                }],
+                line_segs: vec![LineSeg {
+                    text_start: 0,
+                    line_height: 1000,
+                    text_height: 1000,
+                    baseline_distance: 850,
+                    line_spacing: 600,
+                    segment_width: content_width as i32,
+                    tag: LineSeg::TAG_SINGLE_SEGMENT_LINE,
+                    ..Default::default()
+                }],
+                has_para_text: false,
+                raw_header_extra: empty_raw_header_extra,
+                ..Default::default()
+            }
+        };
+
         // --- 5. 커서 위치에 삽입 ---
         self.document.sections[section_idx].raw_stream = None;
 
         let para = &self.document.sections[section_idx].paragraphs[para_idx];
         let is_empty_para = para.text.is_empty() && para.controls.is_empty();
+        let is_structure_only_empty_para = Self::is_structure_only_empty_paragraph(para);
 
         let insert_para_idx;
-        if is_empty_para && char_offset == 0 {
-            // 빈 문단이면 교체
+        let table_control_idx;
+        if is_empty_para {
+            // 빈 문단이면 UI에서 넘어온 offset과 무관하게 현재 줄을 표 host로 사용한다.
             self.document.sections[section_idx].paragraphs[para_idx] = table_para;
+            insert_para_idx = para_idx;
+            table_control_idx = 0;
+        } else if is_structure_only_empty_para {
+            // blank2010 첫 문단처럼 SectionDef/ColumnDef만 있는 빈 줄은 구조 컨트롤을
+            // 보존하되, 줄 배치는 표 host 문단 기준으로 교체해 표 위 빈 줄을 만들지 않는다.
+            let old_para = self.document.sections[section_idx].paragraphs[para_idx].clone();
+            let mut merged_para = table_para;
+            let table_control = merged_para
+                .controls
+                .pop()
+                .ok_or_else(|| HwpError::RenderError("표 컨트롤 생성 실패".to_string()))?;
+            let table_ctrl_data = merged_para.ctrl_data_records.pop().unwrap_or(None);
+
+            merged_para.controls = old_para.controls;
+            merged_para.ctrl_data_records = old_para.ctrl_data_records;
+            while merged_para.ctrl_data_records.len() < merged_para.controls.len() {
+                merged_para.ctrl_data_records.push(None);
+            }
+            table_control_idx = merged_para.controls.len();
+            merged_para.controls.push(table_control);
+            merged_para.ctrl_data_records.push(table_ctrl_data);
+            merged_para.char_count = merged_para.controls.len() as u32 * 8 + 1;
+            merged_para.control_mask = old_para.control_mask | 0x0000_0800;
+            merged_para.has_para_text = true;
+
+            self.document.sections[section_idx].paragraphs[para_idx] = merged_para;
             insert_para_idx = para_idx;
         } else if char_offset == 0 && para.controls.is_empty() {
             // 문단 맨 앞이면 바로 앞에 삽입
@@ -1865,6 +2088,7 @@ impl DocumentCore {
                 .paragraphs
                 .insert(para_idx, table_para);
             insert_para_idx = para_idx;
+            table_control_idx = 0;
         } else {
             // 문단 중간이면 분할 후 삽입
             if char_offset > 0 && !para.text.is_empty() {
@@ -1878,47 +2102,21 @@ impl DocumentCore {
                     .paragraphs
                     .insert(para_idx + 1, table_para);
                 insert_para_idx = para_idx + 1;
+                table_control_idx = 0;
             } else {
                 // char_offset == 0이지만 컨트롤이 있는 경우 → 뒤에 삽입
                 self.document.sections[section_idx]
                     .paragraphs
                     .insert(para_idx + 1, table_para);
                 insert_para_idx = para_idx + 1;
+                table_control_idx = 0;
             }
         }
 
         // 표 아래에 빈 문단 추가 (HWP 표준, 한컴 blank_h_saved.hwp 참조)
-        let mut empty_raw_header_extra = vec![0u8; 10];
-        empty_raw_header_extra[0..2].copy_from_slice(&1u16.to_le_bytes());
-        empty_raw_header_extra[4..6].copy_from_slice(&1u16.to_le_bytes());
-        let empty_para = Paragraph {
-            text: String::new(),
-            char_count: 1,
-            char_count_msb: false,
-            control_mask: 0,
-            para_shape_id: default_para_shape_id,
-            style_id: 0,
-            char_shapes: vec![CharShapeRef {
-                start_pos: 0,
-                char_shape_id: default_char_shape_id,
-            }],
-            line_segs: vec![LineSeg {
-                text_start: 0,
-                line_height: 1000,
-                text_height: 1000,
-                baseline_distance: 850,
-                line_spacing: 600,
-                segment_width: content_width as i32, // 한컴 표준: 편집 영역 폭
-                tag: LineSeg::TAG_SINGLE_SEGMENT_LINE,
-                ..Default::default()
-            }],
-            has_para_text: false,
-            raw_header_extra: empty_raw_header_extra,
-            ..Default::default()
-        };
         self.document.sections[section_idx]
             .paragraphs
-            .insert(insert_para_idx + 1, empty_para);
+            .insert(insert_para_idx + 1, make_empty_neighbor_para());
 
         // --- 6. 스타일 갱신 + 리플로우 + 페이지네이션 ---
         // 새 BorderFill 추가 시 styles.border_styles 갱신이 필요하므로 rebuild_section 사용
@@ -1927,11 +2125,11 @@ impl DocumentCore {
         self.event_log.push(DocumentEvent::TableRowInserted {
             section: section_idx,
             para: insert_para_idx,
-            ctrl: 0,
+            ctrl: table_control_idx,
         });
         Ok(super::super::helpers::json_ok_with(&format!(
-            "\"paraIdx\":{},\"controlIdx\":0",
-            insert_para_idx
+            "\"paraIdx\":{},\"controlIdx\":{}",
+            insert_para_idx, table_control_idx
         )))
     }
 
@@ -1951,6 +2149,7 @@ impl DocumentCore {
         col_count: u16,
         treat_as_char: bool,
         col_widths_hu: Option<&[u32]>,
+        row_heights_hu: Option<&[u32]>,
     ) -> Result<String, HwpError> {
         use crate::model::paragraph::{CharShapeRef, LineSeg};
         use crate::model::style::{BorderFill, BorderLine, BorderLineType, DiagonalLine, Fill};
@@ -2014,9 +2213,17 @@ impl DocumentCore {
             top: 141,
             bottom: 141,
         };
-        let cell_height: u32 = (cell_pad.top + cell_pad.bottom) as u32;
-        let rendered_row_height: u32 = cell_pad.top as u32 + 1000 + cell_pad.bottom as u32;
-        let total_height = rendered_row_height * row_count as u32;
+        let min_row_height: u32 = cell_pad.top as u32 + 1000 + cell_pad.bottom as u32;
+        let row_heights: Vec<u32> = if let Some(heights) = row_heights_hu {
+            if heights.len() == row_count as usize {
+                heights.iter().map(|h| (*h).max(min_row_height)).collect()
+            } else {
+                vec![min_row_height; row_count as usize]
+            }
+        } else {
+            vec![min_row_height; row_count as usize]
+        };
+        let total_height: u32 = row_heights.iter().sum();
 
         // BorderFill
         let cell_border_fill_id = {
@@ -2061,9 +2268,10 @@ impl DocumentCore {
         // 셀 생성
         let mut cells = Vec::with_capacity((row_count as usize) * (col_count as usize));
         for r in 0..row_count {
+            let row_height = row_heights[r as usize];
             for c in 0..col_count {
                 let col_w = col_ws[c as usize];
-                let mut cell = Cell::new_empty(c, r, col_w, cell_height, cell_border_fill_id);
+                let mut cell = Cell::new_empty(c, r, col_w, row_height, cell_border_fill_id);
                 cell.padding = cell_pad;
                 cell.vertical_align = crate::model::table::VerticalAlign::Center;
                 for cp in &mut cell.paragraphs {
@@ -2076,11 +2284,13 @@ impl DocumentCore {
                         cp.raw_header_extra = rhe;
                     }
                     let seg_w = (col_w as i32) - 141 - 141;
+                    let text_height =
+                        row_height.saturating_sub((cell_pad.top + cell_pad.bottom) as u32);
                     cp.line_segs = vec![LineSeg {
                         text_start: 0,
-                        line_height: 1000,
-                        text_height: 1000,
-                        baseline_distance: 850,
+                        line_height: text_height as i32,
+                        text_height: text_height as i32,
+                        baseline_distance: (text_height as f64 * 0.85) as i32,
                         line_spacing: 600,
                         segment_width: seg_w,
                         tag: LineSeg::TAG_SINGLE_SEGMENT_LINE,
@@ -2157,6 +2367,10 @@ impl DocumentCore {
             raw_table_record_attr: 0x04000006,
             raw_table_record_extra: vec![0u8; 2],
             dirty: true,
+            local_resize_rows: Vec::new(),
+            local_resize_cols: Vec::new(),
+            local_resize_cell_widths: Vec::new(),
+            local_resize_cell_heights: Vec::new(),
         };
         table.rebuild_grid();
 
@@ -2344,6 +2558,7 @@ impl DocumentCore {
             brightness: 0,
             contrast: 0,
             effect: ImageEffect::RealPic,
+            transparency: 0,
             external_path: None,
         };
 
@@ -2390,7 +2605,7 @@ impl DocumentCore {
                     ..Default::default()
                 };
 
-                let new_ctrl_idx = {
+                let (new_ctrl_idx, logical_after) = {
                     let section = &mut self.document.sections[section_idx];
                     section.raw_stream = None;
                     let target_para =
@@ -2399,7 +2614,14 @@ impl DocumentCore {
                     target_para.controls.push(Control::Picture(Box::new(pic)));
                     target_para.ctrl_data_records.push(None);
                     target_para.control_mask |= 0x00000800;
-                    new_ctrl_idx
+                    let logical_positions =
+                        super::super::helpers::find_logical_control_positions(target_para);
+                    let logical_after = logical_positions
+                        .get(new_ctrl_idx)
+                        .copied()
+                        .unwrap_or_else(|| target_para.text.chars().count())
+                        + 1;
+                    (new_ctrl_idx, logical_after)
                 };
 
                 self.mark_section_dirty(section_idx);
@@ -2412,8 +2634,8 @@ impl DocumentCore {
                     para: para_idx,
                 });
                 return Ok(super::super::helpers::json_ok_with(&format!(
-                    "\"paraIdx\":{},\"controlIdx\":{}",
-                    para_idx, new_ctrl_idx
+                    "\"paraIdx\":{},\"controlIdx\":{},\"logicalOffset\":{}",
+                    para_idx, new_ctrl_idx, logical_after
                 )));
             }
 
@@ -2465,6 +2687,12 @@ impl DocumentCore {
             let new_ctrl_idx = parent.controls.len();
             parent.controls.push(Control::Picture(Box::new(pic)));
             parent.ctrl_data_records.push(None);
+            let logical_positions = super::super::helpers::find_logical_control_positions(parent);
+            let logical_after = logical_positions
+                .get(new_ctrl_idx)
+                .copied()
+                .unwrap_or_else(|| parent.text.chars().count())
+                + 1;
 
             // outer table dirty 마킹 (재측정 유도)
             let outer_ctrl = cell_path[0].0;
@@ -2487,8 +2715,8 @@ impl DocumentCore {
                 para: para_idx,
             });
             return Ok(super::super::helpers::json_ok_with(&format!(
-                "\"paraIdx\":{},\"controlIdx\":{}",
-                para_idx, new_ctrl_idx
+                "\"paraIdx\":{},\"controlIdx\":{},\"logicalOffset\":{}",
+                para_idx, new_ctrl_idx, logical_after
             )));
         }
 
@@ -2540,6 +2768,12 @@ impl DocumentCore {
         let new_ctrl_idx = parent.controls.len();
         parent.controls.push(Control::Picture(Box::new(pic)));
         parent.ctrl_data_records.push(None);
+        let logical_positions = super::super::helpers::find_logical_control_positions(parent);
+        let logical_after = logical_positions
+            .get(new_ctrl_idx)
+            .copied()
+            .unwrap_or_else(|| parent.text.chars().count())
+            + 1;
 
         self.mark_section_dirty(section_idx);
         self.paginate_if_needed();
@@ -2551,8 +2785,8 @@ impl DocumentCore {
             para: para_idx,
         });
         Ok(super::super::helpers::json_ok_with(&format!(
-            "\"paraIdx\":{},\"controlIdx\":{}",
-            para_idx, new_ctrl_idx
+            "\"paraIdx\":{},\"controlIdx\":{},\"logicalOffset\":{}",
+            para_idx, new_ctrl_idx, logical_after
         )))
     }
 
@@ -2944,6 +3178,7 @@ impl DocumentCore {
         if let Some(v) = json_i16(props_json, "outerMarginBottom") {
             c.margin.bottom = v;
         }
+        Self::sync_common_obj_attr_known_bits(c);
     }
 
     /// 글상자(Shape) 속성 조회 (네이티브).
@@ -7497,6 +7732,90 @@ mod issue_1151_cell_picture_insert_tests {
         ]
     }
 
+    fn collect_picture_transparencies(doc: &Document) -> Vec<u8> {
+        let mut values = Vec::new();
+        for section in &doc.sections {
+            collect_picture_transparencies_from_paragraphs(&section.paragraphs, &mut values);
+        }
+        values
+    }
+
+    fn collect_picture_transparencies_from_paragraphs(
+        paragraphs: &[Paragraph],
+        values: &mut Vec<u8>,
+    ) {
+        for para in paragraphs {
+            for control in &para.controls {
+                collect_picture_transparencies_from_control(control, values);
+            }
+        }
+    }
+
+    fn collect_picture_transparencies_from_control(control: &Control, values: &mut Vec<u8>) {
+        match control {
+            Control::Picture(pic) => {
+                values.push(pic.image_attr.clamped_transparency());
+                if let Some(caption) = &pic.caption {
+                    collect_picture_transparencies_from_paragraphs(&caption.paragraphs, values);
+                }
+            }
+            Control::Table(table) => {
+                for cell in &table.cells {
+                    collect_picture_transparencies_from_paragraphs(&cell.paragraphs, values);
+                }
+            }
+            Control::Shape(shape) => collect_picture_transparencies_from_shape(shape, values),
+            Control::Header(header) => {
+                collect_picture_transparencies_from_paragraphs(&header.paragraphs, values);
+            }
+            Control::Footer(footer) => {
+                collect_picture_transparencies_from_paragraphs(&footer.paragraphs, values);
+            }
+            Control::Footnote(footnote) => {
+                collect_picture_transparencies_from_paragraphs(&footnote.paragraphs, values);
+            }
+            Control::Endnote(endnote) => {
+                collect_picture_transparencies_from_paragraphs(&endnote.paragraphs, values);
+            }
+            _ => {}
+        }
+    }
+
+    fn collect_picture_transparencies_from_shape(
+        shape: &crate::model::shape::ShapeObject,
+        values: &mut Vec<u8>,
+    ) {
+        match shape {
+            crate::model::shape::ShapeObject::Picture(pic) => {
+                values.push(pic.image_attr.clamped_transparency());
+                if let Some(caption) = &pic.caption {
+                    collect_picture_transparencies_from_paragraphs(&caption.paragraphs, values);
+                }
+            }
+            crate::model::shape::ShapeObject::Group(group) => {
+                for child in &group.children {
+                    collect_picture_transparencies_from_shape(child, values);
+                }
+                if let Some(caption) = &group.caption {
+                    collect_picture_transparencies_from_paragraphs(&caption.paragraphs, values);
+                }
+            }
+            _ => {
+                if let Some(drawing) = shape.drawing() {
+                    if let Some(text_box) = &drawing.text_box {
+                        collect_picture_transparencies_from_paragraphs(
+                            &text_box.paragraphs,
+                            values,
+                        );
+                    }
+                    if let Some(caption) = &drawing.caption {
+                        collect_picture_transparencies_from_paragraphs(&caption.paragraphs, values);
+                    }
+                }
+            }
+        }
+    }
+
     fn parse_idx(res: &str, key: &str) -> usize {
         res.split(&format!("\"{}\":", key))
             .nth(1)
@@ -7637,6 +7956,407 @@ mod issue_1151_cell_picture_insert_tests {
             core.document.sections[0].paragraphs.len(),
             1,
             "본문 picture 삽입 시 새 paragraph 생성 안 함 (sibling control)"
+        );
+    }
+
+    #[test]
+    fn issue1452_insert_picture_returns_logical_offset_after_picture() {
+        let mut core = make_test_core();
+        core.insert_text_native(0, 0, 0, "abc")
+            .expect("insert text");
+
+        let image = minimal_png();
+        let result = core
+            .insert_picture_native(
+                0,
+                0,
+                3,
+                &[],
+                &image,
+                5000,
+                5000,
+                1,
+                1,
+                "png",
+                "test",
+                None,
+                None,
+            )
+            .expect("insert picture body");
+
+        assert_eq!(parse_idx(&result, "paraIdx"), 0);
+        assert_eq!(parse_idx(&result, "controlIdx"), 0);
+        assert_eq!(
+            parse_idx(&result, "logicalOffset"),
+            4,
+            "본문 텍스트 'abc' 뒤에 그림 1개를 넣으면 그림 뒤 커서 offset은 4여야 한다: {result}"
+        );
+    }
+
+    #[test]
+    fn issue1452_enter_after_dropped_inline_picture_keeps_next_para_below_picture() {
+        use crate::renderer::render_tree::{RenderNode, RenderNodeType};
+
+        fn collect_image_bboxes(node: &RenderNode, out: &mut Vec<(f64, f64, f64, f64)>) {
+            if matches!(node.node_type, RenderNodeType::Image(_)) {
+                out.push((node.bbox.x, node.bbox.y, node.bbox.width, node.bbox.height));
+            }
+            for child in &node.children {
+                collect_image_bboxes(child, out);
+            }
+        }
+
+        fn collect_para_end_runs(
+            node: &RenderNode,
+            out: &mut Vec<(usize, Option<usize>, f64, f64, f64, f64)>,
+        ) {
+            if let RenderNodeType::TextRun(run) = &node.node_type {
+                if run.is_para_end {
+                    if let Some(para_idx) = run.para_index {
+                        out.push((
+                            para_idx,
+                            run.char_start,
+                            node.bbox.x,
+                            node.bbox.y,
+                            node.bbox.width,
+                            node.bbox.height,
+                        ));
+                    }
+                }
+            }
+            for child in &node.children {
+                collect_para_end_runs(child, out);
+            }
+        }
+
+        let mut core = make_test_core();
+        let image = minimal_png();
+        let pic_w = 30000u32;
+        let pic_h = 9000u32;
+
+        let result = core
+            .insert_picture_native(
+                0,
+                0,
+                0,
+                &[],
+                &image,
+                pic_w,
+                pic_h,
+                1,
+                1,
+                "png",
+                "drop",
+                None,
+                None,
+            )
+            .expect("insert dropped picture");
+        let ctrl_idx = parse_idx(&result, "controlIdx");
+        let logical_offset = parse_idx(&result, "logicalOffset");
+
+        core.set_picture_properties_native(0, 0, ctrl_idx, r#"{"treatAsChar":true}"#)
+            .expect("dropped picture becomes treat-as-char");
+        core.split_paragraph_native(0, 0, logical_offset)
+            .expect("Enter after dropped picture");
+
+        assert_eq!(
+            core.document.sections[0].paragraphs.len(),
+            2,
+            "그림 뒤 Enter 는 새 빈 문단을 만들어야 한다"
+        );
+        assert_eq!(
+            core.document.sections[0].paragraphs[0].line_segs[0].line_height, pic_h as i32,
+            "TAC 그림만 남은 첫 문단은 그림 높이를 줄 높이로 유지해야 한다"
+        );
+        assert!(
+            core.document.sections[0].paragraphs[1].line_segs[0].line_height < pic_h as i32 / 2,
+            "새 빈 문단은 그림 높이를 물려받지 않고 기본 줄 높이로 시작해야 한다"
+        );
+
+        let tree = core.build_page_tree(0).expect("build page tree");
+        let mut images = Vec::new();
+        collect_image_bboxes(&tree.root, &mut images);
+        assert_eq!(images.len(), 1, "drop 그림 ImageNode 1개 필요");
+
+        let mut para_ends = Vec::new();
+        collect_para_end_runs(&tree.root, &mut para_ends);
+        let image = images[0];
+        let image_right = image.0 + image.2;
+        let image_bottom = image.1 + image.3;
+        let para0_end = para_ends
+            .iter()
+            .find(|(para_idx, _, _, _, _, _)| *para_idx == 0)
+            .expect("첫 문단 끝 표시");
+        let para1_end = para_ends
+            .iter()
+            .find(|(para_idx, _, _, _, _, _)| *para_idx == 1)
+            .expect("새 빈 문단 끝 표시");
+
+        assert_eq!(
+            para0_end.1,
+            Some(logical_offset),
+            "첫 문단 끝 표시는 그림 뒤 logical offset에 놓여야 한다"
+        );
+        assert!(
+            para0_end.2 >= image_right - 0.5,
+            "첫 문단부호 x는 그림 뒤에 있어야 한다: mark_x={}, image_right={}",
+            para0_end.2,
+            image_right
+        );
+        assert!(
+            para1_end.3 >= image_bottom - 0.5,
+            "새 빈 문단부호는 그림 아래 줄에 있어야 한다: mark_y={}, image_bottom={}",
+            para1_end.3,
+            image_bottom
+        );
+    }
+
+    #[test]
+    fn issue1452_picture_text_wrap_updates_hwp_attr_bits() {
+        let mut core = make_test_core();
+        let image = minimal_png();
+        core.insert_picture_native(
+            0,
+            0,
+            0,
+            &[],
+            &image,
+            5000,
+            5000,
+            1,
+            1,
+            "png",
+            "test",
+            None,
+            None,
+        )
+        .expect("insert picture body");
+
+        {
+            let pic = match &mut core.document.sections[0].paragraphs[0].controls[0] {
+                Control::Picture(p) => p.as_mut(),
+                _ => panic!("expected picture"),
+            };
+            pic.common.attr |= 1 << 30;
+        }
+
+        let cases = [
+            (
+                "InFrontOfText",
+                crate::model::shape::TextWrap::InFrontOfText,
+                3u32,
+            ),
+            (
+                "BehindText",
+                crate::model::shape::TextWrap::BehindText,
+                2u32,
+            ),
+            (
+                "TopAndBottom",
+                crate::model::shape::TextWrap::TopAndBottom,
+                1u32,
+            ),
+            ("Square", crate::model::shape::TextWrap::Square, 0u32),
+        ];
+
+        for (name, expected_wrap, expected_bits) in cases {
+            let json = format!(r#"{{"textWrap":"{}"}}"#, name);
+            core.set_picture_properties_native(0, 0, 0, &json)
+                .unwrap_or_else(|err| panic!("set textWrap={name} failed: {err}"));
+            let pic = match &core.document.sections[0].paragraphs[0].controls[0] {
+                Control::Picture(p) => p.as_ref(),
+                _ => panic!("expected picture"),
+            };
+            assert_eq!(pic.common.text_wrap, expected_wrap);
+            assert_eq!(
+                (pic.common.attr >> 21) & 0x07,
+                expected_bits,
+                "HWP 저장용 attr textWrap bit가 stale이면 안 된다: {name}"
+            );
+            assert_ne!(
+                pic.common.attr & (1 << 30),
+                0,
+                "알 수 없는 원본 attr 비트는 보존되어야 한다"
+            );
+        }
+    }
+
+    #[test]
+    fn issue1452_picture_transparency_props_roundtrip() {
+        let mut core = make_test_core();
+        let image = minimal_png();
+        core.insert_picture_native(
+            0,
+            0,
+            0,
+            &[],
+            &image,
+            5000,
+            5000,
+            1,
+            1,
+            "png",
+            "test",
+            None,
+            None,
+        )
+        .expect("insert picture body");
+
+        core.set_picture_properties_native(0, 0, 0, r#"{"transparency":50}"#)
+            .expect("set transparency");
+        let props = core
+            .get_picture_properties_native(0, 0, 0)
+            .expect("get picture properties");
+        assert!(
+            props.contains(r#""transparency":50"#),
+            "그림 속성 JSON은 투명도 50%를 반환해야 한다: {props}"
+        );
+
+        let pic = match &core.document.sections[0].paragraphs[0].controls[0] {
+            Control::Picture(p) => p.as_ref(),
+            _ => panic!("expected picture"),
+        };
+        assert_eq!(pic.image_attr.clamped_transparency(), 50);
+        assert!((pic.image_attr.opacity() - 0.5).abs() < f64::EPSILON);
+
+        core.set_picture_properties_native(0, 0, 0, r#"{"transparency":200}"#)
+            .expect("set clamped transparency");
+        let pic = match &core.document.sections[0].paragraphs[0].controls[0] {
+            Control::Picture(p) => p.as_ref(),
+            _ => panic!("expected picture"),
+        };
+        assert_eq!(
+            pic.image_attr.clamped_transparency(),
+            100,
+            "속성 API로 들어온 범위 밖 투명도는 0~100으로 clamp되어야 한다"
+        );
+    }
+
+    #[test]
+    fn issue1452_picture_transparency_samples_parse_as_ui_percent() {
+        for path in ["samples/투명도0-50.hwp", "samples/투명도0-50.hwpx"] {
+            let data =
+                std::fs::read(path).unwrap_or_else(|err| panic!("fixture 읽기 실패 {path}: {err}"));
+            let core =
+                DocumentCore::from_bytes(&data).unwrap_or_else(|err| panic!("parse {path}: {err}"));
+            let transparencies = collect_picture_transparencies(&core.document);
+            assert!(
+                transparencies.len() >= 2,
+                "샘플에는 최소 두 개의 그림이 있어야 한다: {path}, got {transparencies:?}"
+            );
+            assert_eq!(
+                &transparencies[..2],
+                &[0, 50],
+                "샘플 첫 번째/두 번째 그림 투명도는 각각 0%, 50%여야 한다: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn issue1452_picture_transparency_samples_render_once_with_opacity() {
+        use crate::renderer::render_tree::{RenderNode, RenderNodeType};
+
+        fn collect_images(node: &RenderNode, out: &mut Vec<(Option<usize>, Option<usize>, f64)>) {
+            if let RenderNodeType::Image(img) = &node.node_type {
+                out.push((img.para_index, img.control_index, img.opacity));
+            }
+            for child in &node.children {
+                collect_images(child, out);
+            }
+        }
+
+        for path in ["samples/투명도0-50.hwp", "samples/투명도0-50.hwpx"] {
+            let data =
+                std::fs::read(path).unwrap_or_else(|err| panic!("fixture 읽기 실패 {path}: {err}"));
+            let core =
+                DocumentCore::from_bytes(&data).unwrap_or_else(|err| panic!("parse {path}: {err}"));
+            let tree = core
+                .build_page_tree(0)
+                .unwrap_or_else(|err| panic!("render tree {path}: {err}"));
+            let mut images = Vec::new();
+            collect_images(&tree.root, &mut images);
+
+            assert_eq!(
+                images.len(),
+                2,
+                "투명도 샘플의 그림은 두 번만 렌더되어야 한다: {path}, got {images:?}"
+            );
+
+            let mut identities = images
+                .iter()
+                .map(|(para, control, _)| (*para, *control))
+                .collect::<Vec<_>>();
+            identities.sort_unstable();
+            identities.dedup();
+            assert_eq!(
+                identities.len(),
+                2,
+                "같은 그림 control 이 중복 렌더되면 안 된다: {path}, got {images:?}"
+            );
+
+            let mut opacities = images
+                .iter()
+                .map(|(_, _, opacity)| (opacity * 100.0).round() as i32)
+                .collect::<Vec<_>>();
+            opacities.sort_unstable();
+            assert_eq!(
+                opacities,
+                vec![50, 100],
+                "렌더 트리 불투명도는 투명도 0/50%를 100/50%로 보존해야 한다: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn issue1452_enter_after_second_tac_picture_keeps_both_pictures() {
+        use crate::renderer::render_tree::{RenderNode, RenderNodeType};
+
+        fn collect_images(node: &RenderNode, out: &mut Vec<(Option<usize>, Option<usize>, f64)>) {
+            if let RenderNodeType::Image(img) = &node.node_type {
+                out.push((img.para_index, img.control_index, img.opacity));
+            }
+            for child in &node.children {
+                collect_images(child, out);
+            }
+        }
+
+        let data = std::fs::read("samples/투명도0-50.hwp")
+            .expect("fixture 읽기 실패 samples/투명도0-50.hwp");
+        let mut core = DocumentCore::from_bytes(&data).expect("parse samples/투명도0-50.hwp");
+
+        core.split_paragraph_native(0, 0, 2)
+            .expect("두 번째 TAC 그림 뒤 Enter");
+
+        assert_eq!(
+            core.document.sections[0].paragraphs.len(),
+            2,
+            "그림 뒤 Enter 는 새 빈 문단을 만들어야 한다"
+        );
+        assert!(
+            core.document.sections[0].paragraphs[0].line_segs.len() >= 2,
+            "원래 문단은 두 TAC 그림 줄을 유지해야 한다: {:?}",
+            core.document.sections[0].paragraphs[0].line_segs
+        );
+
+        let tree = core.build_page_tree(0).expect("build page tree");
+        let mut images = Vec::new();
+        collect_images(&tree.root, &mut images);
+        assert_eq!(
+            images.len(),
+            2,
+            "Enter 후에도 두 그림이 모두 렌더되어야 한다: {images:?}"
+        );
+
+        let mut identities = images
+            .iter()
+            .map(|(para, control, _)| (*para, *control))
+            .collect::<Vec<_>>();
+        identities.sort_unstable();
+        identities.dedup();
+        assert_eq!(
+            identities.len(),
+            2,
+            "두 그림 control 이 각각 렌더되어야 한다: {images:?}"
         );
     }
 
@@ -8544,9 +9264,9 @@ mod issue_1151_v2_tac_toggle_tests {
         assert_eq!(pic.image_attr.brightness, 50);
     }
 
-    // ─── tac=true → false 토글 — migration 미진입 (한 방향만) ──────────
+    // ─── tac=true → false 토글 — 빈 그림 문단 LINE_SEG 재구성 ──────────
     #[test]
-    fn tac_toggle_true_to_false_no_migration_this_pr() {
+    fn tac_toggle_true_to_false_restores_empty_picture_para_line_seg() {
         let mut core = make_test_core();
         let pic_h = 5000u32;
         let ctrl_idx = {
@@ -8557,14 +9277,20 @@ mod issue_1151_v2_tac_toggle_tests {
         core.set_picture_properties_native(0, 0, ctrl_idx, r#"{"treatAsChar":true}"#)
             .expect("forward migration");
         let lh_after_forward = core.document.sections[0].paragraphs[0].line_segs[0].line_height;
+        assert_eq!(lh_after_forward, pic_h as i32);
 
-        // tac=false 로 — 역방향. line_height 추가 변동 없어야 함 (한 방향만 fix).
+        // tac=false 로 — 빈 그림 전용 문단에는 더 이상 inline 슬롯이 없으므로 기본 빈 줄로 복원.
         core.set_picture_properties_native(0, 0, ctrl_idx, r#"{"treatAsChar":false}"#)
             .expect("reverse toggle");
         let para = &core.document.sections[0].paragraphs[0];
+        assert_eq!(para.line_segs.len(), 1);
         assert_eq!(
-            para.line_segs[0].line_height, lh_after_forward,
-            "역방향 토글은 line_height 영향 없음"
+            para.line_segs[0].line_height, 1000,
+            "남은 TAC 개체가 없으면 기본 빈 줄 높이로 복원"
+        );
+        assert_eq!(
+            para.line_segs[0].baseline_distance, 850,
+            "기본 빈 줄 기준선으로 복원"
         );
         let pic = match &para.controls[ctrl_idx] {
             Control::Picture(p) => p.as_ref(),
