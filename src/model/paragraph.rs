@@ -1277,6 +1277,62 @@ impl Paragraph {
 
         self.char_shapes = merged;
     }
+
+    /// 문단의 글자 모양을 단일 CharShapeRef로 초기화한다.
+    pub fn set_single_char_shape(&mut self, char_shape_id: u32) {
+        self.char_shapes.clear();
+        self.char_shapes.push(CharShapeRef {
+            start_pos: 0,
+            char_shape_id,
+        });
+    }
+
+    /// 스타일 기본 글자 모양 run만 새 ID로 바꾸고 직접 지정된 run은 유지한다.
+    pub fn replace_style_char_shape_preserving_overrides(
+        &mut self,
+        old_char_shape_id: u32,
+        new_char_shape_id: u32,
+    ) {
+        if self.char_shapes.is_empty() {
+            self.set_single_char_shape(new_char_shape_id);
+            return;
+        }
+
+        let mut replaced = false;
+        for csr in &mut self.char_shapes {
+            if csr.char_shape_id == old_char_shape_id {
+                csr.char_shape_id = new_char_shape_id;
+                replaced = true;
+            }
+        }
+
+        if replaced {
+            self.merge_adjacent_char_shapes();
+        }
+    }
+
+    /// 문단 전체에 글자 스타일의 CharShape를 적용한다.
+    pub fn apply_char_shape_to_entire_text(&mut self, char_shape_id: u32) {
+        let text_len = self.text.chars().count();
+        if text_len == 0 || self.char_offsets.is_empty() {
+            self.set_single_char_shape(char_shape_id);
+            return;
+        }
+        self.apply_char_shape_range(0, text_len, char_shape_id);
+    }
+
+    fn merge_adjacent_char_shapes(&mut self) {
+        let mut merged: Vec<CharShapeRef> = Vec::new();
+        for csr in self.char_shapes.drain(..) {
+            if let Some(last) = merged.last() {
+                if last.char_shape_id == csr.char_shape_id {
+                    continue;
+                }
+            }
+            merged.push(csr);
+        }
+        self.char_shapes = merged;
+    }
 }
 
 #[cfg(test)]

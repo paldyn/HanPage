@@ -3769,7 +3769,32 @@ impl LayoutEngine {
                         // 표 하단 = 베이스라인 + outer_margin_bottom
                         if let (Some(p), Some(bdc)) = (para, bin_data_content) {
                             if let Some(Control::Table(t)) = p.controls.get(tac_ci) {
-                                if t.common.treat_as_char {
+                                let raw_seg_width =
+                                    p.line_segs.first().map(|s| s.segment_width).unwrap_or(0);
+                                let seg_width = if raw_seg_width > 0 {
+                                    raw_seg_width
+                                } else {
+                                    px_to_hwpunit(col_area.width, self.dpi)
+                                };
+                                let should_render_inline = cell_ctx.is_some()
+                                    || crate::renderer::height_measurer::is_tac_table_inline(
+                                        t,
+                                        seg_width,
+                                        &p.text,
+                                        &p.controls,
+                                    );
+                                let already_rendered = tree
+                                    .get_inline_shape_position(
+                                        section_index,
+                                        para_index,
+                                        tac_ci,
+                                        cell_ctx.as_ref(),
+                                    )
+                                    .is_some();
+                                if t.common.treat_as_char
+                                    && should_render_inline
+                                    && !already_rendered
+                                {
                                     let table_h = hwpunit_to_px(t.common.height as i32, self.dpi);
                                     let om_bottom =
                                         hwpunit_to_px(t.outer_margin_bottom as i32, self.dpi);
