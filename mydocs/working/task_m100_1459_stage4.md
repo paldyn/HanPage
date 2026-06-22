@@ -57,3 +57,10 @@
 - `cargo test --test issue_1198_nested_cell_paste -- --nocapture`
 - `cargo test --verbose`
 - `cargo clippy --all-targets -- -D warnings`
+- `cargo test --profile release-test --tests`
+- `cargo build --release`
+- `cargo test --release --lib`
+- `cargo test --doc`
+- `cd rhwp-studio && npx tsc --noEmit`
+- `cd rhwp-studio && npm test`
+- `wasm-pack build --target web --out-dir pkg`
