@@ -10,10 +10,14 @@ import { enableDialogDrag } from './dialog-drag';
 
 export type LocalFontsChoice = 'detect' | 'web-substitute' | 'cancel';
 
+export interface LocalFontsModalOptions {
+  disableExternalWebFonts?: boolean;
+}
+
 const STATUS_LABEL: Record<DocumentFontStatusItem['status'], string> = {
   available: '사용 가능',
   'needs-local-check': '로컬 확인 필요',
-  'web-substitute': '웹 대체 사용',
+  'web-substitute': '대체 글꼴 사용',
   missing: '누락',
 };
 
@@ -22,7 +26,10 @@ export class LocalFontsModal {
   private captureHandler: ((e: KeyboardEvent) => void) | null = null;
   private resolver: ((choice: LocalFontsChoice) => void) | null = null;
 
-  constructor(private readonly report: DocumentFontStatusReport) {}
+  constructor(
+    private readonly report: DocumentFontStatusReport,
+    private readonly options: LocalFontsModalOptions = {},
+  ) {}
 
   async showAsync(): Promise<LocalFontsChoice> {
     return new Promise((resolve) => {
@@ -74,9 +81,21 @@ export class LocalFontsModal {
     privacy.style.fontSize = '13px';
     privacy.style.color = 'var(--color-text-secondary)';
     privacy.textContent = this.report.detectionMethod === 'font-presence-probe'
-      ? '이 브라우저에서는 설치된 모든 글꼴 목록을 가져오지 않고, 현재 문서에 필요한 글꼴만 확인합니다. 확인 결과는 이 브라우저/확장 로컬 저장소에만 보관되며 서버로 전송하지 않습니다. 감지를 건너뛰면 웹 대체 글꼴로 계속 표시합니다.'
-      : '감지 결과는 이 브라우저/확장 로컬 저장소에만 보관되며 서버로 전송하지 않습니다. 감지를 건너뛰면 웹 대체 글꼴로 계속 표시합니다.';
+      ? '이 브라우저에서는 설치된 모든 글꼴 목록을 가져오지 않고, 현재 문서에 필요한 글꼴만 확인합니다. 확인 결과는 이 브라우저/확장 로컬 저장소에만 보관되며 서버로 전송하지 않습니다. 감지를 건너뛰면 대체 글꼴로 계속 표시합니다.'
+      : '감지 결과는 이 브라우저/확장 로컬 저장소에만 보관되며 서버로 전송하지 않습니다. 감지를 건너뛰면 대체 글꼴로 계속 표시합니다.';
     body.appendChild(privacy);
+
+    if (this.options.disableExternalWebFonts) {
+      const offlineNotice = document.createElement('div');
+      offlineNotice.style.margin = '0 0 12px 0';
+      offlineNotice.style.padding = '8px 10px';
+      offlineNotice.style.border = '1px solid var(--color-border)';
+      offlineNotice.style.borderRadius = '4px';
+      offlineNotice.style.fontSize = '13px';
+      offlineNotice.style.color = 'var(--color-text-secondary)';
+      offlineNotice.textContent = '외부 웹폰트 사용 안 함: 켜짐. 대체 글꼴은 외부 CDN 폰트를 요청하지 않고 번들/시스템 글꼴 기준으로 표시됩니다.';
+      body.appendChild(offlineNotice);
+    }
 
     const summary = document.createElement('ul');
     summary.style.margin = '0 0 12px 16px';
@@ -86,7 +105,7 @@ export class LocalFontsModal {
     const rows: Array<[string, number]> = [
       ['사용 가능', this.report.summary.available],
       ['로컬 확인 필요', this.report.summary.needsLocalCheck],
-      ['웹 대체 사용', this.report.summary.webSubstitute],
+      ['대체 글꼴 사용', this.report.summary.webSubstitute],
       ['누락', this.report.summary.missing],
     ];
     for (const [label, count] of rows) {
@@ -145,7 +164,7 @@ export class LocalFontsModal {
 
     const webBtn = document.createElement('button');
     webBtn.className = 'dialog-btn';
-    webBtn.textContent = '웹 대체로 보기';
+    webBtn.textContent = '대체 글꼴로 보기';
     webBtn.addEventListener('click', () => this.resolve('web-substitute'));
 
     footer.appendChild(detectBtn);
@@ -190,7 +209,8 @@ export class LocalFontsModal {
 
 export async function showLocalFontsModalIfNeeded(
   report: DocumentFontStatusReport,
+  options: LocalFontsModalOptions = {},
 ): Promise<LocalFontsChoice> {
   if (!report.shouldPromptLocalAccess) return 'web-substitute';
-  return new LocalFontsModal(report).showAsync();
+  return new LocalFontsModal(report, options).showAsync();
 }
