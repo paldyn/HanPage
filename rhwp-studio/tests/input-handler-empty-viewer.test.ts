@@ -25,4 +25,3 @@ test('빈 viewer 클릭은 hitTest 전에 문서 로드 여부를 확인한다',
   assert.notEqual(firstHitTest, -1, 'hitTest call not found');
   assert.ok(pageCountGuard < firstHitTest, 'empty viewer guard must run before hitTest');
 });
-

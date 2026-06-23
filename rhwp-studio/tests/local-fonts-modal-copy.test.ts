@@ -27,4 +27,3 @@ test('외부 웹폰트 비활성 상태는 로컬 글꼴 감지 모달에 표시
   assert.match(modal, /외부 CDN 폰트를 요청하지 않고/);
   assert.match(main, /disableExternalWebFonts:\s*extensionViewerSettings\.disableExternalWebFonts/);
 });
-
