@@ -28,6 +28,15 @@ function resizeHoverBlock(): string {
   return mouse.slice(start, end);
 }
 
+function hitTestBorderBlock(): string {
+  const renderer = source('src/engine/table-resize-renderer.ts');
+  const start = renderer.indexOf('hitTestBorder(');
+  assert.notEqual(start, -1, 'hitTestBorder not found');
+  const end = renderer.indexOf('\n  /** 경계선 위에 마커', start);
+  assert.notEqual(end, -1, 'hitTestBorder end not found');
+  return renderer.slice(start, end);
+}
+
 // #1491 후속: Shift+경계선 드래그는 셀 선택 확장보다 resize 판정이 우선해야 한다.
 test('셀 선택 모드 Shift+경계선 클릭은 확장 선택보다 리사이즈를 먼저 시도한다', () => {
   const block = cellSelectionMouseDownBlock();
@@ -52,4 +61,13 @@ test('표 경계 hover는 hitTest 실패 시 직전 bbox 캐시로 경계선을 
   assert.ok(fallbackIdx < clearCacheIdx, '캐시를 지우기 전에 경계선 fallback을 먼저 수행해야 함');
   assert.match(block, /this\.cachedCellBboxes\.filter/, 'fallback은 직전 bbox 캐시를 사용해야 함');
   assert.match(block, /hitTestBorder\(pageX,\s*pageY,\s*pageBboxes\)/, 'fallback도 경계선 hitTest를 사용해야 함');
+});
+
+test('표 경계 hitTest는 교차점에서 행 경계 선반환으로 컬럼 resize를 막지 않는다', () => {
+  const block = hitTestBorderBlock();
+
+  assert.match(block, /const candidates/, '행/열 후보를 함께 모아야 함');
+  assert.match(block, /type:\s*'col'[\s\S]*priority:\s*0/, '동률일 때 컬럼 후보를 우선해야 함');
+  assert.match(block, /type:\s*'row'[\s\S]*priority:\s*1/, '행 후보는 컬럼 동률 우선순위 뒤에 있어야 함');
+  assert.match(block, /candidates\.sort\(\(a,\s*b\) => a\.distance - b\.distance \|\| a\.priority - b\.priority\)/, '가장 가까운 경계를 고르고 동률은 컬럼 우선이어야 함');
 });
