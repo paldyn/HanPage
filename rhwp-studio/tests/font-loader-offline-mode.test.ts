@@ -2,6 +2,33 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadWebFonts } from '../src/core/font-loader.ts';
 
+const JSDELIVR_HOSTNAME = 'cdn.jsdelivr.net';
+const CSS_URL_PATTERN = /url\((?:"([^"]+)"|'([^']+)'|([^'")]+))\)/g;
+
+function extractFontUrls(source: string): URL[] {
+  return Array.from(source.matchAll(CSS_URL_PATTERN), match => (
+    match[1] ?? match[2] ?? match[3] ?? ''
+  ).trim()).flatMap(rawUrl => {
+    try {
+      return [new URL(rawUrl)];
+    } catch {
+      return [];
+    }
+  });
+}
+
+function usesJsDelivrFontUrl(source: string): boolean {
+  return extractFontUrls(source).some(url => (
+    url.protocol === 'https:' && url.hostname === JSDELIVR_HOSTNAME
+  ));
+}
+
+function usesExternalFontUrl(source: string): boolean {
+  return extractFontUrls(source).some(url => (
+    url.protocol === 'http:' || url.protocol === 'https:'
+  ));
+}
+
 test('외부 웹폰트 사용 안 함 옵션은 CDN @font-face와 FontFace.load를 건너뛴다', async () => {
   const styles: Array<{ id: string; textContent: string }> = [];
   const fontFaceRequests: Array<{ family: string; source: string }> = [];
@@ -59,14 +86,14 @@ test('외부 웹폰트 사용 안 함 옵션은 CDN @font-face와 FontFace.load�
     await loadWebFonts([], undefined, { disableExternalWebFonts: true });
 
     assert.equal(styles.length, 1);
-    assert.equal(styles[0].textContent.includes('https://cdn.jsdelivr.net/'), false);
-    assert.equal(fontFaceRequests.some(request => request.source.includes('https://')), false);
+    assert.equal(usesJsDelivrFontUrl(styles[0].textContent), false);
+    assert.equal(fontFaceRequests.some(request => usesExternalFontUrl(request.source)), false);
 
     fontFaceRequests.length = 0;
     await loadWebFonts([]);
 
-    assert.equal(styles[0].textContent.includes('https://cdn.jsdelivr.net/'), true);
-    assert.equal(fontFaceRequests.some(request => request.source.includes('https://cdn.jsdelivr.net/')), true);
+    assert.equal(usesJsDelivrFontUrl(styles[0].textContent), true);
+    assert.equal(fontFaceRequests.some(request => usesJsDelivrFontUrl(request.source)), true);
   } finally {
     Object.defineProperty(globalThis, 'document', {
       configurable: true,
