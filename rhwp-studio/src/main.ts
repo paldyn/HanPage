@@ -703,7 +703,9 @@ async function promptLocalFontsIfNeeded(docInfo: DocumentInfo, displayName: stri
     const report = analyzeDocumentFonts(docInfo.fontsUsed);
     if (!report.shouldPromptLocalAccess) return;
 
-    const choice = await showLocalFontsModalIfNeeded(report);
+    const choice = await showLocalFontsModalIfNeeded(report, {
+      disableExternalWebFonts: extensionViewerSettings.disableExternalWebFonts,
+    });
     if (choice !== 'detect') return;
 
     msg.textContent = '로컬 글꼴 감지 중...';
