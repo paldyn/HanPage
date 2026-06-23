@@ -9096,6 +9096,39 @@ impl TypesetEngine {
                 end_line = cursor_line + 1;
             }
 
+            let next_para_is_rowbreak_anchor_table = paragraphs
+                .get(para_idx + 1)
+                .map(|next_para| {
+                    next_para.controls.iter().any(|ctrl| {
+                        if let Control::Table(table) = ctrl {
+                            !table.common.treat_as_char
+                                && matches!(
+                                    table.common.text_wrap,
+                                    crate::model::shape::TextWrap::TopAndBottom
+                                )
+                                && matches!(
+                                    table.common.vert_rel_to,
+                                    crate::model::shape::VertRelTo::Para
+                                )
+                                && matches!(
+                                    table.page_break,
+                                    crate::model::table::TablePageBreak::RowBreak
+                                )
+                        } else {
+                            false
+                        }
+                    })
+                })
+                .unwrap_or(false);
+            if cursor_line == 0
+                && end_line > cursor_line + 1
+                && end_line < line_count
+                && next_para_is_rowbreak_anchor_table
+            {
+                end_line -= 1;
+                cumulative = fmt.line_advances_sum(cursor_line..end_line);
+            }
+
             let part_line_height = fmt.line_advances_sum(cursor_line..end_line);
             let part_sp_after = if end_line >= line_count {
                 fmt.spacing_after
@@ -10270,7 +10303,14 @@ impl TypesetEngine {
             if let Some(first_seg) = para.line_segs.first() {
                 let target_y =
                     crate::renderer::hwpunit_to_px(first_seg.vertical_pos as i32, self.dpi);
-                if target_y > st.current_height && target_y < available {
+                let previous_item_is_continued_paragraph = matches!(
+                    st.current_items.last(),
+                    Some(PageItem::PartialParagraph { start_line, .. }) if *start_line > 0
+                );
+                if !previous_item_is_continued_paragraph
+                    && target_y > st.current_height
+                    && target_y < available
+                {
                     st.current_height = target_y;
                 }
             }

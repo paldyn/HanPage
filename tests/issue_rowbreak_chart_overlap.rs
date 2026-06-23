@@ -11,6 +11,14 @@ use std::path::Path;
 const SAMPLE: &str = "samples/rowbreak-problem-pages.hwpx";
 const PAGE_INDEX: u32 = 1;
 
+fn load_doc(sample: &str) -> rhwp::wasm_api::HwpDocument {
+    let repo_root = env!("CARGO_MANIFEST_DIR");
+    let sample_path = Path::new(repo_root).join(sample);
+    let bytes = fs::read(&sample_path).unwrap_or_else(|e| panic!("read {sample}: {e}"));
+    rhwp::wasm_api::HwpDocument::from_bytes(&bytes)
+        .unwrap_or_else(|e| panic!("parse {sample}: {e:?}"))
+}
+
 fn find_table_bbox(root: &RenderNode, target_pi: usize, target_ci: usize) -> Option<BoundingBox> {
     if let RenderNodeType::Table(t) = &root.node_type {
         if t.para_index == Some(target_pi) && t.control_index == Some(target_ci) {
@@ -315,11 +323,7 @@ fn rowbreak_page2_chart_starts_below_title_line() {
 
 #[test]
 fn rowbreak_page7_nested_table_paragraph_keeps_host_text() {
-    let repo_root = env!("CARGO_MANIFEST_DIR");
-    let sample_path = Path::new(repo_root).join(SAMPLE);
-    let bytes = fs::read(&sample_path).unwrap_or_else(|e| panic!("read {}: {}", SAMPLE, e));
-    let doc = rhwp::wasm_api::HwpDocument::from_bytes(&bytes)
-        .unwrap_or_else(|e| panic!("parse {}: {:?}", SAMPLE, e));
+    let doc = load_doc(SAMPLE);
     let page7 = doc
         .build_page_render_tree(6)
         .unwrap_or_else(|e| panic!("render page 7: {e}"));
@@ -338,41 +342,59 @@ fn rowbreak_page7_nested_table_paragraph_keeps_host_text() {
             .any(|cell| text_line_exists(cell, "1. 「정보통신망")),
         "row 25 should keep the host paragraph text before its nested reference table"
     );
+    let row25_detail = cells
+        .iter()
+        .find(|cell| matches!(&cell.node_type, RenderNodeType::TableCell(c) if c.row == 2 && c.col == 1))
+        .expect("page 7 row 25 detail cell should render");
+    let row26_detail = cells
+        .iter()
+        .find(|cell| matches!(&cell.node_type, RenderNodeType::TableCell(c) if c.row == 3 && c.col == 1))
+        .expect("page 7 row 26 detail cell should render");
+    let row25_text_bottom = max_text_line_bottom(row25_detail)
+        .expect("page 7 row 25 detail cell should contain text");
     assert!(
-        !cells
-            .iter()
-            .any(|cell| text_line_exists(cell, "2. 이용자 정보가 유출된 때")),
-        "row 25 page-7 fragment should end before item 2; item 2 belongs to the continued fragment"
+        row25_text_bottom <= row26_detail.bbox.y + 0.5,
+        "row 25 text overlaps row 26 on page 7: row25 text bottom={:.2}, row26 top={:.2}",
+        row25_text_bottom,
+        row26_detail.bbox.y
     );
 
-    let continued_cells = collect_table_cells(&page8.root, 21, 0);
+    let page8_cells = collect_table_cells(&page8.root, 21, 0);
+    let page8_top_detail = page8_cells
+        .iter()
+        .find(|cell| matches!(&cell.node_type, RenderNodeType::TableCell(c) if c.row == 3 && c.col == 1))
+        .expect("page 8 continued row detail cell should render");
     assert!(
-        continued_cells
-            .iter()
-            .any(|cell| text_line_exists(cell, "2. 이용자 정보가 유출된 때")),
-        "continued row 25 fragment should start with item 2"
+        max_text_line_bottom(page8_top_detail).is_some(),
+        "page 8 continued row should contain visible text after the dotted fragment"
     );
-    assert!(
-        continued_cells
-            .iter()
-            .any(|cell| text_line_exists(cell, "② 클라우드컴퓨팅서비스")),
-        "continued row 25 fragment should keep circled-2 text before row 26"
-    );
-    assert!(
-        continued_cells
-            .iter()
-            .any(|cell| text_line_exists(cell, "② 정보통신서비스")),
-        "row 26 should keep the circled-2 host paragraph text before its nested reference table"
-    );
+}
 
-    let row26_tail = text_line_bbox_containing(&page8.root, "도록 권고할 수 있다")
-        .expect("row 26 tail text should render before row 27");
-    let row27_start = text_line_bbox_containing(&page8.root, "법원의 제출명령이나")
-        .expect("row 27 first text should render after row 26");
+#[test]
+fn rowbreak_page7_starts_article_26_like_hancom_pdf() {
+    let doc = load_doc(SAMPLE);
+    let page7 = doc
+        .build_page_render_tree(6)
+        .unwrap_or_else(|e| panic!("render page 7: {e}"));
+
+    let cells = collect_table_cells(&page7.root, 21, 0);
     assert!(
-        row26_tail.y + row26_tail.height <= row27_start.y,
-        "row 26 tail overlaps row 27: row26 bottom={:.2}, row27 top={:.2}",
-        row26_tail.y + row26_tail.height,
-        row27_start.y
+        cells
+            .iter()
+            .any(|cell| text_line_exists(cell, "제26조")),
+        "Hancom PDF page 7 starts article 26 in table pi=21; rhwp should not stop at article 25"
+    );
+}
+
+#[test]
+fn rowbreak_page7_keeps_tail_line_before_large_table_like_hancom_pdf() {
+    let doc = load_doc(SAMPLE);
+    let page7 = doc
+        .build_page_render_tree(6)
+        .unwrap_or_else(|e| panic!("render page 7: {e}"));
+
+    assert!(
+        text_line_exists(&page7.root, "보호에 관한 법률」 및"),
+        "Hancom PDF page 7 starts with the tail of paragraph 20 before table pi=21"
     );
 }
