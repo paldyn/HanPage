@@ -6,6 +6,7 @@ import { InputHandler } from '@/engine/input-handler';
 import { Toolbar } from '@/ui/toolbar';
 import { MenuBar } from '@/ui/menu-bar';
 import { loadWebFonts } from '@/core/font-loader';
+import { loadExtensionViewerSettings, type ExtensionViewerSettings } from '@/core/extension-settings';
 import { CommandRegistry } from '@/command/registry';
 import { CommandDispatcher } from '@/command/dispatcher';
 import type { EditorContext, CommandServices, EditorEditMode } from '@/command/types';
@@ -73,6 +74,9 @@ let inputHandler: InputHandler | null = null;
 let toolbar: Toolbar | null = null;
 let ruler: Ruler | null = null;
 let editMode: EditorEditMode = 'normal';
+let extensionViewerSettings: ExtensionViewerSettings = {
+  disableExternalWebFonts: false,
+};
 
 
 // ─── 커맨드 시스템 ─────────────────────────────
@@ -148,8 +152,14 @@ const sbZoomVal = () => document.getElementById('sb-zoom-val')!;
 async function initialize(): Promise<void> {
   const msg = sbMessage();
   try {
-    msg.textContent = '웹폰트 로딩 중...';
-    await loadWebFonts([]);  // CSS @font-face 등록 + CRITICAL 폰트만 로드
+    extensionViewerSettings = await loadExtensionViewerSettings();
+    if (extensionViewerSettings.disableExternalWebFonts) {
+      console.info('[main] 외부 웹폰트 사용 안 함 옵션이 켜져 있습니다.');
+    }
+    msg.textContent = extensionViewerSettings.disableExternalWebFonts
+      ? '로컬 폰트 준비 중...'
+      : '웹폰트 로딩 중...';
+    await loadWebFonts([], undefined, extensionViewerSettings);  // CSS @font-face 등록 + CRITICAL 폰트만 로드
     msg.textContent = 'WASM 로딩 중...';
     await wasm.initialize();
     if (import.meta.env.DEV) {
@@ -631,7 +641,7 @@ async function initializeDocument(docInfo: DocumentInfo, displayName: string): P
     if (docInfo.fontsUsed?.length) {
       await loadWebFonts(docInfo.fontsUsed, (loaded, total) => {
         msg.textContent = `폰트 로딩 중... (${loaded}/${total})`;
-      });
+      }, extensionViewerSettings);
     }
     console.log('[initDoc] 2. 폰트 로딩 완료');
     msg.textContent = displayName;
@@ -693,7 +703,9 @@ async function promptLocalFontsIfNeeded(docInfo: DocumentInfo, displayName: stri
     const report = analyzeDocumentFonts(docInfo.fontsUsed);
     if (!report.shouldPromptLocalAccess) return;
 
-    const choice = await showLocalFontsModalIfNeeded(report);
+    const choice = await showLocalFontsModalIfNeeded(report, {
+      disableExternalWebFonts: extensionViewerSettings.disableExternalWebFonts,
+    });
     if (choice !== 'detect') return;
 
     msg.textContent = '로컬 글꼴 감지 중...';
