@@ -668,23 +668,18 @@ export const tableCommands: CommandDef[] = [
         const bboxes = services.wasm.getTableCellBboxes(sec, ppi, ci);
         const bboxByCellIdx = new Map(bboxes.map(bbox => [bbox.cellIdx, bbox]));
         const cells: Array<{ idx: number; col: number; width: number; renderWidth: number }> = [];
-        const colWidths = new Map<number, { sum: number; count: number }>();
         for (let i = 0; i < dims.cellCount; i++) {
           const info = services.wasm.getCellInfo(sec, ppi, ci, i);
           if (!isCellInRange(info, range)) continue;
-          if (info.colSpan > 1) continue;
+          if (info.rowSpan > 1) continue;
           const w = services.wasm.getCellProperties(sec, ppi, ci, i).width;
           const bbox = bboxByCellIdx.get(i);
           const renderWidth = bbox ? Math.round(bbox.w * 75) : w;
           cells.push({ idx: i, col: info.col, width: w, renderWidth });
-          const entry = colWidths.get(info.col);
-          if (entry) { entry.sum += renderWidth; entry.count++; }
-          else colWidths.set(info.col, { sum: renderWidth, count: 1 });
         }
-        if (colWidths.size < 2) return;
-        let totalWidth = 0;
-        for (const v of colWidths.values()) totalWidth += v.sum / v.count;
-        const avgWidth = Math.round(totalWidth / colWidths.size);
+        if (cells.length < 2) return;
+        const totalWidth = cells.reduce((sum, cell) => sum + cell.renderWidth, 0);
+        const avgWidth = Math.round(totalWidth / cells.length);
         const updates: Parameters<CommandServices['wasm']['resizeTableCells']>[3] = [];
         let changed = false;
         for (const c of cells) {

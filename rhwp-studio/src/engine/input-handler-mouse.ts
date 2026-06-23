@@ -634,22 +634,8 @@ export function onClick(this: any, e: MouseEvent): void {
   if (this.cursor.isInCellSelectionMode()) {
     // 우클릭 → 셀 선택 영역 유지 (컨텍스트 메뉴에서 처리)
     if (e.button === 2) return;
-    if (e.shiftKey || e.ctrlKey || e.metaKey) {
-      // 클릭된 셀의 row/col 가져오기
-      const cellRC = this.hitTestCellRowCol(e);
-      if (cellRC) {
-        e.preventDefault();
-        if (e.shiftKey) {
-          this.cursor.shiftSelectCell(cellRC.row, cellRC.col);
-        } else {
-          this.cursor.ctrlToggleCell(cellRC.row, cellRC.col);
-        }
-        this.updateCellSelection();
-        this.textarea.focus();
-        return;
-      }
-    }
     // 경계선 클릭 → 셀 선택 유지 + 리사이즈 드래그 시작
+    // Shift+드래그는 단일 셀 경계 resize 의도이므로 Shift+클릭 확장 선택보다 먼저 판정한다.
     if (e.button === 0 && this.tableResizeRenderer) {
       const ctx = this.cursor.getCellTableContext();
       if (ctx) {
@@ -679,6 +665,21 @@ export function onClick(this: any, e: MouseEvent): void {
             }
           }
         } catch { /* bboxes 조회 실패 시 무시 */ }
+      }
+    }
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      // 클릭된 셀의 row/col 가져오기
+      const cellRC = this.hitTestCellRowCol(e);
+      if (cellRC) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          this.cursor.shiftSelectCell(cellRC.row, cellRC.col);
+        } else {
+          this.cursor.ctrlToggleCell(cellRC.row, cellRC.col);
+        }
+        this.updateCellSelection();
+        this.textarea.focus();
+        return;
       }
     }
     if (e.button === 0) {
@@ -1706,6 +1707,17 @@ export function handleResizeHover(this: any, e: MouseEvent): void {
   } catch { /* hitTest 실패 시 표 밖 */ }
 
   if (!tableRef) {
+    // 경계선 바로 위에서는 hitTest가 셀 내부를 못 잡을 수 있다.
+    // 직전 표 bbox 캐시로 한 번 더 경계선을 확인해 세로 경계 hover가 끊기지 않게 한다.
+    if (this.cachedCellBboxes && this.cachedCellBboxes.length > 0) {
+      const pageBboxes = this.cachedCellBboxes.filter((b: any) => b.pageIndex === pageIdx);
+      const edge = this.tableResizeRenderer.hitTestBorder(pageX, pageY, pageBboxes);
+      if (edge) {
+        this.container.style.cursor = edge.type === 'row' ? 'row-resize' : 'col-resize';
+        this.tableResizeRenderer.showMarker(edge, pageBboxes, zoom);
+        return;
+      }
+    }
     this.tableResizeRenderer.clear();
     this.cachedTableRef = null;
     this.cachedCellBboxes = null;

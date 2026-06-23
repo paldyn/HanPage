@@ -479,7 +479,7 @@ fn cell_width_equal_local_hints_keep_selected_row_independent() {
         };
         let mut rows = std::collections::BTreeMap::<u16, Vec<u32>>::new();
         for (idx, cell) in table.cells.iter().enumerate() {
-            if cell.row_span == 1 && cell.col_span == 1 {
+            if cell.row_span == 1 {
                 rows.entry(cell.row).or_default().push(idx as u32);
             }
         }
@@ -488,13 +488,19 @@ fn cell_width_equal_local_hints_keep_selected_row_independent() {
                 if cells.len() < 3 {
                     return false;
                 }
+                if !cells
+                    .iter()
+                    .any(|idx| table.cells[*idx as usize].col_span > 1)
+                {
+                    return false;
+                }
                 let widths: Vec<_> = cells
                     .iter()
                     .map(|idx| table_cell_render_width_hu(&doc, pos, *idx))
                     .collect();
                 widths.iter().any(|width| *width != widths[0])
             })
-            .expect("샘플에는 폭이 다른 단일 셀 행이 있어야 함")
+            .expect("샘플에는 폭이 다른 가로 병합 포함 행이 있어야 함")
     };
     let stable_cell = {
         let Control::Table(table) =
