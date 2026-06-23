@@ -177,10 +177,6 @@ fn table_cell_render_width_hu(doc: &HwpDocument, pos: TablePos, cell_idx: u32) -
     (table_cell_bbox_value(doc, pos, cell_idx as u64, "w") * 75.0).round() as i64
 }
 
-fn table_cell_render_height_hu(doc: &HwpDocument, pos: TablePos, cell_idx: u32) -> i64 {
-    (table_cell_bbox_value(doc, pos, cell_idx as u64, "h") * 75.0).round() as i64
-}
-
 fn resize_cells_to_render_widths(doc: &mut HwpDocument, pos: TablePos, widths: &[(u32, i64)]) {
     let updates = widths
         .iter()
@@ -201,28 +197,6 @@ fn resize_cells_to_render_widths(doc: &mut HwpDocument, pos: TablePos, widths: &
         &format!("[{updates}]"),
     )
     .expect("resize cells to render widths");
-}
-
-fn resize_cells_to_render_heights(doc: &mut HwpDocument, pos: TablePos, heights: &[(u32, i64)]) {
-    let updates = heights
-        .iter()
-        .map(|(idx, render_height)| {
-            let model_height = table_cell_property_i64(doc, pos, *idx, "height");
-            format!(
-                r#"{{"cellIdx":{idx},"heightDelta":{},"localResize":true,"renderHeight":{render_height}}}"#,
-                render_height - model_height
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",");
-
-    doc.resize_table_cells(
-        pos.section as u32,
-        pos.para as u32,
-        pos.control as u32,
-        &format!("[{updates}]"),
-    )
-    .expect("resize cells to render heights");
 }
 
 fn hwpx_section0_xml(bytes: &[u8]) -> String {
@@ -844,7 +818,7 @@ fn recovered_shift_resize_row_keeps_independent_widths() {
 }
 
 #[test]
-fn local_height_resize_render_height_keeps_target_column_independent() {
+fn vertical_resize_keeps_row_cells_aligned() {
     let bytes = sample_bytes("samples/셀보호2.hwp");
     let parsed = parse_document(&bytes).expect("parse 셀보호2.hwp");
     let pos = find_first_table(&parsed);
@@ -859,43 +833,43 @@ fn local_height_resize_render_height_keeps_target_column_independent() {
     let before_same_row_h = table_cell_bbox_value(&doc, pos, stable_same_row_idx as u64, "h");
     let before_neighbor_row_h =
         table_cell_bbox_value(&doc, pos, stable_neighbor_row_idx as u64, "h");
-
-    let target_col = {
-        let Control::Table(table) =
-            &doc.document().sections[pos.section].paragraphs[pos.para].controls[pos.control]
-        else {
-            panic!("expected table control");
-        };
-        table.cells[target_idx as usize].col
-    };
     let delta_hu = 1200_i64;
-    let height_updates = {
+
+    let updates = {
         let Control::Table(table) =
             &doc.document().sections[pos.section].paragraphs[pos.para].controls[pos.control]
         else {
             panic!("expected table control");
         };
+        let target_row = table.cells[target_idx as usize].row;
+        let neighbor_row = table.cells[neighbor_idx as usize].row;
         table
             .cells
             .iter()
             .enumerate()
-            .filter(|(_, cell)| cell.col == target_col && cell.col_span == 1 && cell.row_span == 1)
+            .filter(|(_, cell)| {
+                cell.row_span == 1 && (cell.row == target_row || cell.row == neighbor_row)
+            })
             .map(|(idx, _)| {
-                let idx = idx as u32;
-                let current = table_cell_render_height_hu(&doc, pos, idx);
-                let desired = if idx == target_idx {
-                    current + delta_hu
-                } else if idx == neighbor_idx {
-                    current - delta_hu
+                let cell = &table.cells[idx];
+                let delta = if cell.row == target_row {
+                    delta_hu
                 } else {
-                    current
+                    -delta_hu
                 };
-                (idx, desired)
+                format!(r#"{{"cellIdx":{idx},"heightDelta":{delta}}}"#)
             })
             .collect::<Vec<_>>()
+            .join(",")
     };
 
-    resize_cells_to_render_heights(&mut doc, pos, &height_updates);
+    doc.resize_table_cells(
+        pos.section as u32,
+        pos.para as u32,
+        pos.control as u32,
+        &format!("[{updates}]"),
+    )
+    .expect("vertical row resize table cells");
 
     let after_target_h = table_cell_bbox_value(&doc, pos, target_idx as u64, "h");
     let after_neighbor_h = table_cell_bbox_value(&doc, pos, neighbor_idx as u64, "h");
@@ -904,17 +878,19 @@ fn local_height_resize_render_height_keeps_target_column_independent() {
         table_cell_bbox_value(&doc, pos, stable_neighbor_row_idx as u64, "h");
 
     assert!(
-        after_target_h > before_target_h + 10.0,
-        "Shift 세로 resize 대상 셀 높이는 커져야 함: before={before_target_h}, after={after_target_h}"
+        after_target_h > before_target_h + 10.0
+            && after_same_row_h > before_same_row_h + 10.0,
+        "세로 resize는 대상 행 전체 높이를 함께 키워야 함: target {before_target_h}->{after_target_h}, same-row {before_same_row_h}->{after_same_row_h}"
     );
     assert!(
-        after_neighbor_h < before_neighbor_h - 10.0,
-        "Shift 세로 resize 이웃 셀 높이는 줄어야 함: before={before_neighbor_h}, after={after_neighbor_h}"
+        (after_target_h - after_same_row_h).abs() <= 0.2
+            && (after_neighbor_h - after_neighbor_row_h).abs() <= 0.2,
+        "세로 resize 후 같은 행의 셀 높이는 한컴처럼 정렬되어야 함: target row {after_target_h}/{after_same_row_h}, neighbor row {after_neighbor_h}/{after_neighbor_row_h}"
     );
     assert!(
-        (after_same_row_h - before_same_row_h).abs() <= 0.2
-            && (after_neighbor_row_h - before_neighbor_row_h).abs() <= 0.2,
-        "같은 행의 다른 열은 세로 로컬 resize 때문에 흔들리면 안 됨: same-row {before_same_row_h}->{after_same_row_h}, neighbor-row {before_neighbor_row_h}->{after_neighbor_row_h}"
+        after_neighbor_h <= before_neighbor_h + 0.2
+            && after_neighbor_row_h <= before_neighbor_row_h + 0.2,
+        "내용/여백 때문에 이웃 행이 더 줄지 못하더라도 커지면 안 됨: neighbor {before_neighbor_h}->{after_neighbor_h}, same-row {before_neighbor_row_h}->{after_neighbor_row_h}"
     );
 }
 

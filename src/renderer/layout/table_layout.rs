@@ -57,7 +57,6 @@ fn build_col_row_y_from_cell_heights(
     cell_spacing: f64,
     dpi: f64,
 ) -> Vec<Vec<f64>> {
-    let inferred_local_resize_cols = table.inferred_local_resize_cols();
     let mut cell_height_grid = vec![vec![None::<f64>; row_count]; col_count];
     for (cell_idx, cell) in table.cells.iter().enumerate() {
         if cell.row_span == 1
@@ -87,9 +86,7 @@ fn build_col_row_y_from_cell_heights(
     let mut col_row_y = vec![vec![0.0f64; row_count + 1]; col_count];
     for c in 0..col_count {
         let col_idx = c as u16;
-        if !table.local_resize_cols.contains(&col_idx)
-            && !inferred_local_resize_cols.contains(&col_idx)
-        {
+        if !table.local_resize_cols.contains(&col_idx) {
             col_row_y[c].clone_from_slice(row_y);
             continue;
         }
@@ -1173,12 +1170,9 @@ impl LayoutEngine {
         }
 
         // 1단계: row_span==1인 셀에서 개별 행 높이 추출
-        let inferred_local_resize_cols = table.inferred_local_resize_cols();
         let mut row_heights = vec![0.0f64; row_count];
         for cell in &table.cells {
-            if table.local_resize_cols.contains(&cell.col)
-                || inferred_local_resize_cols.contains(&cell.col)
-            {
+            if table.local_resize_cols.contains(&cell.col) {
                 continue;
             }
             if cell.row_span == 1 && (cell.row as usize) < row_count {
@@ -1194,6 +1188,9 @@ impl LayoutEngine {
 
         // 1-b단계: 셀 내 실제 컨텐츠 높이 계산
         for cell in &table.cells {
+            if table.local_resize_cols.contains(&cell.col) {
+                continue;
+            }
             if cell.row_span == 1 && (cell.row as usize) < row_count {
                 let r = cell.row as usize;
                 let (pad_left, pad_right, pad_top, pad_bottom) =
@@ -1220,9 +1217,7 @@ impl LayoutEngine {
         {
             let mut constraints: Vec<(usize, usize, f64)> = Vec::new();
             for cell in &table.cells {
-                if table.local_resize_cols.contains(&cell.col)
-                    || inferred_local_resize_cols.contains(&cell.col)
-                {
+                if table.local_resize_cols.contains(&cell.col) {
                     continue;
                 }
                 let r = cell.row as usize;
@@ -1273,6 +1268,9 @@ impl LayoutEngine {
 
         // 2-b단계: 병합 셀 컨텐츠 높이 > 결합 행 높이이면 마지막 행 확장
         for cell in &table.cells {
+            if table.local_resize_cols.contains(&cell.col) {
+                continue;
+            }
             let r = cell.row as usize;
             let span = cell.row_span as usize;
             if span > 1 && r + span <= row_count {

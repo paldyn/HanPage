@@ -122,6 +122,7 @@ function computeAffectedResizePositionBounds(
 
 function promoteResizeDragToSingleCell(self: any, state: any, shiftKey: boolean): { cellIdx: number; side: 'start' | 'end' } | null {
   if (state.singleCellTarget) return state.singleCellTarget;
+  if (state.edge?.type !== 'col') return null;
   if (!shiftKey || !state.resizeTarget) return null;
 
   state.singleCellTarget = state.resizeTarget;
@@ -626,8 +627,10 @@ export function startResizeDrag(this: any,
     borderOriginalPos,
   );
   if (!resizeTarget) return;
-  const shouldResizeSingleCell = shiftResize ||
-    isKnownLocalResizeSegment(this, this.cachedTableRef, edge, resizeTarget, this.cachedCellBboxes);
+  const shouldResizeSingleCell = edge.type === 'col' && (
+    shiftResize ||
+    isKnownLocalResizeSegment(this, this.cachedTableRef, edge, resizeTarget, this.cachedCellBboxes)
+  );
   const singleCellTarget = shouldResizeSingleCell ? resizeTarget : null;
   const logicalAffectedCellIndices = !shouldResizeSingleCell
     ? findAlignedLogicalResizeAffectedCells(edge, resizeTarget, this.cachedCellBboxes)
@@ -659,7 +662,7 @@ export function startResizeDrag(this: any,
     maxResizePos: resizeBounds.max,
     resizeTarget,
     singleCellTarget,
-    shiftResize,
+    shiftResize: shouldResizeSingleCell,
   };
 
   // mouseup 리스너 등록 (document 레벨)
