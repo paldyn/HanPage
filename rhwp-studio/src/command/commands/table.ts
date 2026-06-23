@@ -665,28 +665,39 @@ export const tableCommands: CommandDef[] = [
         if (hasNonRectangularCellSelection(ih)) return;
         const dims = services.wasm.getTableDimensions(sec, ppi, ci);
         const range = equalizeTargetRange(ih, dims);
-        const cells: Array<{ idx: number; col: number; width: number }> = [];
+        const bboxes = services.wasm.getTableCellBboxes(sec, ppi, ci);
+        const bboxByCellIdx = new Map(bboxes.map(bbox => [bbox.cellIdx, bbox]));
+        const cells: Array<{ idx: number; col: number; width: number; renderWidth: number }> = [];
         const colWidths = new Map<number, { sum: number; count: number }>();
         for (let i = 0; i < dims.cellCount; i++) {
           const info = services.wasm.getCellInfo(sec, ppi, ci, i);
           if (!isCellInRange(info, range)) continue;
           if (info.colSpan > 1) continue;
           const w = services.wasm.getCellProperties(sec, ppi, ci, i).width;
-          cells.push({ idx: i, col: info.col, width: w });
+          const bbox = bboxByCellIdx.get(i);
+          const renderWidth = bbox ? Math.round(bbox.w * 75) : w;
+          cells.push({ idx: i, col: info.col, width: w, renderWidth });
           const entry = colWidths.get(info.col);
-          if (entry) { entry.sum += w; entry.count++; }
-          else colWidths.set(info.col, { sum: w, count: 1 });
+          if (entry) { entry.sum += renderWidth; entry.count++; }
+          else colWidths.set(info.col, { sum: renderWidth, count: 1 });
         }
         if (colWidths.size < 2) return;
         let totalWidth = 0;
         for (const v of colWidths.values()) totalWidth += v.sum / v.count;
         const avgWidth = Math.round(totalWidth / colWidths.size);
-        const updates: Array<{ cellIdx: number; widthDelta: number }> = [];
+        const updates: Parameters<CommandServices['wasm']['resizeTableCells']>[3] = [];
+        let changed = false;
         for (const c of cells) {
           const delta = avgWidth - c.width;
-          if (delta !== 0) updates.push({ cellIdx: c.idx, widthDelta: delta });
+          if (delta !== 0 || c.renderWidth !== avgWidth) changed = true;
+          updates.push({
+            cellIdx: c.idx,
+            widthDelta: delta,
+            localResize: true,
+            renderWidth: avgWidth,
+          });
         }
-        if (updates.length === 0) return;
+        if (!changed) return;
         services.wasm.resizeTableCells(sec, ppi, ci, updates);
         services.eventBus.emit('document-changed');
       } catch (err) {

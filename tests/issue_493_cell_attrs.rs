@@ -173,6 +173,10 @@ fn table_cell_property_i64(doc: &HwpDocument, pos: TablePos, cell_idx: u32, key:
         .unwrap_or_else(|| panic!("cell {cell_idx} property {key} not found: {json}"))
 }
 
+fn table_cell_render_width_hu(doc: &HwpDocument, pos: TablePos, cell_idx: u32) -> i64 {
+    (table_cell_bbox_value(doc, pos, cell_idx as u64, "w") * 75.0).round() as i64
+}
+
 fn hwpx_section0_xml(bytes: &[u8]) -> String {
     let reader = std::io::Cursor::new(bytes);
     let mut zip = zip::ZipArchive::new(reader).expect("open hwpx zip");
@@ -457,6 +461,120 @@ fn local_resize_render_width_keeps_untouched_bottom_cells_stable() {
             && (after_cell23_w - before_cell23_w).abs() <= 0.2
             && (after_cell24_x - before_cell24_x).abs() <= 0.2,
         "건드리지 않은 뒤쪽 셀은 유지되어야 함: 23x {before_cell23_x}->{after_cell23_x}, 23w {before_cell23_w}->{after_cell23_w}, 24x {before_cell24_x}->{after_cell24_x}"
+    );
+}
+
+#[test]
+fn cell_width_equal_local_hints_keep_selected_row_independent() {
+    let bytes = sample_bytes("samples/셀보호2.hwp");
+    let parsed = parse_document(&bytes).expect("parse 셀보호2.hwp");
+    let pos = find_first_table(&parsed);
+    let mut doc = HwpDocument::from_bytes(&bytes).expect("load HwpDocument");
+
+    let (selected_row, selected_cells) = {
+        let Control::Table(table) =
+            &doc.document().sections[pos.section].paragraphs[pos.para].controls[pos.control]
+        else {
+            panic!("expected table control");
+        };
+        let mut rows = std::collections::BTreeMap::<u16, Vec<u32>>::new();
+        for (idx, cell) in table.cells.iter().enumerate() {
+            if cell.row_span == 1 && cell.col_span == 1 {
+                rows.entry(cell.row).or_default().push(idx as u32);
+            }
+        }
+        rows.into_iter()
+            .find(|(_, cells)| {
+                if cells.len() < 3 {
+                    return false;
+                }
+                let widths: Vec<_> = cells
+                    .iter()
+                    .map(|idx| table_cell_render_width_hu(&doc, pos, *idx))
+                    .collect();
+                widths.iter().any(|width| *width != widths[0])
+            })
+            .expect("샘플에는 폭이 다른 단일 셀 행이 있어야 함")
+    };
+    let stable_cell = {
+        let Control::Table(table) =
+            &doc.document().sections[pos.section].paragraphs[pos.para].controls[pos.control]
+        else {
+            panic!("expected table control");
+        };
+        table
+            .cells
+            .iter()
+            .enumerate()
+            .find(|(_, cell)| cell.row != selected_row && cell.row_span == 1 && cell.col_span == 1)
+            .map(|(idx, _)| idx as u64)
+            .expect("선택 행 밖의 안정성 확인 셀이 있어야 함")
+    };
+
+    let before_json = doc
+        .get_table_properties(pos.section as u32, pos.para as u32, pos.control as u32)
+        .expect("get before table properties");
+    let before: Value = serde_json::from_str(&before_json).expect("parse before table properties");
+    let before_width = before["tableWidth"].as_u64().expect("before tableWidth");
+    let before_stable_x = table_cell_bbox_value(&doc, pos, stable_cell, "x");
+    let before_stable_w = table_cell_bbox_value(&doc, pos, stable_cell, "w");
+    let before_widths: Vec<_> = selected_cells
+        .iter()
+        .map(|idx| table_cell_render_width_hu(&doc, pos, *idx))
+        .collect();
+    assert!(
+        before_widths.iter().any(|width| *width != before_widths[0]),
+        "테스트 전 선택 행 폭은 서로 달라야 함: {before_widths:?}"
+    );
+
+    let avg_width =
+        (before_widths.iter().sum::<i64>() as f64 / before_widths.len() as f64).round() as i64;
+    let updates = selected_cells
+        .iter()
+        .map(|idx| {
+            let model_width = table_cell_property_i64(&doc, pos, *idx, "width");
+            format!(
+                r#"{{"cellIdx":{idx},"widthDelta":{},"localResize":true,"renderWidth":{avg_width}}}"#,
+                avg_width - model_width
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+
+    doc.resize_table_cells(
+        pos.section as u32,
+        pos.para as u32,
+        pos.control as u32,
+        &format!("[{updates}]"),
+    )
+    .expect("cell width equal local resize");
+
+    let after_widths: Vec<_> = selected_cells
+        .iter()
+        .map(|idx| table_cell_render_width_hu(&doc, pos, *idx))
+        .collect();
+    for width in &after_widths {
+        assert!(
+            (*width - avg_width).abs() <= 1,
+            "선택 셀 표시 폭은 평균 폭으로 같아져야 함: avg={avg_width}, after={after_widths:?}"
+        );
+    }
+    let after_json = doc
+        .get_table_properties(pos.section as u32, pos.para as u32, pos.control as u32)
+        .expect("get after table properties");
+    let after: Value = serde_json::from_str(&after_json).expect("parse after table properties");
+    let after_stable_x = table_cell_bbox_value(&doc, pos, stable_cell, "x");
+    let after_stable_w = table_cell_bbox_value(&doc, pos, stable_cell, "w");
+
+    assert_eq!(
+        after["tableWidth"].as_u64(),
+        Some(before_width),
+        "로컬 너비 균등화는 표 common width를 흔들면 안 됨: {after_json}"
+    );
+    assert!(
+        (after_stable_x - before_stable_x).abs() <= 0.2
+            && (after_stable_w - before_stable_w).abs() <= 0.2,
+        "선택 행 밖 셀은 전역 grid 회귀로 흔들리면 안 됨: x {before_stable_x}->{after_stable_x}, w {before_stable_w}->{after_stable_w}"
     );
 }
 
