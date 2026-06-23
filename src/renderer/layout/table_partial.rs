@@ -661,6 +661,21 @@ impl LayoutEngine {
                         let spacing_after = para_style.map(|s| s.spacing_after).unwrap_or(0.0);
                         total += spacing_after;
                     }
+                    if start < end {
+                        total += para
+                            .controls
+                            .iter()
+                            .map(|ctrl| match ctrl {
+                                Control::Picture(pic) => {
+                                    self.cell_non_inline_control_flow_height(&pic.common)
+                                }
+                                Control::Shape(shape) => {
+                                    self.cell_non_inline_control_flow_height(shape.common())
+                                }
+                                _ => 0.0,
+                            })
+                            .sum::<f64>();
+                    }
                 }
                 total
             } else {

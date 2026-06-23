@@ -164,6 +164,68 @@ fn rowbreak_page13_textbox_shapes_cover_their_text() {
     }
 }
 
+#[test]
+fn rowbreak_page17_split_table_covers_visible_textbox_shape() {
+    let repo_root = env!("CARGO_MANIFEST_DIR");
+    let sample_path = Path::new(repo_root).join(SAMPLE);
+    let bytes = fs::read(&sample_path).unwrap_or_else(|e| panic!("read {}: {}", SAMPLE, e));
+    let doc = rhwp::wasm_api::HwpDocument::from_bytes(&bytes)
+        .unwrap_or_else(|e| panic!("parse {}: {:?}", SAMPLE, e));
+    let tree = doc
+        .build_page_render_tree(16)
+        .unwrap_or_else(|e| panic!("render page 17: {e}"));
+    let table = find_table_node(&tree.root, 28, 0).expect("page 17 table pi=28 ci=0");
+
+    let mut rectangles = Vec::new();
+    collect_rectangles_with_text(table, &mut rectangles);
+    let wide_text_rectangles: Vec<_> = rectangles
+        .into_iter()
+        .filter(|node| node.bbox.width > 300.0 && node.bbox.height > 100.0)
+        .collect();
+
+    assert!(
+        !wide_text_rectangles.is_empty(),
+        "page 17 should render the large textbox-backed rectangle in table pi=28 ci=0"
+    );
+
+    let table_bottom = table.bbox.y + table.bbox.height;
+    for rect in wide_text_rectangles {
+        let rect_bottom = rect.bbox.y + rect.bbox.height;
+        assert!(
+            table_bottom >= rect_bottom - 0.5,
+            "page 17 split table clips visible textbox shape: table=[{:.2}..{:.2}], rect=[{:.2}..{:.2}]",
+            table.bbox.y,
+            table_bottom,
+            rect.bbox.y,
+            rect_bottom
+        );
+    }
+}
+
+#[test]
+fn rowbreak_page18_does_not_emit_tiny_empty_table_continuation() {
+    let repo_root = env!("CARGO_MANIFEST_DIR");
+    let sample_path = Path::new(repo_root).join(SAMPLE);
+    let bytes = fs::read(&sample_path).unwrap_or_else(|e| panic!("read {}: {}", SAMPLE, e));
+    let doc = rhwp::wasm_api::HwpDocument::from_bytes(&bytes)
+        .unwrap_or_else(|e| panic!("parse {}: {:?}", SAMPLE, e));
+    let tree = doc
+        .build_page_render_tree(17)
+        .unwrap_or_else(|e| panic!("render page 18: {e}"));
+
+    if let Some(table) = find_table_node(&tree.root, 28, 0) {
+        assert!(
+            table.bbox.height > 100.0,
+            "page 18 should not be a tiny empty continuation of table pi=28 ci=0: height={:.2}",
+            table.bbox.height
+        );
+        assert!(
+            max_text_line_bottom(table).is_some(),
+            "page 18 continuation of table pi=28 ci=0 should contain visible content"
+        );
+    }
+}
+
 fn collect_table_cells<'a>(
     root: &'a RenderNode,
     target_pi: usize,

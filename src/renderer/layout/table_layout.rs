@@ -180,6 +180,7 @@ struct CellUnit {
     /// [Task #1073] 이 유닛이 중첩 표의 한 행을 표현하면 그 행 인덱스. 텍스트/일반 유닛은 None.
     /// 분할 행에서 컷 → `NestedTableSplit`(중첩행 범위) 매핑에 사용.
     nested_row: Option<usize>,
+    empty_spacer: bool,
 }
 
 /// 중첩 표 부분 렌더링을 위한 행 범위 정보
@@ -296,6 +297,24 @@ impl LayoutEngine {
         } else {
             object_height
         }
+    }
+
+    pub(crate) fn cell_non_inline_control_flow_height(&self, common: &CommonObjAttr) -> f64 {
+        let top_and_bottom_height = self.non_inline_control_flow_height(common);
+        if top_and_bottom_height > 0.0 || common.treat_as_char {
+            return top_and_bottom_height;
+        }
+
+        if !matches!(
+            common.text_wrap,
+            TextWrap::Square | TextWrap::Tight | TextWrap::Through
+        ) {
+            return 0.0;
+        }
+
+        hwpunit_to_px(common.height as i32, self.dpi)
+            + hwpunit_to_px(common.margin.top as i32, self.dpi)
+            + hwpunit_to_px(common.margin.bottom as i32, self.dpi)
     }
 
     pub(crate) fn calc_non_inline_controls_flow_height(&self, paragraphs: &[Paragraph]) -> f64 {
@@ -4004,9 +4023,7 @@ impl LayoutEngine {
         let has_visible_text_with_nested_table = table.cells.iter().any(|cell| {
             cell.paragraphs.iter().any(|p| {
                 !p.text.trim().is_empty()
-                    && p.controls
-                        .iter()
-                        .any(|c| matches!(c, Control::Table(_)))
+                    && p.controls.iter().any(|c| matches!(c, Control::Table(_)))
             })
         });
         let use_vpos_unit_positions = matches!(
@@ -4023,10 +4040,45 @@ impl LayoutEngine {
             .unwrap_or(-1);
         let para_count = cell.paragraphs.len();
         let mut units: Vec<CellUnit> = Vec::new();
+        let append_non_inline_units =
+            |units: &mut Vec<CellUnit>, para_idx: usize, non_inline_h: f64| {
+                if non_inline_h <= 0.5 {
+                    return;
+                }
+
+                const FILLER_UNIT_PX: f64 = 16.0;
+                let mut remaining = non_inline_h;
+                while remaining > 0.5 {
+                    let h = remaining.min(FILLER_UNIT_PX);
+                    units.push(CellUnit {
+                        height: h,
+                        hard_break_before: false,
+                        vpos_gap_before: false,
+                        para_idx,
+                        vis_start: 0,
+                        vis_end: 0,
+                        nested_row: None,
+                        empty_spacer: false,
+                    });
+                    remaining -= h;
+                }
+            };
         for (pi, p) in cell.paragraphs.iter().enumerate() {
+            let para_non_inline_h: f64 = p
+                .controls
+                .iter()
+                .map(|ctrl| match ctrl {
+                    Control::Picture(pic) => self.cell_non_inline_control_flow_height(&pic.common),
+                    crate::model::control::Control::Shape(shape) => {
+                        self.cell_non_inline_control_flow_height(shape.common())
+                    }
+                    _ => 0.0,
+                })
+                .sum();
             let mut comp = compose_paragraph(p);
             crate::renderer::composer::recompose_for_cell_width(&mut comp, p, inner_width, styles);
             let para_style = styles.para_styles.get(p.para_shape_id as usize);
+            let is_empty_spacer_para = p.text.trim().is_empty() && p.controls.is_empty();
             let is_last_para = pi + 1 == para_count;
             let spacing_before = if pi > 0 {
                 para_style.map(|s| s.spacing_before).unwrap_or(0.0)
@@ -4176,9 +4228,11 @@ impl LayoutEngine {
                             vis_start: 0,
                             vis_end: line_count.max(1),
                             nested_row: Some(ri),
+                            empty_spacer: false,
                         });
                         unit_cum += uh;
                     }
+                    append_non_inline_units(&mut units, pi, para_non_inline_h);
                     continue;
                 }
             }
@@ -4263,6 +4317,7 @@ impl LayoutEngine {
                     vis_start: 0,
                     vis_end: line_count.max(1),
                     nested_row: None,
+                    empty_spacer: is_empty_spacer_para,
                 });
                 unit_cum += para_h;
             } else {
@@ -4319,49 +4374,14 @@ impl LayoutEngine {
                         vis_start: li,
                         vis_end: li + 1,
                         nested_row: None,
+                        empty_spacer: is_empty_spacer_para,
                     });
                     unit_cum += lh;
                 }
             }
+            append_non_inline_units(&mut units, pi, para_non_inline_h);
         }
 
-        // [Task #1022] 비인라인 Picture/Shape(wrap=TopAndBottom) — LINE_SEG.lh 에
-        // 미포함이므로 HeightMeasurer 와 동일하게 cell_units 끝에 별도 가산.
-        // 분할 가능하도록 ~16px 단위로 쪼개되, 가시 줄은 없다(filler).
-        {
-            let mut non_inline_h = 0.0f64;
-            for para in &cell.paragraphs {
-                for ctrl in &para.controls {
-                    match ctrl {
-                        Control::Picture(pic) => {
-                            non_inline_h += self.non_inline_control_flow_height(&pic.common);
-                        }
-                        crate::model::control::Control::Shape(shape) => {
-                            non_inline_h += self.non_inline_control_flow_height(shape.common());
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            if non_inline_h > 0.5 {
-                let last_para = para_count.saturating_sub(1);
-                const FILLER_UNIT_PX: f64 = 16.0;
-                let mut remaining = non_inline_h;
-                while remaining > 0.5 {
-                    let h = remaining.min(FILLER_UNIT_PX);
-                    units.push(CellUnit {
-                        height: h,
-                        hard_break_before: false,
-                        vpos_gap_before: false,
-                        para_idx: last_para,
-                        vis_start: 0,
-                        vis_end: 0,
-                        nested_row: None,
-                    });
-                    remaining -= h;
-                }
-            }
-        }
         let _ = (pad_top, pad_bottom); // [Task #1022] cell.height 필러 제거 — row_cut_content_height 가 셀별 max(cell.height, content+pad) 로 행 단계에서 정합.
         units
     }
@@ -4402,7 +4422,10 @@ impl LayoutEngine {
             while j < units.len() {
                 let u = &units[j];
                 // 시작 유닛(j==start)은 항상 소비 — 진행 보장.
-                if j > start && u.hard_break_before {
+                if j > start
+                    && u.hard_break_before
+                    && !units[start..j].iter().all(|unit| unit.empty_spacer)
+                {
                     Self::rewind_rowbreak_orphan_before_hard_break(
                         table, &units, start, &mut j, &mut h,
                     );
@@ -4474,7 +4497,10 @@ impl LayoutEngine {
             while j < units.len() {
                 let u = &units[j];
                 // 시작 유닛(j==start)은 항상 소비 — 진행 보장.
-                if j > start && u.hard_break_before {
+                if j > start
+                    && u.hard_break_before
+                    && !units[start..j].iter().all(|unit| unit.empty_spacer)
+                {
                     Self::rewind_rowbreak_orphan_before_hard_break(
                         table, &units, start, &mut j, &mut h,
                     );
@@ -4563,6 +4589,7 @@ impl LayoutEngine {
             crate::model::table::TablePageBreak::RowBreak
         ) || table.common.treat_as_char
             || *j <= start + 1
+            || units[start..*j].iter().all(|unit| unit.empty_spacer)
         {
             return false;
         }
@@ -4957,6 +4984,8 @@ mod row_cut_tests {
     /// vpos 는 vpos_start 부터 1200 HU 간격.
     fn text_para(n_lines: usize, vpos_start: i32) -> Paragraph {
         Paragraph {
+            text: "x".repeat(n_lines.max(1)),
+            char_count: n_lines.max(1) as u32,
             line_segs: (0..n_lines)
                 .map(|i| LineSeg {
                     vertical_pos: vpos_start + i as i32 * 1200,
