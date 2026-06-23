@@ -173,6 +173,56 @@ fn table_cell_property_i64(doc: &HwpDocument, pos: TablePos, cell_idx: u32, key:
         .unwrap_or_else(|| panic!("cell {cell_idx} property {key} not found: {json}"))
 }
 
+fn table_cell_render_width_hu(doc: &HwpDocument, pos: TablePos, cell_idx: u32) -> i64 {
+    (table_cell_bbox_value(doc, pos, cell_idx as u64, "w") * 75.0).round() as i64
+}
+
+fn table_cell_render_height_hu(doc: &HwpDocument, pos: TablePos, cell_idx: u32) -> i64 {
+    (table_cell_bbox_value(doc, pos, cell_idx as u64, "h") * 75.0).round() as i64
+}
+
+fn resize_cells_to_render_widths(doc: &mut HwpDocument, pos: TablePos, widths: &[(u32, i64)]) {
+    let updates = widths
+        .iter()
+        .map(|(idx, render_width)| {
+            let model_width = table_cell_property_i64(doc, pos, *idx, "width");
+            format!(
+                r#"{{"cellIdx":{idx},"widthDelta":{},"localResize":true,"renderWidth":{render_width}}}"#,
+                render_width - model_width
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+
+    doc.resize_table_cells(
+        pos.section as u32,
+        pos.para as u32,
+        pos.control as u32,
+        &format!("[{updates}]"),
+    )
+    .expect("resize cells to render widths");
+}
+
+fn resize_cells_to_render_heights(doc: &mut HwpDocument, pos: TablePos, heights: &[(u32, i64)]) {
+    let updates = heights
+        .iter()
+        .map(|(idx, render_height)| {
+            format!(
+                r#"{{"cellIdx":{idx},"heightDelta":0,"localResize":true,"renderHeight":{render_height}}}"#,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+
+    doc.resize_table_cells(
+        pos.section as u32,
+        pos.para as u32,
+        pos.control as u32,
+        &format!("[{updates}]"),
+    )
+    .expect("resize cells to render heights");
+}
+
 fn hwpx_section0_xml(bytes: &[u8]) -> String {
     let reader = std::io::Cursor::new(bytes);
     let mut zip = zip::ZipArchive::new(reader).expect("open hwpx zip");
@@ -461,6 +511,126 @@ fn local_resize_render_width_keeps_untouched_bottom_cells_stable() {
 }
 
 #[test]
+fn cell_width_equal_local_hints_keep_selected_row_independent() {
+    let bytes = sample_bytes("samples/셀보호2.hwp");
+    let parsed = parse_document(&bytes).expect("parse 셀보호2.hwp");
+    let pos = find_first_table(&parsed);
+    let mut doc = HwpDocument::from_bytes(&bytes).expect("load HwpDocument");
+
+    let (selected_row, selected_cells) = {
+        let Control::Table(table) =
+            &doc.document().sections[pos.section].paragraphs[pos.para].controls[pos.control]
+        else {
+            panic!("expected table control");
+        };
+        let mut rows = std::collections::BTreeMap::<u16, Vec<u32>>::new();
+        for (idx, cell) in table.cells.iter().enumerate() {
+            if cell.row_span == 1 {
+                rows.entry(cell.row).or_default().push(idx as u32);
+            }
+        }
+        rows.into_iter()
+            .find(|(_, cells)| {
+                if cells.len() < 3 {
+                    return false;
+                }
+                if !cells
+                    .iter()
+                    .any(|idx| table.cells[*idx as usize].col_span > 1)
+                {
+                    return false;
+                }
+                let widths: Vec<_> = cells
+                    .iter()
+                    .map(|idx| table_cell_render_width_hu(&doc, pos, *idx))
+                    .collect();
+                widths.iter().any(|width| *width != widths[0])
+            })
+            .expect("샘플에는 폭이 다른 가로 병합 포함 행이 있어야 함")
+    };
+    let stable_cell = {
+        let Control::Table(table) =
+            &doc.document().sections[pos.section].paragraphs[pos.para].controls[pos.control]
+        else {
+            panic!("expected table control");
+        };
+        table
+            .cells
+            .iter()
+            .enumerate()
+            .find(|(_, cell)| cell.row != selected_row && cell.row_span == 1 && cell.col_span == 1)
+            .map(|(idx, _)| idx as u64)
+            .expect("선택 행 밖의 안정성 확인 셀이 있어야 함")
+    };
+
+    let before_json = doc
+        .get_table_properties(pos.section as u32, pos.para as u32, pos.control as u32)
+        .expect("get before table properties");
+    let before: Value = serde_json::from_str(&before_json).expect("parse before table properties");
+    let before_width = before["tableWidth"].as_u64().expect("before tableWidth");
+    let before_stable_x = table_cell_bbox_value(&doc, pos, stable_cell, "x");
+    let before_stable_w = table_cell_bbox_value(&doc, pos, stable_cell, "w");
+    let before_widths: Vec<_> = selected_cells
+        .iter()
+        .map(|idx| table_cell_render_width_hu(&doc, pos, *idx))
+        .collect();
+    assert!(
+        before_widths.iter().any(|width| *width != before_widths[0]),
+        "테스트 전 선택 행 폭은 서로 달라야 함: {before_widths:?}"
+    );
+
+    let avg_width =
+        (before_widths.iter().sum::<i64>() as f64 / before_widths.len() as f64).round() as i64;
+    let updates = selected_cells
+        .iter()
+        .map(|idx| {
+            let model_width = table_cell_property_i64(&doc, pos, *idx, "width");
+            format!(
+                r#"{{"cellIdx":{idx},"widthDelta":{},"localResize":true,"renderWidth":{avg_width}}}"#,
+                avg_width - model_width
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+
+    doc.resize_table_cells(
+        pos.section as u32,
+        pos.para as u32,
+        pos.control as u32,
+        &format!("[{updates}]"),
+    )
+    .expect("cell width equal local resize");
+
+    let after_widths: Vec<_> = selected_cells
+        .iter()
+        .map(|idx| table_cell_render_width_hu(&doc, pos, *idx))
+        .collect();
+    for width in &after_widths {
+        assert!(
+            (*width - avg_width).abs() <= 1,
+            "선택 셀 표시 폭은 평균 폭으로 같아져야 함: avg={avg_width}, after={after_widths:?}"
+        );
+    }
+    let after_json = doc
+        .get_table_properties(pos.section as u32, pos.para as u32, pos.control as u32)
+        .expect("get after table properties");
+    let after: Value = serde_json::from_str(&after_json).expect("parse after table properties");
+    let after_stable_x = table_cell_bbox_value(&doc, pos, stable_cell, "x");
+    let after_stable_w = table_cell_bbox_value(&doc, pos, stable_cell, "w");
+
+    assert_eq!(
+        after["tableWidth"].as_u64(),
+        Some(before_width),
+        "로컬 너비 균등화는 표 common width를 흔들면 안 됨: {after_json}"
+    );
+    assert!(
+        (after_stable_x - before_stable_x).abs() <= 0.2
+            && (after_stable_w - before_stable_w).abs() <= 0.2,
+        "선택 행 밖 셀은 전역 grid 회귀로 흔들리면 안 됨: x {before_stable_x}->{after_stable_x}, w {before_stable_w}->{after_stable_w}"
+    );
+}
+
+#[test]
 fn local_then_global_column_resize_preserves_unaffected_rows() {
     let bytes = sample_bytes("samples/셀보호2.hwp");
     let parsed = parse_document(&bytes).expect("parse 셀보호2.hwp");
@@ -567,6 +737,274 @@ fn local_then_global_column_resize_preserves_unaffected_rows() {
             && (after_global_cell23_w - after_local_cell23_w).abs() <= 0.2
             && (after_global_cell24_x - after_local_cell24_x).abs() <= 0.2,
         "업데이트 대상이 아닌 마지막 행 뒤쪽 셀은 전역 fallback 때문에 흔들리면 안 됨: 23x {after_local_cell23_x}->{after_global_cell23_x}, 23w {after_local_cell23_w}->{after_global_cell23_w}, 24x {after_local_cell24_x}->{after_global_cell24_x}"
+    );
+}
+
+#[test]
+fn recovered_shift_resize_row_keeps_independent_widths() {
+    let bytes = sample_bytes("samples/셀보호2.hwp");
+    let parsed = parse_document(&bytes).expect("parse 셀보호2.hwp");
+    let pos = find_first_table(&parsed);
+    let mut doc = HwpDocument::from_bytes(&bytes).expect("load HwpDocument");
+
+    let before_cell5_w = table_cell_bbox_value(&doc, pos, 5, "w");
+    let before_cell6_w = table_cell_bbox_value(&doc, pos, 6, "w");
+    let first_delta_hu = -6000_i64;
+    let first_cell5_render_w = table_cell_render_width_hu(&doc, pos, 5) + first_delta_hu;
+    let first_cell6_render_w = table_cell_render_width_hu(&doc, pos, 6) - first_delta_hu;
+    let first_cell7_render_w = table_cell_render_width_hu(&doc, pos, 7);
+    let first_cell8_render_w = table_cell_render_width_hu(&doc, pos, 8);
+    let first_cell9_render_w = table_cell_render_width_hu(&doc, pos, 9);
+
+    resize_cells_to_render_widths(
+        &mut doc,
+        pos,
+        &[
+            (5, first_cell5_render_w),
+            (6, first_cell6_render_w),
+            (7, first_cell7_render_w),
+            (8, first_cell8_render_w),
+            (9, first_cell9_render_w),
+        ],
+    );
+
+    let after_local_cell5_w = table_cell_bbox_value(&doc, pos, 5, "w");
+    let after_local_cell6_w = table_cell_bbox_value(&doc, pos, 6, "w");
+    let after_local_cell7_x = table_cell_bbox_value(&doc, pos, 7, "x");
+    let after_local_cell23_x = table_cell_bbox_value(&doc, pos, 23, "x");
+
+    assert!(
+        after_local_cell5_w < before_cell5_w - 50.0,
+        "첫 Shift resize에서 대상 셀은 줄어야 함: before={before_cell5_w}, after={after_local_cell5_w}"
+    );
+    assert!(
+        after_local_cell6_w > before_cell6_w + 50.0,
+        "첫 Shift resize에서 이웃 셀은 커져야 함: before={before_cell6_w}, after={after_local_cell6_w}"
+    );
+
+    let exported = doc.export_hwp().expect("export recovered source hwp");
+    let recovered_parsed = parse_document(&exported).expect("parse recovered source hwp");
+    let recovered_pos = find_first_table(&recovered_parsed);
+    let mut recovered = HwpDocument::from_bytes(&exported).expect("load recovered HwpDocument");
+
+    let recovered_cell5_w = table_cell_bbox_value(&recovered, recovered_pos, 5, "w");
+    let recovered_cell6_w = table_cell_bbox_value(&recovered, recovered_pos, 6, "w");
+    let recovered_cell7_x = table_cell_bbox_value(&recovered, recovered_pos, 7, "x");
+    let recovered_cell23_x = table_cell_bbox_value(&recovered, recovered_pos, 23, "x");
+
+    assert!(
+        (recovered_cell5_w - after_local_cell5_w).abs() <= 0.2
+            && (recovered_cell6_w - after_local_cell6_w).abs() <= 0.2
+            && (recovered_cell7_x - after_local_cell7_x).abs() <= 0.2,
+        "복구본은 저장 전 행 단위 폭을 그대로 렌더해야 함: 5w {after_local_cell5_w}->{recovered_cell5_w}, 6w {after_local_cell6_w}->{recovered_cell6_w}, 7x {after_local_cell7_x}->{recovered_cell7_x}"
+    );
+    assert!(
+        (recovered_cell23_x - after_local_cell23_x).abs() <= 0.2,
+        "복구본 로드는 다른 행의 x를 밀면 안 됨: before={after_local_cell23_x}, after={recovered_cell23_x}"
+    );
+
+    let second_delta_hu = 6000_i64;
+    let second_cell5_render_w =
+        table_cell_render_width_hu(&recovered, recovered_pos, 5) + second_delta_hu;
+    let second_cell6_render_w =
+        table_cell_render_width_hu(&recovered, recovered_pos, 6) - second_delta_hu;
+    let second_cell7_render_w = table_cell_render_width_hu(&recovered, recovered_pos, 7);
+    let second_cell8_render_w = table_cell_render_width_hu(&recovered, recovered_pos, 8);
+    let second_cell9_render_w = table_cell_render_width_hu(&recovered, recovered_pos, 9);
+
+    resize_cells_to_render_widths(
+        &mut recovered,
+        recovered_pos,
+        &[
+            (5, second_cell5_render_w),
+            (6, second_cell6_render_w),
+            (7, second_cell7_render_w),
+            (8, second_cell8_render_w),
+            (9, second_cell9_render_w),
+        ],
+    );
+
+    let after_second_cell5_w = table_cell_bbox_value(&recovered, recovered_pos, 5, "w");
+    let after_second_cell6_w = table_cell_bbox_value(&recovered, recovered_pos, 6, "w");
+    let after_second_cell7_x = table_cell_bbox_value(&recovered, recovered_pos, 7, "x");
+    let after_second_cell23_x = table_cell_bbox_value(&recovered, recovered_pos, 23, "x");
+
+    assert!(
+        after_second_cell5_w > recovered_cell5_w + 50.0
+            && after_second_cell6_w < recovered_cell6_w - 50.0,
+        "복구본에서 두 번째 Shift resize도 대상/이웃 셀만 조절되어야 함: 5w {recovered_cell5_w}->{after_second_cell5_w}, 6w {recovered_cell6_w}->{after_second_cell6_w}"
+    );
+    assert!(
+        (after_second_cell7_x - recovered_cell7_x).abs() <= 0.2
+            && (after_second_cell23_x - recovered_cell23_x).abs() <= 0.2,
+        "복구본에서 두 번째 Shift resize는 뒤쪽/다른 행을 다시 밀면 안 됨: 7x {recovered_cell7_x}->{after_second_cell7_x}, 23x {recovered_cell23_x}->{after_second_cell23_x}"
+    );
+}
+
+#[test]
+fn vertical_resize_keeps_row_cells_aligned() {
+    let bytes = sample_bytes("samples/셀보호2.hwp");
+    let parsed = parse_document(&bytes).expect("parse 셀보호2.hwp");
+    let pos = find_first_table(&parsed);
+    let mut doc = HwpDocument::from_bytes(&bytes).expect("load HwpDocument");
+
+    let target_idx = 18_u32;
+    let neighbor_idx = 23_u32;
+    let stable_same_row_idx = 17_u32;
+    let stable_neighbor_row_idx = 22_u32;
+    let before_target_h = table_cell_bbox_value(&doc, pos, target_idx as u64, "h");
+    let before_neighbor_h = table_cell_bbox_value(&doc, pos, neighbor_idx as u64, "h");
+    let before_same_row_h = table_cell_bbox_value(&doc, pos, stable_same_row_idx as u64, "h");
+    let before_neighbor_row_h =
+        table_cell_bbox_value(&doc, pos, stable_neighbor_row_idx as u64, "h");
+    let delta_hu = 1200_i64;
+
+    let updates = {
+        let Control::Table(table) =
+            &doc.document().sections[pos.section].paragraphs[pos.para].controls[pos.control]
+        else {
+            panic!("expected table control");
+        };
+        let target_row = table.cells[target_idx as usize].row;
+        let neighbor_row = table.cells[neighbor_idx as usize].row;
+        table
+            .cells
+            .iter()
+            .enumerate()
+            .filter(|(_, cell)| {
+                cell.row_span == 1 && (cell.row == target_row || cell.row == neighbor_row)
+            })
+            .map(|(idx, _)| {
+                let cell = &table.cells[idx];
+                let delta = if cell.row == target_row {
+                    delta_hu
+                } else {
+                    -delta_hu
+                };
+                format!(r#"{{"cellIdx":{idx},"heightDelta":{delta}}}"#)
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+
+    doc.resize_table_cells(
+        pos.section as u32,
+        pos.para as u32,
+        pos.control as u32,
+        &format!("[{updates}]"),
+    )
+    .expect("vertical row resize table cells");
+
+    let after_target_h = table_cell_bbox_value(&doc, pos, target_idx as u64, "h");
+    let after_neighbor_h = table_cell_bbox_value(&doc, pos, neighbor_idx as u64, "h");
+    let after_same_row_h = table_cell_bbox_value(&doc, pos, stable_same_row_idx as u64, "h");
+    let after_neighbor_row_h =
+        table_cell_bbox_value(&doc, pos, stable_neighbor_row_idx as u64, "h");
+
+    assert!(
+        after_target_h > before_target_h + 10.0
+            && after_same_row_h > before_same_row_h + 10.0,
+        "세로 resize는 대상 행 전체 높이를 함께 키워야 함: target {before_target_h}->{after_target_h}, same-row {before_same_row_h}->{after_same_row_h}"
+    );
+    assert!(
+        (after_target_h - after_same_row_h).abs() <= 0.2
+            && (after_neighbor_h - after_neighbor_row_h).abs() <= 0.2,
+        "세로 resize 후 같은 행의 셀 높이는 한컴처럼 정렬되어야 함: target row {after_target_h}/{after_same_row_h}, neighbor row {after_neighbor_h}/{after_neighbor_row_h}"
+    );
+    assert!(
+        after_neighbor_h <= before_neighbor_h + 0.2
+            && after_neighbor_row_h <= before_neighbor_row_h + 0.2,
+        "내용/여백 때문에 이웃 행이 더 줄지 못하더라도 커지면 안 됨: neighbor {before_neighbor_h}->{after_neighbor_h}, same-row {before_neighbor_row_h}->{after_neighbor_row_h}"
+    );
+}
+
+#[test]
+fn vertical_shift_local_height_keeps_unrelated_cells_stable() {
+    let bytes = sample_bytes("samples/셀보호2.hwp");
+    let parsed = parse_document(&bytes).expect("parse 셀보호2.hwp");
+    let pos = find_first_table(&parsed);
+    let mut doc = HwpDocument::from_bytes(&bytes).expect("load HwpDocument");
+
+    let target_idx = 18_u32;
+    let neighbor_idx = 23_u32;
+    let same_row_idx = 17_u32;
+    let same_col_above_idx = 13_u32;
+    let neighbor_row_side_idx = 22_u32;
+    let before_target_h = table_cell_bbox_value(&doc, pos, target_idx as u64, "h");
+    let before_neighbor_h = table_cell_bbox_value(&doc, pos, neighbor_idx as u64, "h");
+    let before_same_row_h = table_cell_bbox_value(&doc, pos, same_row_idx as u64, "h");
+    let before_same_col_above_y = table_cell_bbox_value(&doc, pos, same_col_above_idx as u64, "y");
+    let before_same_col_above_h = table_cell_bbox_value(&doc, pos, same_col_above_idx as u64, "h");
+    let before_neighbor_row_side_h =
+        table_cell_bbox_value(&doc, pos, neighbor_row_side_idx as u64, "h");
+    let delta_hu = 900_i64;
+    let height_updates = {
+        let Control::Table(table) =
+            &doc.document().sections[pos.section].paragraphs[pos.para].controls[pos.control]
+        else {
+            panic!("expected table control");
+        };
+        let target_col = table.cells[target_idx as usize].col;
+        table
+            .cells
+            .iter()
+            .enumerate()
+            .filter(|(_, cell)| cell.col == target_col && cell.col_span == 1 && cell.row_span == 1)
+            .map(|(idx, _)| {
+                let idx = idx as u32;
+                let current = table_cell_render_height_hu(&doc, pos, idx);
+                let desired = if idx == target_idx {
+                    current + delta_hu
+                } else if idx == neighbor_idx {
+                    current - delta_hu
+                } else {
+                    current
+                };
+                (idx, desired)
+            })
+            .collect::<Vec<_>>()
+    };
+
+    resize_cells_to_render_heights(&mut doc, pos, &height_updates);
+
+    let Control::Table(table) =
+        &doc.document().sections[pos.section].paragraphs[pos.para].controls[pos.control]
+    else {
+        panic!("expected table control");
+    };
+    let local_height_cells = table
+        .local_resize_cell_heights
+        .iter()
+        .map(|(idx, _)| *idx as u32)
+        .collect::<std::collections::BTreeSet<_>>();
+    assert!(
+        local_height_cells.contains(&target_idx)
+            && local_height_cells.contains(&neighbor_idx)
+            && local_height_cells.contains(&same_col_above_idx),
+        "세로 Shift local height 힌트는 대상/이웃 변경과 같은 열 보존 힌트를 함께 남겨야 함: {local_height_cells:?}"
+    );
+
+    let after_target_h = table_cell_bbox_value(&doc, pos, target_idx as u64, "h");
+    let after_neighbor_h = table_cell_bbox_value(&doc, pos, neighbor_idx as u64, "h");
+    let after_same_row_h = table_cell_bbox_value(&doc, pos, same_row_idx as u64, "h");
+    let after_same_col_above_y = table_cell_bbox_value(&doc, pos, same_col_above_idx as u64, "y");
+    let after_same_col_above_h = table_cell_bbox_value(&doc, pos, same_col_above_idx as u64, "h");
+    let after_neighbor_row_side_h =
+        table_cell_bbox_value(&doc, pos, neighbor_row_side_idx as u64, "h");
+
+    assert!(
+        after_target_h > before_target_h + 5.0 && after_neighbor_h < before_neighbor_h - 5.0,
+        "세로 Shift resize는 대상/이웃 셀 높이만 보상 조절해야 함: target {before_target_h}->{after_target_h}, neighbor {before_neighbor_h}->{after_neighbor_h}"
+    );
+    assert!(
+        (after_same_row_h - before_same_row_h).abs() <= 0.2
+            && (after_neighbor_row_side_h - before_neighbor_row_side_h).abs() <= 0.2,
+        "세로 Shift resize는 옆 셀 행 높이를 흔들면 안 됨: same-row {before_same_row_h}->{after_same_row_h}, neighbor-row-side {before_neighbor_row_side_h}->{after_neighbor_row_side_h}"
+    );
+    assert!(
+        (after_same_col_above_y - before_same_col_above_y).abs() <= 0.2
+            && (after_same_col_above_h - before_same_col_above_h).abs() <= 0.2,
+        "세로 Shift resize는 같은 열의 무관한 셀을 흔들면 안 됨: y {before_same_col_above_y}->{after_same_col_above_y}, h {before_same_col_above_h}->{after_same_col_above_h}"
     );
 }
 

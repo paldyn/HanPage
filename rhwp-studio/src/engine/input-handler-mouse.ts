@@ -128,6 +128,65 @@ function startCellSelectionDragCandidate(this: any, e: MouseEvent, cellRC: { row
   };
 }
 
+function resolveTableResizeHit(
+  self: any,
+  pageIdx: number,
+  pageX: number,
+  pageY: number,
+): { tableRef: { sec: number; ppi: number; ci: number }; bboxes: any[]; pageBboxes: any[] } | null {
+  const tryTableRef = (tableRef: { sec: number; ppi: number; ci: number } | null) => {
+    if (!tableRef) return null;
+    try {
+      const bboxes = self.wasm.getTableCellBboxes(tableRef.sec, tableRef.ppi, tableRef.ci);
+      const pageBboxes = bboxes.filter((b: any) => b.pageIndex === pageIdx);
+      if (pageBboxes.length === 0) return null;
+      self.cachedTableRef = tableRef;
+      self.cachedCellBboxes = bboxes;
+      return { tableRef, bboxes, pageBboxes };
+    } catch {
+      return null;
+    }
+  };
+
+  if (self.cachedTableRef && self.cachedCellBboxes?.length) {
+    const pageBboxes = self.cachedCellBboxes.filter((b: any) => b.pageIndex === pageIdx);
+    if (pageBboxes.length > 0) {
+      return { tableRef: self.cachedTableRef, bboxes: self.cachedCellBboxes, pageBboxes };
+    }
+  }
+
+  try {
+    const hit = self.wasm.hitTest(pageIdx, pageX, pageY);
+    if (hit.parentParaIndex !== undefined && hit.controlIndex !== undefined && !hit.isTextBox) {
+      const resolved = tryTableRef({
+        sec: hit.sectionIndex,
+        ppi: hit.parentParaIndex,
+        ci: hit.controlIndex,
+      });
+      if (resolved) return resolved;
+    }
+  } catch { /* hitTest 실패 시 layout fallback으로 진행 */ }
+
+  try {
+    const layout = self.wasm.getPageControlLayout(pageIdx);
+    const tolerance = 4;
+    const table = (layout.controls || []).find((ctrl: any) =>
+      ctrl.type === 'table' &&
+      ctrl.secIdx !== undefined &&
+      ctrl.paraIdx !== undefined &&
+      ctrl.controlIdx !== undefined &&
+      pageX >= ctrl.x - tolerance &&
+      pageX <= ctrl.x + ctrl.w + tolerance &&
+      pageY >= ctrl.y - tolerance &&
+      pageY <= ctrl.y + ctrl.h + tolerance);
+    if (table) {
+      return tryTableRef({ sec: table.secIdx, ppi: table.paraIdx, ci: table.controlIdx });
+    }
+  } catch { /* layout fallback 실패 시 표 밖으로 처리 */ }
+
+  return null;
+}
+
 function updateCellSelectionDrag(this: any, e: MouseEvent): void {
   const state = this.cellSelectionDragState;
   if (!state) return;
@@ -634,22 +693,8 @@ export function onClick(this: any, e: MouseEvent): void {
   if (this.cursor.isInCellSelectionMode()) {
     // 우클릭 → 셀 선택 영역 유지 (컨텍스트 메뉴에서 처리)
     if (e.button === 2) return;
-    if (e.shiftKey || e.ctrlKey || e.metaKey) {
-      // 클릭된 셀의 row/col 가져오기
-      const cellRC = this.hitTestCellRowCol(e);
-      if (cellRC) {
-        e.preventDefault();
-        if (e.shiftKey) {
-          this.cursor.shiftSelectCell(cellRC.row, cellRC.col);
-        } else {
-          this.cursor.ctrlToggleCell(cellRC.row, cellRC.col);
-        }
-        this.updateCellSelection();
-        this.textarea.focus();
-        return;
-      }
-    }
     // 경계선 클릭 → 셀 선택 유지 + 리사이즈 드래그 시작
+    // Shift+드래그는 단일 셀 경계 resize 의도이므로 Shift+클릭 확장 선택보다 먼저 판정한다.
     if (e.button === 0 && this.tableResizeRenderer) {
       const ctx = this.cursor.getCellTableContext();
       if (ctx) {
@@ -679,6 +724,21 @@ export function onClick(this: any, e: MouseEvent): void {
             }
           }
         } catch { /* bboxes 조회 실패 시 무시 */ }
+      }
+    }
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      // 클릭된 셀의 row/col 가져오기
+      const cellRC = this.hitTestCellRowCol(e);
+      if (cellRC) {
+        e.preventDefault();
+        if (e.shiftKey) {
+          this.cursor.shiftSelectCell(cellRC.row, cellRC.col);
+        } else {
+          this.cursor.ctrlToggleCell(cellRC.row, cellRC.col);
+        }
+        this.updateCellSelection();
+        this.textarea.focus();
+        return;
       }
     }
     if (e.button === 0) {
@@ -725,12 +785,14 @@ export function onClick(this: any, e: MouseEvent): void {
   const pageY = (contentY - pageOffset) / zoom;
 
   // 표 경계선 클릭 → 리사이즈 드래그 시작
-  if (e.button === 0 && this.tableResizeRenderer && this.cachedCellBboxes && this.cachedTableRef) {
-    const pageBboxes = this.cachedCellBboxes.filter((b: any) => b.pageIndex === pageIdx);
-    const edge = this.tableResizeRenderer.hitTestBorder(pageX, pageY, pageBboxes);
+  if (e.button === 0 && this.tableResizeRenderer) {
+    const resizeHit = resolveTableResizeHit(this, pageIdx, pageX, pageY);
+    const edge = resizeHit
+      ? this.tableResizeRenderer.hitTestBorder(pageX, pageY, resizeHit.pageBboxes)
+      : null;
     if (edge) {
       e.preventDefault();
-      this.startResizeDrag(edge, pageX, pageY, pageBboxes, e.shiftKey);
+      this.startResizeDrag(edge, pageX, pageY, resizeHit!.pageBboxes, e.shiftKey);
       this.textarea.focus();
       return;
     }
@@ -1706,6 +1768,17 @@ export function handleResizeHover(this: any, e: MouseEvent): void {
   } catch { /* hitTest 실패 시 표 밖 */ }
 
   if (!tableRef) {
+    // 경계선 바로 위에서는 hitTest가 셀 내부를 못 잡을 수 있다.
+    // 직전 표 bbox 캐시로 한 번 더 경계선을 확인해 세로 경계 hover가 끊기지 않게 한다.
+    if (this.cachedCellBboxes && this.cachedCellBboxes.length > 0) {
+      const pageBboxes = this.cachedCellBboxes.filter((b: any) => b.pageIndex === pageIdx);
+      const edge = this.tableResizeRenderer.hitTestBorder(pageX, pageY, pageBboxes);
+      if (edge) {
+        this.container.style.cursor = edge.type === 'row' ? 'row-resize' : 'col-resize';
+        this.tableResizeRenderer.showMarker(edge, pageBboxes, zoom);
+        return;
+      }
+    }
     this.tableResizeRenderer.clear();
     this.cachedTableRef = null;
     this.cachedCellBboxes = null;
