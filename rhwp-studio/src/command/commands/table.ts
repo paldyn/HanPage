@@ -626,25 +626,42 @@ export const tableCommands: CommandDef[] = [
         if (hasNonRectangularCellSelection(ih)) return;
         const dims = services.wasm.getTableDimensions(sec, ppi, ci);
         const range = equalizeTargetRange(ih, dims);
-        const cells: Array<{ idx: number; height: number }> = [];
+        const bboxes = services.wasm.getTableCellBboxes(sec, ppi, ci);
+        const bboxByCellIdx = new Map(bboxes.map(bbox => [bbox.cellIdx, bbox]));
+        const cells: Array<{ idx: number; height: number; renderHeight: number }> = [];
         for (let i = 0; i < dims.cellCount; i++) {
           const info = services.wasm.getCellInfo(sec, ppi, ci, i);
           if (!isCellInRange(info, range)) continue;
           if (info.rowSpan > 1) continue;
           const h = services.wasm.getCellProperties(sec, ppi, ci, i).height;
-          cells.push({ idx: i, height: h });
+          const bbox = bboxByCellIdx.get(i);
+          const renderHeight = bbox ? Math.round(bbox.h * 75) : h;
+          cells.push({ idx: i, height: h, renderHeight });
         }
         if (cells.length < 2) return;
-        const totalHeight = cells.reduce((sum, c) => sum + c.height, 0);
+        const totalHeight = cells.reduce((sum, cell) => sum + cell.renderHeight, 0);
         const avgHeight = Math.round(totalHeight / cells.length);
-        const updates: Array<{ cellIdx: number; heightDelta: number }> = [];
+        const updates: Parameters<CommandServices['wasm']['resizeTableCells']>[3] = [];
+        let changed = false;
         for (const c of cells) {
-          const delta = avgHeight - c.height;
-          if (delta !== 0) updates.push({ cellIdx: c.idx, heightDelta: delta });
+          if (c.renderHeight !== avgHeight) changed = true;
+          updates.push({
+            cellIdx: c.idx,
+            heightDelta: 0,
+            localResize: true,
+            renderHeight: avgHeight,
+          });
         }
-        if (updates.length === 0) return;
-        services.wasm.resizeTableCells(sec, ppi, ci, updates);
-        services.eventBus.emit('document-changed');
+        if (!changed) return;
+        safeTableOp(() => ih.executeOperation({
+          kind: 'snapshot',
+          operationType: 'equalizeTableCellHeights',
+          operation: (wasm) => {
+            wasm.resizeTableCells(sec, ppi, ci, updates);
+            return pos;
+          },
+        }), '셀 높이를 같게');
+        restoreEditorFocus(ih);
       } catch (err) {
         console.warn('[table:cell-height-equal] 높이 균등화 실패:', err);
       }
@@ -665,30 +682,43 @@ export const tableCommands: CommandDef[] = [
         if (hasNonRectangularCellSelection(ih)) return;
         const dims = services.wasm.getTableDimensions(sec, ppi, ci);
         const range = equalizeTargetRange(ih, dims);
-        const cells: Array<{ idx: number; col: number; width: number }> = [];
-        const colWidths = new Map<number, { sum: number; count: number }>();
+        const bboxes = services.wasm.getTableCellBboxes(sec, ppi, ci);
+        const bboxByCellIdx = new Map(bboxes.map(bbox => [bbox.cellIdx, bbox]));
+        const cells: Array<{ idx: number; col: number; width: number; renderWidth: number }> = [];
         for (let i = 0; i < dims.cellCount; i++) {
           const info = services.wasm.getCellInfo(sec, ppi, ci, i);
           if (!isCellInRange(info, range)) continue;
-          if (info.colSpan > 1) continue;
+          if (info.rowSpan > 1) continue;
           const w = services.wasm.getCellProperties(sec, ppi, ci, i).width;
-          cells.push({ idx: i, col: info.col, width: w });
-          const entry = colWidths.get(info.col);
-          if (entry) { entry.sum += w; entry.count++; }
-          else colWidths.set(info.col, { sum: w, count: 1 });
+          const bbox = bboxByCellIdx.get(i);
+          const renderWidth = bbox ? Math.round(bbox.w * 75) : w;
+          cells.push({ idx: i, col: info.col, width: w, renderWidth });
         }
-        if (colWidths.size < 2) return;
-        let totalWidth = 0;
-        for (const v of colWidths.values()) totalWidth += v.sum / v.count;
-        const avgWidth = Math.round(totalWidth / colWidths.size);
-        const updates: Array<{ cellIdx: number; widthDelta: number }> = [];
+        if (cells.length < 2) return;
+        const totalWidth = cells.reduce((sum, cell) => sum + cell.renderWidth, 0);
+        const avgWidth = Math.round(totalWidth / cells.length);
+        const updates: Parameters<CommandServices['wasm']['resizeTableCells']>[3] = [];
+        let changed = false;
         for (const c of cells) {
           const delta = avgWidth - c.width;
-          if (delta !== 0) updates.push({ cellIdx: c.idx, widthDelta: delta });
+          if (delta !== 0 || c.renderWidth !== avgWidth) changed = true;
+          updates.push({
+            cellIdx: c.idx,
+            widthDelta: delta,
+            localResize: true,
+            renderWidth: avgWidth,
+          });
         }
-        if (updates.length === 0) return;
-        services.wasm.resizeTableCells(sec, ppi, ci, updates);
-        services.eventBus.emit('document-changed');
+        if (!changed) return;
+        safeTableOp(() => ih.executeOperation({
+          kind: 'snapshot',
+          operationType: 'equalizeTableCellWidths',
+          operation: (wasm) => {
+            wasm.resizeTableCells(sec, ppi, ci, updates);
+            return pos;
+          },
+        }), '셀 너비를 같게');
+        restoreEditorFocus(ih);
       } catch (err) {
         console.warn('[table:cell-width-equal] 너비 균등화 실패:', err);
       }

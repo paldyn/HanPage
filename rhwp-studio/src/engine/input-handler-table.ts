@@ -120,6 +120,24 @@ function computeAffectedResizePositionBounds(
   return { min, max };
 }
 
+function promoteResizeDragToSingleCell(self: any, state: any, shiftKey: boolean): { cellIdx: number; side: 'start' | 'end' } | null {
+  if (state.singleCellTarget) return state.singleCellTarget;
+  if (!shiftKey || !state.resizeTarget) return null;
+
+  state.singleCellTarget = state.resizeTarget;
+  state.shiftResize = true;
+  const resizeBounds = computeResizePositionBounds(
+    self,
+    state.edge,
+    state.pageBboxes,
+    state.singleCellTarget,
+    state.bboxes,
+  );
+  state.minResizePos = resizeBounds.min;
+  state.maxResizePos = resizeBounds.max;
+  return state.singleCellTarget;
+}
+
 function clampResizePosition(pos: number, bounds: { min: number; max: number }): number {
   return Math.min(Math.max(pos, bounds.min), bounds.max);
 }
@@ -147,7 +165,7 @@ function findSingleCellResizeTarget(
   bboxes: CellBbox[],
   borderOriginalPos: number,
 ): { cellIdx: number; side: 'start' | 'end' } | null {
-  const tolerance = 1.0;
+  const tolerance = 4.0;
   const rounded = (v: number) => Math.round(v * 10) / 10;
   const border = rounded(borderOriginalPos);
   const candidates: Array<{ cellIdx: number; side: 'start' | 'end'; score: number }> = [];
@@ -639,8 +657,9 @@ export function startResizeDrag(this: any,
     borderOriginalPos,
     minResizePos: resizeBounds.min,
     maxResizePos: resizeBounds.max,
+    resizeTarget,
     singleCellTarget,
-    shiftResize,
+    shiftResize: shouldResizeSingleCell,
   };
 
   // mouseup 리스너 등록 (document 레벨)
@@ -662,15 +681,16 @@ export function updateResizeDrag(this: any, e: MouseEvent): void {
   const pageLeft = this.virtualScroll.getPageLeftResolved(pageIdx, scrollContent.clientWidth);
   const pageX = (contentX - pageLeft) / zoom;
   const pageY = (contentY - pageOffset) / zoom;
+  const singleCellTarget = promoteResizeDragToSingleCell(this, this.resizeDragState, e.shiftKey);
 
   const rawNewPos = this.resizeDragState.edge.type === 'row' ? pageY : pageX;
   const newPos = clampResizePosition(rawNewPos, {
     min: this.resizeDragState.minResizePos,
     max: this.resizeDragState.maxResizePos,
   });
-  const markerBboxes = this.resizeDragState.singleCellTarget
+  const markerBboxes = singleCellTarget
     ? this.resizeDragState.bboxes.filter((b: CellBbox) =>
-      b.cellIdx === this.resizeDragState.singleCellTarget?.cellIdx)
+      b.cellIdx === singleCellTarget.cellIdx)
     : undefined;
 
   // 드래그 마커 표시
@@ -708,6 +728,7 @@ export function finishResizeDrag(this: any, e: MouseEvent): void {
   const pageLeft = this.virtualScroll.getPageLeftResolved(pageIdx, scrollContent.clientWidth);
   const pageX = (contentX - pageLeft) / zoom;
   const pageY = (contentY - pageOffset) / zoom;
+  const singleCellTarget = promoteResizeDragToSingleCell(this, state, e.shiftKey);
 
   const rawNewPos = state.edge.type === 'row' ? pageY : pageX;
   const newPos = clampResizePosition(rawNewPos, {
@@ -723,14 +744,14 @@ export function finishResizeDrag(this: any, e: MouseEvent): void {
     const shouldSelectTable = isOuterResizeEdge(this, state.edge, state.pageBboxes);
     const tableRef = { ...state.tableRef };
     this.cleanupResizeDrag();
-    if (shouldSelectTable && !state.singleCellTarget) {
+    if (shouldSelectTable && !singleCellTarget) {
       selectTableObjectFromResize.call(this, tableRef);
     }
     return;
   }
 
-  // 셀 선택 모드: 선택 셀 + 이웃 셀 보상 (행/열 전체 너비 유지)
-  // 일반 모드: 경계선에 맞닿은 모든 셀 (열/행 전체)
+  // Shift 단일 셀 resize는 가로/세로 모두 singleCellTarget 분기에서 처리한다.
+  // 일반 세로 경계는 셀 선택 상태와 무관하게 행 전체 높이 조절로 처리한다.
   let updates: Array<{
     cellIdx: number;
     widthDelta?: number;
@@ -780,7 +801,9 @@ export function finishResizeDrag(this: any, e: MouseEvent): void {
       state.singleCellTarget.cellIdx,
     );
     const targetDesiredSize = Math.max(MIN_TABLE_CELL_SIZE_HWP, targetDisplaySize + delta);
-    const targetModelDelta = targetDesiredSize - getCellModelSize(targetProps, state.edge);
+    const targetModelDelta = state.edge.type === 'col'
+      ? targetDesiredSize - getCellModelSize(targetProps, state.edge)
+      : 0;
     updates = state.edge.type === 'col'
       ? [{
         cellIdx: state.singleCellTarget.cellIdx,
@@ -790,7 +813,7 @@ export function finishResizeDrag(this: any, e: MouseEvent): void {
       }]
       : [{
         cellIdx: state.singleCellTarget.cellIdx,
-        heightDelta: targetModelDelta,
+        heightDelta: 0,
         localResize: true,
         renderHeight: targetDesiredSize,
       }];
@@ -805,7 +828,9 @@ export function finishResizeDrag(this: any, e: MouseEvent): void {
       MIN_TABLE_CELL_SIZE_HWP,
       getCellDisplaySize(neighborBox, state.edge) - delta,
       );
-      const neighborModelDelta = neighborDesiredSize - getCellModelSize(neighborProps, state.edge);
+      const neighborModelDelta = state.edge.type === 'col'
+        ? neighborDesiredSize - getCellModelSize(neighborProps, state.edge)
+        : 0;
       updates.push(state.edge.type === 'col'
         ? {
           cellIdx: neighborIdx,
@@ -815,7 +840,7 @@ export function finishResizeDrag(this: any, e: MouseEvent): void {
         }
         : {
           cellIdx: neighborIdx,
-          heightDelta: neighborModelDelta,
+          heightDelta: 0,
           localResize: true,
           renderHeight: neighborDesiredSize,
         });
@@ -827,6 +852,13 @@ export function finishResizeDrag(this: any, e: MouseEvent): void {
         if (neighborIdx !== null && box.cellIdx === neighborIdx) continue;
         pushLocalResizeWidthHint(updates, box.cellIdx, getCellDisplaySize(box, state.edge));
       }
+    } else {
+      for (const box of state.bboxes) {
+        if (box.col !== targetBox.col) continue;
+        if (box.cellIdx === state.singleCellTarget.cellIdx) continue;
+        if (neighborIdx !== null && box.cellIdx === neighborIdx) continue;
+        pushLocalResizeHeightHint(updates, box.cellIdx, getCellDisplaySize(box, state.edge));
+      }
     }
     updates = updates.filter(update => {
       const d = state.edge.type === 'col' ? update.widthDelta : update.heightDelta;
@@ -836,7 +868,7 @@ export function finishResizeDrag(this: any, e: MouseEvent): void {
       this.cleanupResizeDrag();
       return;
     }
-  } else if (inCellSel && range) {
+  } else if (state.edge.type === 'col' && inCellSel && range) {
     // 선택 셀만 추출
     const selectedBboxes = state.affectedCellIndices
       .map((cellIdx: any) => state.bboxes.find((b: any) => b.cellIdx === cellIdx))
