@@ -15,6 +15,16 @@ export interface ValidationReport {
     cell: { ctrl: number; row: number; col: number; innerPara: number } | null;
   }>;
 }
+
+export interface TableCellResizeUpdate {
+  cellIdx: number;
+  widthDelta?: number;
+  heightDelta?: number;
+  localResize?: boolean;
+  renderWidth?: number;
+  renderHeight?: number;
+}
+
 import { fontFamilyChainForDisplay } from './font-substitution';
 import type { FileSystemFileHandleLike } from '@/command/file-system-access';
 
@@ -805,7 +815,7 @@ export class WasmBridge {
 
   resizeTableCells(
     sec: number, parentPara: number, controlIdx: number,
-    updates: Array<{ cellIdx: number; widthDelta?: number; heightDelta?: number }>,
+    updates: TableCellResizeUpdate[],
   ): { ok: boolean } {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
     return JSON.parse(this.doc.resizeTableCells(sec, parentPara, controlIdx, JSON.stringify(updates)));

@@ -317,6 +317,7 @@ export class InputHandler {
     borderOriginalPos: number;
     minResizePos: number;
     maxResizePos: number;
+    resizeTarget?: { cellIdx: number; side: 'start' | 'end' } | null;
     singleCellTarget?: { cellIdx: number; side: 'start' | 'end' } | null;
     shiftResize?: boolean;
   } | null = null;
@@ -610,10 +611,10 @@ export class InputHandler {
       });
     });
     eventBus.on('create-new-document', () => {
-      this.tableLocalResizeSegments.clear();
+      this.clearTableResizeRuntimeCache();
     });
     eventBus.on('open-document-bytes', () => {
-      this.tableLocalResizeSegments.clear();
+      this.clearTableResizeRuntimeCache();
     });
 
     // [Task #394] 셀 진입 자동 ON 로직 비활성화 — manual 추적 불필요.
@@ -693,6 +694,14 @@ export class InputHandler {
 
   /** 현재 격자 간격 반환 (mm 단위) */
   getGridStepMm(): number { return this.gridStepMm; }
+
+  /** 문서 스냅샷 전환 뒤 표 resize 런타임 캐시를 비운다. */
+  private clearTableResizeRuntimeCache(): void {
+    this.tableLocalResizeSegments.clear();
+    this.cachedTableRef = null;
+    this.cachedCellBboxes = null;
+    this.tableResizeRenderer?.clear();
+  }
 
   // ─── 그림 삽입 배치 모드 ───────────────────────────────
 
@@ -2098,6 +2107,7 @@ export class InputHandler {
   private handleUndo(): void {
     const newPos = this.history.undo(this.wasm);
     if (newPos) {
+      this.clearTableResizeRuntimeCache();
       this.cursor.moveTo(newPos);
       this.afterEdit();
     }
@@ -2107,6 +2117,7 @@ export class InputHandler {
   private handleRedo(): void {
     const newPos = this.history.redo(this.wasm);
     if (newPos) {
+      this.clearTableResizeRuntimeCache();
       this.cursor.moveTo(newPos);
       this.afterEdit();
     }
