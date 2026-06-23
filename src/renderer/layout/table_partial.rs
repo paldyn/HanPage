@@ -1291,71 +1291,71 @@ impl LayoutEngine {
                                     };
 
                                     // 중첩 표가 가용 공간을 초과하면 NestedTableSplit 적용
-                                    let split_info = if let Some(split) = mixed_nested_split.as_ref()
-                                    {
-                                        Some(NestedTableSplit {
-                                            start_row: split.start_row,
-                                            end_row: split.end_row,
-                                            visible_height: split.visible_height,
-                                            flow_height: split.flow_height,
-                                            offset_within_start: split.offset_within_start,
-                                        })
-                                    } else if let Some((su, eu)) = nested_cut_range {
-                                        // [Task #1073] 페이지네이션 컷(중첩행 범위)으로 직접
-                                        // NestedTableSplit 구성 — 연속 페이지가 start_row 부터
-                                        // 렌더(available_h 휴리스틱의 row0 재렌더 결함 정정).
-                                        let ncol = nested_table.col_count as usize;
-                                        let nrow = nested_table.row_count as usize;
-                                        let nrow_heights = self.resolve_row_heights(
-                                            nested_table,
-                                            ncol,
-                                            nrow,
-                                            None,
-                                            styles,
-                                        );
-                                        let ncs = hwpunit_to_px(
-                                            nested_table.cell_spacing as i32,
-                                            self.dpi,
-                                        );
-                                        let start_row = su.min(nrow);
-                                        let end_row = eu.min(nrow);
-                                        let mut vis_h = 0.0;
-                                        for r in start_row..end_row {
-                                            vis_h += nrow_heights[r];
-                                            if r + 1 < end_row {
-                                                vis_h += ncs;
+                                    let split_info =
+                                        if let Some(split) = mixed_nested_split.as_ref() {
+                                            Some(NestedTableSplit {
+                                                start_row: split.start_row,
+                                                end_row: split.end_row,
+                                                visible_height: split.visible_height,
+                                                flow_height: split.flow_height,
+                                                offset_within_start: split.offset_within_start,
+                                            })
+                                        } else if let Some((su, eu)) = nested_cut_range {
+                                            // [Task #1073] 페이지네이션 컷(중첩행 범위)으로 직접
+                                            // NestedTableSplit 구성 — 연속 페이지가 start_row 부터
+                                            // 렌더(available_h 휴리스틱의 row0 재렌더 결함 정정).
+                                            let ncol = nested_table.col_count as usize;
+                                            let nrow = nested_table.row_count as usize;
+                                            let nrow_heights = self.resolve_row_heights(
+                                                nested_table,
+                                                ncol,
+                                                nrow,
+                                                None,
+                                                styles,
+                                            );
+                                            let ncs = hwpunit_to_px(
+                                                nested_table.cell_spacing as i32,
+                                                self.dpi,
+                                            );
+                                            let start_row = su.min(nrow);
+                                            let end_row = eu.min(nrow);
+                                            let mut vis_h = 0.0;
+                                            for r in start_row..end_row {
+                                                vis_h += nrow_heights[r];
+                                                if r + 1 < end_row {
+                                                    vis_h += ncs;
+                                                }
                                             }
-                                        }
-                                        Some(NestedTableSplit {
-                                            start_row,
-                                            end_row,
-                                            visible_height: vis_h,
-                                            flow_height: vis_h,
-                                            offset_within_start: 0.0,
-                                        })
-                                    } else if nested_h > available_h + 0.5 {
-                                        let ncol = nested_table.col_count as usize;
-                                        let nrow = nested_table.row_count as usize;
-                                        let nrow_heights = self.resolve_row_heights(
-                                            nested_table,
-                                            ncol,
-                                            nrow,
-                                            None,
-                                            styles,
-                                        );
-                                        let ncell_spacing = hwpunit_to_px(
-                                            nested_table.cell_spacing as i32,
-                                            self.dpi,
-                                        );
-                                        Some(calc_nested_split_rows(
-                                            &nrow_heights,
-                                            ncell_spacing,
-                                            0.0,
-                                            available_h,
-                                        ))
-                                    } else {
-                                        None
-                                    };
+                                            Some(NestedTableSplit {
+                                                start_row,
+                                                end_row,
+                                                visible_height: vis_h,
+                                                flow_height: vis_h,
+                                                offset_within_start: 0.0,
+                                            })
+                                        } else if nested_h > available_h + 0.5 {
+                                            let ncol = nested_table.col_count as usize;
+                                            let nrow = nested_table.row_count as usize;
+                                            let nrow_heights = self.resolve_row_heights(
+                                                nested_table,
+                                                ncol,
+                                                nrow,
+                                                None,
+                                                styles,
+                                            );
+                                            let ncell_spacing = hwpunit_to_px(
+                                                nested_table.cell_spacing as i32,
+                                                self.dpi,
+                                            );
+                                            Some(calc_nested_split_rows(
+                                                &nrow_heights,
+                                                ncell_spacing,
+                                                0.0,
+                                                available_h,
+                                            ))
+                                        } else {
+                                            None
+                                        };
                                     let split_ref = split_info.as_ref().filter(|s| {
                                         s.start_row > 0
                                             || s.end_row < nested_table.row_count as usize

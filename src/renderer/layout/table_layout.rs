@@ -4546,8 +4546,7 @@ impl LayoutEngine {
                                 table.page_break,
                                 crate::model::table::TablePageBreak::RowBreak
                             ) && !table.common.treat_as_char;
-                            let include_trailing_ls =
-                                !is_cell_last_line || para_count > 1;
+                            let include_trailing_ls = !is_cell_last_line || para_count > 1;
                             let include_trailing_ls =
                                 include_trailing_ls && (!is_cell_last_line || !is_block_rowbreak);
                             let mut lh = if include_trailing_ls { h + ls } else { h };
@@ -4707,7 +4706,11 @@ impl LayoutEngine {
         let mut fully_consumed = true;
         let mut consumed_height = 0.0f64;
         const HARD_BREAK_REMAINING_TOLERANCE_PX: f64 = 32.0;
-        let relaxed_hard_break = table.row_count <= 5 && table.col_count <= 2;
+        let relaxed_hard_break = matches!(
+            table.page_break,
+            crate::model::table::TablePageBreak::RowBreak
+        ) && table.row_count <= 5
+            && table.col_count <= 2;
         for (i, cell) in row_cells.iter().enumerate() {
             let units = self.cell_units(cell, table, styles);
             let start = start_cut.get(i).copied().unwrap_or(0).min(units.len());
@@ -4798,7 +4801,11 @@ impl LayoutEngine {
         let mut fully_consumed = true;
         let mut consumed_height = 0.0f64;
         const HARD_BREAK_REMAINING_TOLERANCE_PX: f64 = 32.0;
-        let relaxed_hard_break = table.row_count <= 5 && table.col_count <= 2;
+        let relaxed_hard_break = matches!(
+            table.page_break,
+            crate::model::table::TablePageBreak::RowBreak
+        ) && table.row_count <= 5
+            && table.col_count <= 2;
         for (i, cell) in cells.iter().enumerate() {
             let units = self.cell_units(cell, table, styles);
             let start = start_cut.get(i).copied().unwrap_or(0).min(units.len());

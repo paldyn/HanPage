@@ -350,8 +350,8 @@ fn rowbreak_page7_nested_table_paragraph_keeps_host_text() {
         .iter()
         .find(|cell| matches!(&cell.node_type, RenderNodeType::TableCell(c) if c.row == 3 && c.col == 1))
         .expect("page 7 row 26 detail cell should render");
-    let row25_text_bottom = max_text_line_bottom(row25_detail)
-        .expect("page 7 row 25 detail cell should contain text");
+    let row25_text_bottom =
+        max_text_line_bottom(row25_detail).expect("page 7 row 25 detail cell should contain text");
     assert!(
         row25_text_bottom <= row26_detail.bbox.y + 0.5,
         "row 25 text overlaps row 26 on page 7: row25 text bottom={:.2}, row26 top={:.2}",
@@ -379,9 +379,7 @@ fn rowbreak_page7_starts_article_26_like_hancom_pdf() {
 
     let cells = collect_table_cells(&page7.root, 21, 0);
     assert!(
-        cells
-            .iter()
-            .any(|cell| text_line_exists(cell, "제26조")),
+        cells.iter().any(|cell| text_line_exists(cell, "제26조")),
         "Hancom PDF page 7 starts article 26 in table pi=21; rhwp should not stop at article 25"
     );
 }
