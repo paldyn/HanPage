@@ -4567,9 +4567,30 @@ impl LayoutEngine {
         }
     }
 
+    /// RowBreak 표의 rowspan 블록 중 셀 내부 HWP page reset 이 처음 나타나는 셀의
+    /// 시작 행을 찾는다. 단순 rowspan 라벨 표는 기존 행 경계 분할을 유지한다.
+    pub(crate) fn row_block_first_internal_hard_break_row(
+        &self,
+        table: &crate::model::table::Table,
+        b_start: usize,
+        b_end: usize,
+        styles: &ResolvedStyleSet,
+    ) -> Option<usize> {
+        Self::row_block_cells(table, b_start, b_end)
+            .iter()
+            .filter_map(|cell| {
+                let has_hard_break = self
+                    .cell_units(cell, table, styles)
+                    .iter()
+                    .enumerate()
+                    .any(|(i, unit)| i > 0 && unit.hard_break_before);
+                has_hard_break.then_some(cell.row as usize)
+            })
+            .min()
+    }
+
     /// RowBreak 표의 rowspan 블록 중 셀 내부 HWP page reset 이 있는 블록만
-    /// 블록 컷 대상으로 삼기 위한 가드. 단순 rowspan 라벨 표는 기존 행 경계
-    /// 분할을 유지한다.
+    /// 블록 컷 대상으로 삼기 위한 가드.
     pub(crate) fn row_block_has_internal_hard_break(
         &self,
         table: &crate::model::table::Table,
@@ -4577,14 +4598,8 @@ impl LayoutEngine {
         b_end: usize,
         styles: &ResolvedStyleSet,
     ) -> bool {
-        Self::row_block_cells(table, b_start, b_end)
-            .iter()
-            .any(|cell| {
-                self.cell_units(cell, table, styles)
-                    .iter()
-                    .enumerate()
-                    .any(|(i, unit)| i > 0 && unit.hard_break_before)
-            })
+        self.row_block_first_internal_hard_break_row(table, b_start, b_end, styles)
+            .is_some()
     }
 
     /// [Task #1025] 행블록 `[b_start, b_end)` 와 교차하는 셀(rs>1 포함)을 모은다.

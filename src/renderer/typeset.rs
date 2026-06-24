@@ -10667,15 +10667,16 @@ impl TypesetEngine {
                         && block_size <= crate::renderer::height_measurer::BLOCK_UNIT_MAX_ROWS
                         && (b_start..b_end)
                             .any(|x| rowspan_touched.get(x).copied().unwrap_or(false));
-                    let rowbreak_has_internal_hard_break = if mt.allows_row_break_split()
+                    let rowbreak_hard_break_row = if mt.allows_row_break_split()
                         && b_start == r
                         && block_has_protectable_rowspan
                     {
                         layout_engine
-                            .row_block_has_internal_hard_break(table, b_start, b_end, styles)
+                            .row_block_first_internal_hard_break_row(table, b_start, b_end, styles)
                     } else {
-                        false
+                        None
                     };
+                    let rowbreak_has_internal_hard_break = rowbreak_hard_break_row.is_some();
                     let protected = block_has_protectable_rowspan
                         && (!mt.allows_row_break_split() || !rowbreak_has_internal_hard_break);
                     // [Task #1086] RowBreak 표는 행 경계 분할 정책이라 보호 블록
@@ -10687,11 +10688,17 @@ impl TypesetEngine {
                         && b_start == r
                         && block_has_protectable_rowspan
                         && rowbreak_has_internal_hard_break;
+                    // #1486: hard-break가 rowspan 블록 첫 행의 큰 셀 안에 있을 때만
+                    // 행 시작 y offset을 빼서 아래 행 셀을 다음 조각에 남긴다.
+                    // #1105처럼 hard-break가 뒤 행 셀 안에 있는 블록은 기존 블록 컷을
+                    // 유지해야 첫 조각의 `end_cut`이 한컴 기준과 맞는다.
+                    let rowbreak_use_row_offsets =
+                        rowbreak_rowspan_block && rowbreak_hard_break_row == Some(b_start);
                     if (protected || rowbreak_rowspan_block) && b_start == r {
                         // [Task #1025] 연속분 커서가 블록 중간이면 블록 시작 컷을 적용.
                         let blk_start_cut: &[usize] =
                             if r == cursor_row { &start_cut } else { &[] };
-                        let block_row_offsets: Vec<f64> = if rowbreak_rowspan_block {
+                        let block_row_offsets: Vec<f64> = if rowbreak_use_row_offsets {
                             let mut offsets = Vec::with_capacity(block_size);
                             let mut top = 0.0;
                             for br in b_start..b_end {
@@ -10736,7 +10743,7 @@ impl TypesetEngine {
                         let block_h: f64 = if blk_start_cut.is_empty() {
                             (b_start..b_end).map(|x| cut_row_h[x]).sum::<f64>()
                                 + cs * block_size.saturating_sub(1) as f64
-                        } else if rowbreak_rowspan_block {
+                        } else if rowbreak_use_row_offsets {
                             block_fragment_height(b_end, blk_start_cut, &[])
                         } else {
                             layout_engine.row_block_content_height(
@@ -10760,7 +10767,7 @@ impl TypesetEngine {
                         // rowspan 블록은 hard-break(vpos reset)를 만난 경우에만 중간
                         // 분할을 허용해 일반 RowBreak 행 경계 정책의 blast radius 를 줄인다.
                         let budget = (avail_for_rows - consumed - cs_before).max(0.0);
-                        let res = if rowbreak_rowspan_block {
+                        let res = if rowbreak_use_row_offsets {
                             layout_engine.advance_row_block_cut_with_row_offsets(
                                 table,
                                 b_start,
@@ -10793,7 +10800,7 @@ impl TypesetEngine {
                                 || (genuinely_page_larger && res.consumed_height >= MIN_TOP_KEEP_PX)
                         };
                         if can_intra_split && !res.fully_consumed && allow_block_split {
-                            end_row = if rowbreak_rowspan_block {
+                            end_row = if rowbreak_use_row_offsets {
                                 let mut render_end = b_start + 1;
                                 for (idx, row_top) in block_row_offsets.iter().enumerate() {
                                     if *row_top < res.consumed_height - 0.1 {
@@ -10807,7 +10814,7 @@ impl TypesetEngine {
                             split_end_cut = res.end_cut.clone();
                             split_end_limit = res.consumed_height;
                             split_block_start = Some(b_start);
-                            let split_total = if rowbreak_rowspan_block {
+                            let split_total = if rowbreak_use_row_offsets {
                                 block_fragment_height(end_row, blk_start_cut, &res.end_cut)
                             } else {
                                 layout_engine.row_block_content_height(

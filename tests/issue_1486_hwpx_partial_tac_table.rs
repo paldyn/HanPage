@@ -62,6 +62,22 @@ fn collect_images<'a>(node: &'a RenderNode, out: &mut Vec<&'a RenderNode>) {
     }
 }
 
+fn find_image_bbox_by_ref(
+    node: &RenderNode,
+    para_index: usize,
+    control_index: usize,
+) -> Option<BoundingBox> {
+    if let RenderNodeType::Image(image) = &node.node_type {
+        if image.para_index == Some(para_index) && image.control_index == Some(control_index) {
+            return Some(node.bbox);
+        }
+    }
+
+    node.children
+        .iter()
+        .find_map(|child| find_image_bbox_by_ref(child, para_index, control_index))
+}
+
 fn collect_tables<'a>(node: &'a RenderNode, out: &mut Vec<&'a RenderNode>) {
     if matches!(node.node_type, RenderNodeType::Table(_)) {
         out.push(node);
@@ -254,5 +270,30 @@ fn issue_1486_page13_page_number_keeps_footer_gap() {
         page_number.y - table_bottom >= 12.0,
         "13쪽 하단 표와 쪽번호 사이 간격이 너무 좁음: table_bottom={table_bottom:.2}, page_number_y={:.2}",
         page_number.y
+    );
+}
+
+#[test]
+fn issue_1486_page29_tac_logo_aligns_with_text_line() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(SAMPLE);
+    let bytes = fs::read(&path).unwrap_or_else(|e| panic!("read {SAMPLE}: {e}"));
+    let doc = rhwp::wasm_api::HwpDocument::from_bytes(&bytes)
+        .unwrap_or_else(|e| panic!("parse {SAMPLE}: {e}"));
+
+    let page29 = doc
+        .build_page_render_tree(28)
+        .expect("render issue #1486 page 29");
+    let logo = find_image_bbox_by_ref(&page29.root, 218, 0).expect("29쪽 LH 로고 TAC 그림 bbox");
+
+    assert!(
+        (logo.y - 417.6).abs() <= 4.0,
+        "29쪽 LH 로고 y가 한컴 PDF 기준에서 벗어남: y={:.2}, bbox={:?}",
+        logo.y,
+        logo
+    );
+    assert!(
+        (logo.x - 38.4).abs() <= 3.0 && (logo.width - 115.6).abs() <= 3.0,
+        "29쪽 LH 로고 x/폭이 한컴 PDF 기준에서 벗어남: bbox={:?}",
+        logo
     );
 }
