@@ -10895,6 +10895,20 @@ impl TypesetEngine {
             }
 
             if end_row >= row_count && split_end_limit == 0.0 {
+                let skip_terminal_empty_sliver = is_continuation
+                    && !start_cut.is_empty()
+                    && !start_cut_is_block
+                    && mt.allows_row_break_split()
+                    && caption_overhead <= 0.5
+                    && partial_height < MIN_TOP_KEEP_PX
+                    && (cursor_row..end_row).all(|r| {
+                        let su: &[usize] = if r == cursor_row { &start_cut } else { &[] };
+                        !layout_engine.row_cut_range_has_visible_content(table, r, su, &[], styles)
+                    });
+                if skip_terminal_empty_sliver {
+                    break;
+                }
+
                 // 나머지 전부가 현재 페이지에 들어감
                 let bottom_caption_extra = if !caption_is_top {
                     caption_overhead

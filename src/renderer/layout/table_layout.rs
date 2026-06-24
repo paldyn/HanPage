@@ -4330,9 +4330,6 @@ impl LayoutEngine {
                 let u = &units[j];
                 // 시작 유닛(j==start)은 항상 소비 — 진행 보장.
                 if j > start && u.hard_break_before {
-                    Self::rewind_rowbreak_orphan_before_hard_break(
-                        table, &units, start, &mut j, &mut h,
-                    );
                     hit_hard_break = true;
                     break;
                 }
@@ -4548,6 +4545,58 @@ impl LayoutEngine {
             }
         }
         ranges
+    }
+
+    /// RowBreak 분할의 컷 범위에 실제 보이는 내용이 남아 있는지 확인한다.
+    ///
+    /// 마지막 continuation 에 빈 문단/패딩만 남은 조각은 한컴 PDF에서 별도 페이지를
+    /// 만들지 않는 경우가 있어, 페이지네이터가 terminal sliver 를 걸러낼 때 사용한다.
+    pub(crate) fn row_cut_range_has_visible_content(
+        &self,
+        table: &crate::model::table::Table,
+        row: usize,
+        start_cut: &[usize],
+        end_cut: &[usize],
+        styles: &ResolvedStyleSet,
+    ) -> bool {
+        let mut row_cells: Vec<&crate::model::table::Cell> = table
+            .cells
+            .iter()
+            .filter(|c| c.row as usize == row && c.row_span == 1)
+            .collect();
+        row_cells.sort_by_key(|c| c.col);
+
+        for (i, cell) in row_cells.iter().enumerate() {
+            let units = self.cell_units(cell, table, styles);
+            let su = start_cut.get(i).copied().unwrap_or(0).min(units.len());
+            let eu = end_cut
+                .get(i)
+                .copied()
+                .unwrap_or(units.len())
+                .clamp(su, units.len());
+            if units[su..eu]
+                .iter()
+                .any(|unit| Self::cell_unit_has_visible_content(cell, unit))
+            {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn cell_unit_has_visible_content(
+        cell: &crate::model::table::Cell,
+        unit: &CellUnit,
+    ) -> bool {
+        if unit.nested_row.is_some() {
+            return true;
+        }
+
+        let Some(para) = cell.paragraphs.get(unit.para_idx) else {
+            return false;
+        };
+        !para.text.trim().is_empty() || !para.controls.is_empty()
     }
 
     /// [Task #993 / #1022] 분할 행에서 컷 범위 `[start_cut, end_cut)` 사이의

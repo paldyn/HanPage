@@ -36,6 +36,18 @@ fn collect_issue_1486_tables<'a>(node: &'a RenderNode, out: &mut Vec<&'a RenderN
     }
 }
 
+fn render_tree_contains_text(node: &RenderNode, needle: &str) -> bool {
+    if let RenderNodeType::TextRun(run) = &node.node_type {
+        if run.text.contains(needle) {
+            return true;
+        }
+    }
+
+    node.children
+        .iter()
+        .any(|child| render_tree_contains_text(child, needle))
+}
+
 #[test]
 fn issue_1486_partial_table_tac_nested_table_stays_inside_page_body() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(SAMPLE);
@@ -88,5 +100,29 @@ fn issue_1486_partial_table_tac_nested_table_stays_inside_page_body() {
         "분할 표 내부 TAC 중첩 표가 페이지 본문 오른쪽을 초과함: table_right={:.2}, expected_body_right={:.2}",
         table_right,
         expected_body_right,
+    );
+}
+
+#[test]
+fn issue_1486_terminal_rowbreak_sliver_does_not_push_pdf_page22_content() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(SAMPLE);
+    let bytes = fs::read(&path).unwrap_or_else(|e| panic!("read {SAMPLE}: {e}"));
+    let doc = rhwp::wasm_api::HwpDocument::from_bytes(&bytes)
+        .unwrap_or_else(|e| panic!("parse {SAMPLE}: {e}"));
+
+    let page22 = doc
+        .build_page_render_tree(21)
+        .expect("render issue #1486 page 22");
+    let page23 = doc
+        .build_page_render_tree(22)
+        .expect("render issue #1486 page 23");
+
+    assert!(
+        render_tree_contains_text(&page22.root, "lisfranc"),
+        "한컴 PDF 기준 22쪽 하단의 lisfranc 줄이 rhwp 22쪽에 있어야 함"
+    );
+    assert!(
+        !render_tree_contains_text(&page23.root, "lisfranc"),
+        "무가시 RowBreak terminal sliver 때문에 lisfranc 줄이 23쪽으로 밀리면 안 됨"
     );
 }
