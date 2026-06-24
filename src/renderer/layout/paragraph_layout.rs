@@ -1868,8 +1868,9 @@ impl LayoutEngine {
                     .and_then(|p| p.line_segs.get(line_idx))
                     .map(|seg| hwpunit_to_px(seg.text_height, self.dpi))
                     .unwrap_or(0.0);
-                let use_hwpx_text_height = self.is_hwpx_source.get()
-                    && para.map(|p| p.controls.is_empty()).unwrap_or(false);
+                let is_plain_text_para = para.map(|p| p.controls.is_empty()).unwrap_or(false);
+                let use_stored_text_height =
+                    is_plain_text_para && (self.is_hwpx_source.get() || cell_ctx.is_none());
                 crate::renderer::corrected_line_metrics_for_source(
                     raw_lh,
                     raw_text_height,
@@ -1877,7 +1878,7 @@ impl LayoutEngine {
                     max_fs,
                     ls_type,
                     ls_val,
-                    use_hwpx_text_height,
+                    use_stored_text_height,
                 )
             };
             // 인라인 Shape(글상자)가 있는 줄: line_height에 Shape 높이가 포함됨

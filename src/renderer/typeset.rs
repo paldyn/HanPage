@@ -8697,7 +8697,7 @@ impl TypesetEngine {
                         max_fs,
                         ls_type,
                         ls_val,
-                        self.is_hwpx_source.get() && para.controls.is_empty(),
+                        para.controls.is_empty(),
                     )
                 };
                 let extra_rows =

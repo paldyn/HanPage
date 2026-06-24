@@ -2,7 +2,7 @@
 
 ## 1. 출발점
 
-Stage 1 커밋: `62740028 task 1510: co-anchored float 표 순서 보정`
+Stage 1 커밋: `fd6ca17a task 1510: co-anchored float 표 순서 보정`
 
 Stage 1은 visible text host 문단의 co-anchored para-relative `TopAndBottom` 표를
 `vertical_offset`으로 재정렬하지 않고, 큰 양수 offset이 페이지를 2쪽으로 밀어내는

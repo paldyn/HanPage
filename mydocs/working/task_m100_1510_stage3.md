@@ -2,7 +2,7 @@
 
 ## 1. 출발점
 
-Stage 2 커밋: `fb6cc20c task 1510: visible float 표 시각 정합 보정`
+Stage 2 커밋: `6b61d683 task 1510: visible float 표 시각 정합 보정`
 
 Stage 2는 HWP 샘플의 visible text host 문단에 함께 앵커된 `TopAndBottom`
 floating 표를 보정했다.
