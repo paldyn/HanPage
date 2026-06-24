@@ -206,25 +206,42 @@ impl LayoutEngine {
                         .filter(|c| c.row as usize == r && c.row_span == 1)
                         .collect();
                     rcells.sort_by_key(|c| c.col);
-                    let per_start: Vec<usize> = rcells
-                        .iter()
-                        .map(|c| match (in_start, start_block) {
+                    let mut per_start: Vec<usize> = Vec::with_capacity(rcells.len());
+                    let mut per_end: Vec<usize> = Vec::with_capacity(rcells.len());
+                    let mut has_visible_range = false;
+                    let mut has_row_cut = false;
+                    for c in &rcells {
+                        let units = self.cell_units(c, table, styles);
+                        let su = match (in_start, start_block) {
                             (true, Some((bs, be))) => block_cut_index(table, bs, be, c)
                                 .and_then(|i| start_cut.get(i).copied())
                                 .unwrap_or(0),
                             _ => 0,
-                        })
-                        .collect();
-                    let per_end: Vec<usize> = rcells
-                        .iter()
-                        .map(|c| match (in_end, end_block) {
+                        }
+                        .min(units.len());
+                        let eu = match (in_end, end_block) {
                             (true, Some((bs, be))) => block_cut_index(table, bs, be, c)
                                 .and_then(|i| end_cut.get(i).copied())
-                                .unwrap_or(usize::MAX),
-                            _ => usize::MAX,
-                        })
-                        .collect();
-                    let h = self.row_cut_content_height(table, r, &per_start, &per_end, styles);
+                                .unwrap_or(units.len()),
+                            _ => units.len(),
+                        }
+                        .clamp(su, units.len());
+                        if eu > su {
+                            has_visible_range = true;
+                        }
+                        if su > 0 || eu < units.len() {
+                            has_row_cut = true;
+                        }
+                        per_start.push(su);
+                        per_end.push(eu);
+                    }
+                    let h = if !has_visible_range {
+                        0.0
+                    } else if has_row_cut {
+                        self.row_cut_content_height(table, r, &per_start, &per_end, styles)
+                    } else {
+                        self.row_cut_content_height(table, r, &[], &[], styles)
+                    };
                     if h > 0.0 {
                         row_heights[r] = h;
                     }

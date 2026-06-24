@@ -36,16 +36,20 @@ fn collect_issue_1486_tables<'a>(node: &'a RenderNode, out: &mut Vec<&'a RenderN
     }
 }
 
-fn render_tree_contains_text(node: &RenderNode, needle: &str) -> bool {
+fn collect_render_tree_text(node: &RenderNode, out: &mut String) {
     if let RenderNodeType::TextRun(run) = &node.node_type {
-        if run.text.contains(needle) {
-            return true;
-        }
+        out.push_str(&run.text);
     }
 
-    node.children
-        .iter()
-        .any(|child| render_tree_contains_text(child, needle))
+    for child in &node.children {
+        collect_render_tree_text(child, out);
+    }
+}
+
+fn render_tree_contains_text(node: &RenderNode, needle: &str) -> bool {
+    let mut text = String::new();
+    collect_render_tree_text(node, &mut text);
+    text.contains(needle)
 }
 
 #[test]
@@ -124,5 +128,37 @@ fn issue_1486_terminal_rowbreak_sliver_does_not_push_pdf_page22_content() {
     assert!(
         !render_tree_contains_text(&page23.root, "lisfranc"),
         "무가시 RowBreak terminal sliver 때문에 lisfranc 줄이 23쪽으로 밀리면 안 됨"
+    );
+}
+
+#[test]
+fn issue_1486_rowspan_block_tail_stays_on_pdf_page14() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(SAMPLE);
+    let bytes = fs::read(&path).unwrap_or_else(|e| panic!("read {SAMPLE}: {e}"));
+    let doc = rhwp::wasm_api::HwpDocument::from_bytes(&bytes)
+        .unwrap_or_else(|e| panic!("parse {SAMPLE}: {e}"));
+
+    let page13 = doc
+        .build_page_render_tree(12)
+        .expect("render issue #1486 page 13");
+    let page14 = doc
+        .build_page_render_tree(13)
+        .expect("render issue #1486 page 14");
+
+    assert!(
+        render_tree_contains_text(&page13.root, "아동복지시설"),
+        "한컴 PDF 기준 13쪽 끝에는 사회취약 계층 (아) 항목까지 보여야 함"
+    );
+    assert!(
+        !render_tree_contains_text(&page13.root, "제2조제10호"),
+        "사회취약 계층 하단 행이 13쪽에서 먼저 소비되면 안 됨"
+    );
+    assert!(
+        render_tree_contains_text(&page14.root, "(자)"),
+        "한컴 PDF 기준 14쪽은 사회취약 계층 (자) 항목으로 이어져야 함"
+    );
+    assert!(
+        render_tree_contains_text(&page14.root, "제2조제10호"),
+        "국민기초생활 보장법 행은 14쪽에 남아야 함"
     );
 }

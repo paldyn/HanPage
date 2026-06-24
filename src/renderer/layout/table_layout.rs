@@ -176,7 +176,7 @@ pub(crate) struct RowCutResult {
 }
 
 /// [Task #993] 한 셀의 콘텐츠 유닛 — 합성 줄 1개 또는 중첩 표 atom 1개.
-struct CellUnit {
+pub(super) struct CellUnit {
     /// 유닛 높이 (px).
     height: f64,
     /// 이 유닛 앞에 vpos 리셋(셀 내부 페이지 분할)이 있는가.
@@ -4009,7 +4009,7 @@ impl LayoutEngine {
     /// 의 줄 높이 계산과 동일 규칙(줄 h+ls, 셀 마지막 줄 ls 제외, 문단 첫·마지막
     /// 줄에 spacing_before/after). `hard_break_before` = 이 유닛 앞에 HWP vpos
     /// 리셋(셀 내부 페이지 분할, `[Task #697]`)이 있는가.
-    fn cell_units(
+    pub(super) fn cell_units(
         &self,
         cell: &crate::model::table::Cell,
         table: &crate::model::table::Table,
@@ -4419,6 +4419,76 @@ impl LayoutEngine {
         }
     }
 
+    /// RowBreak rowspan 블록에서 셀의 행 시작 y를 반영해 컷을 전진시킨다.
+    ///
+    /// 일반 `advance_row_block_cut`은 블록 안의 모든 셀에 같은 예산을 주기 때문에,
+    /// 위쪽 큰 셀이 페이지 경계에서 잘릴 때 아래 행의 짧은 셀까지 먼저 소비할 수 있다.
+    /// 이 함수는 행별 top offset을 빼고 남은 예산으로 셀을 전진시켜 같은 블록 안의
+    /// 아래 행 내용이 한컴처럼 다음 조각에 남도록 한다.
+    pub(crate) fn advance_row_block_cut_with_row_offsets(
+        &self,
+        table: &crate::model::table::Table,
+        b_start: usize,
+        b_end: usize,
+        start_cut: &[usize],
+        avail_height: f64,
+        row_offsets: &[f64],
+        styles: &ResolvedStyleSet,
+    ) -> RowCutResult {
+        let mut cells = Self::row_block_cells(table, b_start, b_end);
+        cells.sort_by_key(|c| (c.row, c.col));
+
+        let mut end_cut: RowCut = Vec::with_capacity(cells.len());
+        let mut hit_hard_break = false;
+        let mut fully_consumed = true;
+        let mut consumed_height = 0.0f64;
+        for (i, cell) in cells.iter().enumerate() {
+            let units = self.cell_units(cell, table, styles);
+            let start = start_cut.get(i).copied().unwrap_or(0).min(units.len());
+            let cell_row = cell.row as usize;
+            let row_offset = cell_row
+                .checked_sub(b_start)
+                .and_then(|idx| row_offsets.get(idx))
+                .copied()
+                .unwrap_or(0.0);
+            let cell_budget = (avail_height - row_offset).max(0.0);
+            let allow_force_progress = row_offset <= 0.5;
+            let mut j = start;
+            let mut h = 0.0f64;
+            while j < units.len() {
+                let u = &units[j];
+                if j > start && u.hard_break_before {
+                    Self::rewind_rowbreak_orphan_before_hard_break(
+                        table, &units, start, &mut j, &mut h,
+                    );
+                    hit_hard_break = true;
+                    break;
+                }
+                if j > start && h + u.height > cell_budget {
+                    break;
+                }
+                if j == start && !allow_force_progress && h + u.height > cell_budget {
+                    break;
+                }
+                h += u.height;
+                j += 1;
+            }
+            if j < units.len() {
+                fully_consumed = false;
+            }
+            if h > 0.0 {
+                consumed_height = consumed_height.max(row_offset + h);
+            }
+            end_cut.push(j);
+        }
+        RowCutResult {
+            end_cut,
+            hit_hard_break,
+            fully_consumed,
+            consumed_height,
+        }
+    }
+
     fn rewind_rowbreak_orphan_before_hard_break(
         table: &crate::model::table::Table,
         units: &[CellUnit],
@@ -4514,6 +4584,69 @@ impl LayoutEngine {
         max_h
     }
 
+    /// 블록 컷 벡터를 특정 행의 per-row 컷으로 변환해 해당 행 표시 높이를 계산한다.
+    pub(crate) fn row_block_cut_row_content_height(
+        &self,
+        table: &crate::model::table::Table,
+        b_start: usize,
+        b_end: usize,
+        row: usize,
+        start_cut: &[usize],
+        end_cut: &[usize],
+        styles: &ResolvedStyleSet,
+    ) -> f64 {
+        let mut block_cells = Self::row_block_cells(table, b_start, b_end);
+        block_cells.sort_by_key(|c| (c.row, c.col));
+
+        let mut row_cells: Vec<&crate::model::table::Cell> = table
+            .cells
+            .iter()
+            .filter(|c| c.row as usize == row && c.row_span == 1)
+            .collect();
+        row_cells.sort_by_key(|c| c.col);
+
+        if row_cells.is_empty() {
+            return 0.0;
+        }
+
+        let mut per_start = Vec::with_capacity(row_cells.len());
+        let mut per_end = Vec::with_capacity(row_cells.len());
+        let mut has_visible_range = false;
+        let mut has_row_cut = false;
+        for cell in row_cells {
+            let block_idx = block_cells
+                .iter()
+                .position(|c| c.row == cell.row && c.col == cell.col);
+            let units = self.cell_units(cell, table, styles);
+            let su = block_idx
+                .and_then(|idx| start_cut.get(idx).copied())
+                .unwrap_or(0)
+                .min(units.len());
+            let eu = block_idx
+                .and_then(|idx| end_cut.get(idx).copied())
+                .unwrap_or(units.len())
+                .clamp(su, units.len());
+            if eu > su {
+                has_visible_range = true;
+            }
+            if su > 0 || eu < units.len() {
+                has_row_cut = true;
+            }
+            per_start.push(su);
+            per_end.push(eu);
+        }
+
+        if !has_visible_range {
+            return 0.0;
+        }
+
+        if has_row_cut {
+            self.row_cut_content_height(table, row, &per_start, &per_end, styles)
+        } else {
+            self.row_cut_content_height(table, row, &[], &[], styles)
+        }
+    }
+
     /// [Task #993] 한 셀의 유닛 범위 `[start_unit, end_unit)`를 문단별 줄 범위로
     /// 변환한다. `layout_partial_table`이 `RowCut`으로 가시 범위를 렌더할 때
     /// 사용 — 결과는 종전 `compute_cell_line_ranges`와 같은
@@ -4585,10 +4718,7 @@ impl LayoutEngine {
         false
     }
 
-    fn cell_unit_has_visible_content(
-        cell: &crate::model::table::Cell,
-        unit: &CellUnit,
-    ) -> bool {
+    fn cell_unit_has_visible_content(cell: &crate::model::table::Cell, unit: &CellUnit) -> bool {
         if unit.nested_row.is_some() {
             return true;
         }

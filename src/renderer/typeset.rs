@@ -10691,9 +10691,53 @@ impl TypesetEngine {
                         // [Task #1025] 연속분 커서가 블록 중간이면 블록 시작 컷을 적용.
                         let blk_start_cut: &[usize] =
                             if r == cursor_row { &start_cut } else { &[] };
+                        let block_row_offsets: Vec<f64> = if rowbreak_rowspan_block {
+                            let mut offsets = Vec::with_capacity(block_size);
+                            let mut top = 0.0;
+                            for br in b_start..b_end {
+                                offsets.push(top);
+                                top += cut_row_h[br] + if br + 1 < b_end { cs } else { 0.0 };
+                            }
+                            offsets
+                        } else {
+                            Vec::new()
+                        };
+                        let block_fragment_height = |row_end: usize,
+                                                     block_start_cut: &[usize],
+                                                     block_end_cut: &[usize]|
+                         -> f64 {
+                            if block_start_cut.is_empty() && block_end_cut.is_empty() {
+                                return (b_start..row_end).map(|x| cut_row_h[x]).sum::<f64>()
+                                    + cs * row_end.saturating_sub(b_start + 1) as f64;
+                            }
+
+                            let mut total = 0.0;
+                            let mut has_row = false;
+                            for br in b_start..row_end {
+                                let row_h = layout_engine.row_block_cut_row_content_height(
+                                    table,
+                                    b_start,
+                                    b_end,
+                                    br,
+                                    block_start_cut,
+                                    block_end_cut,
+                                    styles,
+                                );
+                                if row_h > 0.0 {
+                                    if has_row {
+                                        total += cs;
+                                    }
+                                    total += row_h;
+                                    has_row = true;
+                                }
+                            }
+                            total
+                        };
                         let block_h: f64 = if blk_start_cut.is_empty() {
                             (b_start..b_end).map(|x| cut_row_h[x]).sum::<f64>()
                                 + cs * block_size.saturating_sub(1) as f64
+                        } else if rowbreak_rowspan_block {
+                            block_fragment_height(b_end, blk_start_cut, &[])
                         } else {
                             layout_engine.row_block_content_height(
                                 table,
@@ -10716,14 +10760,26 @@ impl TypesetEngine {
                         // rowspan 블록은 hard-break(vpos reset)를 만난 경우에만 중간
                         // 분할을 허용해 일반 RowBreak 행 경계 정책의 blast radius 를 줄인다.
                         let budget = (avail_for_rows - consumed - cs_before).max(0.0);
-                        let res = layout_engine.advance_row_block_cut(
-                            table,
-                            b_start,
-                            b_end,
-                            blk_start_cut,
-                            budget,
-                            styles,
-                        );
+                        let res = if rowbreak_rowspan_block {
+                            layout_engine.advance_row_block_cut_with_row_offsets(
+                                table,
+                                b_start,
+                                b_end,
+                                blk_start_cut,
+                                budget,
+                                &block_row_offsets,
+                                styles,
+                            )
+                        } else {
+                            layout_engine.advance_row_block_cut(
+                                table,
+                                b_start,
+                                b_end,
+                                blk_start_cut,
+                                budget,
+                                styles,
+                            )
+                        };
                         // [Task #1025] 블록이 fresh 페이지에도 안 들어가야(진짜 page-larger)
                         // 페이지 중간에서 분할한다. fresh 페이지엔 들어가면(잔여 공간만
                         // 부족) 통째로 다음 페이지로 미뤄 잔여 overflow 를 피한다(기존 동작).
@@ -10737,18 +10793,32 @@ impl TypesetEngine {
                                 || (genuinely_page_larger && res.consumed_height >= MIN_TOP_KEEP_PX)
                         };
                         if can_intra_split && !res.fully_consumed && allow_block_split {
-                            end_row = b_end;
+                            end_row = if rowbreak_rowspan_block {
+                                let mut render_end = b_start + 1;
+                                for (idx, row_top) in block_row_offsets.iter().enumerate() {
+                                    if *row_top < res.consumed_height - 0.1 {
+                                        render_end = b_start + idx + 1;
+                                    }
+                                }
+                                render_end.min(b_end).max(b_start + 1)
+                            } else {
+                                b_end
+                            };
                             split_end_cut = res.end_cut.clone();
                             split_end_limit = res.consumed_height;
                             split_block_start = Some(b_start);
-                            let split_total = layout_engine.row_block_content_height(
-                                table,
-                                b_start,
-                                b_end,
-                                blk_start_cut,
-                                &res.end_cut,
-                                styles,
-                            );
+                            let split_total = if rowbreak_rowspan_block {
+                                block_fragment_height(end_row, blk_start_cut, &res.end_cut)
+                            } else {
+                                layout_engine.row_block_content_height(
+                                    table,
+                                    b_start,
+                                    b_end,
+                                    blk_start_cut,
+                                    &res.end_cut,
+                                    styles,
+                                )
+                            };
                             consumed += cs_before + split_total;
                             break;
                         }
