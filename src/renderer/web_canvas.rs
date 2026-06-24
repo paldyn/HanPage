@@ -30,8 +30,8 @@ use crate::model::style::ImageFillMode;
 use crate::model::style::UnderlineType;
 use crate::paint::replay_order::layer_node_has_replay_plane;
 use crate::paint::{
-    paint_op_replay_plane_with_layer, ClipKind, GroupKind, LayerNode, LayerNodeKind, PageLayerTree,
-    PaintOp, PaintReplayPlane,
+    paint_op_replay_plane_with_layer, render_layer_replay_plane, ClipKind, GroupKind, LayerNode,
+    LayerNodeKind, PageLayerTree, PaintOp, PaintReplayPlane,
 };
 
 const TEXT_MARK_CLIP_RIGHT_PAD: f64 = 48.0;
@@ -50,6 +50,16 @@ fn expand_pua_old_hangul_canvas(text: &str) -> String {
         }
     }
     out
+}
+
+fn group_label_matches_replay_plane(
+    active_replay_plane: Option<PaintReplayPlane>,
+    layer: Option<RenderLayerInfo>,
+) -> bool {
+    match active_replay_plane {
+        Some(active) => render_layer_replay_plane(layer) == active,
+        None => true,
+    }
 }
 use super::composer::{
     decode_pua_overlap_number, expand_pua_render_text, pua_to_display_text, CharOverlapInfo,
@@ -270,6 +280,9 @@ pub struct WebCanvasRenderer {
     /// BehindText plane 을 별도 canvas layer 로 합성할 때 flow Canvas 의 페이지 배경을
     /// 투명하게 둘지 여부.
     transparent_page_background: bool,
+    /// `LayerFilter::All` renders the layer tree in logical replay-plane order,
+    /// independent of raw tree child order.
+    active_replay_plane: Option<PaintReplayPlane>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -290,6 +303,7 @@ impl WebCanvasRenderer {
             scale: 1.0,
             layer_filter: LayerFilter::All,
             transparent_page_background: false,
+            active_replay_plane: None,
         })
     }
 
@@ -312,6 +326,9 @@ impl WebCanvasRenderer {
     fn should_render_op(&self, op: &PaintOp, layer: Option<RenderLayerInfo>) -> bool {
         use crate::model::shape::TextWrap;
         let replay_plane = paint_op_replay_plane_with_layer(op, layer);
+        if let Some(active) = self.active_replay_plane {
+            return replay_plane == active;
+        }
         match self.layer_filter {
             LayerFilter::All => true,
             LayerFilter::BackgroundOnly => replay_plane == PaintReplayPlane::Background,
@@ -333,6 +350,10 @@ impl WebCanvasRenderer {
         !self.transparent_page_background
     }
 
+    fn should_render_group_label(&self, layer: Option<RenderLayerInfo>) -> bool {
+        self.show_control_codes && group_label_matches_replay_plane(self.active_replay_plane, layer)
+    }
+
     /// 렌더 트리를 Canvas에 렌더링
     pub fn render_tree(&mut self, tree: &PageRenderTree) {
         self.render_node(&tree.root);
@@ -351,7 +372,19 @@ impl WebCanvasRenderer {
             LayerFilter::WrapOnly(_) => true,
         };
         self.begin_page(tree.page_width, tree.page_height);
-        self.render_layer_node(&tree.root, None);
+        if self.layer_filter == LayerFilter::All {
+            let prev = self.active_replay_plane;
+            for replay_plane in PaintReplayPlane::ORDERED {
+                if !layer_node_has_replay_plane(&tree.root, replay_plane) {
+                    continue;
+                }
+                self.active_replay_plane = Some(replay_plane);
+                self.render_layer_node(&tree.root, None);
+            }
+            self.active_replay_plane = prev;
+        } else {
+            self.render_layer_node(&tree.root, None);
+        }
         self.transparent_page_background = false;
     }
 
@@ -1029,7 +1062,7 @@ impl WebCanvasRenderer {
                 for child in children {
                     self.render_layer_node(child, active_layer);
                 }
-                if self.show_control_codes {
+                if self.should_render_group_label(active_layer) {
                     let label = match group_kind {
                         GroupKind::Table(_) => Some("[표]"),
                         GroupKind::TextBox => Some("[글상자]"),

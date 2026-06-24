@@ -58,15 +58,21 @@ fn build_col_row_y_from_cell_heights(
     dpi: f64,
 ) -> Vec<Vec<f64>> {
     let mut cell_height_grid = vec![vec![None::<f64>; row_count]; col_count];
-    for cell in &table.cells {
+    for (cell_idx, cell) in table.cells.iter().enumerate() {
         if cell.row_span == 1
             && cell.col_span == 1
             && cell.height < 0x8000_0000
             && (cell.col as usize) < col_count
             && (cell.row as usize) < row_count
         {
+            let render_height = table
+                .local_resize_cell_heights
+                .iter()
+                .find(|(idx, _)| *idx == cell_idx)
+                .map(|(_, height)| *height)
+                .unwrap_or(cell.height);
             cell_height_grid[cell.col as usize][cell.row as usize] =
-                Some(hwpunit_to_px(cell.height as i32, dpi));
+                Some(hwpunit_to_px(render_height as i32, dpi));
         }
     }
 
@@ -79,6 +85,11 @@ fn build_col_row_y_from_cell_heights(
     };
     let mut col_row_y = vec![vec![0.0f64; row_count + 1]; col_count];
     for c in 0..col_count {
+        let col_idx = c as u16;
+        if !table.local_resize_cols.contains(&col_idx) {
+            col_row_y[c].clone_from_slice(row_y);
+            continue;
+        }
         for r in 0..row_count {
             let h = cell_height_grid[c][r]
                 .or_else(|| row_heights.get(r).copied())
@@ -1023,9 +1034,12 @@ impl LayoutEngine {
         col_count: usize,
     ) -> Vec<f64> {
         // 1단계: col_span==1인 셀에서 개별 열 폭 추출
+        let inferred_local_resize_rows = table.inferred_local_resize_rows();
         let mut col_widths = vec![0.0f64; col_count];
         for cell in &table.cells {
-            if table.local_resize_rows.contains(&cell.row) {
+            if table.local_resize_rows.contains(&cell.row)
+                || inferred_local_resize_rows.contains(&cell.row)
+            {
                 continue;
             }
             if cell.col_span == 1 && (cell.col as usize) < col_count {
@@ -1040,7 +1054,9 @@ impl LayoutEngine {
         {
             let mut constraints: Vec<(usize, usize, f64)> = Vec::new();
             for cell in &table.cells {
-                if table.local_resize_rows.contains(&cell.row) {
+                if table.local_resize_rows.contains(&cell.row)
+                    || inferred_local_resize_rows.contains(&cell.row)
+                {
                     continue;
                 }
                 let c = cell.col as usize;
@@ -1201,6 +1217,9 @@ impl LayoutEngine {
 
         // 1-b단계: 셀 내 실제 컨텐츠 높이 계산
         for cell in &table.cells {
+            if table.local_resize_cols.contains(&cell.col) {
+                continue;
+            }
             if cell.row_span == 1 && (cell.row as usize) < row_count {
                 let r = cell.row as usize;
                 let (pad_left, pad_right, pad_top, pad_bottom) =
@@ -1278,6 +1297,9 @@ impl LayoutEngine {
 
         // 2-b단계: 병합 셀 컨텐츠 높이 > 결합 행 높이이면 마지막 행 확장
         for cell in &table.cells {
+            if table.local_resize_cols.contains(&cell.col) {
+                continue;
+            }
             let r = cell.row as usize;
             let span = cell.row_span as usize;
             if span > 1 && r + span <= row_count {
