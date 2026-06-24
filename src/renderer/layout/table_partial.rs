@@ -1235,7 +1235,10 @@ impl LayoutEngine {
                                     };
                                     let available_h =
                                         (inner_area.height - (nested_y - inner_area.y)).max(0.0);
-                                    // TAC(글자처럼 취급) 표: 앞 텍스트 너비만큼 x 오프셋 적용
+                                    // TAC(글자처럼 취급) 표: 앞 텍스트 너비만큼 x 오프셋 적용.
+                                    // 분할 표 내부에서는 composed 텍스트가 이전 줄까지 포함할 수
+                                    // 있으므로, 표가 남은 폭에 들어가지 않으면 셀 좌측 기준으로
+                                    // 배치해 페이지 오른쪽 밖으로 밀려나는 것을 막는다.
                                     let tac_text_offset = if nested_table.common.treat_as_char {
                                         let mut text_w = 0.0;
                                         for line in &composed.lines {
@@ -1254,10 +1257,23 @@ impl LayoutEngine {
                                     } else {
                                         0.0
                                     };
+                                    let nested_w = if nested_table.common.width > 0 {
+                                        hwpunit_to_px(nested_table.common.width as i32, self.dpi)
+                                    } else {
+                                        inner_area.width
+                                    };
+                                    let tac_x_offset = if nested_table.common.treat_as_char
+                                        && tac_text_offset > 0.0
+                                        && tac_text_offset + nested_w > inner_area.width + 0.5
+                                    {
+                                        0.0
+                                    } else {
+                                        tac_text_offset.min(inner_area.width)
+                                    };
                                     let ctrl_area = LayoutRect {
-                                        x: inner_area.x + tac_text_offset,
+                                        x: inner_area.x + tac_x_offset,
                                         y: nested_y,
-                                        width: (inner_area.width - tac_text_offset).max(0.0),
+                                        width: (inner_area.width - tac_x_offset).max(0.0),
                                         height: available_h,
                                     };
 
