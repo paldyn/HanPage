@@ -81,7 +81,17 @@ gh issue view 1510 --repo edwardkim/rhwp --json state,closedAt
 자동 close가 실패하면 수동 close:
 
 ```bash
-gh issue close 1510 --repo edwardkim/rhwp --comment "PR #1518 머지로 해결했습니다."
+gh issue close 1510 --repo edwardkim/rhwp --comment-file /tmp/issue1510_close_comment.md
+```
+
+close 코멘트 초안:
+
+```text
+PR #1518 머지로 #1510 재현 조건을 기준으로 보정했습니다.
+
+이번 검증은 원본 내부 양식이 없어, 이슈 본문 조건에 맞춘 임시 합성 HWP/HWPX 파일을 만들고 한컴 2024에서 PDF로 저장한 기준 파일과 rhwp export-pdf 결과를 비교하는 방식으로 진행했습니다. 해당 샘플과 PDF 기준 자료는 PR에 포함했습니다.
+
+아직 실제 문서에서 부족한 부분이 남아 있으면, 가능하다면 재현 가능한 HWP/HWPX 샘플 파일을 zip으로 묶어 첨부해 주세요. 내부 양식 공유가 어렵다면 민감한 내용을 제거한 최소 재현 파일도 괜찮습니다.
 ```
 
 ### 3.2 devel sync

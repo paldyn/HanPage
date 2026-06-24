@@ -127,7 +127,7 @@ review 문서와 오늘할일 커밋 push 후 GitHub Actions가 다시 실행될
 | 본문 줄 피치 보정 | 중간 | 순수 본문 텍스트 중심. HWP 표 셀 경로는 제외 |
 | HWPX 1쪽 표 셀 y 잔차 | 낮음 | 페이지 분할과 본문 흐름은 맞고, 내부 row/baseline 후속으로 분리 |
 | 샘플/PDF 추가 | 낮음 | #1510 재현과 시각 기준 보존 목적 |
-| GitHub issue auto-close | 확인 필요 | PR 본문에 `Closes #1510` 포함. metadata는 작성 시점 빈 배열 |
+| GitHub issue auto-close | 확인 필요 | PR 본문에 `Closes #1510` 포함. metadata는 작성 시점 빈 배열. close 코멘트에는 임시 합성 샘플 검증 사실과 추가 샘플 zip 요청을 명시 |
 
 ## 8. 권고
 
@@ -139,4 +139,5 @@ merge 후에는 다음을 확인한다.
 2. `local/devel`을 `upstream/devel`로 sync
 3. 원격 작업 브랜치 `task_m100_1510` 삭제
 4. 렌더 영향 PR이므로 `cargo test --test svg_snapshot` 실행
-5. 오늘할일에 merge SHA와 이슈 close 여부 갱신
+5. #1510 close 코멘트에 임시 합성 HWP/HWPX 파일과 한컴 2024 PDF 기준으로 검증했음을 설명하고, 부족한 경우 재현 샘플을 zip으로 첨부해 달라고 요청
+6. 오늘할일에 merge SHA와 이슈 close 여부 갱신
