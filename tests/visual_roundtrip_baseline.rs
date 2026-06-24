@@ -87,26 +87,68 @@ fn in_list(list: &[(&str, &str)], rel: &str) -> bool {
     list.iter().any(|(name, _)| *name == rel)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VisualFailureKind {
+    Read,
+    Roundtrip,
+    PageMismatch,
+    StructMismatch,
+    DispOver,
+}
+
+#[derive(Debug)]
+struct VisualFailure {
+    kind: VisualFailureKind,
+    message: String,
+}
+
+impl std::fmt::Display for VisualFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+fn expected_xfail_kind(reason: &str) -> VisualFailureKind {
+    if reason.contains("구조 불일치") || reason.contains("RawSvg") || reason.contains("Placeholder")
+    {
+        VisualFailureKind::StructMismatch
+    } else {
+        VisualFailureKind::DispOver
+    }
+}
+
 /// 시각 정합성 검사: 페이지 수 보존 + 구조 불일치 없음 + 최대 변위 ≤ 임계. 실패 시 사유.
-fn visual_check(path: &Path) -> Result<(), String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("읽기 실패: {e}"))?;
-    let diff = roundtrip_geom(&bytes, Via::Hwpx).map_err(|e| format!("라운드트립 실패: {e:?}"))?;
+fn visual_check(path: &Path) -> Result<(), VisualFailure> {
+    let bytes = std::fs::read(path).map_err(|e| VisualFailure {
+        kind: VisualFailureKind::Read,
+        message: format!("읽기 실패: {e}"),
+    })?;
+    let diff = roundtrip_geom(&bytes, Via::Hwpx).map_err(|e| VisualFailure {
+        kind: VisualFailureKind::Roundtrip,
+        message: format!("라운드트립 실패: {e:?}"),
+    })?;
 
     if diff.page_count_mismatch() {
-        return Err(format!(
-            "페이지 수 불일치: {} → {}",
-            diff.page_count_a, diff.page_count_b
-        ));
+        return Err(VisualFailure {
+            kind: VisualFailureKind::PageMismatch,
+            message: format!(
+                "페이지 수 불일치: {} → {}",
+                diff.page_count_a, diff.page_count_b
+            ),
+        });
     }
     if diff.any_structure_mismatch() {
         let n = diff.pages.iter().filter(|p| p.structure_mismatch).count();
-        return Err(format!("구조 불일치 {n}페이지(노드 삽입/삭제)"));
+        return Err(VisualFailure {
+            kind: VisualFailureKind::StructMismatch,
+            message: format!("구조 불일치 {n}페이지(노드 삽입/삭제)"),
+        });
     }
     if diff.max_disp > MAX_DISP {
-        return Err(format!(
-            "최대 변위 {:.2}px > 임계 {:.2}px",
-            diff.max_disp, MAX_DISP
-        ));
+        return Err(VisualFailure {
+            kind: VisualFailureKind::DispOver,
+            message: format!("최대 변위 {:.2}px > 임계 {:.2}px", diff.max_disp, MAX_DISP),
+        });
     }
     Ok(())
 }
@@ -146,10 +188,19 @@ fn visual_xfail_entries_still_fail() {
             path.exists(),
             "VISUAL_XFAIL 샘플 실종: {name} (목록 정비 필요)"
         );
-        assert!(
-            visual_check(&path).is_err(),
-            "VISUAL_XFAIL 샘플이 PASS 함: {name} — baseline 으로 승격하고 VISUAL_XFAIL 에서 제거하라 (기록 사유: {reason})"
-        );
+        match visual_check(&path) {
+            Ok(()) => panic!(
+                "VISUAL_XFAIL 샘플이 PASS 함: {name} — baseline 으로 승격하고 VISUAL_XFAIL 에서 제거하라 (기록 사유: {reason})"
+            ),
+            Err(failure) => {
+                let expected = expected_xfail_kind(reason);
+                assert_eq!(
+                    failure.kind, expected,
+                    "VISUAL_XFAIL 샘플 실패 종류가 바뀜: {name} — 기록 사유: {reason}, 현재: {}",
+                    failure
+                );
+            }
+        }
     }
 }
 

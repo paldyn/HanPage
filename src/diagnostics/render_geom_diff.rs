@@ -491,6 +491,10 @@ fn status_str(diff: &DocGeomDiff, sum: &DiffSummary, threshold: f64) -> &'static
     }
 }
 
+fn status_is_hard_failure(status: &str) -> bool {
+    status != "PASS"
+}
+
 /// `.hwp`/`.hwpx` 파일을 재귀 수집(정렬).
 fn collect_doc_files(root: &Path) -> Result<Vec<PathBuf>, String> {
     let mut files = Vec::new();
@@ -625,10 +629,8 @@ fn run_batch(opts: &CliOptions) -> i32 {
     }
     print_batch_summary(&rows);
 
-    // 하드 실패(로드/RT 오류, 페이지 수 불일치)가 있으면 비정상 종료(회귀 검출용).
-    let hard = rows
-        .iter()
-        .any(|r| r.status == "LOAD_FAIL" || r.status == "PAGE_MISMATCH");
+    // 게이트 명령이므로 PASS 외 status 는 CI/스크립트에서 실패로 감지되게 한다.
+    let hard = rows.iter().any(|r| status_is_hard_failure(&r.status));
     if hard {
         1
     } else {
@@ -792,8 +794,7 @@ fn run_single(opts: &CliOptions) -> i32 {
 
     match status {
         "PASS" => 0,
-        "OVER" | "STRUCT_MISMATCH" => 0, // 측정 단계 — 정보성, 비정상 종료 아님
-        _ => 1,                          // PAGE_MISMATCH 등 하드 신호
+        _ => 1,
     }
 }
 
@@ -919,5 +920,16 @@ mod tests {
         assert_eq!(tb.net(), 1);
         // 개수가 같은 타입(Body)은 델타에 없어야 한다.
         assert!(pg.type_deltas.iter().all(|d| d.node_type != "Body"));
+    }
+
+    #[test]
+    fn non_pass_statuses_are_hard_failures() {
+        assert!(!status_is_hard_failure("PASS"));
+        for status in ["OVER", "STRUCT_MISMATCH", "PAGE_MISMATCH", "LOAD_FAIL"] {
+            assert!(
+                status_is_hard_failure(status),
+                "{status} must fail the gate"
+            );
+        }
     }
 }
