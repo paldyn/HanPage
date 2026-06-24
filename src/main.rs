@@ -10,6 +10,7 @@ fn main() {
         Some("--version") | Some("-V") => println!("rhwp v{}", rhwp::version()),
         Some("export-svg") => export_svg(&args[2..]),
         Some("export-render-tree") => export_render_tree(&args[2..]),
+        Some("export-structure") => export_structure(&args[2..]),
         Some("export-png") => export_png(&args[2..]),
         Some("export-pdf") => export_pdf(&args[2..]),
         Some("export-text") => export_text(&args[2..]),
@@ -83,6 +84,8 @@ fn print_help() {
     println!();
     println!("  export-render-tree <파일.hwp> [옵션]");
     println!("      페이지별 render tree bbox JSON을 내보내기 (레이아웃 시각 분석용)");
+    println!("  export-structure <파일> [--mode auto|outline|clause] [-o out.json]");
+    println!("      문서 개요/조문(편·장·절·관·조·항·호·목) 계층을 중첩 JSON 트리로 추출");
     println!();
     println!("      -o, --output <폴더>     출력 폴더 (기본: output/)");
     println!("      -p, --page <번호>       특정 페이지만 내보내기 (0부터 시작)");
@@ -635,6 +638,82 @@ fn export_render_tree(args: &[String]) {
         pages.len(),
         output_dir
     );
+}
+
+/// `export-structure` — 문서 개요/조문 계층을 중첩 JSON 트리로 추출 (조문 DB화용).
+fn export_structure(args: &[String]) {
+    use rhwp::document_core::queries::structure::{build_structure, StructureMode};
+
+    let mut file_path: Option<&str> = None;
+    let mut out_path: Option<String> = None;
+    let mut mode = StructureMode::Auto;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "-o" | "--out" => {
+                i += 1;
+                out_path = args.get(i).cloned();
+            }
+            "--mode" => {
+                i += 1;
+                match args.get(i).and_then(|s| StructureMode::parse(s)) {
+                    Some(m) => mode = m,
+                    None => {
+                        eprintln!("오류: --mode 는 auto|outline|clause");
+                        return;
+                    }
+                }
+            }
+            other if other.starts_with('-') => {
+                eprintln!("알 수 없는 옵션: {other}");
+                return;
+            }
+            other => file_path = Some(other),
+        }
+        i += 1;
+    }
+
+    let Some(file_path) = file_path else {
+        eprintln!(
+            "사용법: rhwp export-structure <파일> [--mode auto|outline|clause] [-o out.json]"
+        );
+        return;
+    };
+
+    let data = match fs::read(file_path) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("오류: 파일을 읽을 수 없습니다 - {}: {}", file_path, e);
+            return;
+        }
+    };
+    let doc = match rhwp::wasm_api::HwpDocument::from_bytes(&data) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("오류: HWP 파싱 실패 - {}", e);
+            return;
+        }
+    };
+
+    let st = build_structure(doc.document(), mode);
+    let json = match serde_json::to_string_pretty(&st) {
+        Ok(j) => j,
+        Err(e) => {
+            eprintln!("오류: JSON 직렬화 실패 - {}", e);
+            return;
+        }
+    };
+
+    match out_path {
+        Some(p) => match fs::write(&p, &json) {
+            Ok(_) => println!(
+                "구조 추출 완료: mode={} 노드={} → {}",
+                st.mode, st.node_count, p
+            ),
+            Err(e) => eprintln!("오류: 출력 쓰기 실패 - {}: {}", p, e),
+        },
+        None => println!("{json}"),
+    }
 }
 
 fn parse_grid_mm(value: &str) -> Option<f64> {
