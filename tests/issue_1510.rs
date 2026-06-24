@@ -33,6 +33,34 @@ fn collect_table_order(root: &RenderNode, out: &mut Vec<usize>) {
     }
 }
 
+fn find_table_bbox(root: &RenderNode, target_ci: usize) -> Option<(f64, f64)> {
+    if let RenderNodeType::Table(table) = &root.node_type {
+        if table.para_index == Some(TARGET_PI) && table.control_index == Some(target_ci) {
+            return Some((root.bbox.y, root.bbox.y + root.bbox.height));
+        }
+    }
+    for child in &root.children {
+        if let Some(found) = find_table_bbox(child, target_ci) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn find_text_bbox(root: &RenderNode, needle: &str) -> Option<(f64, f64)> {
+    if let RenderNodeType::TextRun(run) = &root.node_type {
+        if run.para_index.is_some() && run.text == needle {
+            return Some((root.bbox.y, root.bbox.y + root.bbox.height));
+        }
+    }
+    for child in &root.children {
+        if let Some(found) = find_text_bbox(child, needle) {
+            return Some(found);
+        }
+    }
+    None
+}
+
 #[test]
 fn issue_1510_coanchored_visible_para_float_tables_stay_on_one_page() {
     let doc = load_doc();
@@ -42,6 +70,35 @@ fn issue_1510_coanchored_visible_para_float_tables_stay_on_one_page() {
         1,
         "{} should match the Hancom 2024 HWP PDF baseline as a one-page document",
         SAMPLE,
+    );
+}
+
+#[test]
+fn issue_1510_visible_para_float_tables_apply_offsets_without_text_overlap() {
+    let doc = load_doc();
+    let tree = doc
+        .build_page_render_tree(0)
+        .expect("build_page_render_tree(0)");
+
+    let (a_top, a_bottom) = find_table_bbox(&tree.root, 2).expect("A table bbox");
+    let (b_top, _) = find_table_bbox(&tree.root, 3).expect("B table bbox");
+    let (c_top, _) = find_table_bbox(&tree.root, 4).expect("C table bbox");
+    let (_, filler_07_bottom) =
+        find_text_bbox(&tree.root, "filler paragraph 07").expect("filler 07 bbox");
+    let (filler_08_top, _) =
+        find_text_bbox(&tree.root, "filler paragraph 08").expect("filler 08 bbox");
+
+    assert!(
+        b_top + 0.5 < c_top,
+        "negative vertical_offset table should render above the zero-offset sibling: b_top={b_top:.1}, c_top={c_top:.1}",
+    );
+    assert!(
+        filler_07_bottom <= a_top + 12.0,
+        "text before the positive-offset table should remain above the table zone: filler07_bottom={filler_07_bottom:.1}, a_top={a_top:.1}",
+    );
+    assert!(
+        filler_08_top >= a_bottom - 0.5,
+        "text after reaching the positive-offset table should resume below it: filler08_top={filler_08_top:.1}, a_bottom={a_bottom:.1}",
     );
 }
 

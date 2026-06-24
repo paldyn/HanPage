@@ -1260,6 +1260,7 @@ impl LayoutEngine {
                     None,
                     table_para_y,
                     false,
+                    false,
                 );
                 if table_bottom > max_table_bottom {
                     max_table_bottom = table_bottom;
@@ -1303,6 +1304,7 @@ impl LayoutEngine {
                 Some(inline_x),
                 None,
                 table_para_y,
+                false,
                 false,
             );
             if table_bottom > max_table_bottom {
@@ -3819,6 +3821,7 @@ impl LayoutEngine {
                                         Some(x),
                                         None,
                                         None,
+                                        false,
                                         false,
                                     );
                                     // 스킵 마커 등록 (별도 Table PageItem에서 중복 렌더 방지)

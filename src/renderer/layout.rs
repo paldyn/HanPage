@@ -155,6 +155,13 @@ fn table_has_detached_para_flow_object(table: &crate::model::table::Table) -> bo
 
 type ParaFloatLanes = std::collections::HashMap<usize, FloatLaneSet>;
 
+#[derive(Debug, Clone, Copy)]
+struct VisibleFloatExclusion {
+    /// visible host 문단의 양수 offset 자리차지 표가 후속 본문을 밀어내야 하는 y 구간.
+    top: f64,
+    bottom: f64,
+}
+
 fn render_node_contains_text_for_para(node: &RenderNode, para_index: usize) -> bool {
     if let RenderNodeType::TextRun(run) = &node.node_type {
         if run.para_index == Some(para_index) {
@@ -1567,6 +1574,7 @@ impl LayoutEngine {
                             None,
                             None,
                             None,
+                            false,
                             is_header,
                         );
                     }
@@ -2253,6 +2261,7 @@ impl LayoutEngine {
                                         None,
                                         None,
                                         None,
+                                        false,
                                         false,
                                     );
                                 }
@@ -3245,6 +3254,7 @@ impl LayoutEngine {
         let mut para_start_y: std::collections::HashMap<usize, f64> =
             std::collections::HashMap::new();
         let mut para_float_lanes: ParaFloatLanes = std::collections::HashMap::new();
+        let mut visible_float_exclusions: Vec<VisibleFloatExclusion> = Vec::new();
         // [Task #1151 v9 결함 D] paragraph 단위 inline picture 가로 분배 cursor state.
         // 같은 paragraph 의 sibling tac=true picture 들이 가로로 inline 분배 (한컴 native 정합).
         let mut para_inline_state: std::collections::HashMap<
@@ -3338,6 +3348,7 @@ impl LayoutEngine {
                         paper_images,
                         &mut para_start_y,
                         &mut para_float_lanes,
+                        &mut visible_float_exclusions,
                         &mut para_inline_state,
                         item,
                         page_content,
@@ -3875,6 +3886,21 @@ impl LayoutEngine {
                 }
             }
 
+            if item_is_paragraph && !visible_float_exclusions.is_empty() {
+                visible_float_exclusions.retain(|zone| y_offset < zone.bottom - 0.5);
+                let mut jump_to = y_offset;
+                for zone in &visible_float_exclusions {
+                    if jump_to + 0.5 >= zone.top && jump_to < zone.bottom {
+                        jump_to = jump_to.max(zone.bottom);
+                    }
+                }
+                if jump_to > y_offset + 0.5 {
+                    let delta = jump_to - y_offset;
+                    y_offset = jump_to;
+                    hcursor.shift_vpos_base_for_rendered_delta(delta);
+                }
+            }
+
             let _dbg_tac = std::env::var("RHWP_DEBUG_TAC_CURSOR").is_ok();
             let _y_in = y_offset;
             let _item_desc = if _dbg_tac {
@@ -3963,6 +3989,7 @@ impl LayoutEngine {
                 paper_images,
                 &mut para_start_y,
                 &mut para_float_lanes,
+                &mut visible_float_exclusions,
                 &mut para_inline_state,
                 item,
                 page_content,
@@ -4509,6 +4536,7 @@ impl LayoutEngine {
         paper_images: &mut Vec<RenderNode>,
         para_start_y: &mut std::collections::HashMap<usize, f64>,
         para_float_lanes: &mut ParaFloatLanes,
+        visible_float_exclusions: &mut Vec<VisibleFloatExclusion>,
         // [Task #1151 v9 결함 D] sibling TAC picture 가로 분배 cursor state.
         para_inline_state: &mut std::collections::HashMap<
             usize,
@@ -4931,6 +4959,7 @@ impl LayoutEngine {
                     paper_images,
                     para_start_y,
                     para_float_lanes,
+                    visible_float_exclusions,
                     *para_index,
                     *control_index,
                     &ctx,
@@ -5066,6 +5095,7 @@ impl LayoutEngine {
         paper_images: &mut Vec<RenderNode>,
         para_start_y: &mut std::collections::HashMap<usize, f64>,
         para_float_lanes: &mut ParaFloatLanes,
+        visible_float_exclusions: &mut Vec<VisibleFloatExclusion>,
         para_index: usize,
         control_index: usize,
         ctx: &ColumnItemCtx,
@@ -5447,6 +5477,7 @@ impl LayoutEngine {
                         None,
                         Some(para_y_for_table),
                         false,
+                        false,
                     );
                     let layer =
                         Self::render_layer_from_common(&t.common, para_index, control_index);
@@ -5462,7 +5493,13 @@ impl LayoutEngine {
                     } else if let Some((_, iy)) = inline_pos {
                         iy
                     } else if is_current_visible_para_float {
-                        para_y_for_table
+                        let v_off =
+                            hwpunit_to_px(signed_hwpunit(t.common.vertical_offset), self.dpi);
+                        if v_off < 0.0 {
+                            para_y_for_table + v_off
+                        } else {
+                            para_y_for_table
+                        }
                     } else if let Some(anchor_y) = square_anchor_y {
                         table_visual_shift = (anchor_y - y_offset).max(0.0);
                         anchor_y
@@ -5471,10 +5508,14 @@ impl LayoutEngine {
                     } else {
                         y_offset
                     };
+                    let allow_para_top_bleed = is_current_visible_para_float
+                        && signed_hwpunit(t.common.vertical_offset) < 0;
+                    let table_visual_height = mt
+                        .map(|m| m.total_height)
+                        .filter(|h| *h > 0.0)
+                        .unwrap_or_else(|| hwpunit_to_px(t.common.height as i32, self.dpi));
                     let table_visual_end = if tac_already_rendered_inline {
-                        let measured_height = mt.map(|m| m.total_height).filter(|h| *h > 0.0);
-                        let fallback_height = hwpunit_to_px(t.common.height as i32, self.dpi);
-                        table_y_start + measured_height.unwrap_or(fallback_height)
+                        table_y_start + table_visual_height
                     } else {
                         self.layout_table(
                             tree,
@@ -5496,6 +5537,7 @@ impl LayoutEngine {
                             tbl_inline_x,
                             None,
                             Some(para_y_for_table),
+                            allow_para_top_bleed,
                             false,
                         )
                     };
@@ -5539,6 +5581,19 @@ impl LayoutEngine {
                     } else {
                         table_visual_end
                     };
+                    if is_current_visible_para_float
+                        && signed_hwpunit(t.common.vertical_offset) > 0
+                        && !self.is_hwpx_source.get()
+                        && table_visual_height > 0.0
+                    {
+                        let table_visual_top = table_visual_end - table_visual_height;
+                        if table_visual_end > table_visual_top + 0.5 {
+                            visible_float_exclusions.push(VisibleFloatExclusion {
+                                top: table_visual_top,
+                                bottom: table_visual_end,
+                            });
+                        }
+                    }
                 }
                 // [Task #1046 Stage 3 Class B] 표 실제 콘텐츠 하단 기록 — 이후 더해지는
                 // 표 뒤 trailing 간격(tac 줄간격/표 아래 간격)을 제외한 값. overflow 검출이
@@ -5860,6 +5915,7 @@ impl LayoutEngine {
                                 inline_x,
                                 None,
                                 None,
+                                false,
                                 false,
                             );
                             y_offset = y_offset.max(tac_new_y);
@@ -7380,6 +7436,7 @@ impl LayoutEngine {
                         None,
                         None,
                         None,
+                        false,
                         false,
                     );
                     let layer =
