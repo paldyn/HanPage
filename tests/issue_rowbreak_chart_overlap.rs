@@ -9,6 +9,7 @@ use std::fs;
 use std::path::Path;
 
 const SAMPLE: &str = "samples/rowbreak-problem-pages.hwpx";
+const HWP_SAMPLE: &str = "samples/rowbreak-problem-pages.hwp";
 const PAGE_INDEX: u32 = 1;
 
 fn load_doc(sample: &str) -> rhwp::wasm_api::HwpDocument {
@@ -232,6 +233,42 @@ fn rowbreak_page18_does_not_emit_tiny_empty_table_continuation() {
             "page 18 continuation of table pi=28 ci=0 should contain visible content"
         );
     }
+}
+
+#[test]
+fn rowbreak_final_pages_match_hancom_pdf_page_count() {
+    for sample in [SAMPLE, HWP_SAMPLE] {
+        let doc = load_doc(sample);
+        assert_eq!(
+            doc.page_count(),
+            18,
+            "{sample} should match the 18-page Hancom PDF reference"
+        );
+    }
+}
+
+#[test]
+fn rowbreak_page17_keeps_final_database_table_tail_like_hancom_pdf() {
+    let doc = load_doc(SAMPLE);
+    let page17 = doc
+        .build_page_render_tree(16)
+        .unwrap_or_else(|e| panic!("render page 17: {e}"));
+    let page18 = doc
+        .build_page_render_tree(17)
+        .unwrap_or_else(|e| panic!("render page 18: {e}"));
+
+    assert!(
+        text_line_exists(&page17.root, "오픈API 개발"),
+        "Hancom PDF page 17 contains the final database table tail; rhwp must not defer it"
+    );
+    assert!(
+        text_line_exists(&page18.root, "보안 분야"),
+        "Hancom PDF page 18 starts the security section"
+    );
+    assert!(
+        find_table_node(&page18.root, 28, 0).is_none(),
+        "page 18 should not be another continuation of table pi=28 ci=0"
+    );
 }
 
 fn collect_table_cells<'a>(

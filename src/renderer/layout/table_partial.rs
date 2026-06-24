@@ -841,12 +841,20 @@ impl LayoutEngine {
                 let mixed_nested_split = cut_units.and_then(|(su, eu)| {
                     self.mixed_nested_split_from_cut(cell, table, styles, su, eu, cp_idx)
                 });
+                let visible_non_inline_controls = cut_units.is_some_and(|(su, eu)| {
+                    self.cell_cut_contains_non_inline_control_units(
+                        cell, table, styles, su, eu, cp_idx,
+                    )
+                });
 
                 // [Task #993] 컷 범위 밖 문단은 이전/다음 페이지 소속 — 이 페이지에서
                 // 스킵한다. cell_line_ranges_from_cut 이 가시 유닛만 범위에 넣으므로
                 // (중첩 표/빈 문단 포함) start_line>=end_line 이면 비가시가 확정이다.
                 // content_y_accum 은 가시 콘텐츠만 추적하므로 스킵 시 전진하지 않는다.
-                if start_line >= end_line && mixed_nested_split.is_none() {
+                if start_line >= end_line
+                    && mixed_nested_split.is_none()
+                    && !visible_non_inline_controls
+                {
                     continue;
                 }
 
@@ -960,6 +968,12 @@ impl LayoutEngine {
                     for (ctrl_idx, ctrl) in para.controls.iter().enumerate() {
                         match ctrl {
                             Control::Picture(pic) => {
+                                if !pic.common.treat_as_char
+                                    && cut_units.is_some()
+                                    && !visible_non_inline_controls
+                                {
+                                    continue;
+                                }
                                 if pic.common.treat_as_char {
                                     let pic_w = hwpunit_to_px(pic.common.width as i32, self.dpi);
                                     // layout_composed_paragraph에서 텍스트 흐름 안에 렌더링됐는지 확인:
@@ -1119,6 +1133,12 @@ impl LayoutEngine {
                                 has_preceding_text = true;
                             }
                             Control::Shape(shape) => {
+                                if !shape.common().treat_as_char
+                                    && cut_units.is_some()
+                                    && !visible_non_inline_controls
+                                {
+                                    continue;
+                                }
                                 if shape.common().treat_as_char {
                                     // 인라인 도형: 순차 X 위치로 배치
                                     let shape_w =
@@ -1170,10 +1190,16 @@ impl LayoutEngine {
                                         cp_idx,
                                         ctrl_idx,
                                     ));
+                                    let mut shape_for_layout = shape.clone();
+                                    if cut_units.is_some() && visible_non_inline_controls {
+                                        shape_for_layout.common_mut().horizontal_offset = 0;
+                                        shape_for_layout.common_mut().horz_align =
+                                            crate::model::shape::HorzAlign::Center;
+                                    }
                                     self.layout_cell_shape(
                                         tree,
                                         &mut cell_node,
-                                        shape,
+                                        &shape_for_layout,
                                         &inner_area,
                                         shape_anchor_y,
                                         para_alignment,
@@ -1182,6 +1208,29 @@ impl LayoutEngine {
                                         clamp_header_negative_para_offset,
                                         table_cell_ctx,
                                     );
+                                    let mut shape_flow_h =
+                                        self.cell_non_inline_control_flow_height(shape.common());
+                                    if shape_flow_h <= 0.0 {
+                                        shape_flow_h =
+                                            if cut_units.is_some() && visible_non_inline_controls {
+                                                hwpunit_to_px(
+                                                    shape.common().height as i32,
+                                                    self.dpi,
+                                                ) + hwpunit_to_px(
+                                                    (shape.common().vertical_offset as i32).max(0),
+                                                    self.dpi,
+                                                ) + hwpunit_to_px(
+                                                    shape.common().margin.top as i32,
+                                                    self.dpi,
+                                                ) + hwpunit_to_px(
+                                                    shape.common().margin.bottom as i32,
+                                                    self.dpi,
+                                                )
+                                            } else {
+                                                0.0
+                                            };
+                                    }
+                                    para_y += shape_flow_h;
                                 }
                             }
                             Control::Equation(eq) => {

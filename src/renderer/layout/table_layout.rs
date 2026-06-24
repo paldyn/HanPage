@@ -4168,6 +4168,10 @@ impl LayoutEngine {
             .and_then(|p| p.line_segs.first().map(|s| s.vertical_pos))
             .unwrap_or(-1);
         let para_count = cell.paragraphs.len();
+        let cell_has_visible_content = cell
+            .paragraphs
+            .iter()
+            .any(|p| !p.text.trim().is_empty() || !p.controls.is_empty());
         let mut units: Vec<CellUnit> = Vec::new();
         let append_non_inline_units =
             |units: &mut Vec<CellUnit>, para_idx: usize, non_inline_h: f64| {
@@ -4196,13 +4200,18 @@ impl LayoutEngine {
                 }
             };
         for (pi, p) in cell.paragraphs.iter().enumerate() {
+            let is_block_rowbreak = matches!(
+                table.page_break,
+                crate::model::table::TablePageBreak::RowBreak
+            ) && !table.common.treat_as_char;
             let para_non_inline_h: f64 = p
                 .controls
                 .iter()
                 .map(|ctrl| match ctrl {
-                    Control::Picture(pic) => self.non_inline_control_flow_height(&pic.common),
+                    Control::Picture(pic) => self.cell_non_inline_control_flow_height(&pic.common),
                     crate::model::control::Control::Shape(shape) => {
-                        self.non_inline_control_flow_height(shape.common())
+                        let common = shape.common();
+                        self.cell_non_inline_control_flow_height(common)
                     }
                     _ => 0.0,
                 })
@@ -4211,6 +4220,11 @@ impl LayoutEngine {
             crate::renderer::composer::recompose_for_cell_width(&mut comp, p, inner_width, styles);
             let para_style = styles.para_styles.get(p.para_shape_id as usize);
             let is_empty_spacer_para = p.text.trim().is_empty() && p.controls.is_empty();
+            let collapse_empty_rowbreak_spacer = is_block_rowbreak
+                && table.row_count == 1
+                && table.col_count == 1
+                && is_empty_spacer_para
+                && cell_has_visible_content;
             let is_last_para = pi + 1 == para_count;
             let raw_spacing_before = para_style.map(|s| s.spacing_before).unwrap_or(0.0);
             let spacing_before = if pi > 0 {
@@ -4522,7 +4536,9 @@ impl LayoutEngine {
                         }
                     })
                     .sum();
-                let para_h = if line_count == 0 {
+                let para_h = if collapse_empty_rowbreak_spacer {
+                    0.0
+                } else if line_count == 0 {
                     let h = if nested_h > 0.0 {
                         nested_h
                     } else {
@@ -4585,10 +4601,14 @@ impl LayoutEngine {
                 units.push(CellUnit {
                     height: para_h,
                     hard_break_before,
-                    vpos_gap_before,
+                    vpos_gap_before: vpos_gap_before && !collapse_empty_rowbreak_spacer,
                     para_idx: pi,
                     vis_start: 0,
-                    vis_end: line_count.max(1),
+                    vis_end: if collapse_empty_rowbreak_spacer {
+                        0
+                    } else {
+                        line_count.max(1)
+                    },
                     nested_row: None,
                     mixed_nested_fragment: false,
                     mixed_nested_trailing: false,
@@ -4602,19 +4622,19 @@ impl LayoutEngine {
                     let h = corrected_h(line);
                     let ls = hwpunit_to_px(line.line_spacing, self.dpi);
                     let is_cell_last_line = is_last_para && li + 1 == line_count;
-                    let is_block_rowbreak = matches!(
-                        table.page_break,
-                        crate::model::table::TablePageBreak::RowBreak
-                    ) && !table.common.treat_as_char;
                     let include_trailing_ls = !is_cell_last_line || para_count > 1;
                     let include_trailing_ls =
                         include_trailing_ls && (!is_cell_last_line || !is_block_rowbreak);
                     let mut lh = if include_trailing_ls { h + ls } else { h };
-                    if li == 0 {
-                        lh += spacing_before;
-                    }
-                    if li == line_count - 1 {
-                        lh += spacing_after;
+                    if collapse_empty_rowbreak_spacer {
+                        lh = 0.0;
+                    } else {
+                        if li == 0 {
+                            lh += spacing_before;
+                        }
+                        if li == line_count - 1 {
+                            lh += spacing_after;
+                        }
                     }
                     let hard_break_before = line_reset_before(li);
                     let mut vpos_gap_before = if li == 0 {
@@ -4645,10 +4665,18 @@ impl LayoutEngine {
                     units.push(CellUnit {
                         height: lh,
                         hard_break_before,
-                        vpos_gap_before,
+                        vpos_gap_before: vpos_gap_before && !collapse_empty_rowbreak_spacer,
                         para_idx: pi,
-                        vis_start: li,
-                        vis_end: li + 1,
+                        vis_start: if collapse_empty_rowbreak_spacer {
+                            0
+                        } else {
+                            li
+                        },
+                        vis_end: if collapse_empty_rowbreak_spacer {
+                            0
+                        } else {
+                            li + 1
+                        },
                         nested_row: None,
                         mixed_nested_fragment: false,
                         mixed_nested_trailing: false,
@@ -4706,6 +4734,7 @@ impl LayoutEngine {
         let mut fully_consumed = true;
         let mut consumed_height = 0.0f64;
         const HARD_BREAK_REMAINING_TOLERANCE_PX: f64 = 32.0;
+        const ROWBREAK_VISIBLE_TAIL_OVERFLOW_TOLERANCE_PX: f64 = 120.0;
         let relaxed_hard_break = matches!(
             table.page_break,
             crate::model::table::TablePageBreak::RowBreak
@@ -4719,6 +4748,17 @@ impl LayoutEngine {
             while j < units.len() {
                 let u = &units[j];
                 // 시작 유닛(j==start)은 항상 소비 — 진행 보장.
+                if start > 0
+                    && u.empty_spacer
+                    && units[start..=j].iter().all(|unit| unit.empty_spacer)
+                {
+                    j += 1;
+                    continue;
+                }
+                if u.empty_spacer && units[j..].iter().all(|unit| unit.empty_spacer) {
+                    j = units.len();
+                    break;
+                }
                 if j > start
                     && u.hard_break_before
                     && (!relaxed_hard_break
@@ -4739,6 +4779,17 @@ impl LayoutEngine {
                     break;
                 }
                 if j > start && h + u.height > avail_height {
+                    let visible_tail_before_spacer = relaxed_hard_break
+                        && !u.empty_spacer
+                        && u.vis_start < u.vis_end
+                        && h + u.height
+                            <= avail_height + ROWBREAK_VISIBLE_TAIL_OVERFLOW_TOLERANCE_PX
+                        && units[j + 1..].iter().any(|unit| unit.empty_spacer);
+                    if visible_tail_before_spacer {
+                        h += u.height;
+                        j += 1;
+                        continue;
+                    }
                     break;
                 }
                 h += u.height;
@@ -4801,6 +4852,7 @@ impl LayoutEngine {
         let mut fully_consumed = true;
         let mut consumed_height = 0.0f64;
         const HARD_BREAK_REMAINING_TOLERANCE_PX: f64 = 32.0;
+        const ROWBREAK_VISIBLE_TAIL_OVERFLOW_TOLERANCE_PX: f64 = 120.0;
         let relaxed_hard_break = matches!(
             table.page_break,
             crate::model::table::TablePageBreak::RowBreak
@@ -4814,6 +4866,17 @@ impl LayoutEngine {
             while j < units.len() {
                 let u = &units[j];
                 // 시작 유닛(j==start)은 항상 소비 — 진행 보장.
+                if start > 0
+                    && u.empty_spacer
+                    && units[start..=j].iter().all(|unit| unit.empty_spacer)
+                {
+                    j += 1;
+                    continue;
+                }
+                if u.empty_spacer && units[j..].iter().all(|unit| unit.empty_spacer) {
+                    j = units.len();
+                    break;
+                }
                 if j > start
                     && u.hard_break_before
                     && (!relaxed_hard_break
@@ -4834,6 +4897,17 @@ impl LayoutEngine {
                     break;
                 }
                 if j > start && h + u.height > avail_height {
+                    let visible_tail_before_spacer = relaxed_hard_break
+                        && !u.empty_spacer
+                        && u.vis_start < u.vis_end
+                        && h + u.height
+                            <= avail_height + ROWBREAK_VISIBLE_TAIL_OVERFLOW_TOLERANCE_PX
+                        && units[j + 1..].iter().any(|unit| unit.empty_spacer);
+                    if visible_tail_before_spacer {
+                        h += u.height;
+                        j += 1;
+                        continue;
+                    }
                     break;
                 }
                 h += u.height;
@@ -5057,6 +5131,49 @@ impl LayoutEngine {
             }
         }
         ranges
+    }
+
+    pub(crate) fn cell_cut_contains_non_inline_control_units(
+        &self,
+        cell: &crate::model::table::Cell,
+        table: &crate::model::table::Table,
+        styles: &ResolvedStyleSet,
+        start_unit: usize,
+        end_unit: usize,
+        para_idx: usize,
+    ) -> bool {
+        let units = self.cell_units(cell, table, styles);
+        let lo = start_unit.min(units.len());
+        let hi = end_unit.min(units.len()).max(lo);
+        let explicit_control_unit = units.iter().take(hi).skip(lo).any(|unit| {
+            unit.para_idx == para_idx
+                && unit.vis_start == unit.vis_end
+                && !unit.empty_spacer
+                && unit.nested_row.is_none()
+                && !unit.mixed_nested_fragment
+        });
+        if explicit_control_unit {
+            return true;
+        }
+
+        let has_non_inline_control = cell.paragraphs.get(para_idx).is_some_and(|para| {
+            para.controls.iter().any(|control| match control {
+                Control::Picture(picture) => !picture.common.treat_as_char,
+                Control::Shape(shape) => !shape.common().treat_as_char,
+                _ => false,
+            })
+        });
+        if !has_non_inline_control {
+            return false;
+        }
+
+        let last_para_unit = units
+            .iter()
+            .enumerate()
+            .filter(|(_, unit)| unit.para_idx == para_idx)
+            .map(|(idx, _)| idx)
+            .max();
+        last_para_unit.is_some_and(|idx| lo > idx)
     }
 
     pub(crate) fn mixed_nested_split_from_cut(
