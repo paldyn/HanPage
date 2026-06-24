@@ -4550,51 +4550,61 @@ impl LayoutEngine {
                         unit_cum += lh;
                     }
 
-                    let mut fragment_heights: Vec<(f64, bool, f64)> = p
-                        .controls
-                        .iter()
-                        .filter_map(|ctrl| {
-                            if let Control::Table(t) = ctrl {
-                                Some(self.nested_table_mixed_fragment_heights(t, styles))
-                            } else {
-                                None
-                            }
-                        })
-                        .flatten()
-                        .collect();
-                    if fragment_heights.is_empty() {
-                        const NESTED_FRAGMENT_UNIT_PX: f64 = 16.0;
-                        let mut remaining = nested_h + 4.0;
-                        while remaining > 0.5 {
-                            let h = remaining.min(NESTED_FRAGMENT_UNIT_PX);
-                            fragment_heights.push((h, false, h));
-                            remaining -= h;
-                        }
+                    let has_internal_line_reset = p
+                        .line_segs
+                        .windows(2)
+                        .any(|pair| pair[1].vertical_pos < pair[0].vertical_pos);
+                    let target_h = if has_internal_line_reset {
+                        (nested_h + 4.0 - line_core_height).max(0.0)
                     } else {
-                        let target_h = nested_h + 4.0;
-                        let current_h: f64 = fragment_heights.iter().map(|(h, _, _)| *h).sum();
-                        if target_h > current_h + 0.5 {
-                            if let Some((first, _, content_h)) = fragment_heights.first_mut() {
-                                *first += target_h - current_h;
-                                *content_h = (*content_h).max(*first);
+                        nested_h + 4.0
+                    };
+                    if target_h > 0.5 {
+                        let mut fragment_heights: Vec<(f64, bool, f64)> = p
+                            .controls
+                            .iter()
+                            .filter_map(|ctrl| {
+                                if let Control::Table(t) = ctrl {
+                                    Some(self.nested_table_mixed_fragment_heights(t, styles))
+                                } else {
+                                    None
+                                }
+                            })
+                            .flatten()
+                            .collect();
+                        if fragment_heights.is_empty() {
+                            const NESTED_FRAGMENT_UNIT_PX: f64 = 16.0;
+                            let mut remaining = target_h;
+                            while remaining > 0.5 {
+                                let h = remaining.min(NESTED_FRAGMENT_UNIT_PX);
+                                fragment_heights.push((h, false, h));
+                                remaining -= h;
+                            }
+                        } else {
+                            let current_h: f64 = fragment_heights.iter().map(|(h, _, _)| *h).sum();
+                            if target_h > current_h + 0.5 {
+                                if let Some((first, _, content_h)) = fragment_heights.first_mut() {
+                                    *first += target_h - current_h;
+                                    *content_h = (*content_h).max(*first);
+                                }
                             }
                         }
-                    }
-                    for (h, trailing, content_h) in fragment_heights {
-                        units.push(CellUnit {
-                            height: h,
-                            hard_break_before: false,
-                            vpos_gap_before: false,
-                            para_idx: pi,
-                            vis_start: line_count,
-                            vis_end: line_count,
-                            nested_row: None,
-                            mixed_nested_fragment: true,
-                            mixed_nested_trailing: trailing,
-                            mixed_nested_content_height: content_h,
-                            empty_spacer: false,
-                        });
-                        unit_cum += h;
+                        for (h, trailing, content_h) in fragment_heights {
+                            units.push(CellUnit {
+                                height: h,
+                                hard_break_before: false,
+                                vpos_gap_before: false,
+                                para_idx: pi,
+                                vis_start: line_count,
+                                vis_end: line_count,
+                                nested_row: None,
+                                mixed_nested_fragment: true,
+                                mixed_nested_trailing: trailing,
+                                mixed_nested_content_height: content_h,
+                                empty_spacer: false,
+                            });
+                            unit_cum += h;
+                        }
                     }
                     append_non_inline_units(&mut units, pi, para_non_inline_extra_h);
                     continue;
@@ -4828,18 +4838,26 @@ impl LayoutEngine {
                 // 시작 유닛(j==start)은 항상 소비 — 진행 보장.
                 if start > 0
                     && u.empty_spacer
+                    && !u.hard_break_before
                     && units[start..=j].iter().all(|unit| unit.empty_spacer)
                 {
                     j += 1;
                     continue;
                 }
-                if u.empty_spacer && units[j..].iter().all(|unit| unit.empty_spacer) {
+                if start > 0
+                    && u.empty_spacer
+                    && !u.hard_break_before
+                    && units[j..]
+                        .iter()
+                        .all(|unit| unit.empty_spacer && !unit.hard_break_before)
+                {
                     j = units.len();
                     break;
                 }
                 if j > start
                     && u.hard_break_before
-                    && (!relaxed_hard_break
+                    && (rewind_internal_hard_break_orphan
+                        || !relaxed_hard_break
                         || (!u.empty_spacer
                             && (h + u.height > avail_height
                                 || avail_height - h <= HARD_BREAK_REMAINING_TOLERANCE_PX)))
@@ -4851,6 +4869,7 @@ impl LayoutEngine {
                             &units,
                             start,
                             avail_height,
+                            rewind_internal_hard_break_orphan,
                             &mut j,
                             &mut h,
                         );
@@ -4948,12 +4967,19 @@ impl LayoutEngine {
                 // 시작 유닛(j==start)은 항상 소비 — 진행 보장.
                 if start > 0
                     && u.empty_spacer
+                    && !u.hard_break_before
                     && units[start..=j].iter().all(|unit| unit.empty_spacer)
                 {
                     j += 1;
                     continue;
                 }
-                if u.empty_spacer && units[j..].iter().all(|unit| unit.empty_spacer) {
+                if start > 0
+                    && u.empty_spacer
+                    && !u.hard_break_before
+                    && units[j..]
+                        .iter()
+                        .all(|unit| unit.empty_spacer && !unit.hard_break_before)
+                {
                     j = units.len();
                     break;
                 }
@@ -4970,6 +4996,7 @@ impl LayoutEngine {
                         &units,
                         start,
                         avail_height,
+                        false,
                         &mut j,
                         &mut h,
                     );
@@ -5066,6 +5093,7 @@ impl LayoutEngine {
                         &units,
                         start,
                         cell_budget,
+                        true,
                         &mut j,
                         &mut h,
                     );
@@ -5102,6 +5130,7 @@ impl LayoutEngine {
         units: &[CellUnit],
         start: usize,
         avail_height: f64,
+        force_rewind: bool,
         j: &mut usize,
         h: &mut f64,
     ) {
@@ -5134,7 +5163,7 @@ impl LayoutEngine {
                 let rewind_h: f64 = units[rewind_to..*j].iter().map(|unit| unit.height).sum();
                 let rewound_h = *h - rewind_h;
                 const MAX_REWIND_BLANK_PX: f64 = 80.0;
-                if avail_height - rewound_h > MAX_REWIND_BLANK_PX {
+                if !force_rewind && avail_height - rewound_h > MAX_REWIND_BLANK_PX {
                     return;
                 }
                 *h -= rewind_h;
