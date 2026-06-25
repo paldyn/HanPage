@@ -4104,8 +4104,7 @@ impl LayoutEngine {
             // [Task #1488] 가시 텍스트 문단 여부 — 비가시(빈) 오버레이 스페이서 문단이 만든
             // vpos 리셋을 하드 브레이크(강제 페이지 분할)에서 제외하기 위한 게이트.
             // 가시 텍스트 문단 사이 리셋(Task #993 의도)은 그대로 하드 브레이크로 보존한다.
-            let para_has_visible_text =
-                p.text.chars().any(|c| c > '\u{001F}' && c != '\u{FFFC}');
+            let para_has_visible_text = p.text.chars().any(|c| c > '\u{001F}' && c != '\u{FFFC}');
             let spacing_before = if pi > 0 {
                 para_style.map(|s| s.spacing_before).unwrap_or(0.0)
             } else {
@@ -4289,8 +4288,7 @@ impl LayoutEngine {
                     // [Task #1488] 비가시 빈 문단(중첩표 없음)의 오버레이 리셋은 페이지를
                     // 강제 분할하지 않는다 — 여분 빈 연속 페이지 방지. 중첩표가 있으면
                     // 가시 콘텐츠를 가지므로 리셋 보존.
-                    hard_break_before: reset_before
-                        && (has_table_in_para || para_has_visible_text),
+                    hard_break_before: reset_before && (has_table_in_para || para_has_visible_text),
                     para_idx: pi,
                     vis_start: 0,
                     vis_end: line_count.max(1),
@@ -5286,7 +5284,10 @@ mod row_cut_tests {
         let styles = ResolvedStyleSet::default();
         let t = table(vec![cell(0, 0, vec![text_para(3, 0), text_para(2, 1000)])]);
         let r = eng.advance_row_cut(&t, 0, &[], 1000.0, &styles);
-        assert!(!r.hit_hard_break, "빈 오버레이 문단 리셋은 강제 분할하지 않음");
+        assert!(
+            !r.hit_hard_break,
+            "빈 오버레이 문단 리셋은 강제 분할하지 않음"
+        );
         assert_eq!(r.end_cut, vec![5]);
         assert!(r.fully_consumed);
     }

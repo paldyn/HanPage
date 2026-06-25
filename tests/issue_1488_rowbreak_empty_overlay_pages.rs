@@ -25,8 +25,8 @@ fn issue_1488_no_extra_empty_continuation_pages() {
     let bytes =
         fs::read(&hwpx_path).unwrap_or_else(|e| panic!("read {}: {}", hwpx_path.display(), e));
 
-    let doc = rhwp::wasm_api::HwpDocument::from_bytes(&bytes)
-        .expect("parse rowbreak-problem-pages.hwpx");
+    let doc =
+        rhwp::wasm_api::HwpDocument::from_bytes(&bytes).expect("parse rowbreak-problem-pages.hwpx");
 
     // 정답지 PDF(한글 2024) 18페이지 정합 — 여분 빈 연속 페이지가 제거되어야 함.
     assert_eq!(
