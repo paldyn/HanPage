@@ -1477,6 +1477,7 @@ impl LayoutEngine {
                                         None,
                                         split_ref,
                                         None,
+                                        false,
                                         clamp_header_negative_para_offset,
                                     );
                                     let visible_table_h = mixed_nested_split

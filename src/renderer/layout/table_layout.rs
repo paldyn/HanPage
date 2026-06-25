@@ -419,6 +419,7 @@ impl LayoutEngine {
         inline_x_override: Option<f64>,
         nested_split: Option<&NestedTableSplit>,
         para_y: Option<f64>,
+        allow_para_top_bleed: bool,
         clamp_header_negative_para_offset: bool,
     ) -> f64 {
         if table.cells.is_empty() {
@@ -529,6 +530,7 @@ impl LayoutEngine {
                             inline_x_override,
                             nested_split,
                             para_y,
+                            allow_para_top_bleed,
                             clamp_header_negative_para_offset,
                         );
 
@@ -738,6 +740,7 @@ impl LayoutEngine {
                 caption_height,
                 caption_spacing,
                 para_y,
+                allow_para_top_bleed,
             )
         };
         let inline_table_flow_y_shift = if inline_x_override.is_some() {
@@ -1912,6 +1915,7 @@ impl LayoutEngine {
         caption_height: f64,
         caption_spacing: f64,
         para_y: Option<f64>,
+        allow_para_top_bleed: bool,
     ) -> f64 {
         let table_treat_as_char = table.common.treat_as_char;
         let table_text_wrap = if depth == 0 {
@@ -2010,7 +2014,12 @@ impl LayoutEngine {
                     } else {
                         raw_y
                     };
-                pushed.clamp(body_top, body_bottom.max(body_top))
+                let min_y = if allow_para_top_bleed && v_offset < 0.0 {
+                    body_top + v_offset
+                } else {
+                    body_top
+                };
+                pushed.clamp(min_y, body_bottom.max(min_y))
             } else {
                 raw_y
             }
@@ -3310,6 +3319,7 @@ impl LayoutEngine {
                                             Some(inline_x),
                                             None,
                                             None,
+                                            false,
                                             clamp_header_negative_para_offset,
                                         );
                                         inline_x += tac_w;
@@ -3439,6 +3449,7 @@ impl LayoutEngine {
                                         None,
                                         None,
                                         None,
+                                        false,
                                         clamp_header_negative_para_offset,
                                     );
                                     para_y = nested_y + table_h;
