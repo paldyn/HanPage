@@ -84,14 +84,18 @@ fn print_help() {
     println!();
     println!("  export-render-tree <파일.hwp> [옵션]");
     println!("      페이지별 render tree bbox JSON을 내보내기 (레이아웃 시각 분석용)");
-    println!("  export-structure <파일> [--mode auto|outline|clause] [-o out.json]");
-    println!("      문서 개요/조문(편·장·절·관·조·항·호·목) 계층을 중첩 JSON 트리로 추출");
     println!();
     println!("      -o, --output <폴더>     출력 폴더 (기본: output/)");
     println!("      -p, --page <번호>       특정 페이지만 내보내기 (0부터 시작)");
     println!("      --show-para-marks       문단부호(↵/↓) 표시 상태의 트리 생성");
     println!("      --show-control-codes    조판부호 보이기 상태의 트리 생성");
     println!("      --respect-vpos-reset    LINE_SEG vpos=0 리셋을 단/페이지 강제 경계로 처리");
+    println!();
+    println!("  export-structure <파일> [--mode auto|outline|clause] [-o out.json]");
+    println!("      문서 개요/조문(편·장·절·관·조·항·호·목) 계층을 중첩 JSON 트리로 추출");
+    println!();
+    println!("      --mode <방식>           분류 방식 auto|outline|clause (기본: auto)");
+    println!("      -o, --out <파일>        출력 JSON 파일 경로 (생략 시 stdout)");
     println!();
     println!("  export-png <파일.hwp> [옵션]   (native-skia feature 필요)");
     println!("      HWP 파일을 PNG로 내보내기 (Skia raster backend, AI 파이프라인 + VLM 연동)");
@@ -652,7 +656,13 @@ fn export_structure(args: &[String]) {
         match args[i].as_str() {
             "-o" | "--out" => {
                 i += 1;
-                out_path = args.get(i).cloned();
+                match args.get(i) {
+                    Some(p) => out_path = Some(p.clone()),
+                    None => {
+                        eprintln!("오류: -o 뒤에 출력 파일 경로가 필요합니다.");
+                        return;
+                    }
+                }
             }
             "--mode" => {
                 i += 1;
