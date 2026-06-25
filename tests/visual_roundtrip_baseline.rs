@@ -34,14 +34,10 @@ const VISUAL_XFAIL: &[(&str, &str)] = &[
     // renderingInfo. 도형 회전 전치(shape-001) — 레거시 도형 shape_attr 블록. 쪽 테두리
     // (expense_report) — pageBorderFill borderFillIDRef. 바탕쪽(exam 6종 + 온새미로) —
     // masterPage 직렬화. 잔여는 아래 (차트/표/각주/이미지 등 별개 원인).
-    // (승격) header 글머리표(bullet) 정의 직렬화 정정으로 hy-002 / footnote-01 /
-    // 2026_oss_rst 가 PASS 로 승격됨(❏/※/❍/soft-hyphen 마커 글리프 보존).
+    // (승격) header 글머리표(bullet) 정의 직렬화 → hy-002/footnote-01/2026_oss_rst PASS.
+    // (승격) borderFill 이미지 채움(imgBrush<hc:img>) 직렬화 → el-school-001/aift PASS.
+    // 잔여: 차트(객체 직렬화), k-water-rfp(대형 복합).
     ("143E433F503322BD33.hwpx", "차트 RawSvg→Placeholder 1페이지"),
-    (
-        "el-school-001.hwpx",
-        "구조 불일치 1페이지(셀 배경 이미지 imgBrush)",
-    ),
-    ("aift.hwpx", "구조 불일치 5페이지(대형, 복합)"),
     ("k-water-rfp.hwpx", "구조 불일치 2페이지(대형, 복합)"),
 ];
 

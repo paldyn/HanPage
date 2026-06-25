@@ -270,7 +270,6 @@ fn write_border_fills<W: Write>(
     doc_info: &DocInfo,
     ctx: &SerializeContext,
 ) -> Result<(), SerializeError> {
-    let _ = ctx;
     if doc_info.border_fills.is_empty() {
         return Ok(());
     }
@@ -282,7 +281,7 @@ fn write_border_fills<W: Write>(
     // HWPX borderFill의 id는 1부터 시작 (관찰값: ref_empty.hwpx).
     // 그러나 rhwp parser는 인덱스 기반으로 저장하므로 id는 배열 인덱스 그대로 사용.
     for (idx, bf) in doc_info.border_fills.iter().enumerate() {
-        write_border_fill(w, idx as u16, bf)?;
+        write_border_fill(w, idx as u16, bf, ctx)?;
     }
     end_tag(w, "hh:borderFills")?;
     Ok(())
@@ -292,6 +291,7 @@ fn write_border_fill<W: Write>(
     w: &mut Writer<W>,
     id: u16,
     bf: &BorderFill,
+    ctx: &SerializeContext,
 ) -> Result<(), SerializeError> {
     // 속성 순서 (BorderFillType.cpp:64-68): id, threeD, shadow, centerLine, breakCellSeparateLine
     start_tag_attrs(
@@ -327,7 +327,7 @@ fn write_border_fill<W: Write>(
     // fillBrush: 도형과 동일한 fillBrush 구조를 공유한다.
     // 종전 Stage 1 은 빈 래퍼만 출력해 winBrush(배경색)/gradation/imgBrush 를
     // 전부 잃었다. 파서가 채운 Fill 을 shape 의 검증된 역매핑으로 직렬화한다.
-    super::shape::write_fill_brush(w, &bf.fill)?;
+    super::shape::write_fill_brush(w, &bf.fill, ctx)?;
 
     end_tag(w, "hh:borderFill")?;
     Ok(())
@@ -1464,7 +1464,13 @@ mod tests {
         bf.attr = (0b010 << 2) | (0b011 << 5);
 
         let mut writer = Writer::new(Vec::new());
-        write_border_fill(&mut writer, 0, &bf).expect("write borderFill");
+        write_border_fill(
+            &mut writer,
+            0,
+            &bf,
+            &SerializeContext::collect_from_document(&Default::default()),
+        )
+        .expect("write borderFill");
         let xml = String::from_utf8(writer.into_inner()).unwrap();
 
         assert!(
@@ -1495,7 +1501,13 @@ mod tests {
         };
 
         let mut writer = Writer::new(Vec::new());
-        write_border_fill(&mut writer, 5, &bf).expect("write borderFill");
+        write_border_fill(
+            &mut writer,
+            5,
+            &bf,
+            &SerializeContext::collect_from_document(&Default::default()),
+        )
+        .expect("write borderFill");
         let xml = String::from_utf8(writer.into_inner()).unwrap();
 
         assert!(
@@ -1511,7 +1523,13 @@ mod tests {
         // FillType::None + solid 없음 = 원본에 fillBrush 부재 → 미출력.
         let bf = BorderFill::default();
         let mut writer = Writer::new(Vec::new());
-        write_border_fill(&mut writer, 0, &bf).expect("write borderFill");
+        write_border_fill(
+            &mut writer,
+            0,
+            &bf,
+            &SerializeContext::collect_from_document(&Default::default()),
+        )
+        .expect("write borderFill");
         let xml = String::from_utf8(writer.into_inner()).unwrap();
         assert!(
             !xml.contains("fillBrush"),
@@ -1538,7 +1556,13 @@ mod tests {
         };
 
         let mut writer = Writer::new(Vec::new());
-        write_border_fill(&mut writer, 1, &bf).expect("write borderFill");
+        write_border_fill(
+            &mut writer,
+            1,
+            &bf,
+            &SerializeContext::collect_from_document(&Default::default()),
+        )
+        .expect("write borderFill");
         let xml = String::from_utf8(writer.into_inner()).unwrap();
 
         assert!(
