@@ -86,7 +86,7 @@ pub fn write_rect<W: Write>(
     write_rotation_info(w, sa)?;
     write_rendering_info(w, sa)?;
     write_line_shape(w, &rect.drawing.border_line)?;
-    write_fill_brush(w, &rect.drawing.fill)?;
+    write_fill_brush(w, &rect.drawing.fill, ctx)?;
     write_shadow(w, &rect.drawing)?;
 
     // drawText: 글상자 내부 문단
@@ -604,6 +604,7 @@ fn write_win_brush<W: Write>(
 pub(crate) fn write_fill_brush<W: Write>(
     w: &mut Writer<W>,
     fill: &Fill,
+    ctx: &SerializeContext,
 ) -> Result<(), SerializeError> {
     match fill.fill_type {
         // FillType::None 이지만 solid 데이터가 보존돼 있으면(원본 winBrush 가
@@ -661,7 +662,36 @@ pub(crate) fn write_fill_brush<W: Write>(
                 _ => "TILE",
             };
             start_tag(w, "hc:fillBrush")?;
-            empty_tag(w, "hc:imgBrush", &[("mode", mode)])?;
+            // bin_data_id 가 ctx 에 등록돼 있으면 <hc:img> 참조를 방출(셀/쪽 배경 이미지
+            // 보존). 미등록(예: body shape 의 fill 파서가 bin_data_id 미캡처)이면 종전대로
+            // 빈 imgBrush — 잘못된 image0 참조로 3-way 단언을 깨지 않는다.
+            match ctx.resolve_bin_id(img.bin_data_id) {
+                Some(manifest_id) => {
+                    start_tag_attrs(w, "hc:imgBrush", &[("mode", mode)])?;
+                    let bright = img.brightness.to_string();
+                    let contrast = img.contrast.to_string();
+                    let effect = match img.effect {
+                        1 => "GRAY_SCALE",
+                        2 => "BLACK_WHITE",
+                        _ => "REAL_PIC",
+                    };
+                    empty_tag(
+                        w,
+                        "hc:img",
+                        &[
+                            ("binaryItemIDRef", manifest_id),
+                            ("bright", &bright),
+                            ("contrast", &contrast),
+                            ("effect", effect),
+                            ("alpha", "0"),
+                        ],
+                    )?;
+                    end_tag(w, "hc:imgBrush")?;
+                }
+                None => {
+                    empty_tag(w, "hc:imgBrush", &[("mode", mode)])?;
+                }
+            }
             end_tag(w, "hc:fillBrush")
         }
     }
