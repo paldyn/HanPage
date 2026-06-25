@@ -58,6 +58,14 @@ HWP/HWPX → PDF (svg2pdf + pdf-writer).
 - `-o`, `-p`, `--show-para-marks`, `--show-control-codes`, `--respect-vpos-reset`
 - JSON: `{type, bbox:{x,y,w,h}, children:[...]}` (Page → PageBg/Line/TextRun/Image/Table/Shape …)
 
+### `export-structure <파일> [--mode auto|outline|clause] [-o out.json]`
+문서 **개요/조문 계층**을 중첩 JSON 트리로 추출 (조문 DB화·목차 생성용). 파서/렌더 무변경 읽기 질의.
+- `--mode outline`: IR 개요 수준(`ParaShape.para_level`/head_type) 기반.
+- `--mode clause`: 법률 조문 텍스트 패턴(편·장·절·관·조 / 항①②③ / 호1. / 목가.) 기반.
+- `--mode auto`(기본): 개요 head_type 있으면 outline, 없으면 clause.
+- JSON: `{mode, node_count, preamble, roots:[{level,kind,marker,heading,section,paragraph,body,children}]}`.
+  비제목 문단은 직전 제목 노드의 `body` 에 귀속. `-o` 생략 시 stdout.
+
 ---
 
 ## 2. 구조 덤프·진단 (Debug)
