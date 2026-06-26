@@ -2582,9 +2582,9 @@ mod tests {
 
     #[test]
     fn serializes_text_and_shape_ops_for_browser_replay() {
-        let text = PaintOp::TextRun {
-            bbox: BoundingBox::new(10.0, 20.0, 80.0, 18.0),
-            run: TextRunNode {
+        let text = PaintOp::text_run(
+            BoundingBox::new(10.0, 20.0, 80.0, 18.0),
+            TextRunNode {
                 text: "가A".to_string(),
                 style: TextStyle {
                     font_family: "Noto Sans KR".to_string(),
@@ -2615,10 +2615,10 @@ mod tests {
                 baseline: 13.0,
                 field_marker: FieldMarkerType::FieldBegin,
             },
-        };
-        let rect = PaintOp::Rectangle {
-            bbox: BoundingBox::new(8.0, 18.0, 84.0, 22.0),
-            rect: crate::renderer::render_tree::RectangleNode::new(
+        );
+        let rect = PaintOp::rectangle(
+            BoundingBox::new(8.0, 18.0, 84.0, 22.0),
+            crate::renderer::render_tree::RectangleNode::new(
                 4.0,
                 ShapeStyle {
                     fill_color: Some(0x00F0F1F2),
@@ -2628,7 +2628,7 @@ mod tests {
                 },
                 None,
             ),
-        };
+        );
 
         let tree = PageLayerTree::new(
             120.0,
@@ -2725,9 +2725,9 @@ mod tests {
         let display_text = "(인)(Signature)";
         let source_positions = compute_char_positions(text, &style);
         let display_positions = compute_char_positions(display_text, &style);
-        let text_run = PaintOp::TextRun {
-            bbox: BoundingBox::new(10.0, 20.0, 80.0, 18.0),
-            run: TextRunNode {
+        let text_run = PaintOp::text_run(
+            BoundingBox::new(10.0, 20.0, 80.0, 18.0),
+            TextRunNode {
                 text: text.to_string(),
                 style: style.clone(),
                 char_shape_id: None,
@@ -2745,7 +2745,7 @@ mod tests {
                 baseline: 13.0,
                 field_marker: FieldMarkerType::None,
             },
-        };
+        );
         let tree = PageLayerTree::new(
             120.0,
             80.0,
@@ -2783,9 +2783,9 @@ mod tests {
 
     #[test]
     fn serializes_empty_display_positions_for_hidden_pua_filler() {
-        let text_run = PaintOp::TextRun {
-            bbox: BoundingBox::new(10.0, 20.0, 80.0, 18.0),
-            run: TextRunNode {
+        let text_run = PaintOp::text_run(
+            BoundingBox::new(10.0, 20.0, 80.0, 18.0),
+            TextRunNode {
                 text: "\u{F081C}".to_string(),
                 style: TextStyle {
                     font_family: "Noto Sans KR".to_string(),
@@ -2807,7 +2807,7 @@ mod tests {
                 baseline: 13.0,
                 field_marker: FieldMarkerType::None,
             },
-        };
+        );
         let tree = PageLayerTree::new(
             120.0,
             80.0,
@@ -2868,32 +2868,12 @@ mod tests {
                 BoundingBox::new(0.0, 0.0, 120.0, 80.0),
                 None,
                 vec![
-                    PaintOp::TextRun {
-                        bbox,
-                        run: run.clone(),
-                    },
-                    PaintOp::CharOverlap {
-                        bbox,
-                        run: run.clone(),
-                    },
-                    PaintOp::TextControlMark {
-                        bbox,
-                        run: run.clone(),
-                    },
-                    PaintOp::TabLeader {
-                        bbox,
-                        run: run.clone(),
-                    },
-                    PaintOp::TextDecoration {
-                        bbox,
-                        run: run.clone(),
-                        kind: TextDecorationKind::Underline,
-                    },
-                    PaintOp::TextDecoration {
-                        bbox,
-                        run,
-                        kind: TextDecorationKind::EmphasisDot,
-                    },
+                    PaintOp::text_run(bbox, run.clone()),
+                    PaintOp::char_overlap(bbox, run.clone()),
+                    PaintOp::text_control_mark(bbox, run.clone()),
+                    PaintOp::tab_leader(bbox, run.clone()),
+                    PaintOp::text_decoration(bbox, run.clone(), TextDecorationKind::Underline),
+                    PaintOp::text_decoration(bbox, run, TextDecorationKind::EmphasisDot),
                 ],
             ),
         );
@@ -2940,9 +2920,9 @@ mod tests {
             shaping_engine: ShapingEngineId("test".to_string()),
             fallback_policy: FontFallbackPolicyId("none".to_string()),
         };
-        let text_run = PaintOp::TextRun {
-            bbox: BoundingBox::new(0.0, 0.0, 20.0, 20.0),
-            run: TextRunNode {
+        let text_run = PaintOp::text_run(
+            BoundingBox::new(0.0, 0.0, 20.0, 20.0),
+            TextRunNode {
                 text: "A".to_string(),
                 style: TextStyle {
                     font_family: "Test".to_string(),
@@ -2965,7 +2945,7 @@ mod tests {
                 baseline: 12.0,
                 field_marker: FieldMarkerType::None,
             },
-        };
+        );
         let glyph_run = PaintOp::GlyphRun {
             bbox: BoundingBox::new(0.0, 0.0, 20.0, 20.0),
             run: Box::new(LayerGlyphRunPaint {
@@ -3119,9 +3099,9 @@ mod tests {
             utf16_range: TextSourceRange::new(0, 1),
             stable_source_key: None,
         };
-        let text_run = PaintOp::TextRun {
-            bbox: BoundingBox::new(0.0, 0.0, 20.0, 20.0),
-            run: TextRunNode {
+        let text_run = PaintOp::text_run(
+            BoundingBox::new(0.0, 0.0, 20.0, 20.0),
+            TextRunNode {
                 text: "A".to_string(),
                 style: TextStyle {
                     font_family: "Test".to_string(),
@@ -3144,7 +3124,7 @@ mod tests {
                 baseline: 12.0,
                 field_marker: FieldMarkerType::None,
             },
-        };
+        );
         let outline = PaintOp::GlyphOutline {
             bbox: BoundingBox::new(0.0, 0.0, 20.0, 20.0),
             outline: Box::new(LayerGlyphOutlinePaint {
@@ -3605,18 +3585,11 @@ mod tests {
                 BoundingBox::new(0.0, 0.0, 120.0, 80.0),
                 None,
                 vec![
-                    PaintOp::Path {
-                        bbox: BoundingBox::new(1.0, 2.0, 30.0, 20.0),
-                        path,
-                    },
-                    PaintOp::Image {
-                        bbox: BoundingBox::new(3.0, 4.0, 30.0, 20.0),
-                        image,
-                        resolved: None,
-                    },
-                    PaintOp::Equation {
-                        bbox: BoundingBox::new(5.0, 6.0, 30.0, 20.0),
-                        equation: EquationNode {
+                    PaintOp::path(BoundingBox::new(1.0, 2.0, 30.0, 20.0), path),
+                    PaintOp::image(BoundingBox::new(3.0, 4.0, 30.0, 20.0), image, None),
+                    PaintOp::equation(
+                        BoundingBox::new(5.0, 6.0, 30.0, 20.0),
+                        EquationNode {
                             svg_content: "<text>x</text>".to_string(),
                             layout_box: LayoutBox {
                                 x: 0.0,
@@ -3636,21 +3609,21 @@ mod tests {
                             cell_para_index: None,
                             note_ref: None,
                         },
-                    },
-                    PaintOp::Placeholder {
-                        bbox: BoundingBox::new(7.0, 8.0, 30.0, 20.0),
-                        placeholder: PlaceholderNode {
+                    ),
+                    PaintOp::placeholder(
+                        BoundingBox::new(7.0, 8.0, 30.0, 20.0),
+                        PlaceholderNode {
                             fill_color: 0x00F0F0F0,
                             stroke_color: 0x00000000,
                             label: "OLE".to_string(),
                         },
-                    },
-                    PaintOp::RawSvg {
-                        bbox: BoundingBox::new(9.0, 10.0, 30.0, 20.0),
-                        raw: RawSvgNode {
+                    ),
+                    PaintOp::raw_svg(
+                        BoundingBox::new(9.0, 10.0, 30.0, 20.0),
+                        RawSvgNode {
                             svg: "<g><path d=\"M0 0L1 1\"/></g>".to_string(),
                         },
-                    },
+                    ),
                 ],
             ),
         );
