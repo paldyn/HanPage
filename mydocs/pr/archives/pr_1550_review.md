@@ -68,3 +68,4 @@ PR #1550은 workflow 파일 변경이 포함되어 fast-pass 대상이 아니었
 ## 5. fast-pass 후속 검증
 
 - #1574/#1576 보정 후 review 문서 전용 PR에서 preflight 생성과 heavy job skip 여부를 재확인한다.
+- 최종 확인은 base SHA의 CI/CodeQL push check가 green인 상태에서 문서 전용 후속 커밋으로 수행한다.
