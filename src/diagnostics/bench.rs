@@ -87,10 +87,14 @@ pub fn run(args: &[String]) {
     println!("주의: 절대 수치는 측정 머신·빌드 의존. 동일 환경 상대·재현 지표로 해석.");
 
     let mut rows: Vec<Row> = Vec::new();
+    let mut failures = 0usize;
     for f in &files {
         match bench_one(f, iters) {
             Ok(r) => rows.push(r),
-            Err(e) => eprintln!("  {f}: 실패 — {e}"),
+            Err(e) => {
+                eprintln!("  {f}: 실패 — {e}");
+                failures += 1;
+            }
         }
     }
     print_table(&rows);
@@ -100,6 +104,13 @@ pub fn run(args: &[String]) {
             Ok(()) => println!("\nTSV: {path}"),
             Err(e) => eprintln!("TSV 쓰기 실패: {e}"),
         }
+    }
+
+    // 성능 계측은 CI·스크립트에서 자동화되므로, 하나 이상의 파일 처리 실패가
+    // 있으면 non-zero 로 종료해 실패가 성공처럼 숨겨지지 않게 한다.
+    if failures > 0 {
+        eprintln!("\n{failures}개 파일 처리 실패 — 종료 코드 1");
+        std::process::exit(1);
     }
 }
 
@@ -146,10 +157,11 @@ fn bench_one(path: &str, iters: usize) -> Result<Row, String> {
         load_v.push(ms_since(t));
         pages = core.page_count();
 
-        // render: 전 페이지 SVG 렌더
+        // render: 전 페이지 SVG 렌더 (페이지 렌더 실패는 파일 처리 실패로 전파)
         let t = Instant::now();
         for p in 0..pages {
-            let _ = core.render_page_svg_native(p);
+            core.render_page_svg_native(p)
+                .map_err(|e| format!("{e:?}"))?;
         }
         render_v.push(ms_since(t));
 
