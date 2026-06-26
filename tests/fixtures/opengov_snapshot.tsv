@@ -1,0 +1,9 @@
+id	status	ir_diff_count	class
+36382669	PASS	0	multi-section/secCnt 회귀가드(#1557)
+36383351	PASS	0	PASS 클린
+36384285	PASS	0	PASS 클린
+36385464	IR_DIFF	1	표셀 pic 드롭(V2-B)
+36387103	IR_DIFF	1	잔여 2→1 한글 붕괴
+36388571	IR_DIFF	1	표셀 pic 드롭(V2-B)
+36388853	PASS	0	PASS 클린
+36389298	PASS	0	PASS 클린
