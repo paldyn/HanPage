@@ -24,12 +24,12 @@
 
 ## Merge 후 후속 처리
 
-1. #1606 merge commit을 확인한다.
-2. #1599 자동 close 여부를 확인하고, open이면 수동 close 코멘트를 남긴다.
-3. PR에 merge 완료 및 검증 요약 코멘트를 남긴다.
-4. `devel`을 `upstream/devel`에 동기화한다.
-5. 렌더 영향 PR이므로 `cargo test --test svg_snapshot`을 수행한다.
-6. 원격/로컬 작업 브랜치를 정리한다.
+1. #1606 merge commit 확인: `a6de4b66e7d91ba3e21395328008e8ab162a8548`
+2. #1599 자동 close 실패 확인 후 수동 close 코멘트 및 completed close 처리
+3. PR에 merge 완료 및 검증 요약 코멘트 게시
+4. `devel`을 `upstream/devel`에 fast-forward 동기화
+5. 렌더 영향 PR 후속 체크 `cargo test --test svg_snapshot` 수행: 통과, 8 passed
+6. 원격/로컬 작업 브랜치 `task_m100_1599_table_center_line` 삭제 및 prune 확인
 
 ## 최종 조건
 
