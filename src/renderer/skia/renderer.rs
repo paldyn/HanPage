@@ -2,6 +2,7 @@ use skia_safe::{
     paint, png_encoder, surfaces, Canvas, Color, Font, FontMgr, FontStyle, Paint, PathBuilder,
     PathEffect, RRect, Rect, Typeface,
 };
+use std::borrow::Cow;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use crate::error::HwpError;
@@ -13,6 +14,7 @@ use crate::paint::{
     LayerGlyphRunPaint, LayerNode, LayerNodeKind, LayerOutputOptions, PageLayerTree, PaintOp,
     PaintReplayPlane, ResourceArena, TextVariantQuality,
 };
+use crate::renderer::form_caption::display_form_caption;
 use crate::renderer::layer_renderer::{
     LayerRasterRenderer, LayerRenderResult, RasterOutputFormat, RasterRenderOptions,
     RasterRenderOutput,
@@ -1193,19 +1195,19 @@ impl SkiaLayerRenderer {
                 canvas.draw_rrect(rrect, &stroke);
 
                 let label = if form.caption.is_empty() {
-                    &form.name
+                    Cow::Borrowed(form.name.as_str())
                 } else {
-                    &form.caption
+                    display_form_caption(&form.caption)
                 };
                 if !label.is_empty() {
                     let font = self.make_form_font((h * 0.45).clamp(8.0, 14.0));
                     let mut tp = Paint::default();
                     tp.set_anti_alias(true);
                     tp.set_color(fg_color);
-                    let text_w = font.measure_str(label, Some(&tp)).0;
+                    let text_w = font.measure_str(label.as_ref(), Some(&tp)).0;
                     let tx = x + (w - text_w) / 2.0;
                     let ty = y + h / 2.0 + font.size() * 0.35;
-                    canvas.draw_str(label, (tx, ty), &font, &tp);
+                    canvas.draw_str(label.as_ref(), (tx, ty), &font, &tp);
                 }
             }
             FormType::CheckBox => {
@@ -1249,13 +1251,14 @@ impl SkiaLayerRenderer {
                 }
 
                 if !form.caption.is_empty() {
+                    let caption = display_form_caption(&form.caption);
                     let font = self.make_form_font((h * 0.6).clamp(8.0, 13.0));
                     let mut tp = Paint::default();
                     tp.set_anti_alias(true);
                     tp.set_color(fg_color);
                     let tx = bx + box_size + 4.0;
                     let ty = y + h / 2.0 + font.size() * 0.35;
-                    canvas.draw_str(&form.caption, (tx, ty), &font, &tp);
+                    canvas.draw_str(caption.as_ref(), (tx, ty), &font, &tp);
                 }
             }
             FormType::RadioButton => {
@@ -1285,13 +1288,14 @@ impl SkiaLayerRenderer {
                 }
 
                 if !form.caption.is_empty() {
+                    let caption = display_form_caption(&form.caption);
                     let font = self.make_form_font((h * 0.6).clamp(8.0, 13.0));
                     let mut tp = Paint::default();
                     tp.set_anti_alias(true);
                     tp.set_color(fg_color);
                     let tx = cx + r + 4.0;
                     let ty = y + h / 2.0 + font.size() * 0.35;
-                    canvas.draw_str(&form.caption, (tx, ty), &font, &tp);
+                    canvas.draw_str(caption.as_ref(), (tx, ty), &font, &tp);
                 }
             }
             FormType::ComboBox => {
