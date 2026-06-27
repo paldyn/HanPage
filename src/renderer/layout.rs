@@ -5608,6 +5608,30 @@ impl LayoutEngine {
                     } else {
                         y_offset
                     };
+                    // [Issue #1535] visible-host co-anchored float 표도 문단(아래 visible_float_exclusions
+                    // 소비부)과 동일하게 선행 float 표가 점유한 세로 영역을 벗어나 배치되어야 한다.
+                    // 표 배치는 기존에 exclusion 을 push 만 하고 consult 하지 않아, 연속 문단의
+                    // float 표가 앞 문단 float 표 위에 겹쳐 그려졌다. 표의 자연 상단
+                    // (para_y + outer_margin + v_offset, = compute_table_y_position 의 raw_y)이
+                    // 활성 exclusion 영역 안에서 시작하면 그 영역 하단으로 내려 시작점을 끌어올린다.
+                    // compute_table_y_position 이 raw_y.max(y_start) 로 클램프하므로 table_y_start
+                    // (= y_start)를 올리면 표가 해당 영역 아래로 밀린다.
+                    let table_y_start = if is_current_visible_para_float
+                        && !visible_float_exclusions.is_empty()
+                    {
+                        let v_off =
+                            hwpunit_to_px(signed_hwpunit(t.common.vertical_offset), self.dpi);
+                        let natural_top = para_y_for_table + visible_outer_top_px + v_off.max(0.0);
+                        let mut floor = table_y_start;
+                        for zone in visible_float_exclusions.iter() {
+                            if natural_top + 0.5 >= zone.top && natural_top < zone.bottom {
+                                floor = floor.max(zone.bottom);
+                            }
+                        }
+                        floor
+                    } else {
+                        table_y_start
+                    };
                     let allow_para_top_bleed = is_current_visible_para_float
                         && signed_hwpunit(t.common.vertical_offset) < 0;
                     let table_visual_height = mt
