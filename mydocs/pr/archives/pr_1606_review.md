@@ -59,3 +59,11 @@
 ## 판단
 
 로컬 검증, 원격 CI, 기준 PDF 시각 검증이 모두 통과했다. 최종 merge 조건은 최신 PR head 기준 GitHub Actions 통과와 작업지시자 승인이다.
+
+## 처리 결과
+
+- #1606 merge 완료: `a6de4b66e7d91ba3e21395328008e8ab162a8548`
+- merge 시각: 2026-06-28 02:30 KST
+- #1599 상태: 자동 close 실패 확인 후 수동 close 완료
+- merge 후 렌더 영향 체크: `cargo test --test svg_snapshot` 통과, 8 passed
+- 원격/로컬 작업 브랜치 `task_m100_1599_table_center_line` 삭제 및 prune 확인 완료
