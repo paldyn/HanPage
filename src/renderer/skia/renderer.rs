@@ -286,13 +286,23 @@ pub struct SkiaLayerRenderer {
 
 impl SkiaLayerRenderer {
     pub fn new() -> Self {
-        let font_mgr = FontMgr::default();
-        let system_families = collect_system_families(&font_mgr);
-        Self {
-            font_mgr,
-            custom_typefaces: HashMap::new(),
-            system_families,
+        // [perf] FontMgr::default() + collect_system_families() (시스템 폰트 family 전수
+        // 열거) 는 페이지당 ~8ms 가 드는데, 프로세스(스레드) 내에서 불변이다. 매 렌더마다
+        // 재열거하지 않도록 thread-local 로 1회만 계산하고, 이후 new() 는 캐시를 복제
+        // (FontMgr = refcount bump, families = HashSet clone ~수십 µs) 해 재사용한다.
+        // 폰트 매칭 입력이 동일하므로 렌더 출력은 바이트 단위로 불변이다.
+        thread_local! {
+            static SKIA_FONT_BASE: (FontMgr, SystemFontFamilies) = {
+                let font_mgr = FontMgr::default();
+                let system_families = collect_system_families(&font_mgr);
+                (font_mgr, system_families)
+            };
         }
+        SKIA_FONT_BASE.with(|(font_mgr, system_families)| Self {
+            font_mgr: font_mgr.clone(),
+            custom_typefaces: HashMap::new(),
+            system_families: system_families.clone(),
+        })
     }
 
     /// 사용자 지정 폰트 디렉토리 (ttfs 등) 의 폰트를 로드하여 Skia 가 직접 사용 가능하게 한다.
