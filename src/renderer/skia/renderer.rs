@@ -1,6 +1,6 @@
 use skia_safe::{
-    paint, surfaces, Canvas, Color, EncodedImageFormat, Font, FontMgr, FontStyle, Paint,
-    PathBuilder, PathEffect, RRect, Rect, Typeface,
+    paint, png_encoder, surfaces, Canvas, Color, Font, FontMgr, FontStyle, Paint, PathBuilder,
+    PathEffect, RRect, Rect, Typeface,
 };
 use std::borrow::Cow;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -23,7 +23,10 @@ use crate::renderer::render_tree::RenderLayerInfo;
 use crate::renderer::{svg_arc_to_beziers, LineStyle, PathCommand, ShapeStyle, StrokeDash};
 
 use super::equation_conv::render_equation;
-use super::font_lookup::{collect_system_families, match_system_family_style, SystemFontFamilies};
+use super::font_lookup::{
+    collect_system_families, legacy_typeface_for_style, match_system_family_style,
+    SystemFontFamilies,
+};
 use super::image_conv::{draw_image_bytes, draw_svg_fragment, ImageSampling};
 use super::text_replay::SkiaTextReplay;
 
@@ -411,6 +414,7 @@ impl SkiaLayerRenderer {
         if options.scale != 1.0 {
             canvas.scale((options.scale as f32, options.scale as f32));
         }
+
         let mut next_text_source_id = 0_u32;
         for replay_plane in PaintReplayPlane::ORDERED {
             if !layer_node_has_replay_plane(&tree.root, replay_plane) {
@@ -428,9 +432,16 @@ impl SkiaLayerRenderer {
         }
 
         let image = surface.image_snapshot();
-        let data = image
-            .encode(None, EncodedImageFormat::PNG, None)
-            .ok_or_else(|| HwpError::RenderError("Skia PNG 인코딩 실패".to_string()))?;
+        let mut png_options = png_encoder::Options::default();
+        // PNG is lossless at every zlib level. Level 1 avoids spending most of
+        // native export time on compression while preserving decoded pixels.
+        png_options.z_lib_level = 1;
+        let data = png_encoder::encode_image(
+            None::<&mut skia_safe::gpu::DirectContext>,
+            &image,
+            &png_options,
+        )
+        .ok_or_else(|| HwpError::RenderError("Skia PNG 인코딩 실패".to_string()))?;
         Ok(RasterRenderOutput {
             bytes: data.as_bytes().to_vec(),
             format: RasterOutputFormat::Png,
@@ -1147,7 +1158,7 @@ impl SkiaLayerRenderer {
                 return Font::new(tf, size);
             }
         }
-        if let Some(tf) = self.font_mgr.legacy_make_typeface(None::<&str>, style) {
+        if let Some(tf) = legacy_typeface_for_style(&self.font_mgr, style) {
             return Font::new(tf, size);
         }
         let mut f = Font::default();
@@ -1846,18 +1857,18 @@ mod tests {
             LayerNode::leaf(
                 BoundingBox::new(0.0, 0.0, page_width, page_height),
                 None,
-                vec![PaintOp::Rectangle {
+                vec![PaintOp::rectangle(
                     bbox,
-                    rect: RectangleNode::new(0.0, style, None),
-                }],
+                    RectangleNode::new(0.0, style, None),
+                )],
             ),
         )
     }
 
     fn solid_rect_op(bbox: BoundingBox, fill_color: ColorRef) -> PaintOp {
-        PaintOp::Rectangle {
+        PaintOp::rectangle(
             bbox,
-            rect: RectangleNode::new(
+            RectangleNode::new(
                 0.0,
                 ShapeStyle {
                     fill_color: Some(fill_color),
@@ -1865,17 +1876,13 @@ mod tests {
                 },
                 None,
             ),
-        }
+        )
     }
 
     fn solid_image_op(bbox: BoundingBox, color: [u8; 4], wrap: TextWrap) -> PaintOp {
         let mut image = ImageNode::new(1, Some(solid_png(color)));
         image.text_wrap = Some(wrap);
-        PaintOp::Image {
-            bbox,
-            image,
-            resolved: None,
-        }
+        PaintOp::image(bbox, image, None)
     }
 
     #[test]
@@ -1974,10 +1981,10 @@ mod tests {
         let child = LayerNode::leaf(
             BoundingBox::new(0.0, 0.0, 20.0, 20.0),
             None,
-            vec![PaintOp::Rectangle {
-                bbox: BoundingBox::new(0.0, 0.0, 20.0, 20.0),
-                rect: RectangleNode::new(0.0, style, None),
-            }],
+            vec![PaintOp::rectangle(
+                BoundingBox::new(0.0, 0.0, 20.0, 20.0),
+                RectangleNode::new(0.0, style, None),
+            )],
         );
         let clipped = PageLayerTree::new(
             20.0,
@@ -2124,16 +2131,16 @@ mod tests {
             LayerNode::leaf(
                 BoundingBox::new(0.0, 0.0, 8.0, 8.0),
                 None,
-                vec![PaintOp::PageBackground {
-                    bbox: BoundingBox::new(0.0, 0.0, 8.0, 8.0),
-                    background: PageBackgroundNode {
+                vec![PaintOp::page_background(
+                    BoundingBox::new(0.0, 0.0, 8.0, 8.0),
+                    PageBackgroundNode {
                         background_color: Some(0x0000ff00),
                         border_color: Some(0x00ff0000),
                         border_width: 2.0,
                         gradient: None,
                         image: None,
                     },
-                }],
+                )],
             ),
         );
         let output = SkiaLayerRenderer::new()
@@ -2158,9 +2165,9 @@ mod tests {
             LayerNode::leaf(
                 BoundingBox::new(0.0, 0.0, 8.0, 8.0),
                 None,
-                vec![PaintOp::PageBackground {
-                    bbox: BoundingBox::new(0.0, 0.0, 8.0, 8.0),
-                    background: PageBackgroundNode {
+                vec![PaintOp::page_background(
+                    BoundingBox::new(0.0, 0.0, 8.0, 8.0),
+                    PageBackgroundNode {
                         background_color: None,
                         border_color: None,
                         border_width: 0.0,
@@ -2173,7 +2180,7 @@ mod tests {
                             effect: crate::model::image::ImageEffect::RealPic,
                         }),
                     },
-                }],
+                )],
             ),
         );
         let output = SkiaLayerRenderer::new()
@@ -2261,26 +2268,11 @@ mod tests {
                 BoundingBox::new(0.0, 0.0, 40.0, 40.0),
                 None,
                 vec![
-                    PaintOp::Rectangle {
-                        bbox: BoundingBox::new(2.0, 2.0, 10.0, 8.0),
-                        rect: gradient_rect,
-                    },
-                    PaintOp::Rectangle {
-                        bbox: BoundingBox::new(16.0, 2.0, 10.0, 8.0),
-                        rect: pattern_rect,
-                    },
-                    PaintOp::Ellipse {
-                        bbox: BoundingBox::new(2.0, 12.0, 10.0, 10.0),
-                        ellipse,
-                    },
-                    PaintOp::Path {
-                        bbox: BoundingBox::new(2.0, 24.0, 10.0, 10.0),
-                        path,
-                    },
-                    PaintOp::Line {
-                        bbox: BoundingBox::new(18.0, 28.0, 16.0, 4.0),
-                        line,
-                    },
+                    PaintOp::rectangle(BoundingBox::new(2.0, 2.0, 10.0, 8.0), gradient_rect),
+                    PaintOp::rectangle(BoundingBox::new(16.0, 2.0, 10.0, 8.0), pattern_rect),
+                    PaintOp::ellipse(BoundingBox::new(2.0, 12.0, 10.0, 10.0), ellipse),
+                    PaintOp::path(BoundingBox::new(2.0, 24.0, 10.0, 10.0), path),
+                    PaintOp::line(BoundingBox::new(18.0, 28.0, 16.0, 4.0), line),
                 ],
             ),
         );
@@ -2321,10 +2313,7 @@ mod tests {
             LayerNode::leaf(
                 BoundingBox::new(0.0, 0.0, 24.0, 18.0),
                 None,
-                vec![PaintOp::Path {
-                    bbox: BoundingBox::new(4.0, 4.0, 16.0, 12.0),
-                    path,
-                }],
+                vec![PaintOp::path(BoundingBox::new(4.0, 4.0, 16.0, 12.0), path)],
             ),
         );
         let output = SkiaLayerRenderer::new()
@@ -2344,16 +2333,16 @@ mod tests {
                 BoundingBox::new(0.0, 0.0, 20.0, 10.0),
                 None,
                 vec![
-                    PaintOp::Image {
-                        bbox: BoundingBox::new(0.0, 0.0, 8.0, 8.0),
-                        image: ImageNode::new(1, Some(solid_png([0, 0, 255, 255]))),
-                        resolved: None,
-                    },
-                    PaintOp::Image {
-                        bbox: BoundingBox::new(10.0, 0.0, 8.0, 8.0),
-                        image: ImageNode::new(2, Some(vec![1, 2, 3, 4])),
-                        resolved: None,
-                    },
+                    PaintOp::image(
+                        BoundingBox::new(0.0, 0.0, 8.0, 8.0),
+                        ImageNode::new(1, Some(solid_png([0, 0, 255, 255]))),
+                        None,
+                    ),
+                    PaintOp::image(
+                        BoundingBox::new(10.0, 0.0, 8.0, 8.0),
+                        ImageNode::new(2, Some(vec![1, 2, 3, 4])),
+                        None,
+                    ),
                 ],
             ),
         );
@@ -2472,11 +2461,11 @@ mod tests {
             LayerNode::leaf(
                 BoundingBox::new(0.0, 0.0, 8.0, 8.0),
                 None,
-                vec![PaintOp::Image {
-                    bbox: BoundingBox::new(0.0, 0.0, 8.0, 8.0),
-                    image: node,
-                    resolved: None,
-                }],
+                vec![PaintOp::image(
+                    BoundingBox::new(0.0, 0.0, 8.0, 8.0),
+                    node,
+                    None,
+                )],
             ),
         );
         let output = SkiaLayerRenderer::new()
@@ -2503,11 +2492,11 @@ mod tests {
             LayerNode::leaf(
                 BoundingBox::new(0.0, 0.0, 16.0, 4.0),
                 None,
-                vec![PaintOp::Image {
-                    bbox: BoundingBox::new(0.0, 0.0, 16.0, 4.0),
-                    image: node,
-                    resolved: None,
-                }],
+                vec![PaintOp::image(
+                    BoundingBox::new(0.0, 0.0, 16.0, 4.0),
+                    node,
+                    None,
+                )],
             ),
         );
         let output = SkiaLayerRenderer::new()
@@ -2535,11 +2524,11 @@ mod tests {
             LayerNode::leaf(
                 BoundingBox::new(0.0, 0.0, 8.0, 8.0),
                 None,
-                vec![PaintOp::Image {
-                    bbox: BoundingBox::new(0.0, 0.0, 8.0, 8.0),
-                    image: node,
-                    resolved: None,
-                }],
+                vec![PaintOp::image(
+                    BoundingBox::new(0.0, 0.0, 8.0, 8.0),
+                    node,
+                    None,
+                )],
             ),
         );
         let output = SkiaLayerRenderer::new()
@@ -2562,11 +2551,11 @@ mod tests {
             LayerNode::leaf(
                 BoundingBox::new(0.0, 0.0, 8.0, 8.0),
                 None,
-                vec![PaintOp::Image {
-                    bbox: BoundingBox::new(f64::NAN, 0.0, 8.0, 8.0),
-                    image: ImageNode::new(1, Some(solid_png([255, 0, 0, 255]))),
-                    resolved: None,
-                }],
+                vec![PaintOp::image(
+                    BoundingBox::new(f64::NAN, 0.0, 8.0, 8.0),
+                    ImageNode::new(1, Some(solid_png([255, 0, 0, 255]))),
+                    None,
+                )],
             ),
         );
         let output = SkiaLayerRenderer::new()
@@ -2618,14 +2607,8 @@ mod tests {
                 BoundingBox::new(0.0, 0.0, 64.0, 32.0),
                 None,
                 vec![
-                    PaintOp::TextRun {
-                        bbox: BoundingBox::new(4.0, 4.0, 24.0, 24.0),
-                        run,
-                    },
-                    PaintOp::FootnoteMarker {
-                        bbox: BoundingBox::new(32.0, 4.0, 24.0, 24.0),
-                        marker,
-                    },
+                    PaintOp::text_run(BoundingBox::new(4.0, 4.0, 24.0, 24.0), run),
+                    PaintOp::footnote_marker(BoundingBox::new(32.0, 4.0, 24.0, 24.0), marker),
                 ],
             ),
         );
@@ -2670,10 +2653,10 @@ mod tests {
             LayerNode::leaf(
                 BoundingBox::new(0.0, 0.0, 40.0, 40.0),
                 None,
-                vec![PaintOp::TextRun {
-                    bbox: BoundingBox::new(8.0, 8.0, 24.0, 24.0),
+                vec![PaintOp::text_run(
+                    BoundingBox::new(8.0, 8.0, 24.0, 24.0),
                     run,
-                }],
+                )],
             ),
         );
         let output = SkiaLayerRenderer::new()
@@ -2719,10 +2702,10 @@ mod tests {
             LayerNode::leaf(
                 BoundingBox::new(0.0, 0.0, 88.0, 36.0),
                 None,
-                vec![PaintOp::TextRun {
-                    bbox: BoundingBox::new(4.0, 4.0, 80.0, 28.0),
+                vec![PaintOp::text_run(
+                    BoundingBox::new(4.0, 4.0, 80.0, 28.0),
                     run,
-                }],
+                )],
             ),
         );
         let output = SkiaLayerRenderer::new()
@@ -2763,10 +2746,10 @@ mod tests {
             LayerNode::leaf(
                 BoundingBox::new(0.0, 0.0, 72.0, 36.0),
                 None,
-                vec![PaintOp::TextRun {
-                    bbox: BoundingBox::new(4.0, 4.0, 60.0, 28.0),
+                vec![PaintOp::text_run(
+                    BoundingBox::new(4.0, 4.0, 60.0, 28.0),
                     run,
-                }],
+                )],
             ),
         )
         .with_output_options(LayerOutputOptions {
@@ -2815,10 +2798,10 @@ mod tests {
             LayerNode::leaf(
                 BoundingBox::new(0.0, 0.0, 48.0, 40.0),
                 None,
-                vec![PaintOp::TextRun {
-                    bbox: BoundingBox::new(8.0, 8.0, 32.0, 28.0),
+                vec![PaintOp::text_run(
+                    BoundingBox::new(8.0, 8.0, 32.0, 28.0),
                     run,
-                }],
+                )],
             ),
         );
         let output = SkiaLayerRenderer::new()
@@ -2855,10 +2838,10 @@ mod tests {
             LayerNode::leaf(
                 BoundingBox::new(0.0, 0.0, 64.0, 48.0),
                 None,
-                vec![PaintOp::Equation {
-                    bbox: BoundingBox::new(6.0, 6.0, 44.0, 32.0),
+                vec![PaintOp::equation(
+                    BoundingBox::new(6.0, 6.0, 44.0, 32.0),
                     equation,
-                }],
+                )],
             ),
         );
         let output = SkiaLayerRenderer::new()
@@ -2902,10 +2885,10 @@ mod tests {
             LayerNode::leaf(
                 BoundingBox::new(0.0, 0.0, 64.0, 48.0),
                 None,
-                vec![PaintOp::Equation {
-                    bbox: BoundingBox::new(6.0, 6.0, 44.0, 32.0),
+                vec![PaintOp::equation(
+                    BoundingBox::new(6.0, 6.0, 44.0, 32.0),
                     equation,
-                }],
+                )],
             ),
         );
         let output = SkiaLayerRenderer::new()
@@ -2946,24 +2929,21 @@ mod tests {
                 BoundingBox::new(0.0, 0.0, 48.0, 16.0),
                 None,
                 vec![
-                    PaintOp::Placeholder {
-                        bbox: BoundingBox::new(0.0, 0.0, 14.0, 14.0),
-                        placeholder: PlaceholderNode {
+                    PaintOp::placeholder(
+                        BoundingBox::new(0.0, 0.0, 14.0, 14.0),
+                        PlaceholderNode {
                             fill_color: 0,
                             stroke_color: 0,
                             label: "ph".to_string(),
                         },
-                    },
-                    PaintOp::RawSvg {
-                        bbox: BoundingBox::new(16.0, 0.0, 14.0, 14.0),
-                        raw: RawSvgNode {
+                    ),
+                    PaintOp::raw_svg(
+                        BoundingBox::new(16.0, 0.0, 14.0, 14.0),
+                        RawSvgNode {
                             svg: "<invalid".to_string(),
                         },
-                    },
-                    PaintOp::FormObject {
-                        bbox: BoundingBox::new(32.0, 0.0, 14.0, 14.0),
-                        form,
-                    },
+                    ),
+                    PaintOp::form_object(BoundingBox::new(32.0, 0.0, 14.0, 14.0), form),
                 ],
             ),
         );
@@ -2983,13 +2963,13 @@ mod tests {
             LayerNode::leaf(
                 BoundingBox::new(0.0, 0.0, 32.0, 24.0),
                 None,
-                vec![PaintOp::RawSvg {
-                    bbox: BoundingBox::new(4.0, 4.0, 18.0, 12.0),
-                    raw: RawSvgNode {
+                vec![PaintOp::raw_svg(
+                    BoundingBox::new(4.0, 4.0, 18.0, 12.0),
+                    RawSvgNode {
                         svg: "<rect x=\"0\" y=\"0\" width=\"18\" height=\"12\" fill=\"#00ff00\"/>"
                             .to_string(),
                     },
-                }],
+                )],
             ),
         );
         let output = SkiaLayerRenderer::new()
@@ -3021,15 +3001,15 @@ mod tests {
             LayerNode::leaf(
                 BoundingBox::new(0.0, 0.0, 32.0, 24.0),
                 None,
-                vec![PaintOp::RawSvg {
-                    bbox: BoundingBox::new(4.0, 4.0, 20.0, 16.0),
-                    raw: RawSvgNode {
+                vec![PaintOp::raw_svg(
+                    BoundingBox::new(4.0, 4.0, 20.0, 16.0),
+                    RawSvgNode {
                         svg: format!(
                             "<image href=\"{}\" x=\"0\" y=\"0\" width=\"20\" height=\"16\"/>",
                             external_href
                         ),
                     },
-                }],
+                )],
             ),
         );
         let output = SkiaLayerRenderer::new()
@@ -3050,9 +3030,9 @@ mod tests {
         let red = LayerNode::leaf(
             BoundingBox::new(0.0, 0.0, 12.0, 12.0),
             None,
-            vec![PaintOp::Rectangle {
-                bbox: BoundingBox::new(0.0, 0.0, 12.0, 12.0),
-                rect: RectangleNode::new(
+            vec![PaintOp::rectangle(
+                BoundingBox::new(0.0, 0.0, 12.0, 12.0),
+                RectangleNode::new(
                     0.0,
                     ShapeStyle {
                         fill_color: Some(0x000000ff),
@@ -3060,14 +3040,14 @@ mod tests {
                     },
                     None,
                 ),
-            }],
+            )],
         );
         let blue = LayerNode::leaf(
             BoundingBox::new(3.0, 3.0, 6.0, 6.0),
             None,
-            vec![PaintOp::Rectangle {
-                bbox: BoundingBox::new(3.0, 3.0, 6.0, 6.0),
-                rect: RectangleNode::new(
+            vec![PaintOp::rectangle(
+                BoundingBox::new(3.0, 3.0, 6.0, 6.0),
+                RectangleNode::new(
                     0.0,
                     ShapeStyle {
                         fill_color: Some(0x00ff0000),
@@ -3075,7 +3055,7 @@ mod tests {
                     },
                     None,
                 ),
-            }],
+            )],
         );
         let tree = PageLayerTree::new(
             12.0,

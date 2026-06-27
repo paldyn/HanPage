@@ -825,11 +825,11 @@ mod tests {
 
     #[test]
     fn default_mode_reports_simple_image_as_direct() {
-        let tree = tree_with_ops(vec![PaintOp::Image {
-            bbox: bbox(),
-            image: ImageNode::new(1, Some(vec![1, 2, 3])),
-            resolved: None,
-        }]);
+        let tree = tree_with_ops(vec![PaintOp::image(
+            bbox(),
+            ImageNode::new(1, Some(vec![1, 2, 3])),
+            None,
+        )]);
 
         let plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Default);
 
@@ -847,11 +847,11 @@ mod tests {
 
     #[test]
     fn compat_mode_reports_simple_image_as_direct() {
-        let tree = tree_with_ops(vec![PaintOp::Image {
-            bbox: bbox(),
-            image: ImageNode::new(1, Some(vec![1, 2, 3])),
-            resolved: None,
-        }]);
+        let tree = tree_with_ops(vec![PaintOp::image(
+            bbox(),
+            ImageNode::new(1, Some(vec![1, 2, 3])),
+            None,
+        )]);
 
         let plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Compat);
 
@@ -876,11 +876,7 @@ mod tests {
         image.crop = Some((10, 20, 90, 80));
         image.transform.rotation = 15.0;
 
-        let tree = tree_with_ops(vec![PaintOp::Image {
-            bbox: bbox(),
-            image,
-            resolved: None,
-        }]);
+        let tree = tree_with_ops(vec![PaintOp::image(bbox(), image, None)]);
 
         let plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Default);
 
@@ -898,11 +894,7 @@ mod tests {
         image.brightness = 10;
         image.contrast = -20;
 
-        let tree = tree_with_ops(vec![PaintOp::Image {
-            bbox: bbox(),
-            image,
-            resolved: None,
-        }]);
+        let tree = tree_with_ops(vec![PaintOp::image(bbox(), image, None)]);
 
         let plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Default);
 
@@ -920,16 +912,16 @@ mod tests {
         image.brightness = 70;
         image.contrast = -50;
 
-        let tree = tree_with_ops(vec![PaintOp::Image {
-            bbox: bbox(),
+        let tree = tree_with_ops(vec![PaintOp::image(
+            bbox(),
             image,
-            resolved: Some(Box::new(ResolvedImagePayload {
+            Some(ResolvedImagePayload {
                 data: vec![4, 5, 6],
                 mime: "image/png",
                 kind: ResolvedImageKind::BakedWatermark,
                 suppress_effects: true,
-            })),
-        }]);
+            }),
+        )]);
 
         let plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Default);
 
@@ -948,24 +940,10 @@ mod tests {
         front.text_wrap = Some(TextWrap::InFrontOfText);
 
         let tree = tree_with_ops(vec![
-            PaintOp::PageBackground {
-                bbox: bbox(),
-                background: page_background(None, None),
-            },
-            PaintOp::Image {
-                bbox: bbox(),
-                image: behind,
-                resolved: None,
-            },
-            PaintOp::TextRun {
-                bbox: bbox(),
-                run: text_run("A"),
-            },
-            PaintOp::Image {
-                bbox: bbox(),
-                image: front,
-                resolved: None,
-            },
+            PaintOp::page_background(bbox(), page_background(None, None)),
+            PaintOp::image(bbox(), behind, None),
+            PaintOp::text_run(bbox(), text_run("A")),
+            PaintOp::image(bbox(), front, None),
         ]);
 
         let plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Default);
@@ -989,20 +967,14 @@ mod tests {
         let layered_rect = LayerNode::leaf(
             bbox(),
             None,
-            vec![PaintOp::Rectangle {
-                bbox: bbox(),
-                rect: RectangleNode::new(0.0, ShapeStyle::default(), None),
-            }],
+            vec![PaintOp::rectangle(
+                bbox(),
+                RectangleNode::new(0.0, ShapeStyle::default(), None),
+            )],
         )
         .with_layer(Some(RenderLayerInfo::new(Some(TextWrap::BehindText), 1, 1)));
-        let flow_text = LayerNode::leaf(
-            bbox(),
-            None,
-            vec![PaintOp::TextRun {
-                bbox: bbox(),
-                run: text_run("A"),
-            }],
-        );
+        let flow_text =
+            LayerNode::leaf(bbox(), None, vec![PaintOp::text_run(bbox(), text_run("A"))]);
         let tree = PageLayerTree::new(
             100.0,
             100.0,
@@ -1034,11 +1006,7 @@ mod tests {
         let mut image = ImageNode::new(1, Some(vec![1, 2, 3]));
         image.external_path = Some("linked-image.png".to_string());
 
-        let tree = tree_with_ops(vec![PaintOp::Image {
-            bbox: bbox(),
-            image,
-            resolved: None,
-        }]);
+        let tree = tree_with_ops(vec![PaintOp::image(bbox(), image, None)]);
 
         let plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Default);
 
@@ -1054,11 +1022,7 @@ mod tests {
         let mut image = ImageNode::new(1, None);
         image.external_path = Some("linked-image.png".to_string());
 
-        let tree = tree_with_ops(vec![PaintOp::Image {
-            bbox: bbox(),
-            image,
-            resolved: None,
-        }]);
+        let tree = tree_with_ops(vec![PaintOp::image(bbox(), image, None)]);
 
         let plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Default);
 
@@ -1093,14 +1057,8 @@ mod tests {
             })),
         );
         let tree = tree_with_ops(vec![
-            PaintOp::PageBackground {
-                bbox: bbox(),
-                background: image_background,
-            },
-            PaintOp::PageBackground {
-                bbox: bbox(),
-                background: gradient_background,
-            },
+            PaintOp::page_background(bbox(), image_background),
+            PaintOp::page_background(bbox(), gradient_background),
         ]);
 
         let default_plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Default);
@@ -1131,14 +1089,8 @@ mod tests {
         let mut vertical = text_run("A");
         vertical.is_vertical = true;
         let tree = tree_with_ops(vec![
-            PaintOp::TextRun {
-                bbox: bbox(),
-                run: text_run("A"),
-            },
-            PaintOp::TextRun {
-                bbox: bbox(),
-                run: vertical,
-            },
+            PaintOp::text_run(bbox(), text_run("A")),
+            PaintOp::text_run(bbox(), vertical),
         ]);
 
         let default_plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Default);
@@ -1158,10 +1110,7 @@ mod tests {
 
     #[test]
     fn text_run_op_type_matches_layer_tree_schema_name() {
-        let tree = tree_with_ops(vec![PaintOp::TextRun {
-            bbox: bbox(),
-            run: text_run("A"),
-        }]);
+        let tree = tree_with_ops(vec![PaintOp::text_run(bbox(), text_run("A"))]);
 
         let plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Default);
 
@@ -1170,9 +1119,9 @@ mod tests {
 
     #[test]
     fn footnote_marker_is_reported_as_text_special_visual() {
-        let tree = tree_with_ops(vec![PaintOp::FootnoteMarker {
-            bbox: bbox(),
-            marker: FootnoteMarkerNode {
+        let tree = tree_with_ops(vec![PaintOp::footnote_marker(
+            bbox(),
+            FootnoteMarkerNode {
                 number: 1,
                 text: "1)".to_string(),
                 base_font_size: 12.0,
@@ -1182,7 +1131,7 @@ mod tests {
                 para_index: 0,
                 control_index: 0,
             },
-        }]);
+        )]);
 
         let default_plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Default);
         assert_eq!(
@@ -1220,10 +1169,7 @@ mod tests {
 
     #[test]
     fn replay_plan_serializes_mode_and_summary() {
-        let tree = tree_with_ops(vec![PaintOp::TextRun {
-            bbox: bbox(),
-            run: text_run("A"),
-        }]);
+        let tree = tree_with_ops(vec![PaintOp::text_run(bbox(), text_run("A"))]);
 
         let plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Default);
         let json = serde_json::to_string(&plan).expect("serialize CanvasKit replay plan");

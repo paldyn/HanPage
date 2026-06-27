@@ -3,6 +3,7 @@ use skia_safe::{
     canvas::SrcRectConstraint, color_filters, image::RequiredProperties, Color, Data, FilterMode,
     IRect, Image, Matrix, MipmapMode, Paint, Rect, SamplingOptions, TileMode,
 };
+use std::sync::{Arc, OnceLock};
 
 use crate::model::image::ImageEffect;
 use crate::model::style::ImageFillMode;
@@ -361,10 +362,21 @@ fn svg_parse_options() -> usvg::Options<'static> {
         resolve_data: usvg::ImageHrefResolver::default_data_resolver(),
         resolve_string: Box::new(|_, _| None),
     };
-    let fontdb = options.fontdb_mut();
-    fontdb.load_system_fonts();
-    fontdb.set_sans_serif_family("Noto Sans CJK KR");
-    fontdb.set_serif_family("Noto Serif CJK KR");
-    fontdb.set_monospace_family("D2Coding");
+    options.fontdb = svg_fontdb();
     options
+}
+
+fn svg_fontdb() -> Arc<usvg::fontdb::Database> {
+    static SVG_FONTDB: OnceLock<Arc<usvg::fontdb::Database>> = OnceLock::new();
+
+    SVG_FONTDB
+        .get_or_init(|| {
+            let mut fontdb = usvg::fontdb::Database::new();
+            fontdb.load_system_fonts();
+            fontdb.set_sans_serif_family("Noto Sans CJK KR");
+            fontdb.set_serif_family("Noto Serif CJK KR");
+            fontdb.set_monospace_family("D2Coding");
+            Arc::new(fontdb)
+        })
+        .clone()
 }
