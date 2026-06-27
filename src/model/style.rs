@@ -450,9 +450,9 @@ pub enum CenterLine {
     /// 없음
     #[default]
     None,
-    /// 세로 중심선
+    /// HWPX `VERTICAL` 값. 한컴 2024 기준으로는 셀 중앙 가로선으로 표시된다.
     Vertical,
-    /// 가로 중심선
+    /// HWPX `HORIZONTAL` 값. 한컴 2024 기준으로는 셀 중앙 세로선으로 표시된다.
     Horizontal,
     /// 가로+세로 중심선
     Cross,

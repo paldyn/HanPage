@@ -17,6 +17,11 @@ bit 13 중심선 유무와 bit 8 slash `Crooked=1` 조합이며, HWPX의
 `NONE`/`VERTICAL`/`HORIZONTAL`/`CROSS` 방향을 별도 값으로 보존하고, HWP5/HWPX
 직렬화 때 보조 비트까지 함께 복원한다.
 
+Stage 2에서 한컴 2024 및 기준 PDF를 대조한 결과, HWPX literal `VERTICAL`은 화면상
+셀 중앙 세로선이 아니라 셀 중앙 가로 진행 막대로 표시된다. 반대로 `HORIZONTAL`은
+셀 중앙 세로선으로 렌더링해야 한다. 모델 값 이름은 HWPX literal 보존용으로 유지하고,
+렌더링 단계에서 한컴 2024 기준 방향으로 해석한다.
+
 ## 구현 단계
 
 ### Stage 1 — 파서/모델 확인

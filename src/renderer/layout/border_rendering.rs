@@ -780,10 +780,10 @@ pub(crate) fn render_cell_diagonal(
 
     match center_line {
         CenterLine::Vertical => {
-            nodes.extend(create_single_line(tree, color, width, dash, cx, y1, cx, y2));
+            nodes.extend(create_single_line(tree, color, width, dash, x1, cy, x2, cy));
         }
         CenterLine::Horizontal => {
-            nodes.extend(create_single_line(tree, color, width, dash, x1, cy, x2, cy));
+            nodes.extend(create_single_line(tree, color, width, dash, cx, y1, cx, y2));
         }
         CenterLine::Cross => {
             nodes.extend(create_single_line(tree, color, width, dash, cx, y1, cx, y2));
@@ -885,7 +885,7 @@ mod tests {
     }
 
     #[test]
-    fn render_vertical_center_line_without_diagonal_bits() {
+    fn render_hwpx_vertical_center_line_as_horizontal_bar() {
         let mut tree = PageRenderTree::new(0, 200.0, 100.0);
         let nodes = render_cell_diagonal(
             &mut tree,
@@ -900,9 +900,29 @@ mod tests {
         let line = line_node(&nodes[0]);
         assert_eq!(
             (line.x1, line.y1, line.x2, line.y2),
-            (60.0, 20.0, 60.0, 60.0)
+            (10.0, 40.0, 110.0, 40.0)
         );
         assert_eq!(line.style.color, 0x00F4_C741);
+    }
+
+    #[test]
+    fn render_hwpx_horizontal_center_line_as_vertical_bar() {
+        let mut tree = PageRenderTree::new(0, 200.0, 100.0);
+        let nodes = render_cell_diagonal(
+            &mut tree,
+            &center_line_style(CenterLine::Horizontal),
+            10.0,
+            20.0,
+            100.0,
+            40.0,
+        );
+
+        assert_eq!(nodes.len(), 1);
+        let line = line_node(&nodes[0]);
+        assert_eq!(
+            (line.x1, line.y1, line.x2, line.y2),
+            (60.0, 20.0, 60.0, 60.0)
+        );
     }
 
     #[test]
