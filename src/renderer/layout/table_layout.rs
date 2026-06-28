@@ -8,7 +8,7 @@ use super::super::style_resolver::{ResolvedBorderStyle, ResolvedStyleSet};
 use crate::model::bin_data::BinDataContent;
 use crate::model::control::Control;
 use crate::model::paragraph::Paragraph;
-use crate::model::style::{Alignment, BorderLine};
+use crate::model::style::{Alignment, BorderLine, CenterLine};
 use crate::model::table::VerticalAlign;
 
 /// [Task #548] paragraph 의 line N 에 적용되는 effective margin_left.
@@ -207,6 +207,99 @@ fn render_cell_box_borders(
         y + h,
     ));
     nodes
+}
+
+fn border_style_has_diagonal(bs: &ResolvedBorderStyle) -> bool {
+    let slash_bits = (bs.diagonal_attr >> 2) & 0x07;
+    let backslash_bits = (bs.diagonal_attr >> 5) & 0x07;
+    (slash_bits != 0 || backslash_bits != 0 || bs.center_line != CenterLine::None)
+        && bs.diagonal.diagonal_type != 0
+}
+
+fn mark_cellzone_diagonal_coverage(
+    covered: &mut [Vec<bool>],
+    start_row: usize,
+    end_row: usize,
+    start_col: usize,
+    end_col: usize,
+) {
+    for row in covered.iter_mut().take(end_row).skip(start_row) {
+        for cell in row.iter_mut().take(end_col).skip(start_col) {
+            *cell = true;
+        }
+    }
+}
+
+fn cell_span_has_cellzone_diagonal(
+    covered: &[Vec<bool>],
+    row: usize,
+    col: usize,
+    row_span: usize,
+    col_span: usize,
+    row_count: usize,
+    col_count: usize,
+) -> bool {
+    let end_row = (row + row_span).min(row_count);
+    let end_col = (col + col_span).min(col_count);
+    (row..end_row).any(|rr| {
+        (col..end_col).any(|cc| {
+            covered
+                .get(rr)
+                .and_then(|cells| cells.get(cc))
+                .copied()
+                .unwrap_or(false)
+        })
+    })
+}
+
+fn border_style_has_center_line(bs: &ResolvedBorderStyle) -> bool {
+    bs.center_line != CenterLine::None && bs.diagonal.diagonal_type != 0
+}
+
+fn table_grid_cell_has_own_diagonal(
+    table: &crate::model::table::Table,
+    styles: &ResolvedStyleSet,
+    row: usize,
+    col: usize,
+    zone_border_fill_id: u16,
+) -> bool {
+    table.cells.iter().any(|cell| {
+        let start_row = cell.row as usize;
+        let end_row = start_row + cell.row_span as usize;
+        let start_col = cell.col as usize;
+        let end_col = start_col + cell.col_span as usize;
+        if row < start_row
+            || row >= end_row
+            || col < start_col
+            || col >= end_col
+            || cell.border_fill_id == 0
+            || cell.border_fill_id == zone_border_fill_id
+        {
+            return false;
+        }
+        styles
+            .border_styles
+            .get((cell.border_fill_id as usize).saturating_sub(1))
+            .is_some_and(border_style_has_diagonal)
+    })
+}
+
+fn cellzone_diagonal_fully_overridden_by_cells(
+    table: &crate::model::table::Table,
+    styles: &ResolvedStyleSet,
+    start_row: usize,
+    end_row: usize,
+    start_col: usize,
+    end_col: usize,
+    zone_border_fill_id: u16,
+) -> bool {
+    start_row < end_row
+        && start_col < end_col
+        && (start_row..end_row).all(|row| {
+            (start_col..end_col).all(|col| {
+                table_grid_cell_has_own_diagonal(table, styles, row, col, zone_border_fill_id)
+            })
+        })
 }
 
 /// [Task #993] 분할 표 행 컷 — 행에 속한 셀(col 오름차순)별 "소비한 콘텐츠 유닛 수".
@@ -833,6 +926,7 @@ impl LayoutEngine {
 
         // ── 4-2. cellzone 배경 렌더링 (zone 전체 영역에 한 번) ──
         let mut cellzone_diagonal_nodes = Vec::new();
+        let mut cellzone_diagonal_covered = vec![vec![false; col_count]; row_count];
         for zone in &table.zones {
             if zone.border_fill_id == 0 {
                 continue;
@@ -900,9 +994,28 @@ impl LayoutEngine {
                         zone_h,
                         bin_data_content,
                     );
-                    cellzone_diagonal_nodes.extend(render_cell_diagonal(
-                        tree, zone_bs, zone_x, zone_y, zone_w, zone_h,
-                    ));
+                    if border_style_has_diagonal(zone_bs)
+                        && !cellzone_diagonal_fully_overridden_by_cells(
+                            table,
+                            styles,
+                            sr,
+                            er,
+                            sc,
+                            ec,
+                            zone.border_fill_id,
+                        )
+                    {
+                        mark_cellzone_diagonal_coverage(
+                            &mut cellzone_diagonal_covered,
+                            sr,
+                            er,
+                            sc,
+                            ec,
+                        );
+                        cellzone_diagonal_nodes.extend(render_cell_diagonal(
+                            tree, zone_bs, zone_x, zone_y, zone_w, zone_h,
+                        ));
+                    }
                 }
             }
         }
@@ -938,6 +1051,7 @@ impl LayoutEngine {
             clamp_header_negative_para_offset,
             inline_table_flow_y_shift,
             header_footer_padding_compat,
+            &cellzone_diagonal_covered,
         );
 
         if !cellzone_diagonal_nodes.is_empty() {
@@ -2148,6 +2262,7 @@ impl LayoutEngine {
         clamp_header_negative_para_offset: bool,
         inline_table_flow_y_shift: f64,
         header_footer_padding_compat: bool,
+        cellzone_diagonal_covered: &[Vec<bool>],
     ) {
         let mut independent_border_nodes: Vec<RenderNode> = Vec::new();
         for (cell_idx, cell) in table.cells.iter().enumerate() {
@@ -3702,10 +3817,22 @@ impl LayoutEngine {
             table_node.children.push(cell_node);
 
             // (c) 셀 대각선 렌더링 (셀 콘텐츠 위에 그림)
-            if let Some(bs) = border_style {
-                table_node.children.extend(render_cell_diagonal(
-                    tree, bs, cell_x, cell_y, cell_w, cell_h,
-                ));
+            let suppress_cell_diagonal = cell_span_has_cellzone_diagonal(
+                cellzone_diagonal_covered,
+                r,
+                c,
+                cell.row_span as usize,
+                cell.col_span as usize,
+                row_count,
+                col_count,
+            ) && !border_style
+                .is_some_and(border_style_has_center_line);
+            if !suppress_cell_diagonal {
+                if let Some(bs) = border_style {
+                    table_node.children.extend(render_cell_diagonal(
+                        tree, bs, cell_x, cell_y, cell_w, cell_h,
+                    ));
+                }
             }
         }
         if !independent_border_nodes.is_empty() {

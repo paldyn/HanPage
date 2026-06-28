@@ -362,6 +362,27 @@ fn test_serialize_border_fill_solid() {
 }
 
 #[test]
+fn test_serialize_border_fill_cross_centerline_uses_hwp5_center_bit_only() {
+    let bf = BorderFill {
+        raw_data: None,
+        attr: (0b010 << 2) | (0b010 << 5),
+        borders: [BorderLine::default(); 4],
+        diagonal: DiagonalLine::default(),
+        center_line: CenterLine::Cross,
+        fill: Fill::default(),
+    };
+
+    let data = serialize_border_fill(&bf);
+    let mut r = crate::parser::byte_reader::ByteReader::new(&data);
+
+    assert_eq!(
+        r.read_u16().unwrap(),
+        1 << 13,
+        "HWP5 바이너리 CROSS 중심선은 대각선 꺾은선 bit8/bit10을 건드리면 안 됨"
+    );
+}
+
+#[test]
 fn test_serialize_border_fill_image_fill_mode_uses_hwp5_values() {
     let cases = [
         (ImageFillMode::TileAll, 0),

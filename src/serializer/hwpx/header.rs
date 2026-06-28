@@ -385,7 +385,14 @@ fn effective_center_line(bf: &BorderFill) -> CenterLine {
 }
 
 fn effective_border_fill_attr(bf: &BorderFill) -> u16 {
-    bf.attr | bf.center_line.hwp_attr_bits()
+    let center_line = effective_center_line(bf);
+    if center_line == CenterLine::None {
+        return bf.attr;
+    }
+
+    let mut attr = bf.attr;
+    attr &= !((0x07 << 2) | (0x07 << 5) | (1 << 8) | (1 << 10) | (1 << 11) | (1 << 12) | (1 << 13));
+    attr | center_line.hwp_attr_bits()
 }
 
 fn write_border_line<W: Write>(

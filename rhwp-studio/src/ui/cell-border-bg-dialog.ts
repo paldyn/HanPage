@@ -620,6 +620,22 @@ export class CellBorderBgDialog extends ModalDialog {
   ): HTMLDivElement {
     const group = document.createElement('div');
     group.className = 'tcp-diag-button-grid';
+    const clearTitle = kind === 'slash' ? '대각선 해제' : '역대각선 해제';
+    const clearBtn = this.createIconButton(clearTitle, this.createEmptyDiagonalIcon());
+    clearBtn.addEventListener('click', () => {
+      if (kind === 'slash') {
+        this.diagSlashBits = 0;
+      } else {
+        this.diagBackSlashBits = 0;
+      }
+      this.updateDiagonalButtons();
+      this.updateDiagonalPreview();
+    });
+    clearBtn.dataset.kind = kind;
+    clearBtn.dataset.bits = '0';
+    group.appendChild(clearBtn);
+    this.diagButtons.push(clearBtn);
+
     for (const [shape, bits, title] of defs) {
       const btn = this.createIconButton(title, this.createDiagonalIcon(kind, shape));
       btn.addEventListener('click', () => {
@@ -628,6 +644,7 @@ export class CellBorderBgDialog extends ModalDialog {
         } else {
           this.diagBackSlashBits = this.diagBackSlashBits === bits ? 0 : bits;
         }
+        if (this.hasDiagonalSelection()) this.diagCenterLine = 'NONE';
         this.updateDiagonalButtons();
         this.updateDiagonalPreview();
       });
@@ -642,6 +659,17 @@ export class CellBorderBgDialog extends ModalDialog {
   private createCenterLineButtonGroup(): HTMLDivElement {
     const group = document.createElement('div');
     group.className = 'tcp-diag-button-grid';
+    const clearBtn = this.createIconButton('중심선 해제', this.createEmptyDiagonalIcon());
+    clearBtn.addEventListener('click', () => {
+      this.diagCenterLine = 'NONE';
+      this.updateDiagonalButtons();
+      this.updateDiagonalPreview();
+    });
+    clearBtn.dataset.kind = 'centerLine';
+    clearBtn.dataset.value = 'NONE';
+    group.appendChild(clearBtn);
+    this.diagButtons.push(clearBtn);
+
     const defs: [string, string][] = [
       ['VERTICAL', '가로 중심선'],
       ['HORIZONTAL', '세로 중심선'],
@@ -651,6 +679,10 @@ export class CellBorderBgDialog extends ModalDialog {
       const btn = this.createIconButton(title, this.createCenterLineIcon(value));
       btn.addEventListener('click', () => {
         this.diagCenterLine = this.diagCenterLine === value ? 'NONE' : value;
+        if (this.hasCenterLineSelection()) {
+          this.diagSlashBits = 0;
+          this.diagBackSlashBits = 0;
+        }
         this.updateDiagonalButtons();
         this.updateDiagonalPreview();
       });
@@ -669,6 +701,20 @@ export class CellBorderBgDialog extends ModalDialog {
     btn.title = title;
     btn.appendChild(svg);
     return btn;
+  }
+
+  private createEmptyDiagonalIcon(): SVGSVGElement {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 36 28');
+    const rect = document.createElementNS(ns, 'rect');
+    rect.setAttribute('x', '3'); rect.setAttribute('y', '3');
+    rect.setAttribute('width', '30'); rect.setAttribute('height', '22');
+    rect.setAttribute('fill', 'none');
+    rect.setAttribute('stroke', 'currentColor');
+    rect.setAttribute('stroke-width', '1');
+    svg.appendChild(rect);
+    return svg;
   }
 
   private createDiagonalIcon(kind: 'slash' | 'backSlash', shape: string): SVGSVGElement {
@@ -739,15 +785,46 @@ export class CellBorderBgDialog extends ModalDialog {
     return [[x1, y1, x2, y2]];
   }
 
+  private hasDiagonalSelection(): boolean {
+    return this.diagSlashBits !== 0 || this.diagBackSlashBits !== 0;
+  }
+
+  private hasCenterLineSelection(): boolean {
+    return this.diagCenterLine !== 'NONE';
+  }
+
+  private normalizeDiagonalExclusive(): void {
+    if (this.applyMode === 'asOne') {
+      this.diagCenterLine = 'NONE';
+    } else if (this.hasCenterLineSelection()) {
+      this.diagSlashBits = 0;
+      this.diagBackSlashBits = 0;
+    } else if (this.hasDiagonalSelection()) {
+      this.diagCenterLine = 'NONE';
+    }
+  }
+
   private updateDiagonalButtons(): void {
+    const centerLineUnavailable = this.applyMode === 'asOne';
+    const centerLineSelected = this.hasCenterLineSelection();
+    const diagonalSelected = this.hasDiagonalSelection();
     for (const btn of this.diagButtons) {
       const kind = btn.dataset.kind;
       if (kind === 'slash') {
-        btn.classList.toggle('active', Number(btn.dataset.bits) === this.diagSlashBits);
+        const active = Number(btn.dataset.bits) === this.diagSlashBits;
+        btn.classList.toggle('active', active);
+        btn.disabled = centerLineSelected;
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
       } else if (kind === 'backSlash') {
-        btn.classList.toggle('active', Number(btn.dataset.bits) === this.diagBackSlashBits);
+        const active = Number(btn.dataset.bits) === this.diagBackSlashBits;
+        btn.classList.toggle('active', active);
+        btn.disabled = centerLineSelected;
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
       } else if (kind === 'centerLine') {
-        btn.classList.toggle('active', btn.dataset.value === this.diagCenterLine);
+        const active = !centerLineUnavailable && btn.dataset.value === this.diagCenterLine;
+        btn.classList.toggle('active', active);
+        btn.disabled = centerLineUnavailable || diagonalSelected;
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
       }
     }
   }
@@ -875,6 +952,7 @@ export class CellBorderBgDialog extends ModalDialog {
     this.diagSlashBits = cp.diagonalSlash ?? 0;
     this.diagBackSlashBits = cp.diagonalBackSlash ?? 0;
     this.diagCenterLine = cp.centerLine ?? 'NONE';
+    this.normalizeDiagonalExclusive();
     this.updateDiagonalButtons();
     this.updateDiagonalPreview();
   }
@@ -899,6 +977,7 @@ export class CellBorderBgDialog extends ModalDialog {
 
   protected onConfirm(): void {
     const { sec, ppi, ci } = this.tableCtx;
+    this.normalizeDiagonalExclusive();
 
     const newProps: Record<string, unknown> = {};
     newProps.borderFillId = this.cellProps.borderFillId ?? 0;

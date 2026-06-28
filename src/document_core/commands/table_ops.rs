@@ -402,7 +402,7 @@ impl DocumentCore {
             .get((bf_id - 1) as usize);
         match bf {
             Some(bf) => {
-                use crate::model::style::FillType;
+                use crate::model::style::{CenterLine, FillType};
                 let dir_names = ["Left", "Right", "Top", "Bottom"];
                 let borders_json: Vec<String> = bf.borders.iter().enumerate().map(|(i, b)| {
                     format!(
@@ -420,8 +420,19 @@ impl DocumentCore {
                     }
                     _ => ("none", "#ffffff".to_string(), "#000000".to_string(), 0),
                 };
-                let diagonal_slash = (bf.attr >> 2) & 0x07;
-                let diagonal_backslash = (bf.attr >> 5) & 0x07;
+                let mut diagonal_slash = (bf.attr >> 2) & 0x07;
+                let mut diagonal_backslash = (bf.attr >> 5) & 0x07;
+                let mut center_line = if bf.center_line != CenterLine::None {
+                    bf.center_line
+                } else {
+                    CenterLine::from_hwp_attr(bf.attr)
+                };
+                if center_line != CenterLine::None {
+                    diagonal_slash = 0;
+                    diagonal_backslash = 0;
+                } else if diagonal_slash != 0 || diagonal_backslash != 0 {
+                    center_line = CenterLine::None;
+                }
                 format!(
                     "\"borderFillId\":{},{},\"fillType\":\"{}\",\"fillColor\":\"{}\",\"patternColor\":\"{}\",\"patternType\":{},\"diagonalLine\":{},\"diagonalSlash\":{},\"diagonalBackSlash\":{},\"diagonalWidth\":{},\"diagonalColor\":\"{}\",\"centerLine\":\"{}\"",
                     bf_id,
@@ -432,7 +443,7 @@ impl DocumentCore {
                     diagonal_backslash,
                     bf.diagonal.width,
                     color_ref_to_css(bf.diagonal.color),
-                    bf.center_line.as_hwpx(),
+                    center_line.as_hwpx(),
                 )
             }
             None => {
@@ -597,6 +608,7 @@ impl DocumentCore {
 
         let (needs_reflow, reflow_para_count) = {
             let mut needs_reflow = false;
+            let mut size_changed = false;
             let table = self.get_table_mut(section_idx, parent_para_idx, control_idx)?;
             let cell = table.cells.get_mut(cell_idx).ok_or_else(|| {
                 HwpError::RenderError(format!("셀 인덱스 {} 범위 초과", cell_idx))
@@ -604,9 +616,11 @@ impl DocumentCore {
 
             if let Some(v) = top_u32("width") {
                 needs_reflow |= cell.width != v;
+                size_changed |= cell.width != v;
                 cell.width = v;
             }
             if let Some(v) = top_u32("height") {
+                size_changed |= cell.height != v;
                 cell.height = v;
             }
             if let Some(v) = top_i16("paddingLeft") {
@@ -652,7 +666,9 @@ impl DocumentCore {
             if let Some(v) = top_u32("borderFillId") {
                 cell.border_fill_id = v as u16;
             }
-            table.update_ctrl_dimensions();
+            if size_changed {
+                table.update_ctrl_dimensions();
+            }
             table.dirty = true;
             (needs_reflow, table.cells[cell_idx].paragraphs.len())
         };
@@ -742,7 +758,8 @@ impl DocumentCore {
         end_col: u16,
         json: &str,
     ) -> Result<String, HwpError> {
-        let new_bf_id = self.create_border_fill_from_json(json);
+        let cellzone_json = Self::strip_center_line_for_cellzone_json(json);
+        let new_bf_id = self.create_border_fill_from_json(&cellzone_json);
         let table = self.get_table_mut(section_idx, parent_para_idx, control_idx)?;
         if table.row_count == 0 || table.col_count == 0 {
             return Err(HwpError::RenderError(
@@ -780,6 +797,20 @@ impl DocumentCore {
             "{{\"ok\":true,\"startRow\":{},\"startCol\":{},\"endRow\":{},\"endCol\":{},\"borderFillId\":{}}}",
             sr, sc, er, ec, new_bf_id
         ))
+    }
+
+    fn strip_center_line_for_cellzone_json(json: &str) -> String {
+        let Ok(mut value) = serde_json::from_str::<serde_json::Value>(json) else {
+            return json.to_string();
+        };
+        let Some(obj) = value.as_object_mut() else {
+            return json.to_string();
+        };
+        obj.insert(
+            "centerLine".to_string(),
+            serde_json::Value::String("NONE".to_string()),
+        );
+        serde_json::to_string(&value).unwrap_or_else(|_| json.to_string())
     }
 
     /// 셀 테두리 변경 시 이웃 셀의 공유 엣지 테두리를 동기화한다.
