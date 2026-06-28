@@ -535,6 +535,19 @@ fn serialize_table_record(table: &Table) -> Vec<u8> {
 
     w.write_u16(table.border_fill_id).unwrap();
 
+    // 영역 속성: UINT16 nZones + TableZone[nZones].
+    //
+    // `셀 테두리/배경 - 하나의 셀처럼 적용`은 개별 셀이 아니라 TABLE cellzone
+    // overlay로 저장되어야 한컴에서 선택 영역 전체 대각선으로 표시된다.
+    w.write_u16(table.zones.len() as u16).unwrap();
+    for zone in &table.zones {
+        w.write_u16(zone.start_row).unwrap();
+        w.write_u16(zone.start_col).unwrap();
+        w.write_u16(zone.end_row).unwrap();
+        w.write_u16(zone.end_col).unwrap();
+        w.write_u16(zone.border_fill_id).unwrap();
+    }
+
     // 원본 추가 바이트 복원 (라운드트립용)
     if !table.raw_table_record_extra.is_empty() {
         w.write_bytes(&table.raw_table_record_extra).unwrap();

@@ -218,3 +218,47 @@ fn issue_1633_as_one_cell_diagonal_uses_cellzone_range() {
         "asOne 대각선은 첫 셀이 아니라 선택 영역 전체 cellzone bbox를 가로질러야 함"
     );
 }
+
+#[test]
+fn issue_1633_as_one_cellzone_survives_hwp_export() {
+    let mut doc = HwpDocument::create_empty();
+    let created = doc
+        .create_table_ex_native(0, 0, 0, 8, 10, true, Some(&[4195; 10]), Some(&[1282; 8]))
+        .expect("표 생성");
+    let created: Value = serde_json::from_str(&created).expect("createTable JSON");
+    let ppi = created["paraIdx"].as_u64().expect("paraIdx") as u32;
+    let ci = created["controlIdx"].as_u64().expect("controlIdx") as u32;
+    let props = r##"{
+        "borderFillId":1,
+        "borderLeft":{"type":1,"width":0,"color":"#000000"},
+        "borderRight":{"type":1,"width":0,"color":"#000000"},
+        "borderTop":{"type":1,"width":0,"color":"#000000"},
+        "borderBottom":{"type":1,"width":0,"color":"#000000"},
+        "fillType":"none",
+        "diagonalLine":1,
+        "diagonalSlash":2,
+        "diagonalBackSlash":2,
+        "diagonalWidth":0,
+        "diagonalColor":"#000000",
+        "centerLine":"NONE"
+    }"##;
+
+    doc.set_cell_zone_properties(0, ppi, ci, 0, 0, 7, 9, props)
+        .expect("cellzone 적용");
+    let exported = doc.export_hwp_with_adapter().expect("HWP export");
+    let reparsed = parse_document(&exported).expect("exported HWP 재파싱");
+    let table = first_table(&reparsed);
+    let zone = table.zones.first().expect("HWP TABLE record cellzone");
+
+    assert_eq!(table.row_count, 8);
+    assert_eq!(table.col_count, 10);
+    assert_eq!(
+        (zone.start_row, zone.start_col, zone.end_row, zone.end_col),
+        (0, 0, 7, 9),
+        "다른 이름 저장 HWP도 10열 8줄 전체 cellzone을 보존해야 함"
+    );
+    let bf = &reparsed.doc_info.border_fills[(zone.border_fill_id - 1) as usize];
+    assert_eq!(bf.diagonal.diagonal_type, 1);
+    assert_eq!((bf.attr >> 2) & 0x07, 2);
+    assert_eq!((bf.attr >> 5) & 0x07, 2);
+}
