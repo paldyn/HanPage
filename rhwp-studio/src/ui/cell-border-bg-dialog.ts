@@ -1,6 +1,6 @@
 import { ModalDialog } from './dialog';
 import type { WasmBridge } from '@/core/wasm-bridge';
-import type { CellProperties } from '@/core/types';
+import type { CellBbox, CellProperties } from '@/core/types';
 import type { EventBus } from '@/core/event-bus';
 
 const HWPUNIT_PER_MM = 7200 / 25.4;
@@ -148,7 +148,9 @@ export class CellBorderBgDialog extends ModalDialog {
     super.show();
     this.dialog.classList.add('tcp-border-bg-dialog');
     const { sec, ppi, ci } = this.tableCtx;
-    this.cellProps = this.wasm.getCellProperties(sec, ppi, ci, this.cellIdx);
+    this.cellProps = this.applyMode === 'each'
+      ? this.wasm.getCellOwnProperties(sec, ppi, ci, this.cellIdx)
+      : this.wasm.getCellProperties(sec, ppi, ci, this.cellIdx);
     this.populateFields();
   }
 
@@ -877,6 +879,24 @@ export class CellBorderBgDialog extends ModalDialog {
     this.updateDiagonalPreview();
   }
 
+  private selectedCellIndicesForRange(range: CellRange): number[] {
+    const { sec, ppi, ci } = this.tableCtx;
+    const indices = new Set<number>();
+    const overlaps = (bbox: CellBbox): boolean => {
+      const endRow = bbox.row + Math.max(1, bbox.rowSpan) - 1;
+      const endCol = bbox.col + Math.max(1, bbox.colSpan) - 1;
+      return bbox.row <= range.endRow &&
+        endRow >= range.startRow &&
+        bbox.col <= range.endCol &&
+        endCol >= range.startCol;
+    };
+
+    for (const bbox of this.wasm.getTableCellBboxes(sec, ppi, ci)) {
+      if (overlaps(bbox)) indices.add(bbox.cellIdx);
+    }
+    return [...indices];
+  }
+
   protected onConfirm(): void {
     const { sec, ppi, ci } = this.tableCtx;
 
@@ -935,6 +955,12 @@ export class CellBorderBgDialog extends ModalDialog {
       const dims = this.wasm.getTableDimensions(sec, ppi, ci);
       for (let i = 0; i < dims.cellCount; i++) {
         this.wasm.setCellProperties(sec, ppi, ci, i, newProps as Partial<CellProperties>);
+      }
+    } else if (this.selectionRange) {
+      const cellIndices = this.selectedCellIndicesForRange(this.selectionRange);
+      const targetIndices = cellIndices.length > 0 ? cellIndices : [this.cellIdx];
+      for (const cellIdx of targetIndices) {
+        this.wasm.setCellProperties(sec, ppi, ci, cellIdx, newProps as Partial<CellProperties>);
       }
     } else {
       this.wasm.setCellProperties(sec, ppi, ci, this.cellIdx, newProps as Partial<CellProperties>);

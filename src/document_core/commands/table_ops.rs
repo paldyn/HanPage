@@ -481,6 +481,39 @@ impl DocumentCore {
         control_idx: usize,
         cell_idx: usize,
     ) -> Result<String, HwpError> {
+        self.get_cell_properties_with_border_mode(
+            section_idx,
+            parent_para_idx,
+            control_idx,
+            cell_idx,
+            true,
+        )
+    }
+
+    pub(crate) fn get_cell_own_properties_native(
+        &self,
+        section_idx: usize,
+        parent_para_idx: usize,
+        control_idx: usize,
+        cell_idx: usize,
+    ) -> Result<String, HwpError> {
+        self.get_cell_properties_with_border_mode(
+            section_idx,
+            parent_para_idx,
+            control_idx,
+            cell_idx,
+            false,
+        )
+    }
+
+    fn get_cell_properties_with_border_mode(
+        &self,
+        section_idx: usize,
+        parent_para_idx: usize,
+        control_idx: usize,
+        cell_idx: usize,
+        use_effective_border_fill: bool,
+    ) -> Result<String, HwpError> {
         let para = self
             .document
             .sections
@@ -512,9 +545,12 @@ impl DocumentCore {
             crate::model::table::VerticalAlign::Bottom => 2,
         };
 
-        let effective_border_fill_id =
-            Self::cell_effective_border_fill_id(table, cell_idx).unwrap_or(cell.border_fill_id);
-        let bf_json = self.build_border_fill_json_by_id(effective_border_fill_id);
+        let border_fill_id = if use_effective_border_fill {
+            Self::cell_effective_border_fill_id(table, cell_idx).unwrap_or(cell.border_fill_id)
+        } else {
+            cell.border_fill_id
+        };
+        let bf_json = self.build_border_fill_json_by_id(border_fill_id);
 
         Ok(format!(
             "{{\"width\":{},\"height\":{},\"paddingLeft\":{},\"paddingRight\":{},\"paddingTop\":{},\"paddingBottom\":{},\"applyInnerMargin\":{},\"verticalAlign\":{},\"textDirection\":{},\"isHeader\":{},\"cellProtect\":{},\"fieldName\":{},\"editableInForm\":{},{}}}",

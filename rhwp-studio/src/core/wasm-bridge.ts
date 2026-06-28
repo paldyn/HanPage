@@ -808,6 +808,14 @@ export class WasmBridge {
     return JSON.parse(this.doc.getCellProperties(sec, parentPara, controlIdx, cellIdx));
   }
 
+  getCellOwnProperties(sec: number, parentPara: number, controlIdx: number, cellIdx: number): CellProperties {
+    if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
+    const doc = this.doc as unknown as {
+      getCellOwnProperties(sec: number, parentPara: number, controlIdx: number, cellIdx: number): string;
+    };
+    return JSON.parse(doc.getCellOwnProperties(sec, parentPara, controlIdx, cellIdx));
+  }
+
   setCellProperties(sec: number, parentPara: number, controlIdx: number, cellIdx: number, props: Partial<CellProperties>): { ok: boolean } {
     if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
     return JSON.parse(this.doc.setCellProperties(sec, parentPara, controlIdx, cellIdx, JSON.stringify(props)));

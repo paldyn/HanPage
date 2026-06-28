@@ -159,6 +159,66 @@ fn issue_1633_get_cell_properties_reflects_cellzone_diagonal() {
 }
 
 #[test]
+fn issue_1633_get_cell_own_properties_ignores_cellzone_diagonal() {
+    for sample in ["samples/대각선샘플.hwpx", "samples/대각선샘플.hwp"] {
+        let bytes = read_sample(sample);
+        let parsed = parse_document(&bytes).unwrap_or_else(|err| panic!("{sample}: {err}"));
+        let table = first_table(&parsed);
+        let zone = table
+            .zones
+            .iter()
+            .find(|zone| zone.border_fill_id == 11)
+            .unwrap_or_else(|| panic!("{sample}: BF 11 cellzone을 찾지 못함"));
+        let cell_idx = table
+            .cells
+            .iter()
+            .position(|cell| {
+                if cell.row < zone.start_row
+                    || cell.row > zone.end_row
+                    || cell.col < zone.start_col
+                    || cell.col > zone.end_col
+                    || cell.border_fill_id == zone.border_fill_id
+                {
+                    return false;
+                }
+                let Some(bf) = parsed
+                    .doc_info
+                    .border_fills
+                    .get((cell.border_fill_id.saturating_sub(1)) as usize)
+                else {
+                    return false;
+                };
+                ((bf.attr >> 2) & 0x07) == 0 && ((bf.attr >> 5) & 0x07) == 0
+            })
+            .unwrap_or_else(|| panic!("{sample}: cellzone 내부의 개별 대각선 없는 셀을 찾지 못함"));
+        assert_ne!(
+            table.cells[cell_idx].border_fill_id, 11,
+            "{sample}: 회귀 가드는 cellzone과 개별 셀 BF 분리를 검증해야 함"
+        );
+
+        let doc = HwpDocument::from_bytes(&bytes).unwrap_or_else(|err| panic!("{sample}: {err}"));
+        let effective_props = doc
+            .get_cell_properties(0, 0, 2, cell_idx as u32)
+            .unwrap_or_else(|err| panic!("{sample}: effective 셀 속성 조회 실패: {err:?}"));
+        let effective_props: Value = serde_json::from_str(&effective_props)
+            .unwrap_or_else(|err| panic!("{sample}: effective JSON 파싱 실패: {err}"));
+        assert_eq!(effective_props["borderFillId"].as_u64(), Some(11));
+        assert_eq!(effective_props["diagonalLine"].as_u64(), Some(10));
+        assert_eq!(effective_props["diagonalSlash"].as_u64(), Some(2));
+        assert_eq!(effective_props["diagonalBackSlash"].as_u64(), Some(2));
+
+        let own_props = doc
+            .get_cell_own_properties(0, 0, 2, cell_idx as u32)
+            .unwrap_or_else(|err| panic!("{sample}: 고유 셀 속성 조회 실패: {err:?}"));
+        let own_props: Value = serde_json::from_str(&own_props)
+            .unwrap_or_else(|err| panic!("{sample}: own JSON 파싱 실패: {err}"));
+        assert_ne!(own_props["borderFillId"].as_u64(), Some(11), "{sample}");
+        assert_eq!(own_props["diagonalSlash"].as_u64(), Some(0), "{sample}");
+        assert_eq!(own_props["diagonalBackSlash"].as_u64(), Some(0), "{sample}");
+    }
+}
+
+#[test]
 fn issue_1633_as_one_cell_diagonal_uses_cellzone_range() {
     let mut doc = HwpDocument::create_empty();
     let created = doc

@@ -2221,6 +2221,26 @@ impl HwpDocument {
         .map_err(|e| e.into())
     }
 
+    /// 셀 고유 속성을 조회한다.
+    ///
+    /// cellzone overlay를 합성하지 않고 셀 자체의 borderFill만 반환한다.
+    #[wasm_bindgen(js_name = getCellOwnProperties)]
+    pub fn get_cell_own_properties(
+        &self,
+        section_idx: u32,
+        parent_para_idx: u32,
+        control_idx: u32,
+        cell_idx: u32,
+    ) -> Result<String, JsValue> {
+        self.get_cell_own_properties_native(
+            section_idx as usize,
+            parent_para_idx as usize,
+            control_idx as usize,
+            cell_idx as usize,
+        )
+        .map_err(|e| e.into())
+    }
+
     /// 셀 속성을 수정한다.
     ///
     /// 반환: JSON `{"ok":true}`

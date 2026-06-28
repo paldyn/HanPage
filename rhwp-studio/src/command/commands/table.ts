@@ -296,7 +296,15 @@ export const tableCommands: CommandDef[] = [
       const pos = ih.getCursorPosition();
       if (pos.parentParaIndex === undefined || pos.controlIndex === undefined || pos.cellIndex === undefined) return;
       const tableCtx = { sec: pos.sectionIndex, ppi: pos.parentParaIndex, ci: pos.controlIndex };
-      const dialog = new CellBorderBgDialog(services.wasm, services.eventBus, tableCtx, pos.cellIndex, 'each');
+      const selectionRange = ih.isInCellSelectionMode?.() ? ih.getSelectedCellRange?.() ?? null : null;
+      const dialog = new CellBorderBgDialog(
+        services.wasm,
+        services.eventBus,
+        tableCtx,
+        pos.cellIndex,
+        'each',
+        selectionRange,
+      );
       dialog.show();
     },
   },
