@@ -216,15 +216,14 @@ fn border_style_has_diagonal(bs: &ResolvedBorderStyle) -> bool {
         && bs.diagonal.diagonal_type != 0
 }
 
-fn mark_cellzone_diagonal_coverage(
+/// cellzone 대각선은 영역 전체에 한 번 그리고, 원본 중복 BF가 붙는 시작 셀만 숨긴다.
+fn mark_cellzone_diagonal_origin_coverage(
     covered: &mut [Vec<bool>],
     start_row: usize,
-    end_row: usize,
     start_col: usize,
-    end_col: usize,
 ) {
-    for row in covered.iter_mut().take(end_row).skip(start_row) {
-        for cell in row.iter_mut().take(end_col).skip(start_col) {
+    if let Some(row) = covered.get_mut(start_row) {
+        if let Some(cell) = row.get_mut(start_col) {
             *cell = true;
         }
     }
@@ -926,7 +925,7 @@ impl LayoutEngine {
 
         // ── 4-2. cellzone 배경 렌더링 (zone 전체 영역에 한 번) ──
         let mut cellzone_diagonal_nodes = Vec::new();
-        let mut cellzone_diagonal_covered = vec![vec![false; col_count]; row_count];
+        let mut cellzone_diagonal_origin_covered = vec![vec![false; col_count]; row_count];
         for zone in &table.zones {
             if zone.border_fill_id == 0 {
                 continue;
@@ -1005,12 +1004,10 @@ impl LayoutEngine {
                             zone.border_fill_id,
                         )
                     {
-                        mark_cellzone_diagonal_coverage(
-                            &mut cellzone_diagonal_covered,
+                        mark_cellzone_diagonal_origin_coverage(
+                            &mut cellzone_diagonal_origin_covered,
                             sr,
-                            er,
                             sc,
-                            ec,
                         );
                         cellzone_diagonal_nodes.extend(render_cell_diagonal(
                             tree, zone_bs, zone_x, zone_y, zone_w, zone_h,
@@ -1051,7 +1048,7 @@ impl LayoutEngine {
             clamp_header_negative_para_offset,
             inline_table_flow_y_shift,
             header_footer_padding_compat,
-            &cellzone_diagonal_covered,
+            &cellzone_diagonal_origin_covered,
         );
 
         if !cellzone_diagonal_nodes.is_empty() {
@@ -2262,7 +2259,7 @@ impl LayoutEngine {
         clamp_header_negative_para_offset: bool,
         inline_table_flow_y_shift: f64,
         header_footer_padding_compat: bool,
-        cellzone_diagonal_covered: &[Vec<bool>],
+        cellzone_diagonal_origin_covered: &[Vec<bool>],
     ) {
         let mut independent_border_nodes: Vec<RenderNode> = Vec::new();
         for (cell_idx, cell) in table.cells.iter().enumerate() {
@@ -3818,15 +3815,14 @@ impl LayoutEngine {
 
             // (c) 셀 대각선 렌더링 (셀 콘텐츠 위에 그림)
             let suppress_cell_diagonal = cell_span_has_cellzone_diagonal(
-                cellzone_diagonal_covered,
+                cellzone_diagonal_origin_covered,
                 r,
                 c,
                 cell.row_span as usize,
                 cell.col_span as usize,
                 row_count,
                 col_count,
-            ) && !border_style
-                .is_some_and(border_style_has_center_line);
+            );
             if !suppress_cell_diagonal {
                 if let Some(bs) = border_style {
                     table_node.children.extend(render_cell_diagonal(

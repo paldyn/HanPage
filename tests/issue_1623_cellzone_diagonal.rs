@@ -215,6 +215,43 @@ fn issue_1633_sample4_preserves_diagonal_without_centerline() {
 }
 
 #[test]
+fn issue_1633_sample5_keeps_cellzone_and_cell_borderfills_separate() {
+    for sample in ["samples/대각선샘플5.hwpx", "samples/대각선샘플5.hwp"] {
+        let bytes = read_sample(sample);
+        let doc = parse_document(&bytes).unwrap_or_else(|err| panic!("{sample}: {err}"));
+        let table = first_table(&doc);
+
+        assert_eq!(table.row_count, 10, "{sample}: row count");
+        assert_eq!(table.col_count, 10, "{sample}: col count");
+        let zone = table
+            .zones
+            .iter()
+            .find(|zone| {
+                (zone.start_row, zone.start_col, zone.end_row, zone.end_col) == (0, 0, 9, 9)
+            })
+            .unwrap_or_else(|| panic!("{sample}: 전체 cellzone 없음"));
+        let cell = table.cells.get(1).expect("1행 2열 셀");
+        assert_ne!(
+            cell.border_fill_id, zone.border_fill_id,
+            "{sample}: 1행 2열 셀 BF는 cellzone BF와 분리되어야 함"
+        );
+
+        let zone_bf = &doc.doc_info.border_fills[(zone.border_fill_id - 1) as usize];
+        let cell_bf = &doc.doc_info.border_fills[(cell.border_fill_id - 1) as usize];
+        assert_eq!(
+            zone_bf.borders[0].line_type as u8, 0,
+            "{sample}: zone BF는 셀 외곽 테두리를 갖지 않아야 함"
+        );
+        assert_ne!(
+            cell_bf.borders[0].line_type as u8, 0,
+            "{sample}: 1행 2열 셀 BF는 셀 테두리를 보존해야 함"
+        );
+        assert_eq!((cell_bf.attr >> 2) & 0x07, 2, "{sample}: slash");
+        assert_eq!((cell_bf.attr >> 5) & 0x07, 2, "{sample}: backSlash");
+    }
+}
+
+#[test]
 fn issue_1633_sample4_renders_cellzone_diagonal_without_cell_overlay() {
     for sample in ["samples/대각선샘플4.hwpx", "samples/대각선샘플4.hwp"] {
         let core = DocumentCore::from_bytes(&read_sample(sample))
@@ -558,7 +595,7 @@ fn issue_1633_centerline_is_disabled_for_as_one_cellzone_apply() {
 }
 
 #[test]
-fn issue_1633_cell_centerline_renders_over_existing_cellzone_diagonal() {
+fn issue_1633_cellzone_origin_centerline_is_hidden_like_hancom() {
     let mut doc = HwpDocument::create_empty();
     let created = doc
         .create_table_ex_native(0, 0, 0, 8, 10, true, Some(&[4195; 10]), Some(&[1282; 8]))
@@ -597,6 +634,7 @@ fn issue_1633_cell_centerline_renders_over_existing_cellzone_diagonal() {
 
     doc.set_cell_zone_properties(0, ppi, ci, 0, 0, 7, 9, diagonal_props)
         .expect("대각선 cellzone 적용");
+
     doc.set_cell_properties(0, ppi, ci, 0, centerline_props)
         .expect("선택 셀 중심선 적용");
 
@@ -608,22 +646,119 @@ fn issue_1633_cell_centerline_renders_over_existing_cellzone_diagonal() {
     assert_eq!(own_props["diagonalSlash"].as_u64(), Some(0));
     assert_eq!(own_props["diagonalBackSlash"].as_u64(), Some(0));
 
+    let after_svg = doc.render_page_svg_native(0).expect("SVG 렌더");
+    let after_lines = rendered_lines(&after_svg);
+    assert!(
+        !after_lines.iter().any(|(x1, y1, x2, y2)| {
+            (x1 - x2).abs() < 0.01
+                && (130.0..155.0).contains(x1)
+                && (10.0..25.0).contains(&(y1 - y2).abs())
+        }),
+        "한컴처럼 전체 cellzone 대각선의 시작 셀에는 세로 중심선을 추가 렌더링하지 않아야 함"
+    );
+    assert!(
+        !after_lines.iter().any(|(x1, y1, x2, y2)| {
+            (y1 - y2).abs() < 0.01
+                && (140.0..150.0).contains(y1)
+                && (40.0..80.0).contains(&(x1 - x2).abs())
+        }),
+        "한컴처럼 전체 cellzone 대각선의 시작 셀에는 가로 중심선을 추가 렌더링하지 않아야 함"
+    );
+}
+
+#[test]
+fn issue_1633_cell_diagonal_renders_over_existing_cellzone_diagonal() {
+    let mut doc = HwpDocument::create_empty();
+    let created = doc
+        .create_table_ex_native(0, 0, 0, 8, 10, true, Some(&[4195; 10]), Some(&[1282; 8]))
+        .expect("표 생성");
+    let created: Value = serde_json::from_str(&created).expect("createTable JSON");
+    let ppi = created["paraIdx"].as_u64().expect("paraIdx") as u32;
+    let ci = created["controlIdx"].as_u64().expect("controlIdx") as u32;
+    let diagonal_props = r##"{
+        "borderFillId":1,
+        "borderLeft":{"type":1,"width":0,"color":"#000000"},
+        "borderRight":{"type":1,"width":0,"color":"#000000"},
+        "borderTop":{"type":1,"width":0,"color":"#000000"},
+        "borderBottom":{"type":1,"width":0,"color":"#000000"},
+        "fillType":"none",
+        "diagonalLine":1,
+        "diagonalSlash":2,
+        "diagonalBackSlash":2,
+        "diagonalWidth":0,
+        "diagonalColor":"#000000",
+        "centerLine":"NONE"
+    }"##;
+
+    doc.set_cell_zone_properties(0, ppi, ci, 0, 0, 7, 9, diagonal_props)
+        .expect("대각선 cellzone 적용");
+    doc.set_cell_properties(0, ppi, ci, 1, diagonal_props)
+        .expect("1행 2열 선택 셀 대각선 적용");
+
+    let own_props = doc
+        .get_cell_own_properties(0, ppi, ci, 1)
+        .expect("고유 셀 속성 조회");
+    let own_props: Value = serde_json::from_str(&own_props).expect("own props JSON");
+    assert_eq!(own_props["diagonalSlash"].as_u64(), Some(2));
+    assert_eq!(own_props["diagonalBackSlash"].as_u64(), Some(2));
+
     let svg = doc.render_page_svg_native(0).expect("SVG 렌더");
     let lines = rendered_lines(&svg);
+    let short_cell_diagonals: Vec<_> = lines
+        .iter()
+        .filter(|(x1, y1, x2, y2)| {
+            let dx = (x1 - x2).abs();
+            let dy = (y1 - y2).abs();
+            (40.0..80.0).contains(&dx) && (10.0..30.0).contains(&dy)
+        })
+        .collect();
     assert!(
-        lines
-            .iter()
-            .any(|(x1, y1, x2, y2)| (x1 - x2).abs() < 0.01
-                && (10.0..30.0).contains(&(y1 - y2).abs())),
-        "기존 cellzone 대각선 위에서도 선택 셀의 세로 중심선은 보여야 함"
+        short_cell_diagonals.len() >= 2,
+        "기존 cellzone 대각선 위에 나중에 적용한 1행 2열 셀 대각선이 렌더되어야 함: {short_cell_diagonals:?}"
     );
-    assert!(
-        lines
-            .iter()
-            .any(|(x1, y1, x2, y2)| (y1 - y2).abs() < 0.01
-                && (40.0..80.0).contains(&(x1 - x2).abs())),
-        "기존 cellzone 대각선 위에서도 선택 셀의 가로 중심선은 보여야 함"
+}
+
+#[test]
+fn issue_1633_cell_edit_does_not_store_cellzone_borderfill_as_cell_borderfill() {
+    let bytes = read_sample("samples/대각선샘플4.hwp");
+    let mut doc = HwpDocument::from_bytes(&bytes).expect("대각선샘플4 HWP 파싱");
+    let effective_props = doc
+        .get_cell_properties(0, 0, 2, 1)
+        .expect("1행 2열 effective 속성 조회");
+    let effective_props: Value =
+        serde_json::from_str(&effective_props).expect("effective props JSON");
+    let zone_bf_id = effective_props["borderFillId"]
+        .as_u64()
+        .expect("zone borderFillId") as u16;
+
+    doc.set_cell_properties(0, 0, 2, 1, &effective_props.to_string())
+        .expect("cellzone effective props 기반 셀 편집");
+
+    let table = first_table(doc.document());
+    let zone = table
+        .zones
+        .iter()
+        .find(|zone| zone.start_row == 0 && zone.start_col == 0)
+        .expect("전체 cellzone");
+    let cell = table.cells.get(1).expect("1행 2열 셀");
+    assert_eq!(zone.border_fill_id, zone_bf_id);
+    assert_ne!(
+        cell.border_fill_id, zone.border_fill_id,
+        "각 셀마다 적용은 cellzone BF를 셀 BF로 저장하면 안 됨"
     );
+
+    let zone_bf = &doc.document().doc_info.border_fills[(zone.border_fill_id - 1) as usize];
+    let cell_bf = &doc.document().doc_info.border_fills[(cell.border_fill_id - 1) as usize];
+    assert_eq!(
+        zone_bf.borders[0].line_type as u8, 0,
+        "zone BF는 셀 테두리 없음"
+    );
+    assert_ne!(
+        cell_bf.borders[0].line_type as u8, 0,
+        "셀 BF는 기존 셀 테두리를 보존해야 함"
+    );
+    assert_eq!((cell_bf.attr >> 2) & 0x07, 2);
+    assert_eq!((cell_bf.attr >> 5) & 0x07, 2);
 }
 
 #[test]
@@ -740,14 +875,14 @@ fn issue_1633_centerline_excludes_diagonal_on_hwp_export() {
 
     assert_ne!(bf.attr & (1 << 13), 0, "HWP 중심선 bit 13 보존");
     assert_eq!(
-        bf.attr & (1 << 8),
-        0,
-        "CROSS 중심선은 slash 꺾은선 bit를 켜지 않음"
+        (bf.attr >> 8) & 0x03,
+        3,
+        "CROSS 중심선은 한컴식 slash 중심선 보조 비트를 저장해야 함"
     );
     assert_eq!(
         bf.attr & (1 << 10),
-        0,
-        "CROSS 중심선은 backSlash 꺾은선 bit를 켜지 않음"
+        1 << 10,
+        "CROSS 중심선은 한컴식 backSlash 중심선 보조 비트를 저장해야 함"
     );
     assert_eq!(bf.center_line, CenterLine::Cross);
     assert_eq!(bf.diagonal.diagonal_type, 1);

@@ -362,7 +362,7 @@ fn test_serialize_border_fill_solid() {
 }
 
 #[test]
-fn test_serialize_border_fill_cross_centerline_uses_hwp5_center_bit_only() {
+fn test_serialize_border_fill_cross_centerline_uses_hwp5_center_bits() {
     let bf = BorderFill {
         raw_data: None,
         attr: (0b010 << 2) | (0b010 << 5),
@@ -377,8 +377,8 @@ fn test_serialize_border_fill_cross_centerline_uses_hwp5_center_bit_only() {
 
     assert_eq!(
         r.read_u16().unwrap(),
-        1 << 13,
-        "HWP5 바이너리 CROSS 중심선은 대각선 꺾은선 bit8/bit10을 건드리면 안 됨"
+        (1 << 13) | (0x03 << 8) | (1 << 10),
+        "HWP5 바이너리 CROSS 중심선은 한컴 중심선 보조 비트를 함께 저장해야 함"
     );
 }
 

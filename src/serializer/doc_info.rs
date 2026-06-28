@@ -313,8 +313,13 @@ pub fn serialize_border_fill(bf: &BorderFill) -> Vec<u8> {
         CenterLine::from_hwp_attr(attr)
     };
     if center_line != CenterLine::None {
-        attr &=
-            !((0x07 << 2) | (0x07 << 5) | (1 << 8) | (1 << 10) | (1 << 11) | (1 << 12) | (1 << 13));
+        attr &= !((0x07 << 2)
+            | (0x07 << 5)
+            | (0x03 << 8)
+            | (1 << 10)
+            | (1 << 11)
+            | (1 << 12)
+            | (1 << 13));
         attr |= center_line.hwp_binary_attr_bits();
     }
     w.write_u16(attr).unwrap();

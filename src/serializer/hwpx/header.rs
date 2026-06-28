@@ -391,7 +391,8 @@ fn effective_border_fill_attr(bf: &BorderFill) -> u16 {
     }
 
     let mut attr = bf.attr;
-    attr &= !((0x07 << 2) | (0x07 << 5) | (1 << 8) | (1 << 10) | (1 << 11) | (1 << 12) | (1 << 13));
+    attr &=
+        !((0x07 << 2) | (0x07 << 5) | (0x03 << 8) | (1 << 10) | (1 << 11) | (1 << 12) | (1 << 13));
     attr | center_line.hwp_attr_bits()
 }
 
@@ -1560,8 +1561,8 @@ mod tests {
             "centerLine 방향이 보존되어야 함: {xml}"
         );
         assert!(
-            xml.contains(r#"<hh:slash type="NONE" Crooked="1" isCounter="0"/>"#),
-            "VERTICAL 중심선의 HWP attr 보조 비트가 Crooked=1 로 보존되어야 함: {xml}"
+            xml.contains(r#"<hh:slash type="NONE" Crooked="3" isCounter="0"/>"#),
+            "VERTICAL 중심선의 HWP attr 보조 비트가 Crooked=3 으로 보존되어야 함: {xml}"
         );
     }
 

@@ -606,10 +606,43 @@ impl DocumentCore {
                 .map(ToOwned::to_owned)
         };
 
+        let has_border_fill_change = json.contains("\"borderLeft\"")
+            || json.contains("\"fillType\"")
+            || json.contains("\"diagonalLine\"")
+            || json.contains("\"diagonalSlash\"")
+            || json.contains("\"diagonalBackSlash\"")
+            || json.contains("\"diagonalWidth\"")
+            || json.contains("\"diagonalColor\"")
+            || json.contains("\"centerLine\"");
+        let cell_border_fill_json = if has_border_fill_change {
+            Some(self.normalize_cell_border_fill_json_for_edit(
+                section_idx,
+                parent_para_idx,
+                control_idx,
+                cell_idx,
+                json,
+            ))
+        } else {
+            None
+        };
+
         let (needs_reflow, reflow_para_count) = {
             let mut needs_reflow = false;
             let mut size_changed = false;
             let table = self.get_table_mut(section_idx, parent_para_idx, control_idx)?;
+            let direct_border_fill_id = if has_border_fill_change {
+                None
+            } else {
+                top_u32("borderFillId").map(|v| v as u16).and_then(|bf_id| {
+                    table.cells.get(cell_idx).and_then(|cell| {
+                        if Self::cell_is_covered_by_zone_border_fill(table, cell, bf_id) {
+                            None
+                        } else {
+                            Some(bf_id)
+                        }
+                    })
+                })
+            };
             let cell = table.cells.get_mut(cell_idx).ok_or_else(|| {
                 HwpError::RenderError(format!("셀 인덱스 {} 범위 초과", cell_idx))
             })?;
@@ -663,8 +696,8 @@ impl DocumentCore {
             if let Some(v) = top_str("fieldName") {
                 cell.field_name = if v.is_empty() { None } else { Some(v) };
             }
-            if let Some(v) = top_u32("borderFillId") {
-                cell.border_fill_id = v as u16;
+            if let Some(v) = direct_border_fill_id {
+                cell.border_fill_id = v;
             }
             if size_changed {
                 table.update_ctrl_dimensions();
@@ -686,17 +719,9 @@ impl DocumentCore {
             }
         }
 
-        // BorderFill 변경: 테두리/배경/대각선/중심선 필드가 포함된 경우 처리
-        let has_border_fill_change = json.contains("\"borderLeft\"")
-            || json.contains("\"fillType\"")
-            || json.contains("\"diagonalLine\"")
-            || json.contains("\"diagonalSlash\"")
-            || json.contains("\"diagonalBackSlash\"")
-            || json.contains("\"diagonalWidth\"")
-            || json.contains("\"diagonalColor\"")
-            || json.contains("\"centerLine\"");
         if has_border_fill_change {
-            let new_bf_id = self.create_border_fill_from_json(json);
+            let border_fill_json = cell_border_fill_json.as_deref().unwrap_or(json);
+            let new_bf_id = self.create_border_fill_from_json(border_fill_json);
 
             // 새 BorderFill의 테두리 데이터 복사 (이웃 셀 갱신용)
             let new_borders = {
@@ -744,6 +769,133 @@ impl DocumentCore {
         self.paginate_if_needed();
 
         Ok("{\"ok\":true}".to_string())
+    }
+
+    fn normalize_cell_border_fill_json_for_edit(
+        &self,
+        section_idx: usize,
+        parent_para_idx: usize,
+        control_idx: usize,
+        cell_idx: usize,
+        json: &str,
+    ) -> String {
+        let Ok(mut value) = serde_json::from_str::<serde_json::Value>(json) else {
+            return json.to_string();
+        };
+        let Some(obj) = value.as_object_mut() else {
+            return json.to_string();
+        };
+        let incoming_bf_id = obj
+            .get("borderFillId")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u16)
+            .unwrap_or(0);
+        if incoming_bf_id == 0 {
+            return json.to_string();
+        }
+
+        let Some(table) = self
+            .document
+            .sections
+            .get(section_idx)
+            .and_then(|section| section.paragraphs.get(parent_para_idx))
+            .and_then(|para| match para.controls.get(control_idx) {
+                Some(Control::Table(table)) => Some(table),
+                _ => None,
+            })
+        else {
+            return json.to_string();
+        };
+        let Some(cell) = table.cells.get(cell_idx) else {
+            return json.to_string();
+        };
+        if cell.border_fill_id == incoming_bf_id
+            || !Self::cell_is_covered_by_zone_border_fill(table, cell, incoming_bf_id)
+        {
+            return json.to_string();
+        }
+
+        let incoming_idx = (incoming_bf_id as usize).saturating_sub(1);
+        let own_idx = (cell.border_fill_id as usize).saturating_sub(1);
+        let zone_bf = self.document.doc_info.border_fills.get(incoming_idx);
+        let own_bf = self.document.doc_info.border_fills.get(own_idx);
+        let incoming_borders_are_zone = zone_bf
+            .map(|bf| Self::json_borders_match_border_fill(obj, bf))
+            .unwrap_or(false);
+
+        obj.insert(
+            "borderFillId".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(cell.border_fill_id)),
+        );
+        if incoming_borders_are_zone {
+            if let Some(bf) = own_bf {
+                Self::write_border_json_from_border_fill(obj, bf);
+            }
+        }
+
+        serde_json::to_string(&value).unwrap_or_else(|_| json.to_string())
+    }
+
+    fn cell_is_covered_by_zone_border_fill(
+        table: &crate::model::table::Table,
+        cell: &crate::model::table::Cell,
+        border_fill_id: u16,
+    ) -> bool {
+        let cell_start_row = cell.row;
+        let cell_end_row = cell.row.saturating_add(cell.row_span).saturating_sub(1);
+        let cell_start_col = cell.col;
+        let cell_end_col = cell.col.saturating_add(cell.col_span).saturating_sub(1);
+        table.zones.iter().any(|zone| {
+            zone.border_fill_id == border_fill_id
+                && cell_start_row <= zone.end_row
+                && cell_end_row >= zone.start_row
+                && cell_start_col <= zone.end_col
+                && cell_end_col >= zone.start_col
+        })
+    }
+
+    fn json_borders_match_border_fill(
+        obj: &serde_json::Map<String, serde_json::Value>,
+        bf: &crate::model::style::BorderFill,
+    ) -> bool {
+        const KEYS: [&str; 4] = ["borderLeft", "borderRight", "borderTop", "borderBottom"];
+        KEYS.iter().enumerate().all(|(idx, key)| {
+            let Some(border) = obj.get(*key).and_then(|v| v.as_object()) else {
+                return false;
+            };
+            let line = bf.borders[idx];
+            let type_matches = border.get("type").and_then(|v| v.as_i64()).map(|v| v as u8)
+                == Some(border_line_type_to_u8_val(line.line_type));
+            let width_matches = border
+                .get("width")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as u8)
+                == Some(line.width);
+            let color_matches = border
+                .get("color")
+                .and_then(|v| v.as_str())
+                .map(|v| v.eq_ignore_ascii_case(&color_ref_to_css(line.color)))
+                .unwrap_or(false);
+            type_matches && width_matches && color_matches
+        })
+    }
+
+    fn write_border_json_from_border_fill(
+        obj: &mut serde_json::Map<String, serde_json::Value>,
+        bf: &crate::model::style::BorderFill,
+    ) {
+        const KEYS: [&str; 4] = ["borderLeft", "borderRight", "borderTop", "borderBottom"];
+        for (idx, key) in KEYS.iter().enumerate() {
+            let line = bf.borders[idx];
+            obj.insert(
+                (*key).to_string(),
+                serde_json::json!({
+                    "type": border_line_type_to_u8_val(line.line_type),
+                    "width": line.width,
+                    "color": color_ref_to_css(line.color),
+                }),
+            );
+        }
     }
 
     /// 선택 영역을 하나의 셀처럼 취급하는 cellzone 테두리/배경 속성을 적용한다.

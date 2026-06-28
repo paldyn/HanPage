@@ -2685,7 +2685,7 @@ mod tests {
     fn test_center_line_vertical_sets_attr_and_direction() {
         let bf = parse_single_border_fill(
             r##"<hh:borderFill id="9" centerLine="VERTICAL">
-                 <hh:slash type="NONE" Crooked="1" isCounter="0"/>
+                 <hh:slash type="NONE" Crooked="3" isCounter="0"/>
                  <hh:backSlash type="NONE" Crooked="0" isCounter="0"/>
                  <hh:diagonal type="SOLID" width="2.0 mm" color="#41C7F4"/>
                </hh:borderFill>"##,
@@ -2693,7 +2693,7 @@ mod tests {
 
         assert_eq!(bf.center_line, CenterLine::Vertical);
         assert_ne!(bf.attr & (1 << 13), 0, "centerLine != NONE → bit 13 설정");
-        assert_ne!(bf.attr & (1 << 8), 0, "slash Crooked=1 → bit 8 설정");
+        assert_eq!((bf.attr >> 8) & 0x03, 3, "slash Crooked=3 보존");
         assert_eq!(
             bf.diagonal.diagonal_type, 1,
             "중심선도 diagonal 스타일 사용"

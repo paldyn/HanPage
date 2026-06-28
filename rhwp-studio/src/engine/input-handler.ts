@@ -3928,7 +3928,7 @@ export class InputHandler {
     const pos = this.cursor.getPosition();
     const cellProps = pos.parentParaIndex !== undefined
       ? pickDefined(
-          this.wasm.getCellProperties(pos.sectionIndex, pos.parentParaIndex, pos.controlIndex!, pos.cellIndex!),
+          this.wasm.getCellOwnProperties(pos.sectionIndex, pos.parentParaIndex, pos.controlIndex!, pos.cellIndex!),
           FORMAT_COPY_CELL_KEYS,
         ) as Partial<CellProperties>
       : undefined;
