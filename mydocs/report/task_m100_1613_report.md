@@ -30,6 +30,13 @@ HWPX 로 저장하는 경로를 메뉴로 노출한다.
 
 - HWP 문서 → HWPX 저장(PK 매직), HWPX 문서 → HWP 저장(CFB 매직) 양방향 e2e.
 
+### `rhwp-studio/src/command/file-system-access.ts` (4단계 — 저장 picker 형식)
+
+- 저장 대화창(`showSaveFilePicker`)이 항상 "HWP 문서(.hwp)" 형식만 노출하던 문제 정정.
+- `HWPX_SAVE_PICKER_TYPES`("HWPX 문서", `.hwpx`) 추가, `SaveDocumentOptions.saveAsHwpx` 옵션으로
+  포맷별 picker types 선택. `saveAsFormat`/`saveCurrentDocument` 가 `isHwpx` 전달.
+- → HWPX 저장 시 대화창에 "HWPX 문서 (.hwpx)" 로 표시. (작업지시자 환경 시각 확인 통과.)
+
 WASM/Rust 변경 없음(기존 `exportHwp`/`exportHwpx` 재사용).
 
 ## 3. 검증 결과
@@ -41,8 +48,13 @@ WASM/Rust 변경 없음(기존 `exportHwp`/`exportHwpx` 재사용).
 | `npm run build` | 통과 (dist 메뉴 항목 2건 반영) |
 | **신규 e2e** `save-as-format` (headless) | HWP→HWPX(MIME application/hwp+zip, PK 매직 50 4B 03 04, 재오픈 6p), HWPX→HWP(MIME application/x-hwp, CFB 매직 D0 CF 11 E0, 재오픈 6p) **전부 PASS** |
 | **회귀** `hwpx-direct-save` e2e | 기본 저장(file:save) 무영향, 전부 PASS |
+| 저장 picker 형식(4단계) | HWPX 저장 시 "HWPX 문서(.hwpx)" 표시 — 작업지시자 시각 확인 통과 |
 
 → 매직 바이트로 산출 포맷이 사용자 선택값과 일치함을 직접 확인.
+
+> 참고: studio 가 참조하는 WASM(`@wasm` → `../pkg`)이 stale 이면 exportHwp 가 구버전 동작을
+> 할 수 있다. 본 작업 검증 시 devel 기준 WASM 재빌드 후 정상 확인(작업지시자 환경 stale 캐시
+> 이슈 해소). studio TS 변경은 pkg 재빌드와 독립이나, exportHwp/exportHwpx 동작은 pkg 의존.
 
 ## 4. 영향
 
