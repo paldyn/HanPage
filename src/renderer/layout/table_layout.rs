@@ -5152,6 +5152,16 @@ impl LayoutEngine {
                     j = units.len();
                     break;
                 }
+                // [Task #1658] 미세 fragment 낭비 페이지 방지: 거대 셀이 페이지를 가로질러 분할될
+                // 때 셀 내용 vpos reset(hard_break_before)이 촘촘하면, 잔여공간이 충분한데도 reset 마다
+                // 페이지를 끊어 2줄 이하만 담은 낭비 페이지가 양산된다(법령 별표 거대 셀:
+                // 별표1 5→4쪽, 산업통상부 별표4 33→28쪽). 현재 fragment 가 ≤2 유닛이고 유닛이 들어가며
+                // 잔여공간이 tolerance 초과면 그 reset break 를 흡수한다. #1488(가시 문단 사이 reset 을
+                // 3 유닛 소비 후 보존)은 j>start+2 라 영향 없음.
+                let tiny_fragment_waste = j <= start + 2
+                    && !u.empty_spacer
+                    && h + u.height <= avail_height
+                    && avail_height - h > HARD_BREAK_REMAINING_TOLERANCE_PX;
                 if j > start
                     && u.hard_break_before
                     && (rewind_internal_hard_break_orphan
@@ -5160,6 +5170,7 @@ impl LayoutEngine {
                             && (h + u.height > avail_height
                                 || avail_height - h <= HARD_BREAK_REMAINING_TOLERANCE_PX)))
                     && !units[start..j].iter().all(|unit| unit.empty_spacer)
+                    && !tiny_fragment_waste
                 {
                     if rewind_internal_hard_break_orphan {
                         Self::rewind_rowbreak_orphan_before_hard_break(
