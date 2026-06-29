@@ -2654,8 +2654,7 @@ impl LayoutEngine {
                     // 문서는 한컴이 각 문단 top을 vpos로 고정해 둔다. 누적 y만 쓰면
                     // spacing_before가 중복되거나 음수 line_spacing이 누적되어 줄 위치가
                     // 점점 어긋난다.
-                    let use_saved_cell_para_vpos =
-                        use_top_vpos_anchor || cell.paragraphs.len() > 1;
+                    let use_saved_cell_para_vpos = use_top_vpos_anchor || cell.paragraphs.len() > 1;
                     if use_saved_cell_para_vpos && !has_nested_table {
                         if let Some(first_seg) = para.line_segs.first() {
                             if first_seg.vertical_pos >= 0 {
