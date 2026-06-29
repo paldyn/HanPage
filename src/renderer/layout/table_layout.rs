@@ -50,6 +50,16 @@ fn cell_para_line_anchor_y(
     }
 }
 
+fn has_initial_tac_shape_host(paragraphs: &[Paragraph]) -> bool {
+    paragraphs.first().is_some_and(|para| {
+        para.text.trim().is_empty()
+            && para
+                .controls
+                .iter()
+                .any(|ctrl| matches!(ctrl, Control::Shape(shape) if shape.common().treat_as_char))
+    })
+}
+
 use super::super::composer::effective_text_for_metrics;
 use super::super::{hwpunit_to_px, ShapeStyle};
 use super::border_rendering::{
@@ -2654,7 +2664,8 @@ impl LayoutEngine {
                     // 문서는 한컴이 각 문단 top을 vpos로 고정해 둔다. 누적 y만 쓰면
                     // spacing_before가 중복되거나 음수 line_spacing이 누적되어 줄 위치가
                     // 점점 어긋난다.
-                    let use_saved_cell_para_vpos = use_top_vpos_anchor || cell.paragraphs.len() > 1;
+                    let use_saved_cell_para_vpos =
+                        use_top_vpos_anchor || has_initial_tac_shape_host(&cell.paragraphs);
                     if use_saved_cell_para_vpos && !has_nested_table {
                         if let Some(first_seg) = para.line_segs.first() {
                             if first_seg.vertical_pos >= 0 {
