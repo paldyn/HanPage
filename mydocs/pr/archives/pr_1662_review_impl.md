@@ -23,6 +23,7 @@ devel 추월 대응 merge commit:
 
 | 항목 | 내용 |
 |-----|------|
+| 문서 PR | #1671 |
 | review 문서 | `mydocs/pr/archives/pr_1662_review.md` |
 | 처리 계획 | `mydocs/pr/archives/pr_1662_review_impl.md` |
 | 오늘할일 | `mydocs/orders/20260629.md` |
@@ -56,7 +57,7 @@ devel 추월 대응 merge commit:
    - `local/devel`을 `upstream/devel`에 동기화
    - merge 후 `cargo test --test svg_snapshot` 통과 확인
 7. 문서 전용 PR
-   - 작업지시자 지시에 따라 review 문서와 오늘할일은 #1662 head에 얹지 않고, merge 후 별도 `mydocs/**` 문서 전용 PR로 처리한다.
+   - 작업지시자 지시에 따라 review 문서와 오늘할일은 #1662 head에 얹지 않고, merge 후 별도 `mydocs/**` 문서 전용 PR #1671로 처리한다.
 
 ## 작업지시자 확인 사항
 
