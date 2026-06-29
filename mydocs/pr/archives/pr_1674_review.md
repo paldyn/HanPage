@@ -2,7 +2,7 @@
 
 - PR: https://github.com/edwardkim/rhwp/pull/1674
 - 제목: `Fix HWPX centered cell paragraph vpos after TAC shape`
-- 작성자: oleg-sung (Oleg Sungyrovsky, location: Russian — **rhwp 최초 러시아 기여자**, 2번째 PR(#1489 머지됨))
+- 작성자: oleg-sung (Oleg Sungurovsky, location: Russian — 러시아 기여자, **재기여**: #1489 머지 후 2번째 PR)
 - 연결: closes #1673
 - base ← head: `devel` ← `oleg-sung:fix/hwpx-centered-cell-vpos-after-tac`
 - 처리일: 2026-06-30
@@ -71,7 +71,8 @@ TAC 제목 shape 뒤 본문이 너무 높게 올라와 제목과 겹침.
 
 ## 7. 기여자 메모
 
-- **rhwp 최초 러시아 기여자**(location: Russian). 2번째 PR(#1489 rowbreak 머지 이력).
+- **러시아 기여자**(location: Russian)의 **재기여** — #1489(rowbreak) 머지 후 2번째 PR.
+  (정정: 초기 영어 머지 코멘트에서 "first contributor from Russia"로 잘못 표기 → #1489가 선행이므로 정정. 동일 author 이메일 `andreisungurovsky@yandex.ru` 확인.)
   코멘트는 영어로. fixture·테스트 동반 + 스크린샷 정책 준수로 기여 품질 양호.
 
 ## 8. 산출물
