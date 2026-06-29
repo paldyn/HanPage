@@ -1,6 +1,8 @@
 //! 표/셀 CRUD + 속성 조회·수정 관련 native 메서드
 
-use super::super::helpers::{border_line_type_to_u8_val, color_ref_to_css, navigate_path_to_table};
+use super::super::helpers::{
+    border_line_type_to_u8_val, color_ref_to_css, json_u32, navigate_path_to_table,
+};
 use crate::document_core::{DocumentCore, TableTransposeClipboard};
 use crate::error::HwpError;
 use crate::model::control::Control;
@@ -379,6 +381,53 @@ impl DocumentCore {
         Ok(super::super::helpers::json_ok_with(&format!(
             "\"sourceRows\":{},\"sourceCols\":{},\"targetRows\":{},\"targetCols\":{}",
             source_rows, source_cols, source_cols, source_rows
+        )))
+    }
+
+    /// 전치 복사 버퍼를 커서 위치에 새 표로 생성해 붙여넣는다.
+    pub fn paste_table_cells_transposed_as_new_table_native(
+        &mut self,
+        section_idx: usize,
+        para_idx: usize,
+        char_offset: usize,
+    ) -> Result<String, HwpError> {
+        let data = self
+            .table_transpose_clipboard
+            .as_ref()
+            .ok_or_else(|| HwpError::RenderError("전치 복사 데이터가 없습니다".to_string()))?
+            .data
+            .clone();
+
+        let source_rows = data.source_rows;
+        let source_cols = data.source_cols;
+        let target_rows = source_cols;
+        let target_cols = source_rows;
+        if target_rows == 0 || target_cols == 0 {
+            return Err(HwpError::RenderError(
+                "전치 복사 데이터가 비어 있습니다".to_string(),
+            ));
+        }
+
+        let create_json =
+            self.create_table_native(section_idx, para_idx, char_offset, target_rows, target_cols)?;
+        let table_para_idx = json_u32(&create_json, "paraIdx")
+            .ok_or_else(|| HwpError::RenderError("표 생성 결과 paraIdx 누락".to_string()))?
+            as usize;
+        let table_control_idx = json_u32(&create_json, "controlIdx")
+            .ok_or_else(|| HwpError::RenderError("표 생성 결과 controlIdx 누락".to_string()))?
+            as usize;
+
+        self.paste_table_cells_transposed_native(
+            section_idx,
+            table_para_idx,
+            table_control_idx,
+            0,
+            0,
+        )?;
+
+        Ok(super::super::helpers::json_ok_with(&format!(
+            "\"paraIdx\":{},\"controlIdx\":{},\"sourceRows\":{},\"sourceCols\":{},\"targetRows\":{},\"targetCols\":{}",
+            table_para_idx, table_control_idx, source_rows, source_cols, target_rows, target_cols
         )))
     }
 

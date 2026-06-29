@@ -1468,6 +1468,24 @@ impl HwpDocument {
         .map_err(|e| e.into())
     }
 
+    /// 전치 복사 버퍼를 커서 위치에 새 표로 생성해 붙여넣는다.
+    ///
+    /// 반환값: JSON `{"ok":true,"paraIdx":N,"controlIdx":N,"sourceRows":N,"sourceCols":N,"targetRows":N,"targetCols":N}`
+    #[wasm_bindgen(js_name = pasteTableCellsTransposedAsTable)]
+    pub fn paste_table_cells_transposed_as_table(
+        &mut self,
+        section_idx: u32,
+        para_idx: u32,
+        char_offset: u32,
+    ) -> Result<String, JsValue> {
+        self.paste_table_cells_transposed_as_new_table_native(
+            section_idx as usize,
+            para_idx as usize,
+            char_offset as usize,
+        )
+        .map_err(|e| e.into())
+    }
+
     /// 표 전치 복사 버퍼 보유 여부를 반환한다.
     #[wasm_bindgen(js_name = hasTableTransposeClipboard)]
     pub fn has_table_transpose_clipboard(&self) -> bool {

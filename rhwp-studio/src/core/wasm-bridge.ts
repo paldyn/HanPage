@@ -27,6 +27,8 @@ export interface TableCellResizeUpdate {
 
 export interface TableTransposeResult {
   ok: boolean;
+  paraIdx?: number;
+  controlIdx?: number;
   sourceRows: number;
   sourceCols: number;
   targetRows: number;
@@ -960,6 +962,15 @@ export class WasmBridge {
       startRow,
       startCol,
     ));
+  }
+
+  pasteTableCellsTransposedAsTable(
+    sec: number,
+    para: number,
+    charOffset: number,
+  ): TableTransposeResult {
+    if (!this.doc) throw new Error('문서가 로드되지 않았습니다');
+    return JSON.parse((this.doc as any).pasteTableCellsTransposedAsTable(sec, para, charOffset));
   }
 
   hasTableTransposeClipboard(): boolean {

@@ -1735,6 +1735,47 @@ fn test_table_transpose_clipboard_native_api() {
 }
 
 #[test]
+fn test_table_transpose_paste_as_new_table_native_api() {
+    let mut doc = create_doc_with_table();
+    doc.copy_table_cells_transposed_native(0, 0, 0, 0, 0, 1, 1)
+        .unwrap();
+
+    let paste = doc
+        .paste_table_cells_transposed_as_new_table_native(0, 0, 0)
+        .unwrap();
+    let paste_json: Value = serde_json::from_str(&paste).unwrap();
+    assert_eq!(paste_json["ok"], true);
+    assert_eq!(paste_json["paraIdx"], 1);
+    assert_eq!(paste_json["controlIdx"], 0);
+    assert_eq!(paste_json["targetRows"], 2);
+    assert_eq!(paste_json["targetCols"], 2);
+
+    if let Some(Control::Table(source_table)) =
+        doc.document.sections[0].paragraphs[0].controls.first()
+    {
+        assert_eq!(source_table.cells[0].paragraphs[0].text, "셀A");
+        assert_eq!(source_table.cells[1].paragraphs[0].text, "셀B");
+        assert_eq!(source_table.cells[2].paragraphs[0].text, "셀C");
+        assert_eq!(source_table.cells[3].paragraphs[0].text, "셀D");
+    } else {
+        panic!("원본 표 컨트롤을 찾을 수 없음");
+    }
+
+    if let Some(Control::Table(target_table)) =
+        doc.document.sections[0].paragraphs[1].controls.first()
+    {
+        assert_eq!(target_table.row_count, 2);
+        assert_eq!(target_table.col_count, 2);
+        assert_eq!(target_table.cells[0].paragraphs[0].text, "셀A");
+        assert_eq!(target_table.cells[1].paragraphs[0].text, "셀C");
+        assert_eq!(target_table.cells[2].paragraphs[0].text, "셀B");
+        assert_eq!(target_table.cells[3].paragraphs[0].text, "셀D");
+    } else {
+        panic!("전치 붙여넣기 표 컨트롤을 찾을 수 없음");
+    }
+}
+
+#[test]
 fn test_cell_text_edit_invalid_indices() {
     let mut doc = create_doc_with_table();
 

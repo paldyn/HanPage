@@ -1735,6 +1735,7 @@ export class InputHandler {
       { type: 'command', commandId: 'edit:paste' },
       { type: 'command', commandId: 'edit:format-copy' },
       { type: 'command', commandId: 'edit:format-paste' },
+      { type: 'command', commandId: 'table:transpose-paste' },
       { type: 'separator' },
       { type: 'command', commandId: 'format:char-shape', label: '글자 모양' },
       { type: 'command', commandId: 'format:para-shape', label: '문단 모양' },

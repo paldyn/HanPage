@@ -583,31 +583,50 @@ export const tableCommands: CommandDef[] = [
   {
     id: 'table:transpose-paste',
     label: '셀 전치 붙여넣기',
-    canExecute: (ctx) => ctx.inTable && ctx.hasTableTransposeClipboard,
+    canExecute: (ctx) => ctx.hasDocument && ctx.hasTableTransposeClipboard,
     execute(services) {
       const ih = services.getInputHandler();
       if (!ih) return;
       const pos = ih.getCursorPosition();
-      if (pos.parentParaIndex === undefined || pos.controlIndex === undefined || pos.cellIndex === undefined) return;
       if ((pos.cellPath?.length ?? 0) > 1) return;
 
-      const cellInfo = services.wasm.getCellInfo(
-        pos.sectionIndex,
-        pos.parentParaIndex,
-        pos.controlIndex,
-        pos.cellIndex,
-      );
       safeTableOp(() => ih.executeOperation({
         kind: 'snapshot',
         operationType: 'pasteTableCellsTransposed',
         operation: (wasm) => {
-          wasm.pasteTableCellsTransposed(
+          if (pos.parentParaIndex !== undefined && pos.controlIndex !== undefined && pos.cellIndex !== undefined) {
+            const cellInfo = services.wasm.getCellInfo(
+              pos.sectionIndex,
+              pos.parentParaIndex,
+              pos.controlIndex,
+              pos.cellIndex,
+            );
+            wasm.pasteTableCellsTransposed(
+              pos.sectionIndex,
+              pos.parentParaIndex,
+              pos.controlIndex,
+              cellInfo.row,
+              cellInfo.col,
+            );
+            return pos;
+          }
+
+          const result = wasm.pasteTableCellsTransposedAsTable(
             pos.sectionIndex,
-            pos.parentParaIndex!,
-            pos.controlIndex!,
-            cellInfo.row,
-            cellInfo.col,
+            pos.paragraphIndex,
+            pos.charOffset,
           );
+          if (result.ok && result.paraIdx !== undefined && result.controlIdx !== undefined) {
+            return {
+              sectionIndex: pos.sectionIndex,
+              paragraphIndex: 0,
+              charOffset: 0,
+              parentParaIndex: result.paraIdx,
+              controlIndex: result.controlIdx,
+              cellIndex: 0,
+              cellParaIndex: 0,
+            };
+          }
           return pos;
         },
       }), '셀 전치 붙여넣기');
