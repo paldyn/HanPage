@@ -648,6 +648,28 @@ export const tableCommands: CommandDef[] = [
                 cellParaIndex: 0,
               };
             }
+            if (range) {
+              try {
+                wasm.pasteTableCellsTransposed(
+                  selectionTableCtx.sec,
+                  selectionTableCtx.ppi,
+                  selectionTableCtx.ci,
+                  range.startRow,
+                  range.startCol,
+                );
+                return {
+                  sectionIndex: selectionTableCtx.sec,
+                  paragraphIndex: 0,
+                  charOffset: 0,
+                  parentParaIndex: selectionTableCtx.ppi,
+                  controlIndex: selectionTableCtx.ci,
+                  cellIndex: 0,
+                  cellParaIndex: 0,
+                };
+              } catch (err) {
+                if (!isTransposeTargetOverflowError(err)) throw err;
+              }
+            }
             return pasteAsNewTable(selectionTableCtx.sec, selectionTableCtx.ppi, 0);
           }
 
