@@ -722,6 +722,22 @@ impl DocumentCore {
         if has_border_fill_change {
             let border_fill_json = cell_border_fill_json.as_deref().unwrap_or(json);
             let new_bf_id = self.create_border_fill_from_json(border_fill_json);
+            let new_bf_has_cell_diagonal = self
+                .document
+                .doc_info
+                .border_fills
+                .get((new_bf_id as usize).saturating_sub(1))
+                .is_some_and(Self::border_fill_has_cell_diagonal);
+            let cell_diagonal_bf_ids: Vec<u16> = self
+                .document
+                .doc_info
+                .border_fills
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, bf)| {
+                    Self::border_fill_has_cell_diagonal(bf).then_some((idx + 1) as u16)
+                })
+                .collect();
 
             // 새 BorderFill의 테두리 데이터 복사 (이웃 셀 갱신용)
             let new_borders = {
@@ -737,15 +753,26 @@ impl DocumentCore {
             // 대상 셀 정보 추출 + border_fill_id 변경
             let (target_row, target_col, target_col_span, target_row_span) = {
                 let table = self.get_table_mut(section_idx, parent_para_idx, control_idx)?;
-                let cell = table.cells.get_mut(cell_idx).ok_or_else(|| {
-                    HwpError::RenderError(format!("셀 인덱스 {} 범위 초과", cell_idx))
-                })?;
-                cell.border_fill_id = new_bf_id;
+                let (row, col, col_span, row_span) = {
+                    let cell = table.cells.get_mut(cell_idx).ok_or_else(|| {
+                        HwpError::RenderError(format!("셀 인덱스 {} 범위 초과", cell_idx))
+                    })?;
+                    cell.border_fill_id = new_bf_id;
+                    (cell.row, cell.col, cell.col_span, cell.row_span)
+                };
+                Self::sync_cellzone_origin_cell_diagonal_override(
+                    table,
+                    row,
+                    col,
+                    new_bf_id,
+                    new_bf_has_cell_diagonal,
+                    &cell_diagonal_bf_ids,
+                );
                 (
-                    cell.row as usize,
-                    cell.col as usize,
-                    cell.col_span as usize,
-                    cell.row_span as usize,
+                    row as usize,
+                    col as usize,
+                    col_span as usize,
+                    row_span as usize,
                 )
             };
 
@@ -769,6 +796,67 @@ impl DocumentCore {
         self.paginate_if_needed();
 
         Ok("{\"ok\":true}".to_string())
+    }
+
+    fn border_fill_has_cell_diagonal(bf: &crate::model::style::BorderFill) -> bool {
+        let center_line = if bf.center_line != crate::model::style::CenterLine::None {
+            bf.center_line
+        } else {
+            crate::model::style::CenterLine::from_hwp_attr(bf.attr)
+        };
+        if center_line != crate::model::style::CenterLine::None {
+            return false;
+        }
+
+        let slash = (bf.attr >> 2) & 0x07;
+        let backslash = (bf.attr >> 5) & 0x07;
+        bf.diagonal.diagonal_type != 0 && (slash != 0 || backslash != 0)
+    }
+
+    fn sync_cellzone_origin_cell_diagonal_override(
+        table: &mut crate::model::table::Table,
+        row: u16,
+        col: u16,
+        new_bf_id: u16,
+        new_bf_has_cell_diagonal: bool,
+        cell_diagonal_bf_ids: &[u16],
+    ) {
+        let has_large_origin_diagonal_zone = table.zones.iter().any(|zone| {
+            zone.start_row == row
+                && zone.start_col == col
+                && (zone.end_row > row || zone.end_col > col)
+                && cell_diagonal_bf_ids.contains(&zone.border_fill_id)
+        });
+        if !has_large_origin_diagonal_zone {
+            return;
+        }
+
+        if new_bf_has_cell_diagonal {
+            if let Some(zone) = table.zones.iter_mut().find(|zone| {
+                zone.start_row == row
+                    && zone.start_col == col
+                    && zone.end_row == row
+                    && zone.end_col == col
+            }) {
+                zone.border_fill_id = new_bf_id;
+            } else {
+                table.zones.push(crate::model::table::TableZone {
+                    start_col: col,
+                    start_row: row,
+                    end_col: col,
+                    end_row: row,
+                    border_fill_id: new_bf_id,
+                });
+            }
+        } else {
+            table.zones.retain(|zone| {
+                !(zone.start_row == row
+                    && zone.start_col == col
+                    && zone.end_row == row
+                    && zone.end_col == col
+                    && cell_diagonal_bf_ids.contains(&zone.border_fill_id))
+            });
+        }
     }
 
     fn normalize_cell_border_fill_json_for_edit(

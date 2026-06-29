@@ -595,7 +595,7 @@ fn issue_1633_centerline_is_disabled_for_as_one_cellzone_apply() {
 }
 
 #[test]
-fn issue_1633_cellzone_origin_centerline_is_hidden_like_hancom() {
+fn issue_1633_cellzone_origin_centerline_renders_after_each_cell_apply() {
     let mut doc = HwpDocument::create_empty();
     let created = doc
         .create_table_ex_native(0, 0, 0, 8, 10, true, Some(&[4195; 10]), Some(&[1282; 8]))
@@ -646,23 +646,51 @@ fn issue_1633_cellzone_origin_centerline_is_hidden_like_hancom() {
     assert_eq!(own_props["diagonalSlash"].as_u64(), Some(0));
     assert_eq!(own_props["diagonalBackSlash"].as_u64(), Some(0));
 
+    let table = first_table(doc.document());
+    assert!(
+        !table.zones.iter().any(|zone| {
+            (zone.start_row, zone.start_col, zone.end_row, zone.end_col) == (0, 0, 0, 0)
+        }),
+        "중심선은 한컴 저장 호환성을 위해 1x1 cellzone이 아니라 셀 BF로 보존해야 함"
+    );
+
     let after_svg = doc.render_page_svg_native(0).expect("SVG 렌더");
     let after_lines = rendered_lines(&after_svg);
     assert!(
-        !after_lines.iter().any(|(x1, y1, x2, y2)| {
+        after_lines.iter().any(|(x1, y1, x2, y2)| {
             (x1 - x2).abs() < 0.01
                 && (130.0..155.0).contains(x1)
                 && (10.0..25.0).contains(&(y1 - y2).abs())
         }),
-        "한컴처럼 전체 cellzone 대각선의 시작 셀에는 세로 중심선을 추가 렌더링하지 않아야 함"
+        "전체 cellzone 대각선 시작 셀에 나중에 적용한 세로 중심선이 렌더되어야 함"
     );
     assert!(
-        !after_lines.iter().any(|(x1, y1, x2, y2)| {
+        after_lines.iter().any(|(x1, y1, x2, y2)| {
             (y1 - y2).abs() < 0.01
                 && (140.0..150.0).contains(y1)
                 && (40.0..80.0).contains(&(x1 - x2).abs())
         }),
-        "한컴처럼 전체 cellzone 대각선의 시작 셀에는 가로 중심선을 추가 렌더링하지 않아야 함"
+        "전체 cellzone 대각선 시작 셀에 나중에 적용한 가로 중심선이 렌더되어야 함"
+    );
+
+    let exported = doc.export_hwp_with_adapter().expect("HWP export");
+    let reparsed = parse_document(&exported).expect("exported HWP 재파싱");
+    let reparsed_table = first_table(&reparsed);
+    assert!(
+        !reparsed_table.zones.iter().any(|zone| {
+            (zone.start_row, zone.start_col, zone.end_row, zone.end_col) == (0, 0, 0, 0)
+        }),
+        "HWP 저장본도 대각선샘플3처럼 1x1 중심선 cellzone을 만들지 않아야 함"
+    );
+    let reparsed_cell = reparsed_table.cells.first().expect("첫 셀");
+    let reparsed_bf = &reparsed.doc_info.border_fills[(reparsed_cell.border_fill_id - 1) as usize];
+    assert_eq!(reparsed_bf.center_line, CenterLine::Cross);
+    assert_eq!(reparsed_cell.list_header_width_ref, 0x0400);
+    assert_eq!(reparsed_cell.raw_list_extra.len(), 13);
+    assert_eq!(
+        u32::from_le_bytes(reparsed_cell.raw_list_extra[0..4].try_into().unwrap()),
+        reparsed_cell.width,
+        "한컴 저장본 셀 LIST_HEADER처럼 raw 확장 폭 참조를 보강해야 함"
     );
 }
 
@@ -715,6 +743,59 @@ fn issue_1633_cell_diagonal_renders_over_existing_cellzone_diagonal() {
     assert!(
         short_cell_diagonals.len() >= 2,
         "기존 cellzone 대각선 위에 나중에 적용한 1행 2열 셀 대각선이 렌더되어야 함: {short_cell_diagonals:?}"
+    );
+}
+
+#[test]
+fn issue_1633_cellzone_origin_cell_diagonal_renders_after_each_cell_apply() {
+    let mut doc = HwpDocument::create_empty();
+    let created = doc
+        .create_table_ex_native(0, 0, 0, 8, 10, true, Some(&[4195; 10]), Some(&[1282; 8]))
+        .expect("표 생성");
+    let created: Value = serde_json::from_str(&created).expect("createTable JSON");
+    let ppi = created["paraIdx"].as_u64().expect("paraIdx") as u32;
+    let ci = created["controlIdx"].as_u64().expect("controlIdx") as u32;
+    let diagonal_props = r##"{
+        "borderFillId":1,
+        "borderLeft":{"type":1,"width":0,"color":"#000000"},
+        "borderRight":{"type":1,"width":0,"color":"#000000"},
+        "borderTop":{"type":1,"width":0,"color":"#000000"},
+        "borderBottom":{"type":1,"width":0,"color":"#000000"},
+        "fillType":"none",
+        "diagonalLine":1,
+        "diagonalSlash":2,
+        "diagonalBackSlash":2,
+        "diagonalWidth":0,
+        "diagonalColor":"#000000",
+        "centerLine":"NONE"
+    }"##;
+
+    doc.set_cell_zone_properties(0, ppi, ci, 0, 0, 7, 9, diagonal_props)
+        .expect("대각선 cellzone 적용");
+    doc.set_cell_properties(0, ppi, ci, 0, diagonal_props)
+        .expect("시작 셀 대각선 적용");
+
+    let table = first_table(doc.document());
+    assert!(
+        table.zones.iter().any(|zone| {
+            (zone.start_row, zone.start_col, zone.end_row, zone.end_col) == (0, 0, 0, 0)
+        }),
+        "cellzone 시작 셀에 명시적으로 적용한 대각선은 1x1 override zone으로 분리되어야 함"
+    );
+
+    let svg = doc.render_page_svg_native(0).expect("SVG 렌더");
+    let lines = rendered_lines(&svg);
+    let short_cell_diagonals: Vec<_> = lines
+        .iter()
+        .filter(|(x1, y1, x2, y2)| {
+            let dx = (x1 - x2).abs();
+            let dy = (y1 - y2).abs();
+            (40.0..80.0).contains(&dx) && (10.0..30.0).contains(&dy)
+        })
+        .collect();
+    assert!(
+        short_cell_diagonals.len() >= 2,
+        "cellzone 시작 셀에 나중에 적용한 개별 셀 대각선이 렌더되어야 함: {short_cell_diagonals:?}"
     );
 }
 
@@ -895,5 +976,12 @@ fn issue_1633_centerline_excludes_diagonal_on_hwp_export() {
         (bf.attr >> 5) & 0x07,
         0,
         "HWP 저장본도 중심선과 역대각선 방향을 동시에 저장하지 않음"
+    );
+    assert_eq!(cell.list_header_width_ref, 0x0400);
+    assert_eq!(cell.raw_list_extra.len(), 13);
+    assert_eq!(
+        u32::from_le_bytes(cell.raw_list_extra[0..4].try_into().unwrap()),
+        cell.width,
+        "새로 만든 표 셀도 한컴식 47바이트 LIST_HEADER로 저장해야 함"
     );
 }

@@ -216,6 +216,15 @@ fn border_style_has_diagonal(bs: &ResolvedBorderStyle) -> bool {
         && bs.diagonal.diagonal_type != 0
 }
 
+fn border_style_has_center_line_only(bs: &ResolvedBorderStyle) -> bool {
+    let slash_bits = (bs.diagonal_attr >> 2) & 0x07;
+    let backslash_bits = (bs.diagonal_attr >> 5) & 0x07;
+    bs.diagonal.diagonal_type != 0
+        && bs.center_line != CenterLine::None
+        && slash_bits == 0
+        && backslash_bits == 0
+}
+
 /// cellzone 대각선은 영역 전체에 한 번 그리고, 원본 중복 BF가 붙는 시작 셀만 숨긴다.
 fn mark_cellzone_diagonal_origin_coverage(
     covered: &mut [Vec<bool>],
@@ -3823,8 +3832,8 @@ impl LayoutEngine {
                 row_count,
                 col_count,
             );
-            if !suppress_cell_diagonal {
-                if let Some(bs) = border_style {
+            if let Some(bs) = border_style {
+                if !suppress_cell_diagonal || border_style_has_center_line_only(bs) {
                     table_node.children.extend(render_cell_diagonal(
                         tree, bs, cell_x, cell_y, cell_w, cell_h,
                     ));
