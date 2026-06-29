@@ -1010,6 +1010,23 @@ fn para_near_rowbreak_table(paragraphs: &[Paragraph], para_idx: usize) -> bool {
     })
 }
 
+/// #1672 행정업무 편람 계열: raw TABLE attr 상위 바이트가 비어 있는 RowBreak 표는
+/// 기존 4px 안전마진만으로도 페이지가 누적 과분할된다.
+fn section_has_zero_high_attr_rowbreak_table(paragraphs: &[Paragraph]) -> bool {
+    paragraphs.iter().any(|para| {
+        para.controls.iter().any(|control| {
+            matches!(
+                control,
+                Control::Table(table)
+                    if matches!(
+                        table.page_break,
+                        crate::model::table::TablePageBreak::RowBreak
+                    ) && (table.raw_table_record_attr & 0xff00_0000) == 0
+            )
+        })
+    })
+}
+
 impl TypesetState {
     fn new(
         layout: PageLayoutInfo,
@@ -8945,6 +8962,11 @@ impl TypesetEngine {
                     .first()
                     .zip(para.line_segs.last())
                     .and_then(|(first, last)| {
+                        let has_progressing_vpos =
+                            para.line_segs.len() <= 1 || last.vertical_pos > first.vertical_pos;
+                        if !has_progressing_vpos {
+                            return None;
+                        }
                         let span = last
                             .vertical_pos
                             .saturating_add(last.line_height)
@@ -8993,9 +9015,13 @@ impl TypesetEngine {
         // (k-water-rfp p15 case: PartialTable 직후 작은 텍스트 (16px) 가 잔여 5.3px 부족으로
         // fit 실패하여 다음 페이지로 밀리는 회귀.)
         // [Task #643] VPOS_CORR 백워드 허용 (8px) 으로 layout drift 누적이 해소됨.
-        // [Task #1672] 저장 LINE_SEG vpos 상한과 RowBreak 꼬리 보정으로 누적 over-pagination
-        // 을 줄여 현재는 추가 보수 마진을 두지 않는다.
-        const LAYOUT_DRIFT_SAFETY_PX: f64 = 0.0;
+        const DEFAULT_LAYOUT_DRIFT_SAFETY_PX: f64 = 4.0;
+        const ROWBREAK_LAYOUT_DRIFT_SAFETY_PX: f64 = 0.0;
+        let layout_drift_safety_px = if section_has_zero_high_attr_rowbreak_table(paragraphs) {
+            ROWBREAK_LAYOUT_DRIFT_SAFETY_PX
+        } else {
+            DEFAULT_LAYOUT_DRIFT_SAFETY_PX
+        };
         let prev_is_partial_table =
             matches!(st.current_items.last(), Some(PageItem::PartialTable { .. }));
         let safety = if st.skip_safety_margin_once {
@@ -9004,7 +9030,7 @@ impl TypesetEngine {
         } else if prev_is_partial_table {
             0.0
         } else {
-            LAYOUT_DRIFT_SAFETY_PX
+            layout_drift_safety_px
         };
         let exclusion_probe_height = if st.is_hwpx_source {
             fmt.line_heights
@@ -9133,9 +9159,9 @@ impl TypesetEngine {
             if is_empty_para {
                 let total_h = st.current_height + fmt.height_for_fit;
                 let fit_fail_within_safety =
-                    total_h > available && total_h <= available + LAYOUT_DRIFT_SAFETY_PX;
+                    total_h > available && total_h <= available + layout_drift_safety_px;
                 let prior_trailing_drift = st.current_height > available
-                    && st.current_height <= available + LAYOUT_DRIFT_SAFETY_PX + 0.5;
+                    && st.current_height <= available + layout_drift_safety_px + 0.5;
                 let previous_item_is_empty_para = st
                     .current_items
                     .last()
@@ -9189,6 +9215,10 @@ impl TypesetEngine {
             .line_segs
             .last()
             .map(|s| s.vertical_pos + s.line_height + s.line_spacing);
+        // HWP3-origin 변환본은 spacing_before 누적을 보존해야 dump-pages 요약과
+        // 실제 한컴 줄 흐름이 유지된다(#1116).
+        let trim_spacing_before_for_flow =
+            !st.is_hwp3_variant && !para_near_rowbreak_table(paragraphs, para_idx);
 
         if forced_page_break_line.is_none() && st.current_height + fmt.height_for_fit <= available {
             // place: 전체 배치
@@ -9200,11 +9230,8 @@ impl TypesetEngine {
             //   - 다단 (col_count > 1): height_for_fit (exam_eng 8p 정상 단 채움 복원)
             // 다단에서는 layout 이 vpos 기반으로 항목을 단별로 stacking 하므로
             // typeset 누적 시 trailing_ls 인플레이션이 단을 조기 종료시킴.
-            st.current_height += fmt.flow_advance_height(
-                para,
-                st.col_count,
-                !para_near_rowbreak_table(paragraphs, para_idx),
-            );
+            st.current_height +=
+                fmt.flow_advance_height(para, st.col_count, trim_spacing_before_for_flow);
             if let Some(v) = body_bottom_vpos {
                 st.prev_body_bottom_vpos = Some(v);
             }
@@ -9251,11 +9278,8 @@ impl TypesetEngine {
                 st.current_items.push(PageItem::FullParagraph {
                     para_index: para_idx,
                 });
-                st.current_height += fmt.flow_advance_height(
-                    para,
-                    st.col_count,
-                    !para_near_rowbreak_table(paragraphs, para_idx),
-                );
+                st.current_height +=
+                    fmt.flow_advance_height(para, st.col_count, trim_spacing_before_for_flow);
                 if let Some(v) = body_bottom_vpos {
                     st.prev_body_bottom_vpos = Some(v);
                 }
@@ -9274,11 +9298,8 @@ impl TypesetEngine {
             //   - 다단 (col_count > 1): height_for_fit (exam_eng 8p 정상 단 채움 복원)
             // 다단에서는 layout 이 vpos 기반으로 항목을 단별로 stacking 하므로
             // typeset 누적 시 trailing_ls 인플레이션이 단을 조기 종료시킴.
-            st.current_height += fmt.flow_advance_height(
-                para,
-                st.col_count,
-                !para_near_rowbreak_table(paragraphs, para_idx),
-            );
+            st.current_height +=
+                fmt.flow_advance_height(para, st.col_count, trim_spacing_before_for_flow);
             if let Some(v) = body_bottom_vpos {
                 st.prev_body_bottom_vpos = Some(v);
             }
@@ -9286,7 +9307,7 @@ impl TypesetEngine {
         }
 
         // Task #332 Stage 4a: partial split 시에도 동일 마진 적용
-        let base_available = (st.base_available_height() - LAYOUT_DRIFT_SAFETY_PX).max(0.0);
+        let base_available = (st.base_available_height() - layout_drift_safety_px).max(0.0);
 
         // 남은 공간이 없거나 첫 줄도 못 넣으면 먼저 다음 단/페이지로
         let first_line_h = fmt.line_heights[0];
@@ -9344,7 +9365,7 @@ impl TypesetEngine {
                 0.0
             };
             // Task #332 Stage 4b: partial split 의 줄 단위 fit 검사에도 layout drift 마진 적용
-            let avail_for_lines = (page_avail - sp_b - LAYOUT_DRIFT_SAFETY_PX).max(0.0);
+            let avail_for_lines = (page_avail - sp_b - layout_drift_safety_px).max(0.0);
 
             // 현재 페이지에 들어갈 줄 범위 결정
             let mut cumulative = 0.0;
@@ -11164,10 +11185,35 @@ impl TypesetEngine {
             // 정의상 일치한다(px content_offset·MeasuredTable 누적 제거).
             const MIN_TOP_KEEP_PX: f64 = 25.0;
             const ROWBREAK_TRAILING_EMPTY_ROW_OVERFLOW_TOLERANCE_PX: f64 = 40.0;
-            const LANDSCAPE_ROWBREAK_WHOLE_ROW_TOLERANCE_PX: f64 = 16.0;
-            const LANDSCAPE_ROWBREAK_SHORT_ROW_TOLERANCE_PX: f64 = 96.0;
-            const LANDSCAPE_ROWBREAK_SHORT_ROW_MAX_HEIGHT_PX: f64 = 120.0;
+            const ROWBREAK_SPLIT_ROW_OVERFLOW_TOLERANCE_PX: f64 = 0.1;
+            const HWPX_ROWBREAK_SPLIT_ROW_OVERFLOW_TOLERANCE_PX: f64 = 64.0;
+            const LANDSCAPE_ROWBREAK_WHOLE_ROW_TOLERANCE_PX: f64 = 36.0;
+            const LANDSCAPE_ROWBREAK_SHORT_ROW_TOLERANCE_PX: f64 = 260.0;
+            const LANDSCAPE_ROWBREAK_SHORT_ROW_MAX_HEIGHT_PX: f64 = 260.0;
+            const HWPX_LANDSCAPE_ROWBREAK_WHOLE_ROW_TOLERANCE_PX: f64 = 48.0;
+            const HWPX_LANDSCAPE_ROWBREAK_SHORT_ROW_TOLERANCE_PX: f64 = 320.0;
+            const HWPX_LANDSCAPE_ROWBREAK_SHORT_ROW_MAX_HEIGHT_PX: f64 = 320.0;
             let landscape_rowbreak_bleed = st.layout.body_area.height < 700.0;
+            let landscape_whole_row_tolerance = if st.is_hwpx_source {
+                HWPX_LANDSCAPE_ROWBREAK_WHOLE_ROW_TOLERANCE_PX
+            } else {
+                LANDSCAPE_ROWBREAK_WHOLE_ROW_TOLERANCE_PX
+            };
+            let landscape_short_row_tolerance = if st.is_hwpx_source {
+                HWPX_LANDSCAPE_ROWBREAK_SHORT_ROW_TOLERANCE_PX
+            } else {
+                LANDSCAPE_ROWBREAK_SHORT_ROW_TOLERANCE_PX
+            };
+            let landscape_short_row_max_height = if st.is_hwpx_source {
+                HWPX_LANDSCAPE_ROWBREAK_SHORT_ROW_MAX_HEIGHT_PX
+            } else {
+                LANDSCAPE_ROWBREAK_SHORT_ROW_MAX_HEIGHT_PX
+            };
+            let rowbreak_split_row_overflow_tolerance = if st.is_hwpx_source {
+                HWPX_ROWBREAK_SPLIT_ROW_OVERFLOW_TOLERANCE_PX
+            } else {
+                ROWBREAK_SPLIT_ROW_OVERFLOW_TOLERANCE_PX
+            };
 
             let mut end_row = cursor_row;
             let mut split_end_cut: Vec<usize> = Vec::new();
@@ -11419,7 +11465,7 @@ impl TypesetEngine {
                         && row_start_cut.is_empty()
                         && r > cursor_row
                         && consumed + cs_before + row_total
-                            <= avail_for_rows + LANDSCAPE_ROWBREAK_WHOLE_ROW_TOLERANCE_PX
+                            <= avail_for_rows + landscape_whole_row_tolerance
                     {
                         consumed += cs_before + row_total;
                         r += 1;
@@ -11432,9 +11478,9 @@ impl TypesetEngine {
                         && header_overhead > 0.5
                         && row_start_cut.is_empty()
                         && r > cursor_row
-                        && row_total <= LANDSCAPE_ROWBREAK_SHORT_ROW_MAX_HEIGHT_PX
+                        && row_total <= landscape_short_row_max_height
                         && consumed + cs_before + row_total
-                            <= avail_for_rows + LANDSCAPE_ROWBREAK_SHORT_ROW_TOLERANCE_PX
+                            <= avail_for_rows + landscape_short_row_tolerance
                     {
                         consumed += cs_before + row_total;
                         r += 1;
@@ -11454,7 +11500,16 @@ impl TypesetEngine {
                         }
                         break;
                     }
-                    let padding = mt.max_padding_for_row(r);
+                    let padding = if mt.allows_row_break_split() {
+                        layout_engine.row_remaining_visible_padding_height(
+                            table,
+                            r,
+                            row_start_cut,
+                            styles,
+                        )
+                    } else {
+                        mt.max_padding_for_row(r)
+                    };
                     let budget = (avail_for_rows - consumed - cs_before - padding).max(0.0);
                     let res =
                         layout_engine.advance_row_cut(table, r, row_start_cut, budget, styles);
@@ -11482,7 +11537,15 @@ impl TypesetEngine {
                             styles,
                         );
                         let split_candidate_rows_height = consumed + cs_before + split_total;
-                        if r > cursor_row && split_candidate_rows_height > avail_for_rows + 0.1 {
+                        let split_row_overflow_tolerance = if mt.allows_row_break_split() {
+                            rowbreak_split_row_overflow_tolerance
+                        } else {
+                            0.1
+                        };
+                        if r > cursor_row
+                            && split_candidate_rows_height
+                                > avail_for_rows + split_row_overflow_tolerance
+                        {
                             // 보이는 조각은 orphan 기준을 통과해도 row-area 예산은 넘을 수 있다.
                             // 마지막으로 온전히 들어간 행까지만 유지하고 이 행은 다음 쪽에서
                             // 계속한다. avail_for_rows 는 이미 반복 제목행 높이를 제외한 값이다.
