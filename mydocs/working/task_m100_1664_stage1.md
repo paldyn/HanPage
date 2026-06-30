@@ -2,14 +2,17 @@
 
 ## 단계 목표
 
-`Build & Test` job의 cargo cache step을 restore/save 분리 구조의 첫 단계로 전환한다.
+후속 코드 PR #1702에서 `Build & Test` job의 cargo cache step을 restore/save 분리 구조의 첫 단계로 전환한다.
 
 이번 단계에서는 기존 `actions/cache@v5` 단일 step을 `actions/cache/restore@v5` restore step으로 바꾸고,
 후속 Stage 2에서 trusted branch save 조건을 추가할 수 있도록 step id를 부여했다.
 
+이 Stage 보고서는 문서 PR #1701에 포함되는 작업 기록이다. 실제 `.github/workflows/ci.yml` 변경은 후속 코드
+PR #1702에만 포함되며, #1701 자체에는 workflow 변경이 없다.
+
 ## 변경 내용
 
-수정 파일:
+후속 코드 PR #1702 수정 파일:
 
 - `.github/workflows/ci.yml`
 

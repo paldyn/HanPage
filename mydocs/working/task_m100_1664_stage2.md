@@ -2,11 +2,14 @@
 
 ## 단계 목표
 
-trusted branch에서만 cargo cache save를 허용하고, PR에서는 cache save를 차단한다.
+후속 코드 PR #1702에서 trusted branch만 cargo cache save를 허용하고, PR에서는 cache save를 차단한다.
+
+이 Stage 보고서는 문서 PR #1701에 포함되는 작업 기록이다. 실제 `.github/workflows/ci.yml` 변경은 후속 코드
+PR #1702에만 포함되며, #1701 자체에는 workflow 변경이 없다.
 
 ## 변경 내용
 
-수정 파일:
+후속 코드 PR #1702 수정 파일:
 
 - `.github/workflows/ci.yml`
 

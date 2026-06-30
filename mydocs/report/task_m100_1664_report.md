@@ -6,10 +6,18 @@
 - 부모 이슈: #1668
 - 브랜치: `local/task1664`
 - 주제: Actions cache quota/read-only 상태 해소 및 PR cache 저장 정책 정리
+- 문서 PR: #1701 (`mydocs/**` 정책/측정 기록 전용)
+- 후속 코드 PR: #1702 (`.github/workflows/ci.yml` workflow 변경, draft 상태에서 관측값 수집)
 
-## 최종 변경 요약
+## PR 분리 기준
 
-`.github/workflows/ci.yml`의 `Build & Test` cargo cache를 restore/save 분리 구조로 변경했다.
+문서 PR #1701은 정책, 의사결정, 측정 기록만 포함한다. 실제 `.github/workflows/ci.yml` 변경은 후속 코드 PR
+#1702에서만 다루며, #1701이 merge되어도 workflow 변경이 `devel`에 반영된 것은 아니다.
+
+## 후속 코드 PR #1702 기준 변경 요약
+
+후속 코드 PR #1702에서는 `.github/workflows/ci.yml`의 `Build & Test` cargo cache를 restore/save 분리
+구조로 변경한다.
 
 - 기존: `actions/cache@v5` 단일 step
 - 변경:
@@ -17,7 +25,7 @@
   - `actions/cache/save@v5`로 `devel` / `main` push에서만 save
   - exact cache hit이면 save 생략
 
-정책/측정 원천 문서를 별도로 추가했다.
+정책/측정 원천 문서는 문서 PR #1701에 별도로 추가했다.
 
 - `mydocs/tech/ci_cache_policy_1664.md`: 정책과 의사결정 기록
 - `mydocs/report/task_m100_1668_ci_pipeline_tracking.md`: 부모 이슈 #1668 기준 하위 이슈 간 추적 기록
@@ -30,8 +38,8 @@
    - PR profile 전환은 #1666 범위로 분리했다.
 
 2. PR cache restore-only, `devel` / `main`만 save
-   - 이번 작업의 핵심 변경으로 반영했다.
-   - `pull_request`, tag, `workflow_dispatch`에서는 cargo cache save가 실행되지 않는다.
+   - 후속 코드 PR #1702의 핵심 변경으로 반영했다.
+   - #1702 기준 `pull_request`, tag, `workflow_dispatch`에서는 cargo cache save가 실행되지 않는다.
 
 3. `Build & Test` job 병렬 분리
    - job 구조를 바꾸지 않았다.
@@ -41,9 +49,8 @@
    - 도입하지 않았다.
    - 현행 `actions/cache` 기반 정책 정리 후 안정화 측정을 선행한다.
 
-## 변경 파일
+## PR #1701 변경 파일
 
-- `.github/workflows/ci.yml`
 - `mydocs/orders/20260630.md`
 - `mydocs/plans/task_m100_1664.md`
 - `mydocs/plans/task_m100_1664_impl.md`
@@ -54,6 +61,10 @@
 - `mydocs/report/task_m100_1668_ci_pipeline_tracking.md`
 - `mydocs/report/task_m100_1664_measurement.md`
 - `mydocs/report/task_m100_1664_report.md`
+
+후속 코드 PR #1702 변경 대상:
+
+- `.github/workflows/ci.yml`
 
 ## 보존한 항목
 
@@ -71,11 +82,13 @@
 
 | 항목 | 결과 | 비고 |
 |------|------|------|
-| `git diff --check` | 통과 | whitespace 문제 없음 |
-| `actionlint .github/workflows/ci.yml` | 통과 | workflow 문법 오류 없음 |
-| 변경 범위 확인 | 통과 | `Cargo.toml`, `tests/` 변경 없음 |
-| required check 표면 | 통과 | `Build & Test` job 이름 유지 |
-| 회귀 가드 구조 | 통과 | 테스트 파일/자산 구조 변경 없음 |
+| 문서 PR #1701 `git diff --check` | 통과 | `mydocs/**` whitespace 문제 없음 |
+| 후속 코드 PR #1702 `git diff --check` | 통과 | workflow 변경 기준 whitespace 문제 없음 |
+| 후속 코드 PR #1702 `actionlint .github/workflows/ci.yml` | 통과 | workflow 문법 오류 없음 |
+| 문서 PR #1701 변경 범위 확인 | 통과 | `mydocs/**` 문서 전용 |
+| 후속 코드 PR #1702 변경 범위 확인 | 통과 | `Cargo.toml`, `tests/` 변경 없음 |
+| required check 표면 | 통과 | #1702 기준 `Build & Test` job 이름 유지 |
+| 회귀 가드 구조 | 통과 | #1702 기준 테스트 파일/자산 구조 변경 없음 |
 
 ## before/after 측정 기준
 
@@ -84,15 +97,15 @@
 
 | 항목 | 현재 상태 |
 |------|-----------|
-| PR checks 완료 시간 (P50, P90) | PR #1702 단일 관측값 기록 완료. P50/P90은 표본 부족으로 보류 |
-| `CI / Build & Test` job 시간 | PR #1702 19m08s 기록 완료 |
-| 주요 step 시간 | PR #1702 build / lib test / integration test / native-skia 기록 완료 |
-| cache hit/miss/save 성공 여부 | PR #1702 restore 정확히 적중, save skipped 기록 완료. `devel` / `main` push save 여부 추가 확인 필요 |
-| cache 크기 | PR #1702 약 1476 MB 기록 완료 |
+| PR checks 완료 시간 (P50, P90) | 후속/draft 코드 PR #1702 단일 관측값 기록 완료. P50/P90은 표본 부족으로 보류 |
+| `CI / Build & Test` job 시간 | 후속/draft 코드 PR #1702 19m08s 기록 완료 |
+| 주요 step 시간 | 후속/draft 코드 PR #1702 build / lib test / integration test / native-skia 기록 완료 |
+| cache hit/miss/save 성공 여부 | 후속/draft 코드 PR #1702 restore 정확히 적중, save skipped 기록 완료. #1702 merge 후 `devel` / `main` push save 여부 추가 확인 필요 |
+| cache 크기 | 후속/draft 코드 PR #1702 약 1476 MB 기록 완료 |
 | 실패 시 원인 가시성 | restore/save step 분리로 로그 위치 개선 |
 | runner-minutes 변화 | 단일 PR run만 있으므로 증감 판단 보류 |
-| branch protection / required check 변경 여부 | job 이름 유지, GitHub 설정 변경 없음 |
-| 회귀 가드 162개 PR 실행 여부 | PR #1702에서 issue 계열 131/131 실행 확인 |
+| branch protection / required check 변경 여부 | #1702 기준 job 이름 유지, GitHub 설정 변경 없음 |
+| 회귀 가드 162개 PR 실행 여부 | 후속/draft 코드 PR #1702에서 issue 계열 131/131 실행 확인 |
 
 ## 리스크
 
@@ -102,7 +115,7 @@
 
 ## 후속
 
-- PR에서 save step이 skipped 되는지 확인했다.
-- `devel` push에서 save step이 조건부 실행되는지 확인한다.
-- PR #1702에서는 cache read-only 경고가 관측되지 않았다. `devel` push run에서도 추가 확인한다.
+- 후속/draft 코드 PR #1702에서 PR save step이 skipped 되는지 확인했다.
+- #1702 merge 후 `devel` push에서 save step이 조건부 실행되는지 확인한다.
+- 후속/draft 코드 PR #1702에서는 cache read-only 경고가 관측되지 않았다. #1702 merge 후 `devel` push run에서도 추가 확인한다.
 - 안정화 측정 후 #1667 진행 여부를 판단한다.

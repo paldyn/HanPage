@@ -4,13 +4,17 @@
 
 workflow 문법, 변경 범위, required check 표면, 회귀 가드 보존 여부를 최종 점검한다.
 
+이 Stage 보고서는 문서 PR #1701에 포함되는 작업 기록이다. 실제 `.github/workflows/ci.yml` 변경은 후속 코드
+PR #1702에만 포함되며, #1701 자체에는 workflow 변경이 없다. 아래 workflow 상태와 CI 관측은 #1702
+draft 코드 PR 기준이다.
+
 ## 변경 범위 확인
 
-workflow 변경:
+후속 코드 PR #1702 workflow 변경:
 
 - `.github/workflows/ci.yml`
 
-문서 변경:
+문서 PR #1701 문서 변경:
 
 - `mydocs/orders/20260630.md`
 - `mydocs/plans/task_m100_1664.md`
@@ -25,7 +29,7 @@ workflow 변경:
 
 `Cargo.toml`과 `tests/`에는 변경이 없다.
 
-## 최종 workflow 상태
+## 후속 코드 PR #1702 기준 workflow 상태
 
 - restore:
   - step: `Restore cargo registry & build cache`
@@ -85,11 +89,12 @@ workflow 변경:
 
 후속 갱신:
 
-- PR #1702 run 완료 후 PR run 측정값은 `mydocs/report/task_m100_1664_measurement.md`에 기록했다.
+- 후속/draft 코드 PR #1702 run 완료 후 PR run 측정값은 `mydocs/report/task_m100_1664_measurement.md`에 기록했다.
 - #1664 관측값과 #1666 / #1667로 이관할 비교 기준은
   `mydocs/report/task_m100_1668_ci_pipeline_tracking.md`에 기록했다.
 - `devel` push run의 trusted branch save 동작은 #1702 병합 이후 추가 확인해야 한다.
 
 ## 결론
 
-#1664의 코드 변경은 계획한 범위 안에서 완료됐다. 최종 보고서 승인 후 커밋과 PR 준비 단계로 이동할 수 있다.
+#1664의 workflow 코드 변경은 후속 코드 PR #1702에서 계획한 범위 안으로 준비됐다. 문서 PR #1701은 정책,
+측정, 작업 기록만 포함하며, #1702가 merge되기 전에는 workflow 변경이 `devel`에 반영된 것으로 단정하지 않는다.

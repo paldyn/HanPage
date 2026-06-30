@@ -127,8 +127,9 @@ save:
 - `.github/workflows/ci.yml`: 실제 CI 변경
 - `Cargo.toml` profile 변경: 필요 시 단독 PR
 
-이 문서는 문서 PR 쪽의 정책/의사결정 원천 기록이다. 실제 workflow 변경 PR에는 이 문서 또는 이 문서가 포함된
-문서 PR을 참조한다.
+이 문서는 문서 PR #1701 쪽의 정책/의사결정 원천 기록이다. 실제 workflow 변경은 후속 코드 PR #1702에서만
+다루며, #1701 자체에는 `.github/workflows/ci.yml` 변경을 포함하지 않는다. #1702의 draft PR run 관측값은
+정책 검토와 후속 #1666/#1667 비교 기준으로만 기록한다.
 
 ## required check 표면
 

@@ -7,10 +7,12 @@
 - PR은 cache restore-only로 두고, cache save는 `devel` / `main` trusted branch에서만 허용한다.
 - `Swatinem/rust-cache` 도입, `Cargo.toml` profile 변경, job 병렬화는 후속 이슈 범위로 분리한다.
 - 회귀 가드 162개가 PR마다 모두 실행되는 도메인 제약을 보존한다.
+- 이 구현 계획서는 문서 PR #1701에 포함한다. 실제 `.github/workflows/ci.yml` 변경은 후속 코드 PR #1702에서
+  별도로 진행하며, #1701이 merge되어도 workflow 변경이 `devel`에 반영된 것은 아니다.
 
 ## Stage 1
 
-`Build & Test` job의 cargo cache step을 restore/save 분리 구조로 변경한다.
+후속 코드 PR #1702에서 `Build & Test` job의 cargo cache step을 restore/save 분리 구조로 변경한다.
 
 - `.github/workflows/ci.yml`
   - 기존 `actions/cache@v5` 단일 step을 제거한다.
@@ -21,7 +23,7 @@
 
 ## Stage 2
 
-trusted branch save 조건을 추가하고 PR save를 차단한다.
+후속 코드 PR #1702에서 trusted branch save 조건을 추가하고 PR save를 차단한다.
 
 - `.github/workflows/ci.yml`
   - test/build/clippy 단계 이후에 `actions/cache/save@v5` step을 추가한다.
