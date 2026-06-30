@@ -87,6 +87,39 @@ PR run에서는 cache save가 skipped 되어야 한다.
 |------|---------------|----------|-------------------|----------------|------|
 | TBD | TBD | TBD | TBD | TBD | GitHub cache 목록 확인 후 기록 |
 
+## 진행 중 관측 메모
+
+### 2026-06-30 — PR #1702 Build & Test 중간 관측
+
+- PR: #1702 `Task #1664: cargo cache save를 trusted branch로 제한`
+- Run: <https://github.com/edwardkim/rhwp/actions/runs/28430353568/job/84243307175?pr=1702>
+- 상태: CI 진행 중 관측. 최종 결과와 step별 시간은 run 완료 후 위 표에 정식 반영한다.
+
+관측 로그:
+
+```text
+Native Skia tests:
+Dirty rhwp v0.7.17 (/home/runner/work/rhwp/rhwp): the file `src/parser/hwp3/mod.rs` has changed
+(1782807499.561337796s, 21h 2m 26s after last build at 1782731753.488450083s)
+   Compiling rhwp v0.7.17
+
+Run lib tests:
+Dirty rhwp v0.7.17 (/home/runner/work/rhwp/rhwp): the file `src/model/footnote.rs` has changed
+(1782807499.556391453s, 20h 58m 35s after last build at 1782731984.950573421s)
+   Compiling rhwp v0.7.17
+```
+
+임시 해석:
+
+- `native-skia` feature가 켜진 lib test와 일반 lib test는 Cargo feature set이 달라 `rhwp` crate 산출물을
+  각각 컴파일할 수 있다. 이 부분은 일부 정상 비용이다.
+- 다만 restored `target` cache 이후에도 `Dirty rhwp ... has changed` 판정으로 local crate가 다시 컴파일되는
+  현상은 target cache 실효성 문제일 수 있다.
+- 이 관측은 #1666의 `--release` / `release-test` profile 전환 검토와 #1667의 Rust cache 전략 검토 근거로
+  후속 정리한다.
+- 단일 run 중간 관측이므로 #1666/#1667 이슈 코멘트는 CI 완료 후 전체 시간, step별 시간, cache restore/save
+  상태와 함께 남긴다.
+
 ## 관찰 메모
 
 - #1664 적용 전 read-only 경고가 관측됐다.
