@@ -17,9 +17,10 @@
   - `actions/cache/save@v5`로 `devel` / `main` push에서만 save
   - exact cache hit이면 save 생략
 
-정책/measurement 원천 문서를 별도로 추가했다.
+정책/측정 원천 문서를 별도로 추가했다.
 
 - `mydocs/tech/ci_cache_policy_1664.md`: 정책과 의사결정 기록
+- `mydocs/report/task_m100_1668_ci_pipeline_tracking.md`: 부모 이슈 #1668 기준 하위 이슈 간 추적 기록
 - `mydocs/report/task_m100_1664_measurement.md`: PR/devel run 누적 측정 로그
 
 ## 정책 판단 4건 반영
@@ -50,6 +51,7 @@
 - `mydocs/working/task_m100_1664_stage2.md`
 - `mydocs/working/task_m100_1664_stage3.md`
 - `mydocs/tech/ci_cache_policy_1664.md`
+- `mydocs/report/task_m100_1668_ci_pipeline_tracking.md`
 - `mydocs/report/task_m100_1664_measurement.md`
 - `mydocs/report/task_m100_1664_report.md`
 
@@ -82,15 +84,15 @@
 
 | 항목 | 현재 상태 |
 |------|-----------|
-| PR checks 완료 시간 (P50, P90) | GitHub Actions run 이후 기록 필요 |
-| `CI / Build & Test` job 시간 | GitHub Actions run 이후 기록 필요 |
-| 주요 step 시간 | build / lib test / integration test / native-skia run 이후 기록 필요 |
-| cache hit/miss/save 성공 여부 | PR에서는 save 미실행, `devel` / `main` push에서 save 여부 확인 필요 |
-| cache 크기 | GitHub cache 목록 확인 필요 |
+| PR checks 완료 시간 (P50, P90) | PR #1702 단일 관측값 기록 완료. P50/P90은 표본 부족으로 보류 |
+| `CI / Build & Test` job 시간 | PR #1702 19m08s 기록 완료 |
+| 주요 step 시간 | PR #1702 build / lib test / integration test / native-skia 기록 완료 |
+| cache hit/miss/save 성공 여부 | PR #1702 restore 정확히 적중, save skipped 기록 완료. `devel` / `main` push save 여부 추가 확인 필요 |
+| cache 크기 | PR #1702 약 1476 MB 기록 완료 |
 | 실패 시 원인 가시성 | restore/save step 분리로 로그 위치 개선 |
-| runner-minutes 변화 | GitHub Actions run 이후 기록 필요 |
+| runner-minutes 변화 | 단일 PR run만 있으므로 증감 판단 보류 |
 | branch protection / required check 변경 여부 | job 이름 유지, GitHub 설정 변경 없음 |
-| 회귀 가드 162개 PR 실행 여부 | `Run integration tests` command 유지, PR run에서 최종 확인 필요 |
+| 회귀 가드 162개 PR 실행 여부 | PR #1702에서 issue 계열 131/131 실행 확인 |
 
 ## 리스크
 
@@ -100,7 +102,7 @@
 
 ## 후속
 
-- PR에서 save step이 skipped 되는지 확인한다.
+- PR에서 save step이 skipped 되는지 확인했다.
 - `devel` push에서 save step이 조건부 실행되는지 확인한다.
-- cache read-only 경고가 사라졌는지 확인한다.
+- PR #1702에서는 cache read-only 경고가 관측되지 않았다. `devel` push run에서도 추가 확인한다.
 - 안정화 측정 후 #1667 진행 여부를 판단한다.

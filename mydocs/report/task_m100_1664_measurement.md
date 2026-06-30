@@ -1,12 +1,13 @@
-# Task M100 #1664 measurement 기록
+# Task M100 #1664 측정 기록
 
 ## 목적
 
 이 문서는 #1664 적용 전후 CI 측정값을 누적 기록하는 장기 보관 문서다. 단일 작업 완료 보고서가 아니라,
-PR run과 `devel` / `main` push run이 쌓일 때마다 값을 추가하는 measurement 원천 로그로 사용한다.
+PR run과 `devel` / `main` push run이 쌓일 때마다 값을 추가하는 측정 원천 로그로 사용한다.
 
 정책/의사결정 원천 문서:
 
+- `mydocs/report/task_m100_1668_ci_pipeline_tracking.md`
 - `mydocs/tech/ci_cache_policy_1664.md`
 
 ## 기록 원칙
@@ -60,7 +61,7 @@ PR run에서는 cache save가 skipped 되어야 한다.
 
 | 날짜 | PR | run | head SHA | PR checks 완료 시간 | Build & Test 시간 | build | native-skia | lib test | integration test | restore hit/miss | save 상태 | 회귀 가드 162개 | 비고 |
 |------|----|-----|----------|---------------------|-------------------|-------|-------------|----------|------------------|------------------|-----------|----------------|------|
-| TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | skipped 기대 | TBD | PR 생성 후 기록 |
+| 2026-06-30 | #1702 | `28430353568` | `69229e7937dc08fb94bf5d6530f205de77c15fe4` | 약 19m23s | 19m08s | 3m33s | 3m57s | 3m46s | 4m51s | 정확히 적중 | skipped | issue 계열 131/131 실행 확인 | 변경 후 표본 1개. P50/P90 보류 |
 
 ## trusted branch push 측정 로그
 
@@ -77,9 +78,9 @@ PR run에서는 cache save가 skipped 되어야 한다.
 | 구간 | 대상 | 샘플 수 | P50 | P90 | 비고 |
 |------|------|---------|-----|-----|------|
 | before | PR checks 완료 시간 | TBD | TBD | TBD | 기존 run 수집 필요 |
-| after | PR checks 완료 시간 | TBD | TBD | TBD | #1664 반영 후 누적 |
+| after | PR checks 완료 시간 | 1 | 보류 | 보류 | #1702 단일 관측값 약 19m23s |
 | before | `CI / Build & Test` job 시간 | TBD | TBD | TBD | 기존 run 수집 필요 |
-| after | `CI / Build & Test` job 시간 | TBD | TBD | TBD | #1664 반영 후 누적 |
+| after | `CI / Build & Test` job 시간 | 1 | 보류 | 보류 | #1702 단일 관측값 19m08s |
 
 ## cache 상태 요약
 
@@ -119,6 +120,72 @@ Dirty rhwp v0.7.17 (/home/runner/work/rhwp/rhwp): the file `src/model/footnote.r
   후속 정리한다.
 - 단일 run 중간 관측이므로 #1666/#1667 이슈 코멘트는 CI 완료 후 전체 시간, step별 시간, cache restore/save
   상태와 함께 남긴다.
+
+### 2026-06-30 — PR #1702 최종 CI 관측
+
+- PR: #1702 `Task #1664-CI:cargo cache save를 trusted branch로 제한`
+- Run: <https://github.com/edwardkim/rhwp/actions/runs/28430353568>
+- Build & Test job: <https://github.com/edwardkim/rhwp/actions/runs/28430353568/job/84243307175>
+- 이벤트: `pull_request`
+- head SHA: `69229e7937dc08fb94bf5d6530f205de77c15fe4`
+- 결론: 성공
+
+시간:
+
+| 항목 | 시간 | 비고 |
+|------|------|------|
+| PR checks 완료 시간 | 약 19m23s | run created `08:17:48Z`, updated `08:37:11Z` |
+| `CI / Build & Test` job | 19m08s | `08:18:02Z` - `08:37:10Z` |
+| `Restore cargo registry & build cache` | 37s | 정확히 적중 |
+| `Format check` | 4s | 실행됨 |
+| `Build` | 3m33s | cargo finished `release` 3m32s |
+| `Check WASM target` | 15s | 실행됨 |
+| `Install native Skia runtime packages` | 18s | 실행됨 |
+| `Native Skia tests` | 3m57s | cargo finished `release` 3m56s |
+| `Run lib tests` | 3m46s | cargo finished `release` 3m34s |
+| `Run integration tests` | 4m51s | cargo finished `release-test` 3m32s |
+| `Clippy` | 21s | cargo finished `dev` 20.63s |
+| `Save cargo registry & build cache` | skipped | PR restore-only 정책 확인 |
+
+캐시:
+
+| 항목 | 값 |
+|------|----|
+| restore 상태 | 정확히 적중 |
+| cache key | `Linux-cargo-882d5ae97f721072735d2156a0d55566d62b9f4193a3e2c2fb1fa56ab8525f42` |
+| cache 크기 | 약 1476 MB (`1547590748 B`) |
+| restore 결과 | `Cache restored successfully` |
+| save 상태 | skipped |
+| cache reservation/read-only/save 실패 경고 | 관측되지 않음 |
+
+컴파일 관측:
+
+| step | cargo 관측 | 해석 |
+|------|------------|------|
+| Build | `Compiling rhwp`, `Finished release ... 3m 32s` | restore 이후에도 local crate compile 발생 |
+| Native Skia tests | `Compiling rhwp`, `Finished release ... 3m 56s` | feature 조합 차이로 별도 산출물 가능 |
+| Run lib tests | `Compiling rhwp`, `Finished release ... 3m 34s` | `release` profile local crate compile 발생 |
+| Run integration tests | `Compiling rhwp`, `Finished release-test ... 3m 32s` | profile 차이로 별도 산출물 가능 |
+| Clippy | `Finished dev ... 20.63s` | dev/check 계열 비용 |
+
+회귀 가드 추적성:
+
+| 항목 | 값 |
+|------|----|
+| 로컬 `tests/*.rs` | 162개 |
+| 로컬 `tests/issue_*.rs` | 131개 |
+| CI `Run integration tests` 실행 test binary | 165개 |
+| CI issue 계열 실행 | 131개 |
+| 판단 | issue 계열 131/131 실행 확인. 1:1 회귀 가드 추적성 보존 |
+
+해석:
+
+- #1664 목표인 PR cache save 차단은 의도대로 동작했다.
+- cache restore는 정확히 적중했고 read-only/reservation/save 실패 경고는 관측되지 않았다.
+- cache restore가 성공했더라도 PR merge ref와 프로필/feature 조합 때문에 최종 `rhwp` crate compile은 계속 발생했다.
+- 이는 #1664 실패가 아니며, #1666 `release-test` profile 전환과 #1667 Rust cache 전략 비교의 before 기준으로 사용한다.
+- after sample이 1개뿐이므로 P50/P90은 산출하지 않는다.
+- runner-minutes 변화는 before/after 표본이 더 쌓인 뒤 판단한다.
 
 ## 관찰 메모
 

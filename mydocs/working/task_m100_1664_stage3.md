@@ -19,6 +19,7 @@ workflow 변경:
 - `mydocs/working/task_m100_1664_stage2.md`
 - `mydocs/working/task_m100_1664_stage3.md`
 - `mydocs/tech/ci_cache_policy_1664.md`
+- `mydocs/report/task_m100_1668_ci_pipeline_tracking.md`
 - `mydocs/report/task_m100_1664_measurement.md`
 - `mydocs/report/task_m100_1664_report.md`
 
@@ -54,13 +55,16 @@ workflow 변경:
 - job 병렬화 없음: #1665 범위를 침범하지 않았다.
 - 회귀 가드 구조 변경 없음: `tests/`와 `tests/golden_svg/`를 수정하지 않았다.
 
-## 정책 / measurement 원천 문서
+## 정책 / 측정 원천 문서
 
 메인테이너의 문서/코드 PR 분리 요청에 맞춰 하이퍼-워터폴 절차 문서와 별도로 다음 장기 문서를 추가했다.
 
 - `mydocs/tech/ci_cache_policy_1664.md`
   - #1668 메인테이너 결정사항과 #1664 cache 정책의 원천 기록
   - non-goals, required check 표면, 운영 확인 기준 기록
+- `mydocs/report/task_m100_1668_ci_pipeline_tracking.md`
+  - #1668 하위 이슈 간 정책, 측정 기준, 진행 순서, 관측값 이관 판단 기록
+  - #1664 관측값을 #1666 / #1667 변경 전 기준으로 연결하는 부모 추적 문서
 - `mydocs/report/task_m100_1664_measurement.md`
   - PR run / trusted branch push run 측정 로그 템플릿
   - P50/P90 샘플 수 해석 기준과 로컬 정적 검증 기록
@@ -78,6 +82,13 @@ workflow 변경:
 - runner-minutes 변화
 - branch protection / required check 변경 여부
 - 회귀 가드 162개가 PR마다 모두 실행되는지 확인
+
+후속 갱신:
+
+- PR #1702 run 완료 후 PR run 측정값은 `mydocs/report/task_m100_1664_measurement.md`에 기록했다.
+- #1664 관측값과 #1666 / #1667로 이관할 비교 기준은
+  `mydocs/report/task_m100_1668_ci_pipeline_tracking.md`에 기록했다.
+- `devel` push run의 trusted branch save 동작은 #1702 병합 이후 추가 확인해야 한다.
 
 ## 결론
 
