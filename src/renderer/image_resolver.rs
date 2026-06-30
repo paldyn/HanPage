@@ -436,7 +436,9 @@ pub(crate) fn detect_image_mime_type(data: &[u8]) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::grayscale_jpeg_bytes_to_png_bytes;
+    use super::{grayscale_jpeg_bytes_to_png_bytes, resolve_image_payload};
+    use crate::paint::ResolvedImageKind;
+    use crate::renderer::render_tree::ImageNode;
     use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
     use std::io::Cursor;
 
@@ -477,5 +479,27 @@ mod tests {
         });
 
         assert!(grayscale_jpeg_bytes_to_png_bytes(&jpeg).is_none());
+    }
+
+    #[test]
+    fn tiff_image_payload_is_normalized_to_png() {
+        let mut img = RgbImage::new(2, 2);
+        for y in 0..2 {
+            for x in 0..2 {
+                img.put_pixel(x, y, Rgb([32 + x as u8, 96 + y as u8, 160]));
+            }
+        }
+        let mut tiff = Vec::new();
+        DynamicImage::ImageRgb8(img)
+            .write_to(&mut Cursor::new(&mut tiff), ImageFormat::Tiff)
+            .expect("encode tiff");
+
+        let image = ImageNode::new(1, Some(tiff));
+        let resolved = resolve_image_payload(&image).expect("tiff should resolve");
+
+        assert_eq!(resolved.mime, "image/png");
+        assert_eq!(resolved.kind, ResolvedImageKind::FormatConverted);
+        assert!(resolved.data.starts_with(b"\x89PNG\r\n\x1a\n"));
+        assert!(!resolved.suppress_effects);
     }
 }
