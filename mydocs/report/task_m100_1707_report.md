@@ -34,3 +34,14 @@
 ## 4. 결론
 
 기능 동작은 유지하고, 사용자에게 노출되는 명칭을 #1707 기준으로 정리했다.
+
+## 5. PR 및 후속 처리
+
+- PR: edwardkim/rhwp#1709
+- merge commit: `8461b0ad2b257163266eac9ece3f30dc70f5073c`
+- merge 시각: 2026-06-30 23:38 KST
+- 최신 head `61cd8adc29a8266e1fc3f5aa1ba76475313ea958` 기준 GitHub Actions 통과
+  - Build & Test
+  - CodeQL
+  - Canvas visual diff / Render Diff preflight
+- #1707은 `Closes #1707` 자동 close가 동작하지 않아 수동 close 처리했다.
