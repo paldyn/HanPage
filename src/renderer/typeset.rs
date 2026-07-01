@@ -2340,7 +2340,17 @@ impl TypesetEngine {
                     };
 
                     if !(height_fits && vpos_fits) {
-                        // 빈 문단이 현재 페이지에 안 들어감 → skip (단독 빈 페이지 차단)
+                        // [#1706] 빈 문단이 현재 페이지에 안 들어감.
+                        // 종전엔 통째로 drop(continue) → 문단이 모델에서 사라져 한글 대비
+                        // 문단→페이지 매핑이 어긋났다(rhwp_pNone; 대형 TAC 표가 페이지를 채운
+                        // 직후의 빈 문단). 한글은 이 빈 문단을 현재 페이지 하단의 빈 줄 1개로 유지.
+                        // → drop 대신 현재 페이지에 0-높이로 흡수 기록(hide_empty_line 와 동일
+                        //   시멘틱). 페이지를 advance 하지 않으므로 단독 빈 페이지 회귀(synam-001
+                        //   등)는 발생하지 않는다.
+                        st.hidden_empty_paras.insert(para_idx);
+                        st.current_items.push(PageItem::FullParagraph {
+                            para_index: para_idx,
+                        });
                         continue;
                     }
                     // height·vpos 둘 다 fit → 정상 emit (아래로 진행)
@@ -2370,7 +2380,15 @@ impl TypesetEngine {
                         .unwrap_or(0.0);
                     let avail = st.available_height() - st.current_height;
                     if empty_h_px > avail {
-                        // 빈 paragraph 가 fit 안 됨 → skip 으로 단독 page 차단
+                        // [#1706] 빈 paragraph 가 fit 안 됨.
+                        // 종전엔 drop(continue) → 문단이 모델에서 사라져 한글 대비 매핑이
+                        // 어긋났다(rhwp_pNone). 한컴은 이 빈 문단을 현재 page 하단의 빈 줄로
+                        // 흡수(위 주석)하므로, drop 대신 현재 페이지에 0-높이로 흡수 기록한다.
+                        // 페이지를 advance 하지 않으므로 단독 page 회귀(sample18 등)는 없다.
+                        st.hidden_empty_paras.insert(para_idx);
+                        st.current_items.push(PageItem::FullParagraph {
+                            para_index: para_idx,
+                        });
                         continue;
                     }
                     // fit 가능 — 정상 emit (기존 동작)
