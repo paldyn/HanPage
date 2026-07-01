@@ -7,17 +7,18 @@
 - 브랜치: `local/task1664`
 - 주제: Actions cache quota/read-only 상태 해소 및 PR cache 저장 정책 정리
 - 문서 PR: #1701 (`mydocs/**` 정책/측정 기록 전용)
-- 후속 코드 PR: #1702 (`.github/workflows/ci.yml` workflow 변경, draft 상태에서 관측값 수집)
+- 코드 PR: #1702 (`.github/workflows/ci.yml` workflow 변경, merge 완료)
+- 후속 문서 PR: #1702 merge 이후 최종 measurement를 `mydocs/`에 보존
 
 ## PR 분리 기준
 
 문서 PR #1701은 정책, 의사결정, 측정 기록만 포함한다. 실제 `.github/workflows/ci.yml` 변경은 후속 코드 PR
 #1702에서만 다루며, #1701이 merge되어도 workflow 변경이 `devel`에 반영된 것은 아니다.
 
-## 후속 코드 PR #1702 기준 변경 요약
+## 코드 PR #1702 기준 변경 요약
 
-후속 코드 PR #1702에서는 `.github/workflows/ci.yml`의 `Build & Test` cargo cache를 restore/save 분리
-구조로 변경한다.
+코드 PR #1702에서는 `.github/workflows/ci.yml`의 `Build & Test` cargo cache를 restore/save 분리 구조로
+변경했다.
 
 - 기존: `actions/cache@v5` 단일 step
 - 변경:
@@ -30,6 +31,8 @@
 - `mydocs/tech/ci_cache_policy_1664.md`: 정책과 의사결정 기록
 - `mydocs/report/task_m100_1668_ci_pipeline_tracking.md`: 부모 이슈 #1668 기준 하위 이슈 간 추적 기록
 - `mydocs/report/task_m100_1664_measurement.md`: PR/devel run 누적 측정 로그
+
+2026-07-01 후속 문서 PR에서는 #1702 merge 이후 최종 관측값을 위 원천 문서에 반영했다.
 
 ## 정책 판단 4건 반영
 
@@ -62,7 +65,7 @@
 - `mydocs/report/task_m100_1664_measurement.md`
 - `mydocs/report/task_m100_1664_report.md`
 
-후속 코드 PR #1702 변경 대상:
+코드 PR #1702 변경 대상:
 
 - `.github/workflows/ci.yml`
 
@@ -100,22 +103,23 @@
 | PR checks 완료 시간 (P50, P90) | 후속/draft 코드 PR #1702 단일 관측값 기록 완료. P50/P90은 표본 부족으로 보류 |
 | `CI / Build & Test` job 시간 | 후속/draft 코드 PR #1702 19m08s 기록 완료 |
 | 주요 step 시간 | 후속/draft 코드 PR #1702 build / lib test / integration test / native-skia 기록 완료 |
-| cache hit/miss/save 성공 여부 | 후속/draft 코드 PR #1702 restore 정확히 적중, save skipped 기록 완료. #1702 merge 후 `devel` / `main` push save 여부 추가 확인 필요 |
-| cache 크기 | 후속/draft 코드 PR #1702 약 1476 MB 기록 완료 |
-| 실패 시 원인 가시성 | restore/save step 분리로 로그 위치 개선 |
-| runner-minutes 변화 | 단일 PR run만 있으므로 증감 판단 보류 |
+| cache hit/miss/save 성공 여부 | PR run save skipped, cleanup 후 `devel` save success, 후속 `devel` exact-hit save skipped 확인 |
+| cache 크기 | PR run 약 1476 MB, post-merge cargo exact cache 1,637,296,893 B 기록 |
+| 실패 시 원인 가시성 | `Cache reservation failed`, `Failed to save`, `##[error]` 재현 없음 |
+| runner-minutes 변화 | PR 표본 1개와 trusted branch 표본 2개뿐이므로 장기 증감 판단 보류 |
 | branch protection / required check 변경 여부 | #1702 기준 job 이름 유지, GitHub 설정 변경 없음 |
 | 회귀 가드 162개 PR 실행 여부 | 후속/draft 코드 PR #1702에서 issue 계열 131/131 실행 확인 |
 
 ## 리스크
 
 - cache save가 trusted branch로 제한되어 PR별 두 번째 run cache 개선폭은 줄어들 수 있다.
-- 기존 cache quota 자체가 부족하면 cleanup 또는 budget 조정이 추가로 필요할 수 있다.
+- 기존 cache quota 자체가 부족하면 cleanup 또는 budget 조정이 추가로 필요할 수 있다. 2026-07-01에는
+  closed/merged PR ref cache cleanup 후 trusted branch save가 성공했다.
 - exact key hit가 계속 발생하면 save step은 생략되므로, 새 key 생성 여부는 `Cargo.lock` 변경 또는 cache miss 상황에서 확인해야 한다.
 
 ## 후속
 
 - 후속/draft 코드 PR #1702에서 PR save step이 skipped 되는지 확인했다.
-- #1702 merge 후 `devel` push에서 save step이 조건부 실행되는지 확인한다.
-- 후속/draft 코드 PR #1702에서는 cache read-only 경고가 관측되지 않았다. #1702 merge 후 `devel` push run에서도 추가 확인한다.
-- 안정화 측정 후 #1667 진행 여부를 판단한다.
+- #1702 merge 후 `devel` push에서 save step이 조건부 실행되는지 확인했다.
+- 후속/draft 코드 PR #1702와 #1702 merge 후 `devel` run에서 cache read-only 경고가 관측되지 않았다.
+- 안정화 측정 결과는 #1666 profile 전환 전 기준선과 #1667 cache 전략 재평가 기준선으로 사용한다.
