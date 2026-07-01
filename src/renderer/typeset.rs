@@ -197,6 +197,10 @@ struct TypesetState {
     /// [Task #359] 다음 pi 가 vpos-reset 가드를 발동할 예정 → 현재 pi 의 fit 안전마진 비활성화.
     /// 단독 항목 페이지 발생 차단용.
     skip_safety_margin_once: bool,
+    /// [Task #1725] tail-before-vpos-reset 문단 1회 각주 안전마진(40px) 비활성화.
+    /// 각주 있는 페이지에서 한글 LINESEG 는 tail 문단을 본문에 배치(각주는 아래)하는데,
+    /// rhwp 각주 예약(+40px 버퍼)이 tail 을 수 px 초과로 밀어 near-empty 페이지 over-pagination.
+    skip_footnote_margin_once: bool,
     /// [Task #1007] HWP3-origin HWP5 변환본 여부 — widow 방지 등 variant-specific
     /// behavior 분기에 사용.
     is_hwp3_variant: bool,
@@ -1148,6 +1152,7 @@ impl TypesetState {
             pending_body_wide_top_reserve: 0.0,
             visible_float_exclusions: Vec::new(),
             skip_safety_margin_once: false,
+            skip_footnote_margin_once: false,
             is_hwp3_variant: false,
             is_hwpx_source: false,
             hide_empty_line: false,
@@ -2357,6 +2362,10 @@ impl TypesetEngine {
                 } else {
                     // 일반 텍스트 또는 컨트롤 보유: 안전마진 1회 비활성화 (단독 텍스트 페이지 차단)
                     st.skip_safety_margin_once = true;
+                    // [Task #1725] 각주 있는 페이지의 tail 문단: 각주 안전마진(40px 버퍼)도 1회
+                    // 비활성화. 한글은 tail 을 본문에 배치하는데 rhwp 각주 예약 버퍼가 tail 을 수 px
+                    // 밀어 near-empty 페이지 over-pagination(국제고속선기준 258 vs 242) 을 만든다.
+                    st.skip_footnote_margin_once = true;
                 }
             } else if !st.current_items.is_empty() && para_idx + 1 < paragraphs.len() {
                 // [Task #967] 빈 paragraph 직후 force page break (쪽나누기) case 가드:
@@ -9190,7 +9199,23 @@ impl TypesetEngine {
             0.0
         };
         st.apply_visible_float_exclusions(exclusion_probe_height);
-        let available = (st.available_height() - safety).max(0.0);
+        // [Task #1725] tail-before-vpos-reset 문단은 각주 안전마진(보수 버퍼 40px)만 1회 되돌려
+        // 본문에 유지한다. 한글 LINESEG 는 이 tail 문단을 본문(각주 위)에 배치하는데, rhwp 각주
+        // 예약의 보수 버퍼가 tail 을 수 px 밀어 near-empty 페이지 over-pagination(국제고속선기준
+        // 258 vs 242)을 만든다. 다음 문단이 새 페이지를 시작(vpos-reset)하므로 tail 을 현재
+        // 페이지에 두는 것이 한글 정합. (실제 각주 높이는 유지 — 버퍼만 완화하여 겹침 위험 최소화;
+        // 버퍼 초과분은 별도 원인이라 여기서 다루지 않는다.)
+        let footnote_margin_addback = if st.skip_footnote_margin_once {
+            st.skip_footnote_margin_once = false;
+            if st.current_footnote_height > 0.0 {
+                st.footnote_safety_margin
+            } else {
+                0.0
+            }
+        } else {
+            0.0
+        };
+        let available = (st.available_height() - safety + footnote_margin_addback).max(0.0);
 
         // 다단 레이아웃에서 문단 내 단 경계 감지
         // [Task #459] on_first_multicolumn_page 가드 제거: 다단 구역이 여러 페이지에 걸칠 때
