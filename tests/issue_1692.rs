@@ -226,6 +226,24 @@ fn contains_node_type(node: &Value, node_type: &str) -> bool {
         .any(|child| contains_node_type(child, node_type))
 }
 
+fn contains_node_type_under(node: &Value, ancestor_type: &str, node_type: &str) -> bool {
+    fn walk(node: &Value, ancestor_type: &str, node_type: &str, in_ancestor: bool) -> bool {
+        let current_type = node.get("type").and_then(Value::as_str).unwrap_or("");
+        let now_in_ancestor = in_ancestor || current_type == ancestor_type;
+        if now_in_ancestor && current_type == node_type {
+            return true;
+        }
+
+        node.get("children")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .any(|child| walk(child, ancestor_type, node_type, now_in_ancestor))
+    }
+
+    walk(node, ancestor_type, node_type, false)
+}
+
 fn first_picture<'a>(paragraphs: &'a [Paragraph]) -> Option<&'a rhwp::model::image::Picture> {
     for paragraph in paragraphs {
         for control in &paragraph.controls {
@@ -488,6 +506,12 @@ fn issue_1692_so_sueop_header_footer_page5_matches_reference_contract() {
     let hwpx_tree = page_render_tree(&hwpx_doc, 4);
 
     for tree in [&hwp3_tree, &hwpx_tree] {
+        assert!(
+            contains_node_type_under(tree, "Header", "Path")
+                || contains_node_type_under(tree, "Header", "Line"),
+            "SO-SUEOP header underline must render"
+        );
+
         let footer_text = text_concat_in_tree(tree, "Footer");
         assert!(
             footer_text.contains("협성고등학교"),

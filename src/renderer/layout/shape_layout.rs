@@ -603,7 +603,11 @@ impl LayoutEngine {
         // compute_object_position fallback 으로 그리면 절대 좌표(예: 문단 오프셋=0,0)
         // 기준의 잘못된 위치에 박스가 출현한다 (= 다른 paragraph 영역에 침범).
         // 본질 수정 전까지(paginator A 단계) fallback 그리기를 차단한다.
-        if common.treat_as_char && inline_pos.is_none() {
+        // 머리말/꼬리말 HWP3 선 개체는 inline 좌표 등록 없이 들어오는 경우가 있다.
+        // 본문 TAC 안전장치는 유지하되 Header/Footer 선만 기존 위치 계산으로 복원한다.
+        let allow_header_footer_line_fallback =
+            clamp_negative_para_offset && matches!(shape, ShapeObject::Line(_));
+        if common.treat_as_char && inline_pos.is_none() && !allow_header_footer_line_fallback {
             if std::env::var("RHWP_DEBUG_LAYOUT").is_ok() {
                 eprintln!(
                     "[#476 skip] inline Shape without inline_pos: sec={} para={} ci={}",
