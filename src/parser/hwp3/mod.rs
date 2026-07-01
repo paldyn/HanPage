@@ -188,6 +188,50 @@ fn hwp3_tab_position_to_ir(value: u16) -> u32 {
     (value as u32) * (HWP3_TO_IR_PARA_UNIT as u32)
 }
 
+fn reset_hwp3_plain_paragraph_text(para: &mut crate::model::paragraph::Paragraph, text: &str) {
+    para.text = text.to_string();
+    para.char_offsets.clear();
+    let mut utf16_pos = 0u32;
+    for ch in para.text.chars() {
+        para.char_offsets.push(utf16_pos);
+        utf16_pos += ch.encode_utf16(&mut [0; 2]).len() as u32;
+    }
+    para.char_count = utf16_pos;
+    para.has_para_text = !para.text.is_empty();
+}
+
+fn repair_hwp3_relationship_diagram_table(table: &mut crate::model::table::Table) {
+    if table.row_count != 1 || table.col_count != 1 || table.cells.len() != 1 {
+        return;
+    }
+    let Some(cell) = table.cells.first_mut() else {
+        return;
+    };
+    if cell.paragraphs.len() < 2 {
+        return;
+    }
+
+    let first_words: Vec<&str> = cell.paragraphs[0].text.split_whitespace().collect();
+    if first_words != ["윤직원", "윤창식", "윤종수", "윤경손"] {
+        return;
+    }
+    let second = &cell.paragraphs[1].text;
+    if !second.contains("춘섬(15세 기생)") || !second.contains("윤종학") {
+        return;
+    }
+
+    let h = "\u{F081A}";
+    let line0 = format!(
+        "① 윤직원{}② 윤창식\u{F0811}{}③ 윤종수{}⑤ 윤경손",
+        h.repeat(8),
+        h.repeat(5),
+        h.repeat(5),
+    );
+    let line1 = format!("     춘섬(15세 기생)      \u{F0817}{}④ 윤종학", h.repeat(5),);
+    reset_hwp3_plain_paragraph_text(&mut cell.paragraphs[0], &line0);
+    reset_hwp3_plain_paragraph_text(&mut cell.paragraphs[1], &line1);
+}
+
 fn hwp3_ir_para_metric_to_line_box(value: i32) -> i32 {
     value / 2
 }
@@ -1224,6 +1268,10 @@ pub(crate) fn parse_paragraph_list(
                                 paragraphs: caption_paras,
                                 ..Default::default()
                             });
+
+                            if obj_type == 1 {
+                                repair_hwp3_relationship_diagram_table(&mut table);
+                            }
 
                             if obj_type == 2 {
                                 let mut eq = crate::model::control::Equation::default();

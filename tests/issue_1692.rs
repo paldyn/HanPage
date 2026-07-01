@@ -593,6 +593,30 @@ fn issue_1692_so_sueop_hwp3_page22_relationship_box_uses_table_flow() {
         matches!(para.controls.first(), Some(Control::Table(_))),
         "HWP3 obj_type=1 relationship box must remain a 1x1 table so TopAndBottom flow is reserved"
     );
+    let Control::Table(table) = para.controls.first().expect("HWP3 p22 relationship table") else {
+        unreachable!();
+    };
+    let cell = table
+        .cells
+        .first()
+        .expect("HWP3 p22 relationship table cell");
+    assert!(
+        cell.paragraphs[0]
+            .text
+            .contains("① 윤직원\u{F081A}\u{F081A}"),
+        "HWP3 p22 relationship diagram must restore circled number 1 and horizontal connectors"
+    );
+    assert!(
+        cell.paragraphs[0].text.contains("② 윤창식\u{F0811}")
+            && cell.paragraphs[0].text.contains("③ 윤종수")
+            && cell.paragraphs[0].text.contains("⑤ 윤경손"),
+        "HWP3 p22 relationship diagram must restore the first-line family labels"
+    );
+    assert!(
+        cell.paragraphs[1].text.contains("\u{F0817}\u{F081A}")
+            && cell.paragraphs[1].text.contains("④ 윤종학"),
+        "HWP3 p22 relationship diagram must restore the lower branch to 윤종학"
+    );
 
     let hwp3_doc = load_wasm_doc("samples/SO-SUEOP.hwp");
     let hwpx_doc = load_wasm_doc("samples/SO-SUEOP.hwpx");
