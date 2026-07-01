@@ -1738,36 +1738,20 @@ pub(crate) fn parse_paragraph_list(
                                 controls
                                     .push(crate::model::control::Control::Equation(Box::new(eq)));
                             } else if parsed_obj_type == 1 {
-                                let mut rect = crate::model::shape::RectangleShape::default();
                                 if let Some(table) = parsed_table {
-                                    rect.common = table.common.clone();
-                                    let mut tb = crate::model::shape::TextBox::default();
-                                    if let Some(cell) = table.cells.first() {
-                                        tb.paragraphs = cell.paragraphs.clone();
-                                        tb.margin_left = cell.padding.left as _;
-                                        tb.margin_right = cell.padding.right as _;
-                                        tb.margin_top = cell.padding.top as _;
-                                        tb.margin_bottom = cell.padding.bottom as _;
-                                        tb.vertical_align = cell.vertical_align;
-
-                                        if let Some(bf) = doc_border_fills
-                                            .get(cell.border_fill_id.saturating_sub(1) as usize)
-                                        {
-                                            rect.drawing.border_line =
-                                                crate::model::style::ShapeBorderLine {
-                                                    width: bf.borders[0].width as i32,
-                                                    color: bf.borders[0].color,
-                                                    ..Default::default()
-                                                };
-                                            rect.drawing.fill = bf.fill.clone();
-                                        }
-                                    }
-                                    rect.drawing.text_box = Some(tb);
-                                    rect.drawing.caption = table.caption.clone();
+                                    // HWP3 obj_type=1 글상자는 1x1 표 구조가 자리차지 흐름과
+                                    // 내부 여백을 이미 담고 있으므로 Table IR 그대로 보존한다.
+                                    controls.push(crate::model::control::Control::Table(Box::new(
+                                        table,
+                                    )));
+                                } else {
+                                    let mut rect = crate::model::shape::RectangleShape::default();
+                                    rect.drawing.text_box =
+                                        Some(crate::model::shape::TextBox::default());
+                                    controls.push(crate::model::control::Control::Shape(Box::new(
+                                        crate::model::shape::ShapeObject::Rectangle(rect),
+                                    )));
                                 }
-                                controls.push(crate::model::control::Control::Shape(Box::new(
-                                    crate::model::shape::ShapeObject::Rectangle(rect),
-                                )));
                             } else if parsed_obj_type == 3 {
                                 let mut form = crate::model::control::FormObject::default();
                                 form.form_type = crate::model::control::FormType::PushButton;
@@ -3019,6 +3003,10 @@ pub fn parse_hwp3(data: &[u8]) -> Result<Document, Hwp3Error> {
     doc.doc_info.tab_defs = doc_tab_defs;
     doc.doc_info.bin_data_list = doc_bin_data_list;
     doc.bin_data_content = doc_bin_data_content;
+
+    // HWP3 pic_type=1 OLE도 payload가 없으면 Link BinData로 남는다.
+    // 같은 디렉터리의 외부 파일을 로드할 수 있도록 공통 Link 경로 전달을 적용한다.
+    super::populate_link_image_paths(&mut doc);
 
     crate::parser::assign_auto_numbers(&mut doc);
     fixup_hwp3_notes(&mut doc);

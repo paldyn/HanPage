@@ -34,6 +34,27 @@ fn uses_hwp3_origin_page_tolerance(document: &Document) -> bool {
     para_shape_ratio < 0.05 && char_shape_ratio < 0.15
 }
 
+fn uses_hwp3_origin_flow_spacing_before(document: &Document) -> bool {
+    if document.is_hwp3_variant {
+        return true;
+    }
+    if document.header.version.major != 3 {
+        return false;
+    }
+
+    let total_paragraphs: usize = document.sections.iter().map(|s| s.paragraphs.len()).sum();
+    if total_paragraphs <= 50 {
+        return false;
+    }
+
+    let para_shape_ratio = document.doc_info.para_shapes.len() as f64 / total_paragraphs as f64;
+    // sample16 계열 HWP3 원본은 paragraph마다 독립 ParaShape가 매우 풍부해
+    // 한컴 3mm 격자 정합을 위해 기존 spacing_before 복원 경로를 유지한다.
+    // SO-SUEOP처럼 HWPX 기준본과 같은 HWP3 원본은 이 비율이 낮아 기본 1/2
+    // 해소값을 그대로 써야 p1 표지 배치가 맞는다.
+    para_shape_ratio > 2.0
+}
+
 fn should_insert_hwp3_title_filler_page(
     hwp3_origin_page_tolerance: bool,
     section_index: usize,
@@ -2141,8 +2162,7 @@ impl DocumentCore {
     fn paginate_pass(&mut self, force_breaks: &[std::collections::HashSet<usize>]) {
         self.invalidate_page_tree_cache();
         let paginator = Paginator::new(self.dpi);
-        let hwp3_origin_flow_spacing_before =
-            self.document.is_hwp3_variant || self.document.header.version.major == 3;
+        let hwp3_origin_flow_spacing_before = uses_hwp3_origin_flow_spacing_before(&self.document);
         let is_hwpx_source = matches!(self.source_format, crate::parser::FileFormat::Hwpx);
         let measurer = HeightMeasurer::new(self.dpi)
             .with_hwp3_variant(self.document.is_hwp3_variant)
@@ -3336,7 +3356,7 @@ impl DocumentCore {
         self.layout_engine
             .set_hwp3_variant(self.document.is_hwp3_variant);
         self.layout_engine.set_hwp3_origin_flow_spacing_before(
-            self.document.is_hwp3_variant || self.document.header.version.major == 3,
+            uses_hwp3_origin_flow_spacing_before(&self.document),
         );
         self.layout_engine.set_hwpx_source(matches!(
             self.source_format,

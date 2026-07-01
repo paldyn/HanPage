@@ -8,6 +8,7 @@ use rhwp::parser::ole_container::is_hmapsi_ole_container;
 use rhwp::parser::parse_document;
 use rhwp::wasm_api::HwpDocument;
 use serde_json::Value;
+use std::path::Path;
 
 fn load(path: &str) -> rhwp::model::document::Document {
     let bytes = std::fs::read(path).unwrap_or_else(|e| panic!("read {path}: {e}"));
@@ -118,6 +119,79 @@ fn text_width_in_tree(node: &Value, ancestor_type: &str, text: &str) -> Option<f
     walk(node, ancestor_type, text, false)
 }
 
+fn text_bbox_in_tree(node: &Value, text: &str) -> Option<(f64, f64, f64, f64)> {
+    fn walk(node: &Value, text: &str) -> Option<(f64, f64, f64, f64)> {
+        let node_type = node.get("type").and_then(Value::as_str).unwrap_or("");
+        if node_type == "TextRun" && node.get("text").and_then(Value::as_str) == Some(text) {
+            let bbox = node.get("bbox")?;
+            return Some((
+                bbox.get("x")?.as_f64()?,
+                bbox.get("y")?.as_f64()?,
+                bbox.get("w")?.as_f64()?,
+                bbox.get("h")?.as_f64()?,
+            ));
+        }
+
+        node.get("children")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .find_map(|child| walk(child, text))
+    }
+
+    walk(node, text)
+}
+
+fn text_bbox_containing_in_tree(node: &Value, needle: &str) -> Option<(f64, f64, f64, f64)> {
+    fn walk(node: &Value, needle: &str) -> Option<(f64, f64, f64, f64)> {
+        let node_type = node.get("type").and_then(Value::as_str).unwrap_or("");
+        if node_type == "TextRun"
+            && node
+                .get("text")
+                .and_then(Value::as_str)
+                .is_some_and(|text| text.contains(needle))
+        {
+            let bbox = node.get("bbox")?;
+            return Some((
+                bbox.get("x")?.as_f64()?,
+                bbox.get("y")?.as_f64()?,
+                bbox.get("w")?.as_f64()?,
+                bbox.get("h")?.as_f64()?,
+            ));
+        }
+
+        node.get("children")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .find_map(|child| walk(child, needle))
+    }
+
+    walk(node, needle)
+}
+
+fn first_bbox_by_type(node: &Value, node_type: &str) -> Option<(f64, f64, f64, f64)> {
+    fn walk(node: &Value, needle_type: &str) -> Option<(f64, f64, f64, f64)> {
+        if node.get("type").and_then(Value::as_str) == Some(needle_type) {
+            let bbox = node.get("bbox")?;
+            return Some((
+                bbox.get("x")?.as_f64()?,
+                bbox.get("y")?.as_f64()?,
+                bbox.get("w")?.as_f64()?,
+                bbox.get("h")?.as_f64()?,
+            ));
+        }
+
+        node.get("children")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .find_map(|child| walk(child, needle_type))
+    }
+
+    walk(node, node_type)
+}
+
 fn text_concat_in_tree(node: &Value, ancestor_type: &str) -> String {
     fn walk(node: &Value, ancestor_type: &str, in_ancestor: bool, out: &mut String) {
         let node_type = node.get("type").and_then(Value::as_str).unwrap_or("");
@@ -150,6 +224,65 @@ fn contains_node_type(node: &Value, node_type: &str) -> bool {
         .into_iter()
         .flatten()
         .any(|child| contains_node_type(child, node_type))
+}
+
+fn first_picture<'a>(paragraphs: &'a [Paragraph]) -> Option<&'a rhwp::model::image::Picture> {
+    for paragraph in paragraphs {
+        for control in &paragraph.controls {
+            match control {
+                Control::Picture(picture) => return Some(picture),
+                Control::Table(table) => {
+                    for cell in &table.cells {
+                        if let Some(picture) = first_picture(&cell.paragraphs) {
+                            return Some(picture);
+                        }
+                    }
+                    if let Some(caption) = &table.caption {
+                        if let Some(picture) = first_picture(&caption.paragraphs) {
+                            return Some(picture);
+                        }
+                    }
+                }
+                Control::Header(header) => {
+                    if let Some(picture) = first_picture(&header.paragraphs) {
+                        return Some(picture);
+                    }
+                }
+                Control::Footer(footer) => {
+                    if let Some(picture) = first_picture(&footer.paragraphs) {
+                        return Some(picture);
+                    }
+                }
+                Control::Shape(shape) => {
+                    if let Some(drawing) = shape.drawing() {
+                        if let Some(text_box) = &drawing.text_box {
+                            if let Some(picture) = first_picture(&text_box.paragraphs) {
+                                return Some(picture);
+                            }
+                        }
+                        if let Some(caption) = &drawing.caption {
+                            if let Some(picture) = first_picture(&caption.paragraphs) {
+                                return Some(picture);
+                            }
+                        }
+                    }
+                }
+                Control::Endnote(endnote) => {
+                    if let Some(picture) = first_picture(&endnote.paragraphs) {
+                        return Some(picture);
+                    }
+                }
+                Control::Footnote(footnote) => {
+                    if let Some(picture) = first_picture(&footnote.paragraphs) {
+                        return Some(picture);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    None
 }
 
 #[test]
@@ -402,6 +535,90 @@ fn issue_1692_so_sueop_hwpx_title_ole_renders_from_embedded_preview() {
     assert!(
         !contains_node_type(&tree, "Placeholder"),
         "SO-SUEOP page 1 title OLE must not fall back to Placeholder"
+    );
+}
+
+#[test]
+fn issue_1692_so_sueop_hwp3_title_external_link_renders_from_sample_dir() {
+    let hwp3_model = load("samples/SO-SUEOP.hwp");
+    let picture = first_picture(&hwp3_model.sections[0].paragraphs)
+        .expect("SO-SUEOP HWP3 page 1 title picture");
+    assert_eq!(
+        picture.image_attr.external_path.as_deref(),
+        Some("00000000.OOO"),
+        "HWP3 title picture must keep the linked external object basename"
+    );
+
+    let mut hwp3_doc = load_wasm_doc("samples/SO-SUEOP.hwp");
+    let loaded = hwp3_doc.populate_external_images_from_dir(Path::new("samples"));
+    assert!(
+        loaded > 0,
+        "samples/00000000.OOO must be loaded as the HWP3 title image"
+    );
+
+    let tree = page_render_tree(&hwp3_doc, 0);
+    assert!(
+        contains_node_type(&tree, "Image"),
+        "SO-SUEOP HWP3 page 1 title must render as an image after external file loading"
+    );
+    assert!(
+        !contains_node_type(&tree, "Placeholder"),
+        "SO-SUEOP HWP3 page 1 title must not fall back to Placeholder"
+    );
+}
+
+#[test]
+fn issue_1692_so_sueop_hwp3_page1_school_label_matches_hwpx_y() {
+    let hwp3_doc = load_wasm_doc("samples/SO-SUEOP.hwp");
+    let hwpx_doc = load_wasm_doc("samples/SO-SUEOP.hwpx");
+
+    let hwp3_tree = page_render_tree(&hwp3_doc, 0);
+    let hwpx_tree = page_render_tree(&hwpx_doc, 0);
+    let hwp3_school =
+        text_bbox_in_tree(&hwp3_tree, " 협성고등학교").expect("HWP3 page 1 school label bbox");
+    let hwpx_school =
+        text_bbox_in_tree(&hwpx_tree, " 협성고등학교").expect("HWPX page 1 school label bbox");
+
+    assert!(
+        (hwp3_school.1 - hwpx_school.1).abs() < 1.0,
+        "HWP3 page 1 school label y must match HWPX reference: hwp3={hwp3_school:?}, hwpx={hwpx_school:?}"
+    );
+}
+
+#[test]
+fn issue_1692_so_sueop_hwp3_page22_relationship_box_uses_table_flow() {
+    let hwp3_model = load("samples/SO-SUEOP.hwp");
+    let para = &hwp3_model.sections[0].paragraphs[574];
+    assert!(
+        matches!(para.controls.first(), Some(Control::Table(_))),
+        "HWP3 obj_type=1 relationship box must remain a 1x1 table so TopAndBottom flow is reserved"
+    );
+
+    let hwp3_doc = load_wasm_doc("samples/SO-SUEOP.hwp");
+    let hwpx_doc = load_wasm_doc("samples/SO-SUEOP.hwpx");
+    let hwp3_tree = page_render_tree(&hwp3_doc, 21);
+    let hwpx_tree = page_render_tree(&hwpx_doc, 21);
+
+    let hwp3_table = first_bbox_by_type(&hwp3_tree, "Table")
+        .expect("HWP3 page 22 relationship diagram table bbox");
+    let hwp3_body = text_bbox_containing_in_tree(&hwp3_tree, "윤두꺼비 시절 부친 말대가리")
+        .expect("HWP3 page 22 first body line bbox");
+    assert!(
+        hwp3_body.1 >= hwp3_table.1 + hwp3_table.3 + 4.0,
+        "HWP3 p22 body y={} must start below relationship table bottom={}",
+        hwp3_body.1,
+        hwp3_table.1 + hwp3_table.3
+    );
+
+    let hwp3_follow = text_bbox_in_tree(&hwp3_tree, " 그와 유사한 인물은?")
+        .expect("HWP3 page 22 follow-up question bbox");
+    let hwpx_follow = text_bbox_in_tree(&hwpx_tree, " 그와 유사한 인물은?")
+        .expect("HWPX page 22 follow-up question bbox");
+    assert!(
+        (hwp3_follow.1 - hwpx_follow.1).abs() <= 3.0,
+        "HWP3 follow-up question y={} must match HWPX y={}",
+        hwp3_follow.1,
+        hwpx_follow.1
     );
 }
 
