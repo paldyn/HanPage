@@ -9204,6 +9204,31 @@ impl TypesetEngine {
         st.apply_visible_float_exclusions(exclusion_probe_height);
         let available = (st.available_height() - safety).max(0.0);
 
+        // [Task #1686] RowBreak 표 조각 뒤에 남는 빈 guide 문단 흡수.
+        // pr-1674처럼 표 셀 내부 vpos reset으로 페이지가 갈린 뒤, 뒤따르는 빈 문단들이
+        // 이전 좌표계의 큰 vpos(페이지 하단)를 그대로 갖고 다음 실질 앵커 표보다 아래에
+        // 기록될 수 있다. 이 빈 줄들을 flow 높이로 누적하면 다음 RowBreak 표가 한컴/PDF보다
+        // 늦게 시작해 page 5 내용과 총 페이지 수가 밀린다.
+        if prev_is_partial_table
+            && para.controls.is_empty()
+            && !para_has_visible_text(para)
+            && para.line_segs.len() == 1
+        {
+            let curr_vpos = para.line_segs.first().map(|s| s.vertical_pos);
+            let next_anchor_vpos = paragraphs
+                .iter()
+                .skip(para_idx + 1)
+                .find(|p| para_has_visible_text(p) || !p.controls.is_empty())
+                .and_then(|p| p.line_segs.first().map(|s| s.vertical_pos));
+            if let (Some(curr), Some(next)) = (curr_vpos, next_anchor_vpos) {
+                const EMPTY_GUIDE_RESET_GAP_HU: i32 = 2000;
+                if curr > next + EMPTY_GUIDE_RESET_GAP_HU {
+                    st.hidden_empty_paras.insert(para_idx);
+                    return;
+                }
+            }
+        }
+
         // 다단 레이아웃에서 문단 내 단 경계 감지
         // [Task #459] on_first_multicolumn_page 가드 제거: 다단 구역이 여러 페이지에 걸칠 때
         // 후속 페이지에서도 LINE_SEG vpos-reset 으로 인코딩된 단 경계를 인식해야 함.
@@ -11604,7 +11629,7 @@ impl TypesetEngine {
             // 정의상 일치한다(px content_offset·MeasuredTable 누적 제거).
             const MIN_TOP_KEEP_PX: f64 = 25.0;
             const ROWBREAK_TRAILING_EMPTY_ROW_OVERFLOW_TOLERANCE_PX: f64 = 40.0;
-            const ROWBREAK_SPLIT_ROW_OVERFLOW_TOLERANCE_PX: f64 = 0.1;
+            const ROWBREAK_SPLIT_ROW_OVERFLOW_TOLERANCE_PX: f64 = 2.0;
             const HWPX_ROWBREAK_SPLIT_ROW_OVERFLOW_TOLERANCE_PX: f64 = 64.0;
             const LANDSCAPE_ROWBREAK_WHOLE_ROW_TOLERANCE_PX: f64 = 36.0;
             const LANDSCAPE_ROWBREAK_SHORT_ROW_TOLERANCE_PX: f64 = 260.0;

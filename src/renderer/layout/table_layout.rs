@@ -4492,6 +4492,8 @@ impl LayoutEngine {
             .first()
             .and_then(|p| p.line_segs.first().map(|s| s.vertical_pos))
             .unwrap_or(-1);
+        let cell_has_local_vpos_origin = cell_first_vpos == 0
+            || (is_block_rowbreak_table && (0..=500).contains(&cell_first_vpos));
         let preserve_linear_single_cell_vpos = is_block_rowbreak_table
             && table.row_count == 1
             && table.col_count == 1
@@ -4598,7 +4600,7 @@ impl LayoutEngine {
                 0.0
             };
             // vpos 리셋 검출: 직전 문단 끝보다 현재 문단 시작 vpos 가 작으면 리셋.
-            let reset_before = if pi > 0 && cell_first_vpos == 0 {
+            let reset_before = if pi > 0 && cell_has_local_vpos_origin {
                 let prev = &cell.paragraphs[pi - 1];
                 let prev_end = prev
                     .line_segs
@@ -4635,7 +4637,7 @@ impl LayoutEngine {
                 if li == 0 {
                     return reset_before;
                 }
-                if cell_first_vpos != 0 {
+                if !cell_has_local_vpos_origin {
                     return false;
                 }
                 let Some(prev) = p.line_segs.get(li - 1) else {
