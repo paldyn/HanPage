@@ -159,6 +159,11 @@ pub struct TypesetEngine {
 }
 
 /// 조판 중 현재 페이지/단 상태
+/// [Task #1725 v2] tail-before-vpos-reset 문단에 1회 허용하는 소량 오버플로(px).
+/// 한글은 하드 페이지 경계 직전 tail 을 본문 하단(여백 침범 무시)에 배치하므로, rhwp 가 수 px
+/// over-fill 한 경우에도 tail 을 현재 페이지에 유지해 near-empty 페이지 over-pagination 을 막는다.
+const TAIL_BREAK_OVERFLOW_TOLERANCE_PX: f64 = 20.0;
+
 struct TypesetState {
     /// 완성된 페이지 목록
     pages: Vec<PageContent>,
@@ -208,6 +213,14 @@ struct TypesetState {
     /// [Task #359] 다음 pi 가 vpos-reset 가드를 발동할 예정 → 현재 pi 의 fit 안전마진 비활성화.
     /// 단독 항목 페이지 발생 차단용.
     skip_safety_margin_once: bool,
+    /// [Task #1725] tail-before-vpos-reset 문단 1회 각주 안전마진(40px) 비활성화.
+    /// 각주 있는 페이지에서 한글 LINESEG 는 tail 문단을 본문에 배치(각주는 아래)하는데,
+    /// rhwp 각주 예약(+40px 버퍼)이 tail 을 수 px 초과로 밀어 near-empty 페이지 over-pagination.
+    skip_footnote_margin_once: bool,
+    /// [Task #1725 v2] tail-before-vpos-reset 문단 1회 소량 오버플로 허용(px). 각주 없이도
+    /// 페이지가 수 px over-fill 되어 tail 이 밀리는 케이스(국제고속선기준 pi=718/995/1789/2128).
+    /// 한글은 tail 을 본문 하단(여백 침범 무시)에 배치하므로 tail 에 한해 소량 초과를 허용한다.
+    tail_overflow_tolerance_once: f64,
     /// [Task #1007] HWP3-origin HWP5 변환본 여부 — widow 방지 등 variant-specific
     /// behavior 분기에 사용.
     is_hwp3_variant: bool,
@@ -1160,6 +1173,8 @@ impl TypesetState {
             visible_float_exclusions: Vec::new(),
             deferred_table_controls: Vec::new(),
             skip_safety_margin_once: false,
+            skip_footnote_margin_once: false,
+            tail_overflow_tolerance_once: 0.0,
             is_hwp3_variant: false,
             is_hwpx_source: false,
             hide_empty_line: false,
@@ -2280,6 +2295,35 @@ impl TypesetEngine {
                     false
                 };
 
+            // [Task #1725 v2] 현재 일반텍스트 tail 과 새 페이지(vpos-reset) 사이에 빈 문단이 1개
+            // 끼어 immediate-next reset 을 놓치는 각주-tail 케이스(국제고속선기준 pi=537/2378).
+            // 이 경우도 tail 로 보고 fit 완화 플래그(각주 버퍼/안전마진)만 켠다. 빈 문단 skip
+            // 로직(아래 next_will_vpos_reset 분기)에는 영향 없음.
+            let tail_before_break_through_empty = !next_will_vpos_reset
+                && !st.current_items.is_empty()
+                && para_has_visible_text(para)
+                && para.controls.is_empty()
+                && para_idx + 2 < paragraphs.len()
+                && {
+                    let mid = &paragraphs[para_idx + 1];
+                    let after = &paragraphs[para_idx + 2];
+                    mid.text.trim().is_empty()
+                        && mid.controls.is_empty()
+                        && after.column_type != ColumnBreakType::Page
+                        && after.column_type != ColumnBreakType::Section
+                        && paragraph_saved_vpos_reset_starts_new_page_after(
+                            mid,
+                            after,
+                            st.col_count,
+                            st.is_hwp3_variant,
+                        )
+                };
+            if tail_before_break_through_empty {
+                st.skip_safety_margin_once = true;
+                st.skip_footnote_margin_once = true;
+                st.tail_overflow_tolerance_once = TAIL_BREAK_OVERFLOW_TOLERANCE_PX;
+            }
+
             if next_will_vpos_reset {
                 // [Task #362] 빈 paragraph 가 표/도형/그림 컨트롤을 포함하면 skip 안 함
                 // (kps-ai pi=778 case: 빈 텍스트 + 3x3 wrap=Square 표를 가진 paragraph 가
@@ -2369,6 +2413,13 @@ impl TypesetEngine {
                 } else {
                     // 일반 텍스트 또는 컨트롤 보유: 안전마진 1회 비활성화 (단독 텍스트 페이지 차단)
                     st.skip_safety_margin_once = true;
+                    // [Task #1725] 각주 있는 페이지의 tail 문단: 각주 안전마진(40px 버퍼)도 1회
+                    // 비활성화. 한글은 tail 을 본문에 배치하는데 rhwp 각주 예약 버퍼가 tail 을 수 px
+                    // 밀어 near-empty 페이지 over-pagination(국제고속선기준 258 vs 242) 을 만든다.
+                    st.skip_footnote_margin_once = true;
+                    // [Task #1725 v2] 각주 없이 페이지가 수 px over-fill 되어 tail 이 밀리는 경우도
+                    // 한글은 tail 을 본문 하단에 배치하므로 소량 오버플로를 1회 허용.
+                    st.tail_overflow_tolerance_once = TAIL_BREAK_OVERFLOW_TOLERANCE_PX;
                 }
             } else if !st.current_items.is_empty() && para_idx + 1 < paragraphs.len() {
                 // [Task #967] 빈 paragraph 직후 force page break (쪽나누기) case 가드:
@@ -9220,7 +9271,34 @@ impl TypesetEngine {
             0.0
         };
         st.apply_visible_float_exclusions(exclusion_probe_height);
-        let available = (st.available_height() - safety).max(0.0);
+        // [Task #1725] tail-before-vpos-reset 문단은 각주 안전마진(보수 버퍼 40px)만 1회 되돌려
+        // 본문에 유지한다. 한글 LINESEG 는 이 tail 문단을 본문(각주 위)에 배치하는데, rhwp 각주
+        // 예약의 보수 버퍼가 tail 을 수 px 밀어 near-empty 페이지 over-pagination(국제고속선기준
+        // 258 vs 242)을 만든다. 다음 문단이 새 페이지를 시작(vpos-reset)하므로 tail 을 현재
+        // 페이지에 두는 것이 한글 정합. (실제 각주 높이는 유지 — 버퍼만 완화하여 겹침 위험 최소화;
+        // 버퍼 초과분은 별도 원인이라 여기서 다루지 않는다.)
+        let footnote_margin_addback = if st.skip_footnote_margin_once {
+            st.skip_footnote_margin_once = false;
+            if st.current_footnote_height > 0.0 {
+                st.footnote_safety_margin
+            } else {
+                0.0
+            }
+        } else {
+            0.0
+        };
+        // [Task #1725 v2] tail-before-vpos-reset 문단은 소량 오버플로를 1회 허용(각주 무관 page-full
+        // over-fill 로 tail 이 밀리는 케이스). 다음 문단이 새 페이지를 시작하므로 tail 을 현재
+        // 페이지 하단에 유지하는 것이 한글 정합.
+        let tail_overflow = if st.tail_overflow_tolerance_once > 0.0 {
+            let t = st.tail_overflow_tolerance_once;
+            st.tail_overflow_tolerance_once = 0.0;
+            t
+        } else {
+            0.0
+        };
+        let available =
+            (st.available_height() - safety + footnote_margin_addback + tail_overflow).max(0.0);
 
         // [Task #1686] RowBreak 표 조각 뒤에 남는 빈 guide 문단 흡수.
         // pr-1674처럼 표 셀 내부 vpos reset으로 페이지가 갈린 뒤, 뒤따르는 빈 문단들이
