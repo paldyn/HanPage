@@ -72,6 +72,13 @@ fn format_endnote_marker_text(endnote: &crate::model::footnote::Endnote) -> Stri
     format!("{}{}{}", prefix, number, suffix)
 }
 
+fn prepend_endnote_marker_text(para: &mut Paragraph, endnote: &crate::model::footnote::Endnote) {
+    // 미주 번호는 렌더 시점에 가상 텍스트로 붙이므로, line_segs/char_shapes도
+    // 같은 UTF-16 stream 기준으로 함께 밀어야 한다.
+    let prefix = format!("{} ", format_endnote_marker_text(endnote));
+    para.insert_text_at(0, &prefix);
+}
+
 // ========================================================
 // Break Token — 조판 분할 지점 (Chromium LayoutNG 참고)
 // ========================================================
@@ -3726,24 +3733,33 @@ impl TypesetEngine {
                                 emitted_endnote_count += 1;
                                 continue;
                             }
+                            let mut compact_no_separator_para;
+                            let render_en_para = en_para;
+                            let compact_no_separator_spacing = endnote_shape
+                                .map(|shape| {
+                                    !endnote_has_visible_separator(shape)
+                                        && endnote_between_notes_margin(shape) == 0
+                                })
+                                .unwrap_or(false);
+                            let en_para = if compact_no_separator_spacing {
+                                compact_no_separator_para = en_para.clone();
+                                let divisor = 20;
+                                for line_seg in &mut compact_no_separator_para.line_segs {
+                                    line_seg.line_spacing = -(line_seg.line_height / divisor);
+                                }
+                                &compact_no_separator_para
+                            } else {
+                                en_para
+                            };
                             let en_para_idx = paragraphs.len() + st.endnote_paragraphs.len();
-                            let mut en_para_copy = en_para.clone();
+                            let mut en_para_copy = render_en_para.clone();
                             // line_segs vpos를 endnote 시작점 기준으로 오프셋
                             for ls in &mut en_para_copy.line_segs {
                                 ls.vertical_pos += endnote_start;
                             }
                             // 첫 paragraph에 미주 번호 prepend
                             if ep_idx == 0 {
-                                let prefix = format!("{} ", format_endnote_marker_text(en_ctrl));
-                                en_para_copy.text = format!("{}{}", prefix, en_para_copy.text);
-                                en_para_copy.char_count += prefix.encode_utf16().count() as u32;
-                                let shift = prefix.encode_utf16().count() as u32;
-                                for off in &mut en_para_copy.char_offsets {
-                                    *off += shift;
-                                }
-                                let mut new_offsets: Vec<u32> = (0..shift).collect();
-                                new_offsets.extend_from_slice(&en_para_copy.char_offsets);
-                                en_para_copy.char_offsets = new_offsets;
+                                prepend_endnote_marker_text(&mut en_para_copy, en_ctrl);
                             }
                             let prev_render_endnote_para_local_idx =
                                 last_render_endnote_para_local_idx;
@@ -3940,6 +3956,24 @@ impl TypesetEngine {
                                         (prev_en_bottom_vpos, this_first_offset),
                                         (Some(prev), Some(first)) if first < prev
                                     );
+                            let no_separator_zero_local_rewind_para_fits_current_column =
+                                compact_endnote_separator_profile
+                                    && !has_visible_endnote_separator_before_rewind
+                                    && endnote_shape
+                                        .map(|shape| endnote_between_notes_margin(shape) == 0)
+                                        .unwrap_or(false)
+                                    && st.current_column + 1 < st.col_count
+                                    && (ep_idx > 0 || emitted_endnote_count > 0)
+                                    && !para_is_treat_as_char_picture_only(en_para)
+                                    && para_has_visible_text_or_equation(en_para)
+                                    && st.current_height + fmt.total_height
+                                        <= available
+                                            + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX
+                                            + 4.0
+                                    && matches!(
+                                        (prev_en_bottom_vpos, this_first_offset),
+                                        (Some(prev), Some(first)) if first < prev
+                                    );
                             let no_separator_local_rewind_final_tail_fits_current_column =
                                 compact_endnote_separator_profile
                                     && large_separator_block_before_rewind
@@ -4056,6 +4090,7 @@ impl TypesetEngine {
                                 && !zero_visible_local_rewind_text_run_para_fits
                                 && !zero_visible_last_column_local_rewind_text_fits
                                 && !zero_between_visible_local_rewind_para_fits_current_column
+                                && !no_separator_zero_local_rewind_para_fits_current_column
                                 && !no_separator_local_rewind_final_tail_fits_current_column
                                 && !zero_between_visible_local_rewind_final_tail_fits_current_column
                                 && matches!(
@@ -4614,17 +4649,7 @@ impl TypesetEngine {
                                         return None;
                                     };
                                     let mut next_para = next_ctrl.paragraphs.first()?.clone();
-                                    let prefix =
-                                        format!("{} ", format_endnote_marker_text(next_ctrl));
-                                    next_para.text = format!("{}{}", prefix, next_para.text);
-                                    next_para.char_count += prefix.encode_utf16().count() as u32;
-                                    let shift = prefix.encode_utf16().count() as u32;
-                                    for off in &mut next_para.char_offsets {
-                                        *off += shift;
-                                    }
-                                    let mut new_offsets: Vec<u32> = (0..shift).collect();
-                                    new_offsets.extend_from_slice(&next_para.char_offsets);
-                                    next_para.char_offsets = new_offsets;
+                                    prepend_endnote_marker_text(&mut next_para, next_ctrl);
 
                                     let next_comp =
                                         crate::renderer::composer::compose_paragraph(&next_para);
@@ -6279,10 +6304,16 @@ impl TypesetEngine {
                             } else {
                                 0.95
                             };
+                            let no_separator_zero_between_notes = !has_visible_endnote_separator
+                                && endnote_shape
+                                    .map(|shape| endnote_between_notes_margin(shape) == 0)
+                                    .unwrap_or(false);
                             let allow_compact_question_title_tail =
                                 compact_endnote_separator_profile
                                     && !default_between_notes_gap
-                                    && (has_visible_endnote_separator || !large_separator_block)
+                                    && (has_visible_endnote_separator
+                                        || !large_separator_block
+                                        || no_separator_zero_between_notes)
                                     && ep_idx == 0
                                     && st.current_column + 1 < st.col_count
                                     && fmt.line_heights.len() == 1
@@ -7450,59 +7481,6 @@ impl TypesetEngine {
                                     || visible_separator_large_tac_tail_overflows_frame)
                                 && !large_between_non_visible_tail_bleeds_previous_column
                                 && !st.current_items.is_empty();
-                            if std::env::var("RHWP_ENDNOTE_ADVANCE_DEBUG").is_ok() {
-                                eprintln!(
-                                    "ENDNOTE_ADV phase=fit note={} ep={} col={}/{} cur={:.2} avail={:.2} en_fit={:.2} total={:.2} h4f={:.2} boundary_gap_extra={:.2} boundary_gap_over={} next_head_large_tac={} lines={} first={:?} bottom={:?} content_bottom={:?} local_rewind={} internal_rewind={:?} internal_split={:?} split={:?} visual_split={:?} flow_tail_split={:?} own_span_fit={} late_text_tail={} eq_tail_next_title={} zero_tac_tail={} visible_large_tac_tail={} text_after_tac_tail={} text_after_eq_tail={} tac_candidate={} tac_render_y={:?} tac_bottom={:?} zero_intro_tail={} zero_text_tail={} no_sep_visible_tail={} no_sep_multiline_tail={} default_title_body={} split_head_over={} reset_split_head_over={} rewind_full_advance={} last_col_new_tail={} large_eq_tail_next_col={} lead_final_tail={} no_sep_tail={} visible_sep_tail={} internal_head_over={} non_visible_tail_bleed={} advance_fit={}",
-                                    en_ref.number,
-                                    ep_idx,
-                                    st.current_column + 1,
-                                    st.col_count,
-                                    st.current_height,
-                                    available,
-                                    en_fit,
-                                    total_advance_fit,
-                                    h4f,
-                                    endnote_boundary_gap_extra_px,
-                                    endnote_boundary_gap_tail_overflows_frame,
-                                    next_endnote_head_has_large_tac_picture,
-                                    fmt.line_heights.len(),
-                                    this_first_offset,
-                                    this_bottom_offset,
-                                    this_content_bottom_offset,
-                                    local_vpos_rewind,
-                                    internal_rewind_position,
-                                    internal_rewind_split,
-                                    split_endnote_to_fit,
-                                    large_between_last_column_visual_split,
-                                    large_between_last_column_flow_tail_split,
-                                    compact_endnote_own_vpos_span_fits_for_flow,
-                                    late_compact_text_tail_overflow_risk,
-                                    zero_equation_text_run_tail_before_next_title_fits,
-                                    zero_tac_picture_tail_bleeds_frame,
-                                    visible_separator_large_tac_tail_overflows_frame,
-                                    visible_separator_text_after_large_tac_tail_starts_next_page,
-                                    visible_separator_text_after_equation_tail_overflows_frame,
-                                    visible_separator_large_tac_tail_candidate,
-                                    visible_separator_large_tac_tail_render_y,
-                                    visible_separator_large_tac_tail_bottom,
-                                    zero_question_intro_tail_before_rewind_fits,
-                                    zero_visible_text_tail_before_rewind_fits,
-                                    no_separator_final_tail_fits_by_visible_height,
-                                    no_separator_visible_multiline_tail_fits_with_bleed,
-                                    default_title_tail_body_advances_column,
-                                    large_between_split_head_render_overflows,
-                                    internal_reset_split_head_render_overflows,
-                                    internal_rewind_full_advance_needed,
-                                    large_between_last_column_new_note_tail,
-                                    large_between_equation_tail_starts_next_column,
-                                    large_between_lead_in_before_final_tail_starts_next_column,
-                                    no_separator_saved_vpos_tail_outside,
-                                    visible_separator_saved_vpos_tail_outside,
-                                    internal_rewind_head_overflows_current_column,
-                                    non_visible_endnote_tail_bleeds_previous_column,
-                                    advance_for_fit,
-                                );
-                            }
                             let pre_emit_tail_before_non_tac_object_advance = advance_for_fit
                                 && compact_endnote_separator_profile
                                 && has_visible_endnote_separator
@@ -7995,47 +7973,6 @@ impl TypesetEngine {
                                 && !st.current_items.is_empty();
                             let advance_for_internal_rewind = move_internal_rewind_equation_to_next
                                 && !st.current_items.is_empty();
-                            if std::env::var("RHWP_ENDNOTE_ADVANCE_DEBUG").is_ok() {
-                                eprintln!(
-                                    "ENDNOTE_ADV phase=new note={} ep={} col={}/{} cur={:.2} avail={:.2} en_fit={:.2} total={:.2} gap={:?} default_gap={} compact_gap={} zero_gap={} visible_sep={} render_y={:?} lead_group_outside={} has_rewind={} rewind_near_bottom={} rewind_would_split={} large_head_outside={} stale_forward={} allow_default_late={} allow_default_col_bottom={} allow_default_title={} allow_large_title={} allow_large_last_title={} allow_large_render_title={} allow_large_rewind_title={} allow_default_line={} allow_zero_line={} allow_compact={} allow_large_sep_first={} zero_full_tail={} zero_title_tail={} large_zero_small_bleed={} advance_new={} advance_internal={}",
-                                    en_ref.number,
-                                    ep_idx,
-                                    st.current_column + 1,
-                                    st.col_count,
-                                    st.current_height,
-                                    available,
-                                    en_fit,
-                                    total_advance_fit,
-                                    new_endnote_between_notes_px,
-                                    default_between_notes_gap,
-                                    compact_between_notes_gap,
-                                    zero_endnote_spacing_profile,
-                                    has_visible_endnote_separator,
-                                    large_between_question_title_render_y,
-                                    large_between_question_lead_group_render_outside,
-                                    endnote_has_vpos_rewind,
-                                    rewind_endnote_head_near_bottom,
-                                    rewind_endnote_head_would_split,
-                                    large_between_notes_vpos_head_outside,
-                                    new_endnote_stale_forward_vpos,
-                                    allow_default_late_question_tail,
-                                    allow_default_column_bottom_question_title_tail,
-                                    allow_default_question_title_tail,
-                                    allow_large_between_question_title_tail,
-                                    large_between_last_column_question_title_tail_fits,
-                                    large_between_last_column_render_title_tail_fits,
-                                    large_between_last_column_rewind_title_tail_fits,
-                                    default_question_title_tail_fits_by_line_height,
-                                    zero_question_title_tail_fits_by_line_height,
-                                    allow_compact_question_title_tail,
-                                    allow_large_separator_first_column_tail,
-                                    zero_new_endnote_full_tail_fits_current_column,
-                                    zero_between_question_title_tail_fits_current_column,
-                                    large_between_zero_above_whole_note_small_bleed_fits,
-                                    advance_for_new_endnote,
-                                    advance_for_internal_rewind,
-                                );
-                            }
                             if advance_for_new_endnote {
                                 st.advance_column_or_new_page();
                                 prev_en_bottom_vpos = None;
@@ -12941,6 +12878,9 @@ impl EndnoteFlowProfile {
     }
 
     fn separator_height_px(self, dpi: f64) -> f64 {
+        if !self.visible_separator {
+            return 0.0;
+        }
         let line_height = if self.visible_separator {
             border_width_to_px(self.separator_line_width).max(0.5)
         } else {
@@ -12982,10 +12922,13 @@ fn endnote_has_compact_separator_below(shape: &FootnoteShape) -> bool {
 }
 
 fn endnote_has_visible_separator(shape: &FootnoteShape) -> bool {
-    shape.separator_line_type != 0 || shape.separator_line_width != 0 || shape.separator_length != 0
+    shape.separator_line_type != 0 && shape.separator_line_width != 0
 }
 
 fn endnote_separator_height_px(shape: &FootnoteShape, dpi: f64) -> f64 {
+    if !endnote_has_visible_separator(shape) {
+        return 0.0;
+    }
     let line_height = if endnote_has_visible_separator(shape) {
         border_width_to_px(shape.separator_line_width).max(0.5)
     } else {
