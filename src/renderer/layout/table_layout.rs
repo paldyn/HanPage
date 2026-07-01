@@ -35,6 +35,31 @@ fn effective_margin_left_line(margin_left: f64, indent: f64, line_n: usize) -> f
     margin_left + line_indent
 }
 
+fn cell_para_line_anchor_y(
+    base_y: f64,
+    content_cell_y: f64,
+    pad_top: f64,
+    vertical_pos_hu: i32,
+    dpi: f64,
+    use_top_vpos_anchor: bool,
+) -> f64 {
+    if use_top_vpos_anchor {
+        content_cell_y + pad_top + hwpunit_to_px(vertical_pos_hu, dpi)
+    } else {
+        base_y + hwpunit_to_px(vertical_pos_hu, dpi)
+    }
+}
+
+fn has_initial_tac_shape_host(paragraphs: &[Paragraph]) -> bool {
+    paragraphs.first().is_some_and(|para| {
+        para.text.trim().is_empty()
+            && para
+                .controls
+                .iter()
+                .any(|ctrl| matches!(ctrl, Control::Shape(shape) if shape.common().treat_as_char))
+    })
+}
+
 use super::super::composer::effective_text_for_metrics;
 use super::super::{hwpunit_to_px, ShapeStyle};
 use super::border_rendering::{
@@ -2473,11 +2498,14 @@ impl LayoutEngine {
                                     text_height += eq_h;
                                 }
                             }
-                            Control::Table(t) => {
-                                // 중첩 표 높이: 행 높이 합산
-                                let nested_h = self.calc_nested_table_height(t, styles);
-                                text_height += nested_h;
-                            }
+                            // [Task #1658] 중첩 표 높이를 composed(text_height)에 가산하지 않는다.
+                            // 가산하면 stored vpos(last_seg_end, nested 포함) 및 아래 nested_bottom
+                            // 과 double-count 되어 total_content_height 가 ~2× 과대 → Center/Bottom
+                            // offset≈0 → 상단정렬(valign over-count, kkyu8925 제보). 중첩 표 기여는
+                            // final max 의 vpos_height(B)·nested_bottom 이 담당하며, composed 의
+                            // line_height 가 중첩을 반영하는 케이스는 composed 가, 미반영(과소)
+                            // 케이스는 nested_bottom 이 max 로 보정한다(#44 under-count 가드 보존).
+                            Control::Table(_) => {}
                             _ => {}
                         }
                     }
@@ -2639,7 +2667,9 @@ impl LayoutEngine {
                     // 문서는 한컴이 각 문단 top을 vpos로 고정해 둔다. 누적 y만 쓰면
                     // spacing_before가 중복되거나 음수 line_spacing이 누적되어 줄 위치가
                     // 점점 어긋난다.
-                    if use_top_vpos_anchor && !has_nested_table {
+                    let use_saved_cell_para_vpos =
+                        use_top_vpos_anchor || has_initial_tac_shape_host(&cell.paragraphs);
+                    if use_saved_cell_para_vpos && !has_nested_table {
                         if let Some(first_seg) = para.line_segs.first() {
                             if first_seg.vertical_pos >= 0 {
                                 let spacing_before = styles
@@ -2647,9 +2677,14 @@ impl LayoutEngine {
                                     .get(para.para_shape_id as usize)
                                     .map(|s| s.spacing_before)
                                     .unwrap_or(0.0);
-                                let anchored_y = content_cell_y
-                                    + pad_top
-                                    + hwpunit_to_px(first_seg.vertical_pos, self.dpi);
+                                let anchored_y = cell_para_line_anchor_y(
+                                    text_y_start,
+                                    content_cell_y,
+                                    pad_top,
+                                    first_seg.vertical_pos,
+                                    self.dpi,
+                                    use_top_vpos_anchor,
+                                );
                                 // layout_composed_paragraph()가 spacing_before를 더하므로
                                 // 호출 전에 그 값을 빼서 최종 line top이 vpos와 일치하게 한다.
                                 para_y = anchored_y - spacing_before;
@@ -4457,6 +4492,8 @@ impl LayoutEngine {
             .first()
             .and_then(|p| p.line_segs.first().map(|s| s.vertical_pos))
             .unwrap_or(-1);
+        let cell_has_local_vpos_origin = cell_first_vpos == 0
+            || (is_block_rowbreak_table && (0..=500).contains(&cell_first_vpos));
         let preserve_linear_single_cell_vpos = is_block_rowbreak_table
             && table.row_count == 1
             && table.col_count == 1
@@ -4563,7 +4600,7 @@ impl LayoutEngine {
                 0.0
             };
             // vpos 리셋 검출: 직전 문단 끝보다 현재 문단 시작 vpos 가 작으면 리셋.
-            let reset_before = if pi > 0 && cell_first_vpos == 0 {
+            let reset_before = if pi > 0 && cell_has_local_vpos_origin {
                 let prev = &cell.paragraphs[pi - 1];
                 let prev_end = prev
                     .line_segs
@@ -4600,7 +4637,7 @@ impl LayoutEngine {
                 if li == 0 {
                     return reset_before;
                 }
-                if cell_first_vpos != 0 {
+                if !cell_has_local_vpos_origin {
                     return false;
                 }
                 let Some(prev) = p.line_segs.get(li - 1) else {
@@ -5090,6 +5127,38 @@ impl LayoutEngine {
             .sum()
     }
 
+    /// [Task #1718] RowBreak 셀에서 용량을 살짝 넘긴 "가시 꼬리줄"에 over-fill grace 를
+    /// 줄지 판정한다.
+    ///
+    /// 원래 grace 조건은 `units[j+1..].any(spacer)` — 뒤 어딘가에 빈 문단 spacer 가
+    /// 하나라도 있으면 grace 였다. 이 때문에 654문단 거대 셀(spacer 가 문서 전체에
+    /// 흩어져 있음)에서는 연속 본문 한복판에서도 항상 grace 가 걸려 페이지당 +1~5줄
+    /// over-fill → under-pagination(승강기 별표27: rhwp 40 vs 한글 48).
+    ///
+    /// 반대로 `all(spacer)` 로 좁히면 caption 줄 + 개체(그림상자) 앞의 spacer 처럼
+    /// 뒤에 가시/개체 유닛이 남아 있는 진짜 구조적 꼬리줄까지 무너뜨린다
+    /// (rowbreak-problem-pages 13쪽 회귀).
+    ///
+    /// 정답 판별: 오버플로 꼬리줄 다음 "첫 spacer 전까지"의 유닛을 본다.
+    /// - spacer 가 없다 → 순수 본문 꼬리 → grace 거부.
+    /// - 그 사이가 전부 가시 텍스트 줄의 끊김 없는 연속(run) → 본문 한복판 → grace 거부.
+    /// - spacer 가 바로 뒤이거나(진짜 꼬리줄) 그 사이에 비가시 유닛(개체/중첩/오브젝트
+    ///   높이 등)이 끼어 있으면 → 구조적 꼬리줄 → grace 유지.
+    ///
+    /// 거대 셀 grace 후보 37건은 모두 "첫 spacer 전까지 전부 가시 run" 이라 거부되고,
+    /// 13쪽 caption 은 spacer 앞에 개체 유닛이 끼어 grace 가 유지된다.
+    fn grace_visible_tail_before_spacer(units: &[CellUnit], j: usize) -> bool {
+        let Some(first_spacer) = units[j + 1..].iter().position(|u| u.empty_spacer) else {
+            return false;
+        };
+        // 진짜 꼬리줄(first_spacer == 0, run 이 빔) 또는 spacer 전에 비가시 유닛이 끼면 grace.
+        // 전부 가시 텍스트 줄로 채워진 연속 run 이면(거대 셀 본문) grace 거부.
+        first_spacer == 0
+            || !units[j + 1..j + 1 + first_spacer]
+                .iter()
+                .all(|u| u.vis_start < u.vis_end)
+    }
+
     /// [Task #993] 분할 표 행 컷을 전진시킨다 — 분할 표 페이지네이션의 단일 권위 함수.
     ///
     /// `start_cut`(이전 페이지까지 셀별 소비 유닛 수)에서 시작해, 각 셀을 공통
@@ -5123,8 +5192,7 @@ impl LayoutEngine {
         let relaxed_hard_break = matches!(
             table.page_break,
             crate::model::table::TablePageBreak::RowBreak
-        ) && table.row_count <= 5
-            && table.col_count <= 2;
+        ) && (table.col_count <= 2 || table.row_count > 5);
         let rewind_internal_hard_break_orphan = Self::row_has_prior_rowspan_cover(table, row);
         for (i, cell) in row_cells.iter().enumerate() {
             let units = self.cell_units(cell, table, styles);
@@ -5152,6 +5220,19 @@ impl LayoutEngine {
                     j = units.len();
                     break;
                 }
+                // [Task #1658] 미세 fragment 낭비 페이지 방지: 거대 셀이 페이지를 가로질러 분할될
+                // 때 셀 내용 vpos reset(hard_break_before)이 촘촘하면, 잔여공간이 충분한데도 reset 마다
+                // 페이지를 끊어 2줄 이하만 담은 낭비 페이지가 양산된다(법령 별표 거대 셀:
+                // 별표1 5→4쪽, 산업통상부 별표4 33→27쪽). 흡수 임계: continuation(start>0, 셀 중간
+                // 조각)은 ≤3 유닛, fresh(start==0)는 ≤2 유닛. continuation 의 reset 은 셀 내부
+                // page-wrap 인데 rhwp 가 한글 break 보다 1~3줄 일찍 capacity-break 하여 reset 직전
+                // 1~3줄 orphan 을 만든다(한글 COM 대조: 한글 break @line 5/40/75 vs rhwp 3·6/74·76).
+                // fresh 의 ≤2 는 #1488(가시 문단 사이 reset 3유닛 후 보존)을 깨지 않도록 유지한다.
+                let waste_thresh = if start > 0 { 3 } else { 2 };
+                let tiny_fragment_waste = j <= start + waste_thresh
+                    && !u.empty_spacer
+                    && h + u.height <= avail_height
+                    && avail_height - h > HARD_BREAK_REMAINING_TOLERANCE_PX;
                 if j > start
                     && u.hard_break_before
                     && (rewind_internal_hard_break_orphan
@@ -5160,6 +5241,7 @@ impl LayoutEngine {
                             && (h + u.height > avail_height
                                 || avail_height - h <= HARD_BREAK_REMAINING_TOLERANCE_PX)))
                     && !units[start..j].iter().all(|unit| unit.empty_spacer)
+                    && !tiny_fragment_waste
                 {
                     if rewind_internal_hard_break_orphan {
                         Self::rewind_rowbreak_orphan_before_hard_break(
@@ -5181,7 +5263,7 @@ impl LayoutEngine {
                         && u.vis_start < u.vis_end
                         && h + u.height
                             <= avail_height + ROWBREAK_VISIBLE_TAIL_OVERFLOW_TOLERANCE_PX
-                        && units[j + 1..].iter().any(|unit| unit.empty_spacer);
+                        && Self::grace_visible_tail_before_spacer(&units, j);
                     if visible_tail_before_spacer {
                         h += u.height;
                         j += 1;
@@ -5253,8 +5335,7 @@ impl LayoutEngine {
         let relaxed_hard_break = matches!(
             table.page_break,
             crate::model::table::TablePageBreak::RowBreak
-        ) && table.row_count <= 5
-            && table.col_count <= 2;
+        ) && (table.col_count <= 2 || table.row_count > 5);
         for (i, cell) in cells.iter().enumerate() {
             let units = self.cell_units(cell, table, styles);
             let start = start_cut.get(i).copied().unwrap_or(0).min(units.len());
@@ -5307,7 +5388,7 @@ impl LayoutEngine {
                         && u.vis_start < u.vis_end
                         && h + u.height
                             <= avail_height + ROWBREAK_VISIBLE_TAIL_OVERFLOW_TOLERANCE_PX
-                        && units[j + 1..].iter().any(|unit| unit.empty_spacer);
+                        && Self::grace_visible_tail_before_spacer(&units, j);
                     if visible_tail_before_spacer {
                         h += u.height;
                         j += 1;
@@ -5967,7 +6048,14 @@ impl LayoutEngine {
             let content: f64 =
                 units[su..eu].iter().map(|u| u.height).sum::<f64>() + mixed_nested_extra;
             let (_, _, pad_top, pad_bottom) = self.resolve_cell_padding(cell, table);
-            let pad_cell = pad_top + pad_bottom;
+            let has_visible_cut = units[su..eu]
+                .iter()
+                .any(|unit| Self::cell_unit_has_visible_content(cell, unit));
+            let pad_cell = if is_whole_row || has_visible_cut {
+                pad_top + pad_bottom
+            } else {
+                0.0
+            };
             let cell_h_px = if cell.height < 0x8000_0000 {
                 hwpunit_to_px(cell.height as i32, self.dpi)
             } else {
@@ -5985,6 +6073,41 @@ impl LayoutEngine {
             }
         }
         max_h
+    }
+
+    /// RowBreak 분할 예산에서 실제 남은 가시 내용이 있는 셀의 패딩만 예약한다.
+    ///
+    /// Q&A 표처럼 왼쪽 gutter 빈 셀에 큰 padding 이 들어간 행은 그 padding 때문에
+    /// 오른쪽 답변 셀의 첫 줄까지 다음 쪽으로 밀릴 수 있다. 분할 행에서는 보이는
+    /// cut 이 남은 셀의 padding 만 행 예산에 반영해 렌더러의 split 높이와 맞춘다.
+    pub(crate) fn row_remaining_visible_padding_height(
+        &self,
+        table: &crate::model::table::Table,
+        row: usize,
+        start_cut: &[usize],
+        styles: &ResolvedStyleSet,
+    ) -> f64 {
+        let mut row_cells: Vec<&crate::model::table::Cell> = table
+            .cells
+            .iter()
+            .filter(|c| c.row as usize == row && c.row_span == 1)
+            .collect();
+        row_cells.sort_by_key(|c| c.col);
+
+        let mut max_padding = 0.0f64;
+        for (i, cell) in row_cells.iter().enumerate() {
+            let units = self.cell_units(cell, table, styles);
+            let su = start_cut.get(i).copied().unwrap_or(0).min(units.len());
+            if !units[su..]
+                .iter()
+                .any(|unit| Self::cell_unit_has_visible_content(cell, unit))
+            {
+                continue;
+            }
+            let (_, _, pad_top, pad_bottom) = self.resolve_cell_padding(cell, table);
+            max_padding = max_padding.max(pad_top + pad_bottom);
+        }
+        max_padding
     }
 
     /// 줄 범위(line_ranges)에 해당하는 셀 콘텐츠의 실제 렌더링 높이를 계산한다.
@@ -6357,6 +6480,60 @@ mod row_cut_tests {
         let r = eng.advance_row_cut(&t, 0, &[], 5.0, &styles);
         assert_eq!(r.end_cut, vec![1]);
         assert!(!r.fully_consumed);
+    }
+
+    #[test]
+    fn test_advance_row_cut_rowbreak_grace_denied_in_continuous_visible_run() {
+        // [Task #1718 v2] over-fill grace 는 오버플로 꼬리줄과 첫 spacer 사이가
+        // "끊김 없는 가시 텍스트 줄의 연속(run)" 이면 거부한다 — 거대 RowBreak 셀 본문
+        // 한복판(spacer 는 저 멀리)에서 grace 가 걸려 페이지당 +1~5줄 과충전 →
+        // under-pagination(승강기 별표27: 40 vs 한글 48) 을 막는다.
+        let eng = LayoutEngine::new(96.0);
+        let styles = ResolvedStyleSet::default();
+        let t = rowbreak_table(vec![cell(
+            0,
+            0,
+            vec![
+                visible_text_para(6, 0),     // 가시 6유닛 (vpos 0,1200,..6000)
+                empty_overlay_para(1, 7200), // spacer 는 가시 run 뒤에 위치
+            ],
+        )]);
+        // avail=52px: 3줄(48px) 소비, 4번째(64px)는 +12px 초과(<120 tolerance).
+        // 첫 spacer 전까지 units[4..6]=[가시,가시] 연속 run → grace 거부 → end_cut=[3].
+        let r = eng.advance_row_cut(&t, 0, &[], 52.0, &styles);
+        assert_eq!(
+            r.end_cut,
+            vec![3],
+            "연속 가시 run 한복판에서는 over-fill grace 미적용"
+        );
+        assert!(
+            r.consumed_height <= 52.5,
+            "본문 초과 채움 금지: {}",
+            r.consumed_height
+        );
+    }
+
+    #[test]
+    fn test_advance_row_cut_rowbreak_grace_kept_for_true_tail_before_spacers() {
+        // [Task #1718] 오버플로 가시라인 바로 뒤가 spacer 면(진짜 꼬리줄) grace 유지 —
+        // caption/꼬리줄 보존(byeolpyo1/4 over-pagination 방지 케이스 무회귀).
+        let eng = LayoutEngine::new(96.0);
+        let styles = ResolvedStyleSet::default();
+        let t = rowbreak_table(vec![cell(
+            0,
+            0,
+            vec![
+                visible_text_para(4, 0),
+                empty_overlay_para(1, 4800), // 바로 뒤 spacer → 진짜 꼬리줄
+                empty_overlay_para(1, 6000),
+            ],
+        )]);
+        let r = eng.advance_row_cut(&t, 0, &[], 52.0, &styles);
+        assert!(
+            r.end_cut[0] >= 4,
+            "진짜 tail-before-spacer 는 grace 로 수용: {:?}",
+            r.end_cut
+        );
     }
 
     #[test]
