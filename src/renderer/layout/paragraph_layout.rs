@@ -1638,8 +1638,27 @@ impl LayoutEngine {
         let mut endnote_marker_x_advance = 0.0f64;
         if start_line == 0 {
             if let Some(p) = para {
-                for ctrl in &p.controls {
+                let ctrl_positions = p.control_text_positions();
+                let first_line_char_start = composed
+                    .lines
+                    .first()
+                    .map(|line| line.char_start)
+                    .unwrap_or(0);
+                for (ctrl_idx, ctrl) in p.controls.iter().enumerate() {
                     if let Control::Endnote(en) = ctrl {
+                        let Some(marker_pos) = ctrl_positions.get(ctrl_idx).copied() else {
+                            continue;
+                        };
+                        if !is_leading_endnote_marker_rendered_as_prefix(
+                            para,
+                            ctrl_idx,
+                            0,
+                            start_line,
+                            marker_pos,
+                            first_line_char_start,
+                        ) {
+                            continue;
+                        }
                         let marker_text =
                             format!("{} ", note_marker_text_from_control(Some(ctrl), en.number));
                         let first_cs_id = p
@@ -2483,11 +2502,14 @@ impl LayoutEngine {
                     // 위첨자를 그리지 않으므로(문26 "공" x=78=선두 마커 끝), 측정에서도
                     // est_x 에 위첨자 폭을 더하면 이중 계상 → 거짓 오버플로우.
                     // start_line==0 의 미주(= endnote_marker_x_advance 처리 대상)는 제외.
-                    let is_leading_endnote_marker = start_line == 0
-                        && matches!(
-                            para.and_then(|p| p.controls.get(ctrl_idx)),
-                            Some(Control::Endnote(_))
-                        );
+                    let is_leading_endnote_marker = is_leading_endnote_marker_rendered_as_prefix(
+                        para,
+                        ctrl_idx,
+                        line_idx,
+                        start_line,
+                        fpos,
+                        comp_line.char_start,
+                    );
                     if is_leading_endnote_marker {
                         continue;
                     }

@@ -613,6 +613,17 @@ fn issue_1692_so_sueop_hwp3_page1_school_label_matches_hwpx_y() {
 fn issue_1692_so_sueop_hwp3_page22_relationship_box_uses_table_flow() {
     let hwp3_model = load("samples/SO-SUEOP.hwp");
     let para = &hwp3_model.sections[0].paragraphs[574];
+    let control_positions = para.control_text_positions();
+    let expected_endnote_pos = para
+        .text
+        .find("가문의 영예(")
+        .map(|byte_pos| para.text[..byte_pos].chars().count() + "가문의 영예(".chars().count() + 5)
+        .expect("HWP3 p22 first explanation must contain endnote anchor text");
+    assert_eq!(
+        control_positions.get(1).copied(),
+        Some(expected_endnote_pos),
+        "HWP3 p22 endnote 118 marker must be anchored inside the parentheses"
+    );
     assert!(
         matches!(para.controls.first(), Some(Control::Table(_))),
         "HWP3 obj_type=1 relationship box must remain a 1x1 table so TopAndBottom flow is reserved"

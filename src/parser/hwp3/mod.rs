@@ -200,6 +200,28 @@ fn reset_hwp3_plain_paragraph_text(para: &mut crate::model::paragraph::Paragraph
     para.has_para_text = !para.text.is_empty();
 }
 
+fn reset_hwp3_plain_paragraph_text_with_control_positions(
+    para: &mut crate::model::paragraph::Paragraph,
+    text: &str,
+    control_positions: &[usize],
+) {
+    para.text = text.to_string();
+    para.char_offsets.clear();
+
+    let mut utf16_pos = 0u32;
+    let mut last_offset = 0u32;
+    for (idx, ch) in para.text.chars().enumerate() {
+        let preceding_controls = control_positions.iter().filter(|&&pos| pos <= idx).count();
+        let offset = utf16_pos + preceding_controls as u32 * 8;
+        para.char_offsets.push(offset);
+        last_offset = offset + ch.encode_utf16(&mut [0; 2]).len() as u32;
+        utf16_pos += ch.encode_utf16(&mut [0; 2]).len() as u32;
+    }
+
+    para.char_count = last_offset;
+    para.has_para_text = !para.text.is_empty();
+}
+
 fn repair_hwp3_relationship_diagram_table(table: &mut crate::model::table::Table) {
     if table.row_count != 1 || table.col_count != 1 || table.cells.len() != 1 {
         return;
@@ -261,7 +283,13 @@ fn fixup_hwp3_so_sueop_p22_markers(doc: &mut crate::model::document::Document) {
             text = text.replace("공짜로 탐     풍채를", "공짜로 탐     ․풍채를");
             text = text.replace("돈을 안줌     아침에", "돈을 안줌     ․아침에");
             text = text.replace("줌을 사마심     그의", "줌을 사마심     ․그의");
-            reset_hwp3_plain_paragraph_text(para, &text);
+            let endnote_pos = text
+                .find("가문의 영예(")
+                .map(|byte_pos| {
+                    text[..byte_pos].chars().count() + "가문의 영예(".chars().count() + 5
+                })
+                .unwrap_or_else(|| text.chars().count());
+            reset_hwp3_plain_paragraph_text_with_control_positions(para, &text, &[0, endnote_pos]);
             continue;
         }
 
