@@ -1273,7 +1273,14 @@ fn parse_visibility(e: &quick_xml::events::BytesStart, sec_def: &mut SectionDef)
                     sec_def.flags &= !0x0010;
                 }
             }
-            b"hideFirstEmptyLine" => sec_def.hide_empty_line = attr_str(&attr) == "1",
+            b"hideFirstEmptyLine" => {
+                sec_def.hide_empty_line = attr_str(&attr) == "1";
+                if sec_def.hide_empty_line {
+                    sec_def.flags |= 0x0008_0000;
+                } else {
+                    sec_def.flags &= !0x0008_0000;
+                }
+            }
             _ => {}
         }
     }
@@ -5910,6 +5917,34 @@ mod tests {
             vec![(0, 10), (9, 11)],
             "run2 경계는 offsets 축 9"
         );
+    }
+
+    #[test]
+    fn task1654_hide_first_empty_line_sets_hwp5_section_flag() {
+        // HWPX visibility 값은 HWP 저장 경로가 읽는 SectionDef.flags bit 19와
+        // 함께 동기화되어야 한다.
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<hs:sec xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph"
+        xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section">
+  <hp:p paraPrIDRef="0" styleIDRef="0">
+    <hp:run charPrIDRef="0">
+      <hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000" tabStopVal="4000" tabStopUnit="HWPUNIT" outlineShapeIDRef="1" memoShapeIDRef="0" textVerticalWidthHead="0" masterPageCnt="0">
+        <hp:visibility hideFirstHeader="0" hideFirstFooter="0" hideFirstMasterPage="0" border="SHOW_ALL" fill="SHOW_ALL" hideFirstPageNum="0" hideFirstEmptyLine="1" showLineNumber="0"/>
+      </hp:secPr>
+      <hp:t/>
+    </hp:run>
+  </hp:p>
+</hs:sec>"#;
+
+        let section = parse_hwpx_section(xml).unwrap();
+        assert!(section.section_def.hide_empty_line);
+        assert_ne!(section.section_def.flags & 0x0008_0000, 0);
+
+        let Control::SectionDef(section_def) = &section.paragraphs[0].controls[0] else {
+            panic!("첫 컨트롤은 SectionDef 여야 함");
+        };
+        assert!(section_def.hide_empty_line);
+        assert_ne!(section_def.flags & 0x0008_0000, 0);
     }
 
     #[test]
