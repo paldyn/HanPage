@@ -107,12 +107,21 @@ SO-SUEOP HWP3/HWPX/PDF 기준 페이지 수와 주요 시각 차이를 재검증
 - PR #1743 admin merge 완료: `f50aa4ef7a011817d8ae0ae0e41b817d42f4b030`
 - merge 시각: 2026-07-02 19:32 KST
 - `devel`이 default branch가 아니어서 `Closes #1692` auto-close는 동작하지 않았다.
-- 확인 시점 기준 #1689, #1692, #1693, #1694, #1695, #1696, #1697, #1698, #1699는 모두 open 상태다.
+- #1692, #1693, #1694, #1696, #1697, #1698은 수동 close 완료.
+- #1689, #1695, #1699는 open 유지.
+- #1695는 #1743에서 페이지 수와 미주 흐름 관련 증상이 상당 부분 줄었지만, 본문 6/23/28쪽 및 미주 42/44쪽의
+  원본 LINE_SEG vpos reset/rewind 힌트 해석 규칙까지 검증한 것은 아니므로 open 유지.
+- #1699는 구조적 레이아웃 보정 뒤에도 폰트 fallback 조건별 줄 높이/폭 비교가 별도로 필요하므로 open 유지.
 
 ## 후속 처리 계획
 
-- #1692, #1693, #1694, #1696, #1697, #1698 close 후보를 작업지시자 승인 후 처리
-- #1695는 close 또는 open 유지 판단을 별도 확인
-- #1699는 font fallback 후속으로 open 유지
+- #1692 close comment: https://github.com/edwardkim/rhwp/issues/1692#issuecomment-4864806076
+- #1693 close comment: https://github.com/edwardkim/rhwp/issues/1693#issuecomment-4864806208
+- #1694 close comment: https://github.com/edwardkim/rhwp/issues/1694#issuecomment-4864806357
+- #1696 close comment: https://github.com/edwardkim/rhwp/issues/1696#issuecomment-4864806486
+- #1697 close comment: https://github.com/edwardkim/rhwp/issues/1697#issuecomment-4864806638
+- #1698 close comment: https://github.com/edwardkim/rhwp/issues/1698#issuecomment-4864806850
+- #1695는 LINE_SEG vpos reset/rewind 일반 규칙 검증 후 별도 close 판단.
+- #1699는 font fallback 후속으로 open 유지.
 - #1689 parent 이슈는 하위 이슈 처리 상태 확인 후 별도 판단
 - PR 감사/후속 코멘트와 오늘할일은 문서-only PR로 반영
