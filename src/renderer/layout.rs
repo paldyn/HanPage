@@ -966,6 +966,10 @@ pub struct LayoutEngine {
     /// [Task #1147 v2] HWPX 원본 여부 — 빈 앵커 TopAndBottom 비-TAC 표 직후 갭을
     /// typeset (host_line_spacing=0) 과 동일하게 0 으로 억제하기 위한 트리거.
     is_hwpx_source: std::cell::Cell<bool>,
+    /// [Task #1728 v2] RowBreak 셀-내 continuation 조각의 첫 가시 문단에서만 set.
+    /// 이 문단은 셀-상단(is_column_top)이고 셀-상대 인덱스>0 이지만, 한컴은 앞 간격
+    /// (spacing_before)을 유지하므로 column-top 트림을 우회해 전량 적용한다.
+    keep_continuation_column_top_spacing_before: std::cell::Cell<bool>,
     /// HWPX `Preview/PrvImage.png` 원본. HMapsi OLE처럼 일반 preview stream이 없는
     /// legacy 객체의 제한적 첫 페이지 fallback에 사용한다.
     hwpx_page_preview: std::cell::RefCell<Option<PagePreviewImage>>,
@@ -1032,6 +1036,7 @@ impl LayoutEngine {
             current_body_area: std::cell::Cell::new((0.0, 0.0, 0.0, 0.0)),
             is_hwp3_variant: std::cell::Cell::new(false),
             use_hwp3_origin_flow_spacing_before: std::cell::Cell::new(false),
+            keep_continuation_column_top_spacing_before: std::cell::Cell::new(false),
             is_hwpx_source: std::cell::Cell::new(false),
             hwpx_page_preview: std::cell::RefCell::new(None),
         }
@@ -2151,8 +2156,15 @@ impl LayoutEngine {
         footer_area: &LayoutRect,
         font_size: f64,
     ) -> f64 {
+        // [Task #1728] 자동 쪽번호 세로 위치: HWP 실측상 glyph 은 body_bottom(footer_area.y) 에서
+        // margin_footer/2 + ~10px 아래에 온다(gc/ktx/aift 3문서 1~2px 정합). 종전 공식은
+        // footer_area.height(= margin_bottom)/2 를 써서, margin_footer ≠ margin_bottom 인 문서
+        // (margin_footer=0 인 giant cell, margin_footer≠margin_bottom 인 KTX)를 7~18px 낮게 놓았다.
+        // margin_footer = page_height - footer_area.bottom.
         let center_y = if footer_area.height > 0.5 {
-            footer_area.y + footer_area.height / 2.0
+            let margin_footer =
+                (layout.page_height - (footer_area.y + footer_area.height)).max(0.0);
+            footer_area.y + margin_footer / 2.0
         } else {
             (footer_area.y + layout.page_height) / 2.0
         };

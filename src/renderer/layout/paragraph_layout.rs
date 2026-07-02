@@ -1562,8 +1562,14 @@ impl LayoutEngine {
         // LINE_SEG.vertical_pos 로 상한 클램프해 적용한다. 페이지 break 후 이어진 column-top
         // (para_index>0)은 종전대로 0. (Task #853)
         let is_column_top = (y - col_area.y).abs() < 1.0;
+        // [Task #1728 v2] RowBreak 셀-내 continuation 조각의 첫 가시 문단은 셀-상단이지만
+        // (is_column_top) 셀-상대 인덱스>0 이라 아래 para_index==0 클램프 분기에도 못 든다.
+        // 한컴은 이 첫 문단의 앞 간격(spacing_before)을 유지하므로, 토글이 켜진 이 문단만
+        // column-top 이 아닌 것처럼 spacing_before 를 전량 적용한다.
+        let keep_continuation_spacing_before =
+            self.keep_continuation_column_top_spacing_before.get();
         if start_line == 0 && spacing_before > 0.0 {
-            if !is_column_top {
+            if !is_column_top || keep_continuation_spacing_before {
                 y += spacing_before;
             } else if para_index == 0 && !suppress_column_top_vpos_fallback {
                 let vpos0_px = para
