@@ -936,6 +936,9 @@ pub struct LayoutEngine {
     last_item_endnote_equation_tail_line_box: std::cell::Cell<bool>,
     /// 빈 줄 감추기로 높이 0 처리된 문단 인덱스 집합
     hidden_empty_paras: std::cell::RefCell<std::collections::HashSet<usize>>,
+    /// [Task #1755] 지연 이월 표의 host 텍스트 줄이 typeset 에서 이월 전 쪽에
+    /// PartialParagraph 로 pre-emit 된 문단 집합 — 마지막 fragment 뒤 host 렌더 억제.
+    pre_emitted_host_paras: std::cell::RefCell<std::collections::HashSet<usize>>,
     /// 렌더용 가상 미주 문단 시작 인덱스
     endnote_para_base: std::cell::Cell<usize>,
     /// 가상 미주 문단별 원본 위치
@@ -1025,6 +1028,7 @@ impl LayoutEngine {
             last_item_content_bottom: std::cell::Cell::new(f64::NAN),
             last_item_endnote_equation_tail_line_box: std::cell::Cell::new(false),
             hidden_empty_paras: std::cell::RefCell::new(std::collections::HashSet::new()),
+            pre_emitted_host_paras: std::cell::RefCell::new(std::collections::HashSet::new()),
             endnote_para_base: std::cell::Cell::new(usize::MAX),
             endnote_para_sources: std::cell::RefCell::new(Vec::new()),
             endnote_between_notes_hu: std::cell::Cell::new(0),
@@ -1217,6 +1221,11 @@ impl LayoutEngine {
     /// 빈 줄 감추기 문단 집합 설정
     pub fn set_hidden_empty_paras(&self, paras: &std::collections::HashSet<usize>) {
         *self.hidden_empty_paras.borrow_mut() = paras.clone();
+    }
+
+    /// [Task #1755] 이월 전 쪽에 host 텍스트가 pre-emit 된 문단 집합 설정
+    pub fn set_pre_emitted_host_paras(&self, paras: &std::collections::HashSet<usize>) {
+        *self.pre_emitted_host_paras.borrow_mut() = paras.clone();
     }
 
     /// 렌더용 가상 미주 문단과 원본 Endnote 내부 문단의 매핑을 설정한다.
@@ -4228,7 +4237,11 @@ impl LayoutEngine {
 
             if item_is_paragraph && !visible_float_exclusions.is_empty() {
                 visible_float_exclusions.retain(|zone| y_offset < zone.bottom - 0.5);
-                let item_probe_height = if self.is_hwpx_source.get() {
+                // [Task #1794] 잉크-겹침 프로브를 HWP5 소스에도 적용 — 자리차지 표의
+                // exclusion zone 과 문단 첫 줄 잉크가 겹치면 소스 포맷과 무관하게 표
+                // 아래로 밀어야 한다 (seoul_0765: HWPX 직파스와 HWP5 재파스의 표 앵커
+                // 95.16px 갈림). HWPX 전용 게이트는 도입 당시 blast radius 제한이었다.
+                let item_probe_height = {
                     match item {
                         PageItem::FullParagraph { para_index } => paragraphs
                             .get(*para_index)
@@ -4242,7 +4255,11 @@ impl LayoutEngine {
                                     } else {
                                         seg.line_height
                                     };
-                                    hwpunit_to_px(line_height + seg.line_spacing, self.dpi)
+                                    // [Task #1789] line_spacing 은 겹침 판정에서 제외 —
+                                    // 잉크가 zone 위에 들어가는 줄을 spacing 포함분 수 px
+                                    // 겹침으로 표 아래로 밀면 한컴 저장 flow(36385142 pi8
+                                    // vpos=34925 = 표 위 유지)와 어긋난다 (최대 345px).
+                                    hwpunit_to_px(line_height, self.dpi)
                                 })
                             })
                             .unwrap_or(0.0),
@@ -4262,14 +4279,16 @@ impl LayoutEngine {
                                     } else {
                                         seg.line_height
                                     };
-                                    hwpunit_to_px(line_height + seg.line_spacing, self.dpi)
+                                    // [Task #1789] line_spacing 은 겹침 판정에서 제외 —
+                                    // 잉크가 zone 위에 들어가는 줄을 spacing 포함분 수 px
+                                    // 겹침으로 표 아래로 밀면 한컴 저장 flow(36385142 pi8
+                                    // vpos=34925 = 표 위 유지)와 어긋난다 (최대 345px).
+                                    hwpunit_to_px(line_height, self.dpi)
                                 })
                             })
                             .unwrap_or(0.0),
                         _ => 0.0,
                     }
-                } else {
-                    0.0
                 };
                 let mut jump_to = y_offset;
                 for zone in &visible_float_exclusions {
@@ -4280,8 +4299,7 @@ impl LayoutEngine {
                         continue;
                     }
                     let starts_in_zone = jump_to + 0.5 >= zone.top && jump_to < zone.bottom;
-                    let overlaps_zone = self.is_hwpx_source.get()
-                        && item_probe_height > 0.0
+                    let overlaps_zone = item_probe_height > 0.0
                         && jump_to < zone.top
                         && jump_to + item_probe_height > zone.top + 0.5;
                     if starts_in_zone || overlaps_zone {
@@ -6163,6 +6181,16 @@ impl LayoutEngine {
                     let wrap_sw = para.line_segs.first().map(|s| s.segment_width).unwrap_or(0);
                     let wrap_text_x = col_area.x + hwpunit_to_px(wrap_cs, self.dpi);
                     let wrap_text_width = hwpunit_to_px(wrap_sw, self.dpi);
+                    // [Task #1745] 텍스트 혼합 anchor: 후속 어울림 문단 띠는 표 geometry 로.
+                    let (strip_x, strip_width) =
+                        crate::renderer::text_anchor_square_table_strip(para)
+                            .map(|(cs, sw)| {
+                                (
+                                    col_area.x + hwpunit_to_px(cs, self.dpi),
+                                    hwpunit_to_px(sw, self.dpi),
+                                )
+                            })
+                            .unwrap_or((wrap_text_x, wrap_text_width));
                     // Task #463: 인라인 floating 표 우측 x 계산 (paragraph border box 확장용).
                     // table_layout::compute_table_x_position 와 동일 공식.
                     let tbl_x_right = compute_square_wrap_tbl_x_right(t, col_area, self.dpi);
@@ -6180,6 +6208,9 @@ impl LayoutEngine {
                         y_offset,
                         wrap_text_x,
                         wrap_text_width,
+                        strip_x,
+                        strip_width,
+                        true,
                         0.0,
                         bin_data_content,
                         Some(tbl_x_right),
@@ -6485,10 +6516,15 @@ impl LayoutEngine {
                     _ => None,
                 })
         });
-        let render_deferred_rowbreak_host_text_after = defer_visible_rowbreak_host_text
-            .is_some_and(|row_count| is_continuation && end_cut.is_empty() && end_row >= row_count);
+        // [Task #1755] typeset 이 host 텍스트 줄을 이월 전 쪽에 PartialParagraph 로
+        // pre-emit 한 문단은 fragment 쪽 host 렌더(첫 부분/마지막 뒤 모두)를 억제한다.
+        let host_pre_emitted = self.pre_emitted_host_paras.borrow().contains(&para_index);
+        let render_deferred_rowbreak_host_text_after = !host_pre_emitted
+            && defer_visible_rowbreak_host_text.is_some_and(|row_count| {
+                is_continuation && end_cut.is_empty() && end_row >= row_count
+            });
         // ── 분할 표 첫 부분: 호스트 문단 텍스트 렌더링 ──
-        if !is_continuation && defer_visible_rowbreak_host_text.is_none() {
+        if !is_continuation && defer_visible_rowbreak_host_text.is_none() && !host_pre_emitted {
             if let Some(para) = paragraphs.get(para_index) {
                 let is_tac = para
                     .controls
@@ -6690,6 +6726,17 @@ impl LayoutEngine {
                     let wrap_sw = para.line_segs.first().map(|s| s.segment_width).unwrap_or(0);
                     let wrap_text_x = col_area.x + hwpunit_to_px(wrap_cs, self.dpi);
                     let wrap_text_width = hwpunit_to_px(wrap_sw, self.dpi);
+                    // [Task #1745] 텍스트 혼합 anchor: 후속 어울림 문단 띠는 표 geometry 로,
+                    // 호스트 텍스트는 이미 "분할 표 첫 부분" 경로에서 렌더됨 → 이중 렌더 방지.
+                    let strip = crate::renderer::text_anchor_square_table_strip(para);
+                    let (strip_x, strip_width) = strip
+                        .map(|(cs, sw)| {
+                            (
+                                col_area.x + hwpunit_to_px(cs, self.dpi),
+                                hwpunit_to_px(sw, self.dpi),
+                            )
+                        })
+                        .unwrap_or((wrap_text_x, wrap_text_width));
                     let content_offset = if let Some(mt) = pt_mt {
                         mt.range_height(0, start_row)
                     } else {
@@ -6710,6 +6757,9 @@ impl LayoutEngine {
                         y_offset,
                         wrap_text_x,
                         wrap_text_width,
+                        strip_x,
+                        strip_width,
+                        strip.is_none(),
                         content_offset,
                         bin_data_content,
                         Some(tbl_x_right),
@@ -7610,6 +7660,15 @@ impl LayoutEngine {
         table_y_end: f64,
         wrap_text_x: f64,
         wrap_text_width: f64,
+        // [Task #1745] 후속 어울림 문단(WrapAroundPara)이 놓일 wrap 띠. 표 단독 anchor
+        // 는 wrap_text_x/width 와 동일. 텍스트 혼합 anchor 는 표 geometry 로 도출한
+        // 띠(text_anchor_square_table_strip) — host 영역(전폭)과 분리된다.
+        strip_x: f64,
+        strip_width: f64,
+        // [Task #1745] 호스트 문단 텍스트 렌더 여부. 분할 표의 텍스트 혼합 anchor 는
+        // 호스트 텍스트가 이미 일반 경로(분할 표 첫 부분)에서 렌더되므로 false 로
+        // 이중 렌더를 막는다.
+        render_host_text: bool,
         table_content_offset: f64,
         bin_data_content: &[BinDataContent],
         // Task #463: 인라인 floating 표(예: 인용 따옴표 ｢｣)의 우측 끝 x 좌표.
@@ -7652,13 +7711,20 @@ impl LayoutEngine {
             width: wrap_text_width + host_margin_left + host_margin_right,
             height: col_area.height,
         };
+        // [Task #1745] 후속 어울림 문단용 띠 영역 (표 단독 anchor 는 wrap_area 와 동일).
+        let strip_area = LayoutRect {
+            x: strip_x - host_margin_left,
+            y: col_area.y,
+            width: strip_width + host_margin_left + host_margin_right,
+            height: col_area.height,
+        };
 
         // 호스트 문단(표 문단) 텍스트를 어울림 영역에 렌더링
         let has_host_text = table_para
             .text
             .chars()
             .any(|c| c > '\u{001F}' && c != '\u{FFFC}');
-        if table_content_offset == 0.0 {
+        if table_content_offset == 0.0 && render_host_text {
             if has_host_text {
                 if let Some(comp) = composed.get(table_para_index) {
                     let text_start_line = comp.lines.iter().position(|line| {
@@ -7806,7 +7872,7 @@ impl LayoutEngine {
                     para,
                     comp,
                     styles,
-                    &wrap_area,
+                    &strip_area,
                     para_y,
                     0,
                     end_line,
@@ -7835,7 +7901,7 @@ impl LayoutEngine {
                         .filter(|fs| *fs > 0.0)
                         .unwrap_or(13.3)
                 };
-                let mark_x = wrap_text_x;
+                let mark_x = strip_x;
 
                 let line_id = tree.next_id();
                 let line_node = RenderNode::new(

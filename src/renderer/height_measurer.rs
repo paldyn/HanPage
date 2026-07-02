@@ -839,30 +839,23 @@ impl HeightMeasurer {
         for cell in &table.cells {
             if cell.row_span == 1 && (cell.row as usize) < row_count {
                 let r = cell.row as usize;
-                // 셀 패딩 — layout 의 resolve_cell_padding 과 일관성:
-                //   aim=true  → cell.padding (0 도 명시값으로 존중)
-                //   aim=false → table.padding
-                let pad_top = if cell.apply_inner_margin {
-                    hwpunit_to_px(cell.padding.top as i32, self.dpi)
+                // [Task #1785] 셀 패딩 — aim=false 는 layout 의 레거시 보존값 규칙
+                // (Cell::effective_padding)과 통일: 단순 table.padding 폴백은 cell > table
+                // 보존값 케이스에서 layout 렌더와 어긋나 표 높이가 틀어진다 (36381023
+                // micro-grid 결재란 라운드트립 9.3px). aim=true 는 기존대로 cell.padding
+                // 을 0 포함 그대로 존중 — layout 의 `!= 0 → 표 기본 폴백`과 다르지만,
+                // #493 세로 Shift 리사이즈(셀보호2.hwp 셀[20] aim=true pad top/bottom=0)가
+                // 이 의미에 의존한다. aim=true && 0 의 레이아웃-측정 정합은 후속 항목.
+                let eff_pad = if cell.apply_inner_margin {
+                    cell.padding
                 } else {
-                    hwpunit_to_px(table.padding.top as i32, self.dpi)
+                    cell.effective_padding(&table.padding)
                 };
-                let pad_bottom = if cell.apply_inner_margin {
-                    hwpunit_to_px(cell.padding.bottom as i32, self.dpi)
-                } else {
-                    hwpunit_to_px(table.padding.bottom as i32, self.dpi)
-                };
+                let pad_top = hwpunit_to_px(eff_pad.top as i32, self.dpi);
+                let pad_bottom = hwpunit_to_px(eff_pad.bottom as i32, self.dpi);
                 // [Task #671] 좌우 패딩 — recompose_for_cell_width 의 inner_width 계산용
-                let pad_left = if cell.apply_inner_margin {
-                    hwpunit_to_px(cell.padding.left as i32, self.dpi)
-                } else {
-                    hwpunit_to_px(table.padding.left as i32, self.dpi)
-                };
-                let pad_right = if cell.apply_inner_margin {
-                    hwpunit_to_px(cell.padding.right as i32, self.dpi)
-                } else {
-                    hwpunit_to_px(table.padding.right as i32, self.dpi)
-                };
+                let pad_left = hwpunit_to_px(eff_pad.left as i32, self.dpi);
+                let pad_right = hwpunit_to_px(eff_pad.right as i32, self.dpi);
                 let cell_w_px = if cell.width < 0x80000000 {
                     hwpunit_to_px(cell.width as i32, self.dpi)
                 } else {
@@ -1019,6 +1012,48 @@ impl HeightMeasurer {
                     cell_h_px
                 } else {
                     content_height + total_pad
+                };
+                // [Task #1763] 한컴 선언 셀높이 권위 — 저장 cell.height 는 trailing ls
+                // 미포함(825행 주석 원칙)인데, 다문단 셀 측정은 셀 마지막 줄 trailing ls
+                // 를 포함(#874/#1086 보존 조건)해 required 가 선언높이를 초과 확장할 수
+                // 있다(2501937 row0: 콘텐츠 10016HU + trailing 600HU + pad → 149.1px >
+                // 선언 142.2px, 한글은 선언 유지). 초과분이 전적으로 trailing ls 때문이면
+                // (trailing 제외 콘텐츠+pad 가 선언 안) 선언높이로 clamp — 콘텐츠가 진짜
+                // 초과하는 기존 보존 케이스(aift/KTX)는 조건 미충족으로 불변.
+                // RowBreak(행 단위 쪽나눔) 표는 TAC 여부와 무관하게 clamp 제외 —
+                // 분할 배치가 trailing 포함 측정에 정합 (rowbreak-problem-pages p11~13).
+                let cell_last_trailing_ls = if cell.text_direction == 0
+                    && !has_nested_table_in_cell
+                    && cell.paragraphs.len() > 1
+                    && !matches!(table.page_break, TablePageBreak::RowBreak)
+                {
+                    cell.paragraphs
+                        .last()
+                        .map(|p| {
+                            let mut comp = compose_paragraph(p);
+                            crate::renderer::composer::recompose_for_cell_width(
+                                &mut comp,
+                                p,
+                                cell_inner_width,
+                                styles,
+                            );
+                            comp.lines
+                                .last()
+                                .map(|l| hwpunit_to_px(l.line_spacing, self.dpi))
+                                .unwrap_or(0.0)
+                        })
+                        .unwrap_or(0.0)
+                } else {
+                    0.0
+                };
+                let required_height = if cell_h_px > 0.0
+                    && required_height > cell_h_px
+                    && cell_last_trailing_ls > 0.0
+                    && content_height - cell_last_trailing_ls + total_pad <= cell_h_px
+                {
+                    cell_h_px
+                } else {
+                    required_height
                 };
                 if required_height > row_heights[r] {
                     row_heights[r] = required_height;

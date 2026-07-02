@@ -143,8 +143,8 @@ python3 scripts/task1274_visual_sweep.py \
 ```bash
 python3 scripts/task1274_visual_sweep.py \
   --key so-sueop \
-  --hwp /Users/tsjang/rhwp/samples/SO-SUEOP.hwpx \
-  --pdf /Users/tsjang/rhwp/pdf/SO-SUEOP-2024.pdf \
+  --hwp samples/SO-SUEOP.hwpx \
+  --pdf pdf/SO-SUEOP-2024.pdf \
   --out output/visual-so-sueop
 ```
 
@@ -156,8 +156,8 @@ stem을 target 이름으로 사용한다.
 
 ```bash
 python3 scripts/task1274_visual_sweep.py \
-  --file-target so-sueop /Users/tsjang/rhwp/samples/SO-SUEOP.hwpx /Users/tsjang/rhwp/pdf/SO-SUEOP-2024.pdf \
-  --file-target pr1674 /Users/tsjang/rhwp/samples/pr-1674.hwpx /Users/tsjang/rhwp/pdf/pr-1674-2024.pdf \
+  --file-target so-sueop samples/SO-SUEOP.hwpx pdf/SO-SUEOP-2024.pdf \
+  --file-target pr1674 samples/pr-1674.hwpx pdf/pr-1674-2024.pdf \
   --out output/visual-custom
 ```
 
@@ -174,8 +174,8 @@ python3 scripts/task1274_visual_sweep.py \
 ```bash
 python3 scripts/task1274_visual_sweep.py \
   --key so-sueop-p22 \
-  --hwp /Users/tsjang/rhwp/samples/SO-SUEOP.hwpx \
-  --pdf /Users/tsjang/rhwp/pdf/SO-SUEOP-2024.pdf \
+  --hwp samples/SO-SUEOP.hwpx \
+  --pdf pdf/SO-SUEOP-2024.pdf \
   --page 22 \
   --out output/visual-so-sueop-p22
 ```
@@ -341,6 +341,8 @@ summary: /path/to/rhwp/output/task1274/summary.json
 - `svg_pages == pdf_pages`는 기본 조건이다.
 - `overlay_contact_sheet.png`에서 빨강/파랑/주황이 본문 흐름에 집중되면 우선 검토한다.
 - `visual_accuracy_proxy_percent`는 자동 일치율 지표일 뿐 최종 시각 판정을 대체하지 않는다.
+- PR 의 실제 변경 목적을 먼저 확인한다. 렌더링 개선 PR 이 아니면 visual sweep 차이는 참고 자료이며,
+  그 차이만으로 merge 보류나 reject 결론을 내리지 않는다.
 - `frame`, `question`, `title`, `tail`, `eq` 후보는 우선 검토 대상이다.
 - `line`, `column`, `order` 후보는 실제 시각 차이인지 false positive인지 비교 이미지를 열어 확인한다.
 - 후보가 남아도 메인테이너 SVG/웹/한컴 시각 판정이 통과하면 blocker가 아닐 수 있다.

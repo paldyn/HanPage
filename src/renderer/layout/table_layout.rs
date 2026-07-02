@@ -632,6 +632,43 @@ impl LayoutEngine {
                             None
                         }
                     }) {
+                        // [Task #1658 v3] 외곽 1×1 래퍼가 페이지/용지 앵커 자리차지
+                        // (절대배치) 표면, unwrap 이 외곽의 절대 y 를 소실시키고 내부 표를
+                        // flow 커서(y_start)에 렌더하던 결함 교정 — 외곽 표 속성으로 절대
+                        // y 를 계산해 내부 표 시작점으로 사용한다 (하단 고정 결재/서명 틀이
+                        // 본문 상단에 그려지던 문제, #1653 RCA 패턴 B).
+                        let y_start = if depth == 0
+                            && !table.common.treat_as_char
+                            && matches!(
+                                table.common.text_wrap,
+                                crate::model::shape::TextWrap::TopAndBottom
+                            )
+                            && matches!(
+                                table.common.vert_rel_to,
+                                crate::model::shape::VertRelTo::Page
+                                    | crate::model::shape::VertRelTo::Paper
+                            ) {
+                            let outer_h = hwpunit_to_px(
+                                crate::renderer::float_placement::signed_hwpunit(
+                                    table.common.height,
+                                )
+                                .max(0),
+                                self.dpi,
+                            );
+                            self.compute_table_y_position(
+                                table,
+                                outer_h,
+                                y_start,
+                                col_area,
+                                depth,
+                                0.0,
+                                0.0,
+                                para_y,
+                                allow_para_top_bleed,
+                            )
+                        } else {
+                            y_start
+                        };
                         // [Task: nested-table-border] 자료 박스 외곽 테두리 추가:
                         // 외부 1x1 표가 wrapper 라도 padding + border_fill 에 테두리선이
                         // 정의된 경우 (자료 박스 외곽), 외곽 4개 라인을 별도 추가하여 시각 정합.
@@ -1870,22 +1907,9 @@ impl LayoutEngine {
         table_padding: i16,
         allow_saved_small_cell_margin: bool,
     ) -> bool {
-        if cell.apply_inner_margin {
-            return cell_padding != 0;
-        }
-
-        if cell_padding <= table_padding {
-            return false;
-        }
-
-        // 오래된 HWP/HWPX에는 hasMargin=0이어도 셀별 안여백 보존값이 렌더링에
-        // 필요한 경우가 있다(KTX 목차, exam_kor 보기 박스 등). 다만 1443 샘플처럼
-        // 사용자가 10mm급 명시 여백을 껐다가 저장한 값은 한컴이 렌더링에 쓰지 않는다.
-        if !allow_saved_small_cell_margin && cell_padding >= 2500 {
-            return false;
-        }
-
-        true
+        // [Task #1785] 규칙 본체는 Cell::use_cell_padding_axis 로 이동 — height_measurer
+        // 와 단일 출처 공유 (규칙이 갈리면 예약 높이와 실제 렌더가 어긋난다).
+        cell.use_cell_padding_axis(cell_padding, table_padding, allow_saved_small_cell_margin)
     }
 
     /// 셀 텍스트가 오버플로우할 때 좌우 패딩을 축소하여 공간을 확보한다.
@@ -5747,6 +5771,28 @@ impl LayoutEngine {
         } else {
             self.row_cut_content_height(table, row, &[], &[], styles)
         }
+    }
+
+    /// [Task #1748] 셀 유닛 누적높이가 `budget`(패딩 제외 콘텐츠 예산) 안에
+    /// 들어가는 선두 유닛 수를 반환한다. 컷 행에 걸친(straddling) rowspan 셀의
+    /// 높이 기반 가시 유닛 컷 산출용 — 컷 페이지의 eu 와 연속 페이지의 su 가
+    /// 같은 예산 식으로 계산되어 경계 줄 인덱스가 산술적으로 일치한다.
+    pub(crate) fn cell_units_fitting_height(
+        &self,
+        cell: &crate::model::table::Cell,
+        table: &crate::model::table::Table,
+        styles: &ResolvedStyleSet,
+        budget: f64,
+    ) -> usize {
+        const EPS: f64 = 0.1;
+        let units = self.cell_units(cell, table, styles);
+        let mut n = 0usize;
+        let mut h = 0.0f64;
+        while n < units.len() && h + units[n].height <= budget + EPS {
+            h += units[n].height;
+            n += 1;
+        }
+        n
     }
 
     /// [Task #993] 한 셀의 유닛 범위 `[start_unit, end_unit)`를 문단별 줄 범위로
