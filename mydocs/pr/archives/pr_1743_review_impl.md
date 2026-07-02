@@ -120,12 +120,38 @@
 1. merge 직전 최신 GitHub Actions와 head SHA 재확인: 완료
 2. PR #1743 admin merge: 완료, `f50aa4ef7a011817d8ae0ae0e41b817d42f4b030`
 3. `upstream/devel` fetch: 완료
-4. 자동 close 여부 확인: #1692 포함 관련 이슈 모두 open
-5. #1692/#1693/#1694/#1696/#1697/#1698 close 누락 시 수동 close 판단 필요
-6. #1695는 실제 close 여부 별도 판단
+4. 자동 close 여부 확인: #1692 포함 관련 이슈 모두 open 상태였음
+5. #1692/#1693/#1694/#1696/#1697/#1698 수동 close 완료
+6. #1695는 실제 close 여부 확인 결과 open 유지
 7. #1699는 font fallback 후속으로 open 유지
 8. #1689 parent 이슈는 하위 이슈 상태를 본 뒤 별도 판단
 9. PR 후속 코멘트와 오늘할일 갱신은 문서-only PR로 반영
+
+## 수동 close 결과
+
+- #1692: https://github.com/edwardkim/rhwp/issues/1692#issuecomment-4864806076
+- #1693: https://github.com/edwardkim/rhwp/issues/1693#issuecomment-4864806208
+- #1694: https://github.com/edwardkim/rhwp/issues/1694#issuecomment-4864806357
+- #1696: https://github.com/edwardkim/rhwp/issues/1696#issuecomment-4864806486
+- #1697: https://github.com/edwardkim/rhwp/issues/1697#issuecomment-4864806638
+- #1698: https://github.com/edwardkim/rhwp/issues/1698#issuecomment-4864806850
+
+close 시 최초 코멘트의 브랜치명 표기가 shell quoting 문제로 깨져, 위 정정 코멘트를 추가로 남겼다.
+
+## open 유지 판단
+
+- #1695
+  - #1743에서 페이지 수 46쪽, p43~p46 미주 범위, p45 footer 겹침은 해결됐다.
+  - 하지만 #1695 본문 확인 기준은 일반 본문 6/23/28쪽과 미주 42/44/47쪽의 원본 LINE_SEG vpos reset/rewind가
+    페이지 또는 단 경계 힌트인지 검증하고, 반영 가능한 최소 규칙을 정의하는 것이다.
+  - 현재 회귀 테스트는 미주 내부 vpos=0 normalize와 페이지/미주 범위를 고정하지만, LINE_SEG reset/rewind 일반
+    규칙 검증까지 포함하지 않는다.
+  - 따라서 #1695는 부분 반영으로 보고 open 유지한다.
+- #1699
+  - #1743은 구조적 레이아웃 차이를 우선 해소했다.
+  - #1699의 확인 기준인 로컬 폰트 설치 여부, fallback 결과, `--font-style`, `--embed-fonts`, `--font-path`
+    옵션별 차이 비교는 아직 별도 검증하지 않았다.
+  - 따라서 #1699는 font fallback 후속 검증 이슈로 open 유지한다.
 
 ## 후속 코멘트 요지
 
@@ -134,4 +160,5 @@
 - 로컬 검증은 `clippy --all-targets`, `test --all-targets`, `release-test --tests`, issue 전용 테스트, 시각 sweep까지 통과했다.
 - SO-SUEOP 기준 PDF/HWP/HWPX 모두 46쪽이며, p22 관계도와 p43~p46 미주 흐름을 확인했다.
 - PR #1743은 `f50aa4ef7a011817d8ae0ae0e41b817d42f4b030`으로 merge 완료됐다.
-- #1699 폰트 fallback은 별도 후속으로 남긴다.
+- #1692/#1693/#1694/#1696/#1697/#1698은 수동 close 완료됐다.
+- #1695 LINE_SEG reset/rewind 일반 규칙과 #1699 폰트 fallback은 별도 후속으로 남긴다.
