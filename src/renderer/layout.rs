@@ -4237,7 +4237,11 @@ impl LayoutEngine {
 
             if item_is_paragraph && !visible_float_exclusions.is_empty() {
                 visible_float_exclusions.retain(|zone| y_offset < zone.bottom - 0.5);
-                let item_probe_height = if self.is_hwpx_source.get() {
+                // [Task #1794] 잉크-겹침 프로브를 HWP5 소스에도 적용 — 자리차지 표의
+                // exclusion zone 과 문단 첫 줄 잉크가 겹치면 소스 포맷과 무관하게 표
+                // 아래로 밀어야 한다 (seoul_0765: HWPX 직파스와 HWP5 재파스의 표 앵커
+                // 95.16px 갈림). HWPX 전용 게이트는 도입 당시 blast radius 제한이었다.
+                let item_probe_height = {
                     match item {
                         PageItem::FullParagraph { para_index } => paragraphs
                             .get(*para_index)
@@ -4251,7 +4255,11 @@ impl LayoutEngine {
                                     } else {
                                         seg.line_height
                                     };
-                                    hwpunit_to_px(line_height + seg.line_spacing, self.dpi)
+                                    // [Task #1789] line_spacing 은 겹침 판정에서 제외 —
+                                    // 잉크가 zone 위에 들어가는 줄을 spacing 포함분 수 px
+                                    // 겹침으로 표 아래로 밀면 한컴 저장 flow(36385142 pi8
+                                    // vpos=34925 = 표 위 유지)와 어긋난다 (최대 345px).
+                                    hwpunit_to_px(line_height, self.dpi)
                                 })
                             })
                             .unwrap_or(0.0),
@@ -4271,14 +4279,16 @@ impl LayoutEngine {
                                     } else {
                                         seg.line_height
                                     };
-                                    hwpunit_to_px(line_height + seg.line_spacing, self.dpi)
+                                    // [Task #1789] line_spacing 은 겹침 판정에서 제외 —
+                                    // 잉크가 zone 위에 들어가는 줄을 spacing 포함분 수 px
+                                    // 겹침으로 표 아래로 밀면 한컴 저장 flow(36385142 pi8
+                                    // vpos=34925 = 표 위 유지)와 어긋난다 (최대 345px).
+                                    hwpunit_to_px(line_height, self.dpi)
                                 })
                             })
                             .unwrap_or(0.0),
                         _ => 0.0,
                     }
-                } else {
-                    0.0
                 };
                 let mut jump_to = y_offset;
                 for zone in &visible_float_exclusions {
@@ -4289,8 +4299,7 @@ impl LayoutEngine {
                         continue;
                     }
                     let starts_in_zone = jump_to + 0.5 >= zone.top && jump_to < zone.bottom;
-                    let overlaps_zone = self.is_hwpx_source.get()
-                        && item_probe_height > 0.0
+                    let overlaps_zone = item_probe_height > 0.0
                         && jump_to < zone.top
                         && jump_to + item_probe_height > zone.top + 0.5;
                     if starts_in_zone || overlaps_zone {
