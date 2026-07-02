@@ -324,7 +324,11 @@ export class CanvasKitLayerRenderer {
         this.renderPlaceholder(canvas, op);
         return;
       case 'equation':
+        this.unsupportedOps.add('equation:unsupportedDirectReplay');
+        return;
       case 'rawSvg':
+        this.unsupportedOps.add('rawSvg:unsupportedDirectReplay');
+        return;
       case 'charOverlap':
       case 'glyphRun':
       case 'tabLeader':

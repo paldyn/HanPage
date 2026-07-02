@@ -355,7 +355,13 @@ impl CanvasKitReplayPlanBuilder {
                 image, resolved, ..
             } => self.image_item(path, image, resolved.as_deref()),
             PaintOp::Equation { .. } => {
-                self.transition_overlay_item(path, "equation", CanvasKitReplayFeature::Equation)
+                let mut item = self.transition_overlay_item(
+                    path,
+                    "equation",
+                    CanvasKitReplayFeature::Equation,
+                );
+                item.detail = Some("unsupportedDirectReplay".to_string());
+                item
             }
             PaintOp::FormObject { .. } => {
                 let mut item = direct_item(path, "formObject", CanvasKitReplayFeature::FormObject);
@@ -363,7 +369,13 @@ impl CanvasKitReplayPlanBuilder {
                 item
             }
             PaintOp::RawSvg { .. } => {
-                self.transition_overlay_item(path, "rawSvg", CanvasKitReplayFeature::RawSvgFragment)
+                let mut item = self.transition_overlay_item(
+                    path,
+                    "rawSvg",
+                    CanvasKitReplayFeature::RawSvgFragment,
+                );
+                item.detail = Some("unsupportedDirectReplay".to_string());
+                item
             }
             PaintOp::Placeholder { .. } => {
                 let mut item =
@@ -778,9 +790,10 @@ mod tests {
     use crate::model::control::FormType;
     use crate::model::style::ImageFillMode;
     use crate::paint::{GroupKind, LayerNode, ResolvedImageKind, ResolvedImagePayload};
+    use crate::renderer::equation::layout::{LayoutBox, LayoutKind};
     use crate::renderer::render_tree::{
-        BoundingBox, FootnoteMarkerNode, FormObjectNode, ImageNode, PageBackgroundImage,
-        PlaceholderNode, RectangleNode, RenderLayerInfo,
+        BoundingBox, EquationNode, FootnoteMarkerNode, FormObjectNode, ImageNode,
+        PageBackgroundImage, PlaceholderNode, RawSvgNode, RectangleNode, RenderLayerInfo,
     };
     use crate::renderer::{GradientFillInfo, ShapeStyle, TextStyle};
 
@@ -828,6 +841,29 @@ mod tests {
             border_width: 0.0,
             gradient,
             image,
+        }
+    }
+
+    fn equation_node() -> EquationNode {
+        EquationNode {
+            svg_content: "<text>x</text>".to_string(),
+            layout_box: LayoutBox {
+                x: 0.0,
+                y: 0.0,
+                width: 8.0,
+                height: 12.0,
+                baseline: 10.0,
+                kind: LayoutKind::Text("x".to_string()),
+            },
+            color_str: "#000000".to_string(),
+            color: 0x00000000,
+            font_size: 12.0,
+            section_index: None,
+            para_index: None,
+            control_index: None,
+            cell_index: None,
+            cell_para_index: None,
+            note_ref: None,
         }
     }
 
@@ -1090,6 +1126,38 @@ mod tests {
         assert!(compat_plan.direct_replay_required);
         assert_eq!(compat_plan.summary.direct_required_items, 2);
         assert_eq!(compat_plan.summary.compat_overlay_items, 0);
+    }
+
+    #[test]
+    fn object_fragment_replay_gaps_use_runtime_diagnostic_detail() {
+        let tree = tree_with_ops(vec![
+            PaintOp::equation(bbox(), equation_node()),
+            PaintOp::raw_svg(
+                bbox(),
+                RawSvgNode {
+                    svg: "<g><path d=\"M0 0H1\"/></g>".to_string(),
+                },
+            ),
+        ]);
+
+        let plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Default);
+
+        assert_eq!(plan.summary.direct_required_items, 2);
+        assert_eq!(plan.items[0].op_type, "equation");
+        assert_eq!(plan.items[0].feature, CanvasKitReplayFeature::Equation);
+        assert_eq!(
+            plan.items[0].detail.as_deref(),
+            Some("unsupportedDirectReplay")
+        );
+        assert_eq!(plan.items[1].op_type, "rawSvg");
+        assert_eq!(
+            plan.items[1].feature,
+            CanvasKitReplayFeature::RawSvgFragment
+        );
+        assert_eq!(
+            plan.items[1].detail.as_deref(),
+            Some("unsupportedDirectReplay")
+        );
     }
 
     #[test]

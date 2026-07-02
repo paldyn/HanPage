@@ -251,12 +251,14 @@ const directReplayOps = [
 ];
 const textRunFallbackOps = [
   'charOverlap',
-  'equation',
   'glyphRun',
-  'rawSvg',
   'tabLeader',
   'textControlMark',
   'textDecoration',
+];
+const objectFragmentFallbackOps = [
+  ['equation', 'equation:unsupportedDirectReplay'],
+  ['rawSvg', 'rawSvg:unsupportedDirectReplay'],
 ];
 
 for (const [op, renderMethod] of directReplayOps) {
@@ -281,6 +283,21 @@ for (const op of textRunFallbackOps) {
     caseBody,
     /this\.unsupportedOps\.add\(op\.type\);\s*return;/,
     `${op} should stay on the declared unsupported/TextRun fallback path`,
+  );
+  assert.doesNotMatch(
+    caseBody,
+    /this\.render[A-Za-z0-9]+\(/,
+    `${op} fallback case should not direct-render before the fallback policy changes`,
+  );
+}
+
+for (const [op, unsupportedReason] of objectFragmentFallbackOps) {
+  const caseBody = extractSwitchCaseClusterBody(renderOpBody, op);
+  requireSnippet(caseBody, new RegExp(`case '${op}':`), `${op} should have an explicit CanvasKit fallback case`);
+  requireSnippet(
+    caseBody,
+    new RegExp(`this\\.unsupportedOps\\.add\\('${unsupportedReason}'\\);\\s*return;`),
+    `${op} should report the declared direct replay gap`,
   );
   assert.doesNotMatch(
     caseBody,
