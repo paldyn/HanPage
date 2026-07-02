@@ -80,11 +80,16 @@ fn prepend_endnote_marker_text(para: &mut Paragraph, endnote: &crate::model::foo
         .chars()
         .take_while(|ch| matches!(*ch, ' ' | '\u{00A0}' | '\u{2007}'))
         .count();
+    let marker_char_shape_id = para.char_shape_id_at(leading_spaces);
     if leading_spaces > 0 {
         para.delete_text_at(0, leading_spaces);
     }
     let prefix = format!("{} ", format_endnote_marker_text(endnote));
+    let prefix_len = prefix.chars().count();
     para.insert_text_at(0, &prefix);
+    if let Some(char_shape_id) = marker_char_shape_id {
+        para.apply_char_shape_range(0, prefix_len, char_shape_id);
+    }
 }
 
 // ========================================================
@@ -13228,7 +13233,7 @@ fn endnote_has_compact_separator_below(shape: &FootnoteShape) -> bool {
 }
 
 fn endnote_has_visible_separator(shape: &FootnoteShape) -> bool {
-    shape.separator_line_type != 0 || shape.separator_line_width != 0 || shape.separator_length != 0
+    shape.separator_line_type != 0 && shape.separator_line_width != 0
 }
 
 fn endnote_separator_height_px(shape: &FootnoteShape, dpi: f64) -> f64 {

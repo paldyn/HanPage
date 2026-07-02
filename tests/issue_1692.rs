@@ -214,6 +214,67 @@ fn text_concat_in_tree(node: &Value, ancestor_type: &str) -> String {
     out
 }
 
+fn parse_leading_note_marker(text: &str) -> Option<u32> {
+    let trimmed = text.trim_start();
+    let digit_len = trimmed
+        .chars()
+        .take_while(|ch| ch.is_ascii_digit())
+        .map(char::len_utf8)
+        .sum::<usize>();
+    if digit_len == 0 {
+        return None;
+    }
+
+    let rest = &trimmed[digit_len..];
+    let after_marker = rest.strip_prefix(')')?;
+    if after_marker
+        .chars()
+        .next()
+        .is_some_and(|ch| !ch.is_whitespace())
+    {
+        return None;
+    }
+
+    trimmed[..digit_len].parse().ok()
+}
+
+fn endnote_marker_numbers_on_page(node: &Value) -> Vec<u32> {
+    fn walk(node: &Value, out: &mut Vec<u32>) {
+        if node.get("type").and_then(Value::as_str) == Some("TextRun") {
+            let x = node
+                .get("bbox")
+                .and_then(|bbox| bbox.get("x"))
+                .and_then(Value::as_f64);
+            let h = node
+                .get("bbox")
+                .and_then(|bbox| bbox.get("h"))
+                .and_then(Value::as_f64);
+            let at_note_column_start =
+                x.is_some_and(|x| (113.4..=133.4).contains(&x) || (406.3..=426.3).contains(&x));
+            let note_marker_sized = h.is_some_and(|h| h <= 14.0);
+            if at_note_column_start && note_marker_sized {
+                if let Some(text) = node.get("text").and_then(Value::as_str) {
+                    if let Some(number) = parse_leading_note_marker(text) {
+                        if out.last().copied() != Some(number) {
+                            out.push(number);
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(children) = node.get("children").and_then(Value::as_array) {
+            for child in children {
+                walk(child, out);
+            }
+        }
+    }
+
+    let mut out = Vec::new();
+    walk(node, &mut out);
+    out
+}
+
 fn contains_node_type(node: &Value, node_type: &str) -> bool {
     if node.get("type").and_then(Value::as_str) == Some(node_type) {
         return true;
@@ -301,6 +362,42 @@ fn first_picture<'a>(paragraphs: &'a [Paragraph]) -> Option<&'a rhwp::model::ima
     }
 
     None
+}
+
+#[test]
+fn issue_1692_so_sueop_answer_endnote_pages_match_pdf_ranges() {
+    let cases = [
+        ("HWP3", load_wasm_doc("samples/SO-SUEOP.hwp")),
+        ("HWPX", load_wasm_doc("samples/SO-SUEOP.hwpx")),
+    ];
+    let expected = [
+        (42, 43, 1, 58),
+        (43, 44, 59, 129),
+        (44, 45, 130, 191),
+        (45, 46, 192, 223),
+    ];
+
+    for (label, doc) in cases {
+        for (page_index, page_number, first, last) in expected {
+            let tree = page_render_tree(&doc, page_index);
+            let markers = endnote_marker_numbers_on_page(&tree);
+            assert_eq!(
+                markers.first().copied(),
+                Some(first),
+                "{label} page {page_number} first endnote marker"
+            );
+            assert_eq!(
+                markers.last().copied(),
+                Some(last),
+                "{label} page {page_number} last endnote marker"
+            );
+            assert_eq!(
+                markers.len() as u32,
+                last - first + 1,
+                "{label} page {page_number} endnote marker count: {markers:?}"
+            );
+        }
+    }
 }
 
 #[test]
