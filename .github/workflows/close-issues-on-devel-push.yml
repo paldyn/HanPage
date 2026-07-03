@@ -22,8 +22,7 @@ jobs:
             const { owner, repo } = context.repo;
             const payload = context.payload;
 
-            const closingKeyword = /\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*/gi;
-            const issueRef = /(?:https:\/\/github\.com\/([^/\s#]+)\/([^/\s#]+)\/issues\/(\d+)|(?:(\w[\w.-]*)\/([\w.-]+))?#(\d+))/gi;
+            const closingIssueRef = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*(?:https:\/\/github\.com\/([^/\s#]+)\/([^/\s#]+)\/issues\/(\d+)|(?:(\w[\w.-]*)\/([\w.-]+))?#(\d+))/gi;
 
             function collectIssueNumbers(text) {
               const numbers = new Set();
@@ -31,26 +30,20 @@ jobs:
               const lines = source.split(/\r?\n/);
 
               for (const line of lines) {
-                closingKeyword.lastIndex = 0;
-                let keywordMatch;
+                closingIssueRef.lastIndex = 0;
+                let refMatch;
 
-                while ((keywordMatch = closingKeyword.exec(line)) !== null) {
-                  const clause = line.slice(keywordMatch.index + keywordMatch[0].length);
-                  issueRef.lastIndex = 0;
-                  let refMatch;
+                while ((refMatch = closingIssueRef.exec(line)) !== null) {
+                  const refOwner = refMatch[1] || refMatch[4] || owner;
+                  const refRepo = refMatch[2] || refMatch[5] || repo;
+                  const number = Number(refMatch[3] || refMatch[6]);
 
-                  while ((refMatch = issueRef.exec(clause)) !== null) {
-                    const refOwner = refMatch[1] || refMatch[4] || owner;
-                    const refRepo = refMatch[2] || refMatch[5] || repo;
-                    const number = Number(refMatch[3] || refMatch[6]);
-
-                    if (
-                      Number.isInteger(number) &&
-                      refOwner.toLowerCase() === owner.toLowerCase() &&
-                      refRepo.toLowerCase() === repo.toLowerCase()
-                    ) {
-                      numbers.add(number);
-                    }
+                  if (
+                    Number.isInteger(number) &&
+                    refOwner.toLowerCase() === owner.toLowerCase() &&
+                    refRepo.toLowerCase() === repo.toLowerCase()
+                  ) {
+                    numbers.add(number);
                   }
                 }
               }
