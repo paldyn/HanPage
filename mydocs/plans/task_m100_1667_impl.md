@@ -8,6 +8,18 @@
 - 작업 브랜치: `task-1667-rust-cache-strategy`
 - 1차 구현 대상: CodeQL Rust cargo cache restore/save 분리
 
+## 결정사항
+
+1차 구현 PR은 "PR restore-only"와 "restore/save 분리" 중 하나를 고르는 작업이 아니다.
+
+- 정책 결정: PR run에서는 restore-only로 동작하게 한다.
+- 구현 방식: `actions/cache/restore@v5`와 `actions/cache/save@v5`를 분리한다.
+- trusted branch 정책: `push` on `refs/heads/devel` 또는 `refs/heads/main`에서만 save를 허용한다.
+- exact hit 정책: exact hit이면 trusted branch에서도 save를 생략한다.
+
+따라서 이번 PR의 정확한 표현은 "CodeQL Rust cache를 restore/save 분리로 바꾸어 PR restore-only /
+trusted branch save-only 정책을 적용한다"이다.
+
 ## 구현 판단
 
 이번 코드 PR의 범위는 `.github/workflows/codeql.yml`의 Rust cache step으로 한정한다.
@@ -20,6 +32,11 @@ PR run에서 cache save 표면이 남아 있다는 점이다.
 있다고 지적됐다. CodeQL은 `push` on `main/devel`, `pull_request`, `schedule`, `workflow_dispatch`를 모두 갖고 있어
 #1664와 같은 정책을 적용하기 쉽다. 따라서 1차 구현은 CodeQL Rust cache에 PR restore-only / trusted branch save-only
 정책을 적용하는 것으로 제한한다.
+
+Render Diff cargo cache와 stale PR ref cleanup은 #1667 범위에는 포함하지만, 이번 1차 코드 PR에는 포함하지 않는다.
+특히 `Linux-render-diff-cargo-*`는 PR ref 누적의 가장 큰 요인이지만, workflow가 `pull_request`/`workflow_dispatch`
+중심이라 단순 PR restore-only 전환 시 warm source가 사라질 수 있다. 따라서 Render Diff 정책 변경, closed PR ref
+cleanup 운영, cleanup 자동화는 CodeQL PR과 분리한다.
 
 ## 포함 범위
 
@@ -40,6 +57,7 @@ PR run에서 cache save 표면이 남아 있다는 점이다.
 - `.github/workflows/ci.yml`의 `wasm-build` cache 변경
 - `Swatinem/rust-cache` 도입
 - cache 삭제 또는 stale PR ref cleanup 실행
+- Render Diff closed PR ref cleanup 자동화
 - branch protection / required check 이름 변경
 - 회귀 가드, 테스트 파일, `tests/golden_svg/**` 구조 변경
 
