@@ -274,14 +274,10 @@ jobs:
             cargo build --release --verbose
           fi
 
-      # [Task #1192 A] canvas_layer_tree_matches_legacy* 는 feature gate 없는 lib 테스트로
-      # 아래 "Run lib tests"에 이미 포함된다. 별도 step 은 순수 중복이라 제거.
-      # (native-skia 테스트는 default feature 가 아니므로 전용 step 을 유지한다.)
-
-      # [Task #1667] Keep the command surface unchanged, but run default-feature
-      # test targets immediately after Build so restored target reuse can be
-      # measured before wasm/native-skia feature changes affect fingerprints.
-      - name: Run integration tests
+      # [Task #1667] `cargo test --tests` covers all default-feature test=true
+      # targets, including the rhwp lib test executable. Keep one default-feature
+      # test step here so the same lib tests are not rerun by a separate --lib step.
+      - name: Run default-feature tests
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]] || [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == "refs/heads/devel" ]]; then
             echo "profile=release-test event=${GITHUB_EVENT_NAME} ref=${GITHUB_REF}"
@@ -289,16 +285,6 @@ jobs:
           else
             echo "profile=release event=${GITHUB_EVENT_NAME} ref=${GITHUB_REF}"
             cargo test --release --tests --verbose
-          fi
-
-      - name: Run lib tests
-        run: |
-          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]] || [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == "refs/heads/devel" ]]; then
-            echo "profile=release-test event=${GITHUB_EVENT_NAME} ref=${GITHUB_REF}"
-            cargo test --profile release-test --lib --verbose
-          else
-            echo "profile=release event=${GITHUB_EVENT_NAME} ref=${GITHUB_REF}"
-            cargo test --release --lib --verbose
           fi
 
       - name: Check WASM target
