@@ -184,9 +184,9 @@ pub struct TypesetEngine {
 /// 한글은 하드 페이지 경계 직전 tail 을 본문 하단(여백 침범 무시)에 배치하므로, rhwp 가 수 px
 /// over-fill 한 경우에도 tail 을 현재 페이지에 유지해 near-empty 페이지 over-pagination 을 막는다.
 const TAIL_BREAK_OVERFLOW_TOLERANCE_PX: f64 = 20.0;
-/// [Task #1733] 저장 LINE_SEG 좌표가 현재 쪽 하단 안에 남은 줄을 두었다는 증거가 있을 때
-/// partial paragraph tail split 에만 허용하는 누적 높이 drift 완화값.
-const PARTIAL_TAIL_SAVED_VPOS_OVERFLOW_TOLERANCE_PX: f64 = 128.0;
+/// [Task #1733] 저장 LINE_SEG 좌표가 현재 쪽 하단 안에 tail 을 두었다는 증거가 있을 때
+/// 제한된 tail 경로에만 허용하는 누적 높이 drift 완화값.
+const SAVED_TAIL_VPOS_OVERFLOW_TOLERANCE_PX: f64 = 128.0;
 
 struct TypesetState {
     /// 완성된 페이지 목록
@@ -1123,9 +1123,17 @@ fn line_seg_visible_bounds_px(seg: &LineSeg, page_vpos_base: i32, dpi: f64) -> O
 }
 
 fn saved_bounds_fit_at_flow_tail(bounds: (f64, f64), current_height: f64, available: f64) -> bool {
+    saved_bounds_fit_at_flow_tail_with_tolerance(bounds, current_height, available, 16.0)
+}
+
+fn saved_bounds_fit_at_flow_tail_with_tolerance(
+    bounds: (f64, f64),
+    current_height: f64,
+    available: f64,
+    tolerance_px: f64,
+) -> bool {
     let (top, bottom) = bounds;
-    top + PARTIAL_TAIL_SAVED_VPOS_OVERFLOW_TOLERANCE_PX >= current_height
-        && bottom <= available + 0.5
+    top + tolerance_px >= current_height && bottom <= available + 0.5
 }
 
 fn saved_line_range_fits_body_tail(
@@ -2508,6 +2516,10 @@ impl TypesetEngine {
             // 0-높이로 흡수한다.
             let empty_tail_bridge_to_reset = !next_will_vpos_reset
                 && !st.current_items.is_empty()
+                && !st
+                    .current_items
+                    .iter()
+                    .any(|item| matches!(item, PageItem::PartialTable { .. }))
                 && para.text.is_empty()
                 && para.controls.is_empty()
                 && para.line_segs.first().is_some_and(|seg| {
@@ -10031,10 +10043,11 @@ impl TypesetEngine {
                 .first()
                 .and_then(|seg| line_seg_visible_bounds_px(seg, 0, self.dpi))
                 .is_some_and(|bounds| {
-                    saved_bounds_fit_at_flow_tail(
+                    saved_bounds_fit_at_flow_tail_with_tolerance(
                         bounds,
                         st.current_height,
                         st.base_available_height(),
+                        SAVED_TAIL_VPOS_OVERFLOW_TOLERANCE_PX,
                     )
                 });
 
@@ -10346,7 +10359,8 @@ impl TypesetEngine {
                         && st.col_count == 1
                         && para.controls.is_empty()
                         && !st.current_items.is_empty()
-                        && overflow <= PARTIAL_TAIL_SAVED_VPOS_OVERFLOW_TOLERANCE_PX
+                        && !para_near_rowbreak_table(paragraphs, para_idx)
+                        && overflow <= SAVED_TAIL_VPOS_OVERFLOW_TOLERANCE_PX
                         && saved_line_range_fits_body_tail(
                             para,
                             li,
