@@ -3280,12 +3280,13 @@ fn dump_controls(args: &[String]) {
                                     .map(|p| p.text.chars().take(30).collect::<String>())
                                     .collect::<Vec<_>>()
                                     .join("|");
-                                println!("{}셀[{}] r={},c={} rs={},cs={} h={} w={} pad=({},{},{},{}) valign={:?} aim={} bf={} paras={} text=\"{}\"",
+                                println!("{}셀[{}] r={},c={} rs={},cs={} h={} w={} pad=({},{},{},{}) valign={:?} aim={} hdr={} bf={} paras={} text=\"{}\"",
                                     indent, ci, cell.row, cell.col, cell.row_span, cell.col_span,
                                     cell.height, cell.width,
                                     cell.padding.left, cell.padding.right, cell.padding.top, cell.padding.bottom,
                                     cell.vertical_align,
                                     cell.apply_inner_margin,
+                                    cell.is_header,
                                     cell.border_fill_id, cell.paragraphs.len(), text_preview);
                                 if let Some(ref fname) = cell.field_name {
                                     println!("{}  field=\"{}\"", indent, fname);
