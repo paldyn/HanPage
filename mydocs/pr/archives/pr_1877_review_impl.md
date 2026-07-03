@@ -165,6 +165,9 @@ merge 후에는 다음을 확인한다.
 - PR merge commit과 mergedAt
 - `devel` push CI run에서 aggregate `Build & Test`, `Build default-feature tests`, `Native Skia tests` 결과
 - trusted branch cache save writer가 하나뿐인지
+- Native Skia job의 산출물이 별도 runner에서 생성된 뒤 저장되지 않는 한계가 실제 Native Skia compile 시간과
+  runner-minutes에 미치는 영향
+- Native Skia compile 시간이 계속 크면 별도 native-skia cache key 또는 별도 target dir 도입을 후속으로 검토
 - #1665, #1668 상태
 - #1665는 `Refs` 형식이라 auto-close되지 않는 것이 정상이다. merge 후 measurement/report 정리가 남으면 open
   유지한다.

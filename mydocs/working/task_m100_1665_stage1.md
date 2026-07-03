@@ -95,6 +95,20 @@ gate로 바꿨다.
 - cache key/path
 - `Swatinem/rust-cache` 미도입
 
+### Native Skia cache 한계
+
+이번 1차 분리는 cache save writer를 `Build default-feature tests` 하나로 제한한다. 변경 전 단일
+`Build & Test` job에서는 trusted branch cache save 시점에 default-feature 산출물과 Native Skia 산출물이 같은
+`target/`에 함께 포함될 수 있었다. 변경 후에는 Native Skia job의 `target/` 산출물이 별도 runner에서 생성되고
+저장되지 않는다.
+
+이 선택은 같은 cache key에 여러 job이 동시에 save하면서 cache reservation 경합이나 read-only 경고가 재발하는
+것을 피하기 위한 보수적 설계다. 대신 Native Skia job은 exact restore 이후에도 필요한 산출물을 다시 빌드할 수
+있으며, runner-minutes 또는 Native Skia job 시간이 기대보다 줄지 않을 수 있다.
+
+merge 후 `devel` push와 후속 PR run에서 Native Skia compile 시간, cache hit 여부, queue 대기,
+runner-minutes를 관측한 뒤 별도 native-skia cache key 또는 별도 target dir 도입 여부를 판단한다.
+
 ## 회귀 가드 보존
 
 이번 변경은 workflow job 구조만 바꿨다.
