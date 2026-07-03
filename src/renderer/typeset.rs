@@ -435,6 +435,17 @@ fn para_is_empty_topbottom_table_anchor(para: &Paragraph) -> bool {
             .any(|ctrl| matches!(ctrl, Control::Table(t) if is_para_topbottom_float(&t.common)))
 }
 
+/// [Task #1863] 텍스트 없이 TAC 표만 담은 문단 — 시각적으로 단독 표 줄.
+/// 빈 앵커 TopAndBottom 표 뒤에 이런 문단이 오면 표-표 스택이므로 앵커의
+/// host_line_spacing 이 표 사이 시각 간격이다 (#1133 과 동일 본질).
+fn para_is_empty_tac_table_anchor(para: &Paragraph) -> bool {
+    !para_has_visible_text(para)
+        && para
+            .controls
+            .iter()
+            .any(|ctrl| matches!(ctrl, Control::Table(t) if t.common.treat_as_char))
+}
+
 fn para_has_visible_text_or_equation(para: &Paragraph) -> bool {
     para_has_visible_text(para)
         || para
@@ -10484,7 +10495,6 @@ impl TypesetEngine {
         composed: Option<&ComposedParagraph>,
         next_para: Option<&Paragraph>,
         is_column_top: bool,
-        is_hwpx_source: bool,
     ) -> FormattedTable {
         let mt = measured_tables
             .iter()
@@ -10546,26 +10556,33 @@ impl TypesetEngine {
                         .all(|p| p.controls.is_empty() && p.line_segs.len() <= 1)
                 })
                 .unwrap_or(false);
-        // [Task #1147] HWPX 원본 의 wrap=TopAndBottom 비-TAC 표 + 빈 앵커 문단:
-        //   HWPX LINE_SEG 시멘틱상 빈 앵커 문단 vpos = 직전 문단 종료 vpos (갭 0).
-        //   PS.spacing_before / host_line_spacing 을 별도 가산하면 HWPX vpos delta 와
-        //   +sb +leading 만큼 어긋나 페이지 overflow 유발.
-        //   HWP5/HWP3 는 LINE_SEG 인코딩이 달라 기존 동작 유지 (hwpspec 등 178p 정합).
-        // [Task #1133] 단, 빈 앵커 TopAndBottom 표가 연속될 때는 첫 표의
-        //   host_line_spacing 이 표-표 사이 시각 간격이다. 이를 0으로 누르면 HWPX
-        //   pi=28→29가 HWP와 달리 붙어 출력된다.
-        let is_topbottom_empty_anchor_hwpx = is_hwpx_source
-            && !is_tac
+        // [Task #1147] 빈 앵커 wrap=TopAndBottom 비-TAC 표 + 다음이 일반 문단:
+        //   host_line_spacing 을 0 으로 억제한다 (빈 앵커 vpos 가 이미 갭을 인코딩해
+        //   별도 가산 시 page overflow).
+        // [Task #1133] 단, 다음도 빈 앵커 TopAndBottom 표이면 host_line_spacing 이
+        //   표-표 사이 간격이므로 보존.
+        // [Task #1836] 종전 `is_hwpx_source` 게이트 제거 — 이 억제는 렌더 경로
+        //   (layout.rs suppress_empty_anchor_spacing = is_current_empty_para_float,
+        //   소스 무관)와 대칭이어야 한다. HWPX 만 억제하면 typeset pagination(HWP5
+        //   재파스는 미억제, host_sp +12px phantom)이 layout 렌더(소스 무관 억제,
+        //   가시 위치 동일)와 어긋나 라운드트립 쪽나눔이 뒤집힌다 (seoul_0776 p2→p3
+        //   1줄 이월; #1763 clamp 가 누적을 razor-thin 경계로 옮겨 노출). #1809/#1841
+        //   과 동일 소스 무관화. #1147 원 케이스(HWPX)는 억제 유지되어 불변.
+        // [Task #1863] 소스 무관화가 native HWP5 표-표 스택을 깨뜨리는 케이스 보정:
+        //   다음 문단이 빈 TAC-표 앵커여도 #1133 과 같은 표 스택이므로 보존한다
+        //   (rowbreak-problem-pages.hwp sec1 pi=2→pi=3, 1200HU 가 한컴 페이지 채움에
+        //   실제 계상되는 간격 — 억제 시 p12 PartialTable 42.5px overflow).
+        let is_topbottom_empty_anchor = !is_tac
             && matches!(
                 table.common.text_wrap,
                 crate::model::shape::TextWrap::TopAndBottom
             )
             && para.text.is_empty();
-        let next_is_empty_topbottom_table_anchor = next_para
-            .map(para_is_empty_topbottom_table_anchor)
+        let next_is_empty_table_anchor = next_para
+            .map(|p| para_is_empty_topbottom_table_anchor(p) || para_is_empty_tac_table_anchor(p))
             .unwrap_or(false);
         let suppress_empty_anchor_spacing =
-            is_topbottom_empty_anchor_hwpx && !next_is_empty_topbottom_table_anchor;
+            is_topbottom_empty_anchor && !next_is_empty_table_anchor;
 
         let host_line_spacing = if suppress_empty_anchor_spacing {
             0.0
@@ -10785,7 +10802,6 @@ impl TypesetEngine {
                 composed_para,
                 paragraphs.get(deferred.para_index + 1),
                 is_column_top,
-                st.is_hwpx_source,
             );
             let mt = measured_tables.iter().find(|mt| {
                 mt.para_index == deferred.para_index && mt.control_index == deferred.control_index
@@ -11090,7 +11106,6 @@ impl TypesetEngine {
                         composed,
                         next_para,
                         is_column_top,
-                        st.is_hwpx_source,
                     );
 
                     let mt = measured_tables
