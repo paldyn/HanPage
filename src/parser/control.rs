@@ -377,7 +377,7 @@ fn parse_cell(records: &[Record]) -> Cell {
     // 34바이트 이후 추가 데이터 보존 (라운드트립용)
     if r.remaining() > 0 {
         cell.raw_list_extra = r.read_bytes(r.remaining()).unwrap_or_default();
-        // 셀 필드명 추출: raw_list_extra offset 14-15(name_len) + 16~(UTF-16LE)
+        // 셀 필드명 추출: raw_list_extra offset 15..17(name_len) + 17..(UTF-16LE)
         cell.field_name = parse_cell_field_name(&cell.raw_list_extra);
     }
 
