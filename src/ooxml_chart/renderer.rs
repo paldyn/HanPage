@@ -252,7 +252,7 @@ fn estimate_axis_label_width(chart: &OoxmlChart, axis_group: u8) -> f64 {
     if series.is_empty() {
         return 16.0;
     }
-    let (vmin, vmax, _) = value_range_for(series.iter().cloned());
+    let (vmin, vmax, _) = value_range_for(series.iter().cloned(), VERTICAL_AXIS_TICKS);
     let fmt = series.first().and_then(|s| s.format_code.as_deref());
     let min_label = format_num(vmin, fmt);
     let max_label = format_num(vmax, fmt);
@@ -261,8 +261,12 @@ fn estimate_axis_label_width(chart: &OoxmlChart, axis_group: u8) -> f64 {
     (max_chars as f64 * 7.0 + 18.0).max(28.0)
 }
 
-/// 시리즈 부분집합에 대한 값 범위 `(min, max, step)`
-fn value_range_for<'a>(series: impl Iterator<Item = &'a OoxmlSeries>) -> (f64, f64, f64) {
+/// 시리즈 부분집합에 대한 값 범위 `(min, max, step)`. `target_ticks`는 축 방향별
+/// 눈금 밀도(`VERTICAL_AXIS_TICKS`/`HORIZONTAL_AXIS_TICKS`).
+fn value_range_for<'a>(
+    series: impl Iterator<Item = &'a OoxmlSeries>,
+    target_ticks: f64,
+) -> (f64, f64, f64) {
     let mut min = f64::INFINITY;
     let mut max = f64::NEG_INFINITY;
     for s in series {
@@ -288,11 +292,11 @@ fn value_range_for<'a>(series: impl Iterator<Item = &'a OoxmlSeries>) -> (f64, f
         max = min + 1.0;
     }
     // Nice number 반올림 (눈금을 깔끔하게, 경계 headroom 포함)
-    nice_axis(min, max)
+    nice_axis(min, max, target_ticks)
 }
 
-fn value_range(chart: &OoxmlChart) -> (f64, f64, f64) {
-    value_range_for(chart.series.iter())
+fn value_range(chart: &OoxmlChart, target_ticks: f64) -> (f64, f64, f64) {
+    value_range_for(chart.series.iter(), target_ticks)
 }
 
 /// raw 간격에 가장 가까운 "깔끔한" 눈금 간격 (1/2/5/10 × 10^n, 반올림 임계 1.5/3/7)
@@ -311,42 +315,29 @@ fn floor_nice_step(raw: f64) -> f64 {
     step * mag
 }
 
-/// raw 이상인 가장 작은 "깔끔한" 눈금 간격 (1/2/5/10 × 10^n)
-fn ceil_nice_step(raw: f64) -> f64 {
-    let mag = 10f64.powf(raw.abs().log10().floor());
-    let norm = raw / mag;
-    let step = if norm <= 1.0 {
-        1.0
-    } else if norm <= 2.0 {
-        2.0
-    } else if norm <= 5.0 {
-        5.0
-    } else {
-        10.0
-    };
-    step * mag
-}
+/// 세로 값축 눈금 목표 칸수 (한컴 2022 실측: 세로막대/선의 값축은 ~3칸 — 5.0→0~6
+/// step 2, 누적 12.3→0~15 step 5)
+const VERTICAL_AXIS_TICKS: f64 = 3.0;
+/// 가로 값축·scatter 양축 눈금 목표 칸수 (실측: 가로 누적 12.3→0~14 step 2,
+/// 가로 묶은 5.0→0~6 step 1, scatter X 2.6→0~3 step 0.5)
+const HORIZONTAL_AXIS_TICKS: f64 = 5.0;
 
 /// min~max 구간을 "깔끔한" 눈금으로 확장하고 `(min', max', step)`을 반환.
 ///
-/// 한컴 정합(C1c #1882 갭④): 데이터 max가 step 경계에 정확히 걸리면 **+1 step
-/// headroom**을 두고, 확장된 범위에 대해 step을 재계산(ceil-nice)한다. 확장이
-/// 없으면 step을 유지한다 — 무조건 재계산하면 scatter X(2.6→0~3)의 0.5 간격이
-/// 1.0으로 승격돼 실측과 어긋난다. 실측 앵커 3점(`pdf/chart/` 한컴 2022):
-/// 막대 max 5.0→(0,6,2) 라벨 0,2,4,6 / scatter Y 4.0→(0,5,1) / X 2.6→(0,3,0.5).
-fn nice_axis(min: f64, max: f64) -> (f64, f64, f64) {
+/// 한컴 정합(C1c #1882 갭④, 시각판정 실측 보강): 데이터 max가 step 경계에 정확히
+/// 걸리면 **+1 step headroom**(step은 유지 — 가로 묶은막대 5.0→0~6 step 1 실측).
+/// 눈금 밀도는 축 방향별 target_ticks로 제어(세로 3칸/가로·scatter 5칸) — 같은
+/// 데이터(합 12.3)가 세로 누적 0~15 step 5, 가로 누적 0~14 step 2로 실측됨.
+/// 3차원 계열의 고유 축(묶은 0~5 무헤드룸/누적 0~20 과헤드룸)은 2D 근사 범위 밖(C2).
+fn nice_axis(min: f64, max: f64, target_ticks: f64) -> (f64, f64, f64) {
     if max <= min {
         return (min, max, 1.0);
     }
-    let step0 = floor_nice_step((max - min) / 5.0);
-    let mut new_min = (min / step0).floor() * step0;
-    let mut new_max = (max / step0).ceil() * step0;
-    let mut step = step0;
-    if (new_max - max).abs() < step0 * 1e-6 {
-        new_max += step0; // headroom +1 step
-        step = ceil_nice_step((new_max - new_min) / 5.0);
-        new_max = (new_max / step).ceil() * step;
-        new_min = (new_min / step).floor() * step;
+    let step = floor_nice_step((max - min) / target_ticks);
+    let new_min = (min / step).floor() * step;
+    let mut new_max = (max / step).ceil() * step;
+    if (new_max - max).abs() < step * 1e-6 {
+        new_max += step; // 경계 headroom +1 step (step 유지)
     }
     (new_min, new_max, step)
 }
@@ -378,7 +369,7 @@ fn scatter_range(vals: impl Iterator<Item = f64>) -> (f64, f64, f64) {
     if (max - min).abs() < 1e-9 {
         max = min + 1.0;
     }
-    nice_axis(min, max)
+    nice_axis(min, max, HORIZONTAL_AXIS_TICKS)
 }
 
 // ---------------- Bar / Column (단일 축) ----------------
@@ -413,15 +404,21 @@ fn render_bars(
 
     // 값축 범위: clustered=개별값, stacked=카테고리 합의 최대, percent=0~100%
     // (percent는 step 20 고정 = 종전 5등분 라벨 0/20/…/100%와 동일)
+    // 눈금 밀도는 값축 방향 기준: 세로막대=세로 값축(3칸), 가로막대=가로 값축(5칸)
+    let ticks = if horizontal {
+        HORIZONTAL_AXIS_TICKS
+    } else {
+        VERTICAL_AXIS_TICKS
+    };
     let (vmin, vmax, vstep) = if percent {
         (0.0, 100.0, 20.0)
     } else if stacked {
         let max_sum = (0..cat_count)
             .map(|ci| category_positive_sum(chart, ci))
             .fold(0.0_f64, f64::max);
-        nice_axis(0.0, max_sum.max(1.0))
+        nice_axis(0.0, max_sum.max(1.0), ticks)
     } else {
-        value_range(chart)
+        value_range(chart, ticks)
     };
 
     svg.push_str(&format!(
@@ -543,7 +540,7 @@ fn category_positive_sum(chart: &OoxmlChart, ci: usize) -> f64 {
 // ---------------- Line (단일 축) ----------------
 
 fn render_line(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f64, ph: f64) {
-    let (vmin, vmax, vstep) = value_range(chart);
+    let (vmin, vmax, vstep) = value_range(chart, VERTICAL_AXIS_TICKS);
     let max_len = chart
         .series
         .iter()
@@ -769,14 +766,14 @@ fn render_combo(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f64,
     let sec: Vec<&OoxmlSeries> = chart.series.iter().filter(|s| s.axis_group == 1).collect();
 
     let (pri_min, pri_max, pri_step) = if pri.is_empty() {
-        value_range(chart)
+        value_range(chart, VERTICAL_AXIS_TICKS)
     } else {
-        value_range_for(pri.iter().cloned())
+        value_range_for(pri.iter().cloned(), VERTICAL_AXIS_TICKS)
     };
     let (sec_min, sec_max, sec_step) = if sec.is_empty() {
         (0.0, 1.0, 0.2)
     } else {
-        value_range_for(sec.iter().cloned())
+        value_range_for(sec.iter().cloned(), VERTICAL_AXIS_TICKS)
     };
 
     svg.push_str(&format!(
@@ -1549,8 +1546,8 @@ mod tests {
 
     #[test]
     fn test_axis_headroom_bar_max_on_boundary() {
-        // 한컴 실측 앵커: 막대 데이터 max 5.0(step 경계) → 축 0~6, step 재계산으로
-        // 성긴 라벨 0,2,4,6 (묶은세로막대형-2022.pdf).
+        // 한컴 실측 앵커: 세로막대 max 5.0 → 축 0~6, 세로 값축 3칸 정책으로
+        // step 2 → 성긴 라벨 0,2,4,6 (묶은세로막대형-2022.pdf).
         let chart = OoxmlChart {
             chart_type: OoxmlChartType::Column,
             series: vec![
@@ -1574,6 +1571,70 @@ mod tests {
         }
         for absent in [">1<", ">3<", ">5<"] {
             assert!(!svg.contains(absent), "라벨 {absent} 없어야 (성긴 라벨)");
+        }
+    }
+
+    #[test]
+    fn test_axis_vertical_stacked_coarse_ticks() {
+        // 한컴 실측: 누적'세로'막대(합 max 12.3) → 축 0~15 step 5 (세로 값축은 ~3칸).
+        // 같은 데이터의 누적'가로'막대는 0~14 step 2 — 방향별 눈금 밀도가 다름.
+        let mut chart = bars_chart(BarGrouping::Stacked);
+        chart.series[0].values = vec![4.3, 2.5, 3.5, 4.5];
+        chart.series[1].values = vec![2.4, 4.4, 1.8, 2.8];
+        chart.series[2].values = vec![2.0, 2.0, 3.0, 5.0];
+        chart.categories = vec!["a".into(), "b".into(), "c".into(), "d".into()];
+        let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
+        for want in [">5<", ">10<", ">15<"] {
+            assert!(svg.contains(want), "세로 누적 라벨 {want} 있어야 (0~15 step 5)");
+        }
+        for absent in [">14<", ">2<", ">4<"] {
+            assert!(!svg.contains(absent), "세로 누적 라벨 {absent} 없어야");
+        }
+    }
+
+    #[test]
+    fn test_axis_horizontal_stacked_fine_ticks() {
+        // 한컴 실측: 누적'가로'막대(합 max 12.3) → 축 0~14 step 2 (가로 값축은 ~5칸).
+        let mut chart = bars_chart(BarGrouping::Stacked);
+        chart.chart_type = OoxmlChartType::Bar;
+        chart.series[0].values = vec![4.3, 2.5, 3.5, 4.5];
+        chart.series[1].values = vec![2.4, 4.4, 1.8, 2.8];
+        chart.series[2].values = vec![2.0, 2.0, 3.0, 5.0];
+        for s in &mut chart.series {
+            s.series_type = OoxmlChartType::Bar;
+        }
+        chart.categories = vec!["a".into(), "b".into(), "c".into(), "d".into()];
+        let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
+        for want in [">2<", ">14<"] {
+            assert!(svg.contains(want), "가로 누적 라벨 {want} 있어야 (0~14 step 2)");
+        }
+        assert!(!svg.contains(">15<"), "가로 누적은 0~14 (15 아님)");
+    }
+
+    #[test]
+    fn test_axis_horizontal_clustered_headroom_keeps_step() {
+        // 한컴 실측: 묶은'가로'막대(max 5.0, step 1 경계) → 0~6 **step 1 유지**
+        // (라벨 0~6 전부 — 경계 headroom 후 step 재계산하지 않음).
+        let chart = OoxmlChart {
+            chart_type: OoxmlChartType::Bar,
+            series: vec![
+                OoxmlSeries {
+                    values: vec![4.3, 2.5, 3.5, 4.5],
+                    series_type: OoxmlChartType::Bar,
+                    ..Default::default()
+                },
+                OoxmlSeries {
+                    values: vec![2.0, 2.0, 3.0, 5.0],
+                    series_type: OoxmlChartType::Bar,
+                    ..Default::default()
+                },
+            ],
+            categories: vec!["a".into(), "b".into(), "c".into(), "d".into()],
+            ..Default::default()
+        };
+        let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
+        for want in [">1<", ">3<", ">5<", ">6<"] {
+            assert!(svg.contains(want), "가로 묶은 라벨 {want} 있어야 (0~6 step 1)");
         }
     }
 

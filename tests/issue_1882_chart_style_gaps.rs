@@ -75,6 +75,18 @@ fn chart_axis_headroom_and_sparse_ticks() {
             assert!(svg.contains(want), "{rel}: 축 라벨 {want} 없음");
         }
     });
+    // ④ 방향별 눈금 밀도 (한컴 실측): 같은 합(12.3)인데
+    //    누적'세로' → 0~15 step 5 / 누적'가로' → 0~14 step 2.
+    for_both_exts("세로막대형/누적세로막대형", |rel, svg| {
+        for want in [">10<", ">15<"] {
+            assert!(svg.contains(want), "{rel}: 세로 누적 라벨 {want} 없음 (0~15 step 5)");
+        }
+        assert!(!svg.contains(">14<"), "{rel}: 세로 누적에 14 라벨 (step 2 회귀)");
+    });
+    for_both_exts("가로막대형/누적가로막대형", |rel, svg| {
+        assert!(svg.contains(">14<"), "{rel}: 가로 누적 라벨 14 없음 (0~14 step 2)");
+        assert!(!svg.contains(">15<"), "{rel}: 가로 누적에 15 라벨");
+    });
 }
 
 #[test]
