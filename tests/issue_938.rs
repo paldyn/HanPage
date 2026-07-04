@@ -251,6 +251,14 @@ fn issue_938_overlay_watermark_is_hancom_baked_png() {
         parsed["rawSvgCount"].as_u64().is_some(),
         "overlay summary must expose rawSvgCount for decode retry decisions"
     );
+    assert!(
+        parsed["flowImageCount"].as_u64().is_some(),
+        "overlay summary must expose flowImageCount for flow-static split decisions"
+    );
+    assert!(
+        parsed["flowRawSvgCount"].as_u64().is_some(),
+        "overlay summary must expose flowRawSvgCount for flow-static split decisions"
+    );
     let watermark = behind
         .iter()
         .find(|entry| entry.get("watermark").is_some())

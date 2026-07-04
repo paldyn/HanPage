@@ -766,8 +766,8 @@ impl DocumentCore {
     ///
     /// Studio는 BehindText/InFrontOfText 그림 overlay 계산을 위해 전체 PageLayerTree JSON을
     /// 파싱할 필요가 없다. 특히 그림이 본문 layer에만 있는 페이지에서는 빈 overlay 배열과
-    /// imageCount/rawSvgCount/hasBehind/hasFront만 반환하여 입력 중 대용량 JSON
-    /// 직렬화/파싱을 피한다.
+    /// imageCount/rawSvgCount/flowImageCount/flowRawSvgCount/hasBehind/hasFront만
+    /// 반환하여 입력 중 대용량 JSON 직렬화/파싱을 피한다.
     pub fn get_page_overlay_images_native(&self, page_num: u32) -> Result<String, HwpError> {
         use crate::model::image::ImageEffect;
         use crate::model::shape::TextWrap;
@@ -904,6 +904,8 @@ impl DocumentCore {
             front: &mut String,
             image_count: &mut usize,
             raw_svg_count: &mut usize,
+            flow_image_count: &mut usize,
+            flow_raw_svg_count: &mut usize,
             has_behind: &mut bool,
             has_front: &mut bool,
             inherited_layer: Option<RenderLayerInfo>,
@@ -918,6 +920,8 @@ impl DocumentCore {
                             front,
                             image_count,
                             raw_svg_count,
+                            flow_image_count,
+                            flow_raw_svg_count,
                             has_behind,
                             has_front,
                             active_layer,
@@ -930,6 +934,8 @@ impl DocumentCore {
                     front,
                     image_count,
                     raw_svg_count,
+                    flow_image_count,
+                    flow_raw_svg_count,
                     has_behind,
                     has_front,
                     active_layer,
@@ -968,7 +974,9 @@ impl DocumentCore {
                                             TextWrap::InFrontOfText,
                                         );
                                     }
-                                    _ => {}
+                                    PaintReplayPlane::Flow | PaintReplayPlane::Background => {
+                                        *flow_image_count += 1;
+                                    }
                                 }
                             }
                             // OLE/차트 미리보기 등은 RawSvg 로 emit 되며 web_canvas 의 draw_image
@@ -976,6 +984,9 @@ impl DocumentCore {
                             // 발화를 위해 별도 rawSvgCount 로 노출한다.
                             PaintOp::RawSvg { .. } => {
                                 *raw_svg_count += 1;
+                                if plane == PaintReplayPlane::Flow {
+                                    *flow_raw_svg_count += 1;
+                                }
                             }
                             _ => {}
                         }
@@ -989,6 +1000,8 @@ impl DocumentCore {
         let mut front = String::new();
         let mut image_count = 0usize;
         let mut raw_svg_count = 0usize;
+        let mut flow_image_count = 0usize;
+        let mut flow_raw_svg_count = 0usize;
         let mut has_behind = false;
         let mut has_front = false;
         collect(
@@ -997,14 +1010,23 @@ impl DocumentCore {
             &mut front,
             &mut image_count,
             &mut raw_svg_count,
+            &mut flow_image_count,
+            &mut flow_raw_svg_count,
             &mut has_behind,
             &mut has_front,
             None,
         );
 
         Ok(format!(
-            "{{\"behind\":[{}],\"front\":[{}],\"imageCount\":{},\"rawSvgCount\":{},\"hasBehind\":{},\"hasFront\":{}}}",
-            behind, front, image_count, raw_svg_count, has_behind, has_front
+            "{{\"behind\":[{}],\"front\":[{}],\"imageCount\":{},\"rawSvgCount\":{},\"flowImageCount\":{},\"flowRawSvgCount\":{},\"hasBehind\":{},\"hasFront\":{}}}",
+            behind,
+            front,
+            image_count,
+            raw_svg_count,
+            flow_image_count,
+            flow_raw_svg_count,
+            has_behind,
+            has_front
         ))
     }
 

@@ -150,6 +150,9 @@ test('PageRenderer prefers lightweight overlay summary before full PageLayerTree
   assert.match(source, /this\.wasm\.getPageLayerTree\(pageIdx\)/);
   assert.match(source, /typeof wrapper\?\.hasBehind !== 'boolean'/);
   assert.match(source, /const rawSvgCount = finiteCount\(wrapper\.rawSvgCount\)/);
+  assert.match(source, /const flowImageCount =/);
+  assert.match(source, /const flowRawSvgCount =/);
+  assert.match(source, /flowStaticCount/);
 });
 
 test('CanvasView forwards text-edit invalidation as static overlay reuse context', () => {
@@ -175,6 +178,36 @@ test('PageRenderer reuses static overlay canvases only when the overlay key matc
   assert.match(source, /summary=\$\{summary\.signature\}/);
   assert.match(source, /profile=\$\{this\.renderProfile\}/);
   assert.match(source, /backend=\$\{this\.backend\}/);
+});
+
+test('PageRenderer splits flow static images only on text-edit fast path', () => {
+  const source = readFileSync(new URL('../src/view/page-renderer.ts', import.meta.url), 'utf8');
+  assert.match(source, /shouldUseStaticFlowReuse\(context,\s*layers\)/);
+  assert.match(source, /layers\.flowStaticCount > 0/);
+  assert.match(source, /!layers\.hasBehind/);
+  assert.match(source, /renderPageToCanvasFiltered\(pageIdx,\s*canvas,\s*renderScale,\s*'flow-dynamic'\)/);
+  assert.match(source, /createOrReuseFilteredCanvasLayer\(\s*pageIdx,\s*canvas,\s*renderScale,\s*'flow-static'/);
+  assert.match(source, /this\.flowSplitSupported = false/);
+  assert.match(source, /flow-dynamic 렌더 미지원/);
+  assert.match(source, /flow-static 지연 재렌더 실패/);
+});
+
+test('PageRenderer deferred image rerender preserves static layer reuse policy', () => {
+  const source = readFileSync(new URL('../src/view/page-renderer.ts', import.meta.url), 'utf8');
+  assert.match(source, /interface ReRenderPolicy/);
+  assert.match(source, /retrySignature: overlays\.signature/);
+  assert.match(source, /reuseStaticFlow/);
+  assert.match(source, /reuseStaticOverlay/);
+  assert.match(source, /const retryKey = `\$\{imageCount\}:\$\{policy\.retrySignature\}`/);
+  assert.match(source, /this\.reRenderPageCanvases\(pageIdx,\s*canvas,\s*renderScale,\s*policy\)/);
+  assert.match(source, /this\.findOverlayLayer\(parent,\s*pageIdx,\s*'flow-static'\)/);
+  assert.match(source, /if \(policy\.reuseStaticOverlay\) return/);
+});
+
+test('WasmBridge exposes flow split filtered render layer kinds', () => {
+  const source = readFileSync(new URL('../src/core/wasm-bridge.ts', import.meta.url), 'utf8');
+  assert.match(source, /'flow-dynamic'/);
+  assert.match(source, /'flow-static'/);
 });
 
 test('PageLayerTree bridge normalizes canonical build/debug option metadata', () => {
