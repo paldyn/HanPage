@@ -3,7 +3,7 @@
 ## 목적
 
 #666 의 DoD 는 기존 visual sweep 도구 자체가 아니라, 시험지 분석 결과인
-`ingest.json` 이 rhwp CLI 를 통해 HWPX 로 생성되고 다시 텍스트/구조/시각 산출물로
+`ingest.json` 이 rhwp CLI 를 통해 HWPX 로 생성되고 다시 텍스트/구조/SVG 산출물로
 확인되는지 검증하는 것이다. Stage 1 에서 최소 샘플 직렬화 실패를 복구했으므로,
 Stage 2 에서는 4종 시험지 PDF 전체의 텍스트 레이어를 추출해 ingest 입력으로 만든 뒤
 CLI 왕복을 확인했다.
@@ -43,6 +43,10 @@ target/debug/rhwp export-svg <sample>.hwpx -o <svg-dir>
 산출 text/svg 파일 수는 다를 수 있다. 페이지별 텍스트 파일을 합산하면 ingest 텍스트는
 4종 모두 100% 보존된다.
 
+`export-svg` 통과는 생성된 HWPX 가 rhwp 렌더러에서 SVG 로 산출 가능한지를 확인하는
+smoke test 이다. 원본 PDF 의 다단 배치, 문항 위치, 이미지, 수식 조판, 글꼴, 지면
+밀도까지 맞춘다는 의미의 시각 정합성 통과가 아니다.
+
 ## 결함 분류
 
 - hotfix 필요: 없음. Stage 1 의 DocInfo 기본 pool 보정 후 4종 대표 입력은 모두
@@ -61,4 +65,5 @@ target/debug/rhwp export-svg <sample>.hwpx -o <svg-dir>
 - PDF 직접 분석 명령이 아니라 ingest JSON 을 HWPX 로 조립하는 명령임을 명시
 - `-o`, `--media-dir`, 최소 입력 필드 설명
 - `build-from-ingest -> export-text -> dump -> export-svg` 검증 흐름 예시
+- `export-svg` 는 원본 PDF 대조가 아니라 산출 HWPX 렌더 가능 여부 확인임을 명시
 - 수식/도형/손글씨는 ingest 전단계에서 별도 구조로 분류해야 한다는 한계

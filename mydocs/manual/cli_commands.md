@@ -179,8 +179,10 @@ rhwp export-svg output/poc/ingest/sample_minimal.hwpx \
 
 - 텍스트 보존 검증은 `ingest.json` 의 문제/지문/선택지 텍스트와 `export-text` 결과를 비교한다.
 - 구조 검증은 `dump` 로 ParaShape/CharShape/표·이미지 control 생성 여부를 확인한다.
-- 시각 검증이 필요하면 `export-svg` 산출물 또는 PDF 기준 비교를
-  [visual_sweep_guide.md](visual_sweep_guide.md)에 따라 수행한다.
+- `export-svg` 는 산출 HWPX 가 렌더러에서 SVG 로 변환 가능한지 확인하는 smoke test 로
+  사용할 수 있다. 이것만으로 원본 PDF 와 시각적으로 일치한다고 판정하지 않는다.
+- 원본 PDF 와의 시각 검증이 필요하면 PDF 기준 비교를
+  [visual_sweep_guide.md](visual_sweep_guide.md)에 따라 별도로 수행한다.
 - 수식/도형/손글씨처럼 PDF 텍스트 레이어가 의미 정보를 잃는 항목은 `build-from-ingest` 단독으로
   복원할 수 없다. 이 경우 ingest 단계에서 이미지/media 또는 전용 구조로 분류하고,
   결함 유형을 hotfix/follow-up 으로 나누어 기록한다.
