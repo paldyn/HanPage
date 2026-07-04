@@ -610,6 +610,60 @@ mod tests {
     }
 
     #[test]
+    fn task1655_equation_flow_with_text_roundtrips() {
+        use crate::model::control::{Control, Equation};
+        use crate::model::shape::CommonObjAttr;
+
+        let mut doc = Document::default();
+        let mut section = crate::model::document::Section::default();
+        let mut para = crate::model::paragraph::Paragraph::default();
+        para.text = "A".to_string();
+        para.char_offsets = vec![0];
+        para.char_count = 9;
+        para.controls.push(Control::Equation(Box::new(Equation {
+            common: CommonObjAttr {
+                width: 1600,
+                height: 900,
+                treat_as_char: true,
+                flow_with_text: false,
+                ..Default::default()
+            },
+            script: "a+b".to_string(),
+            font_size: 1000,
+            ..Default::default()
+        })));
+        section.paragraphs.push(para);
+        doc.sections.push(section);
+
+        let bytes = serialize_hwpx(&doc).expect("serialize equation");
+        let cursor = std::io::Cursor::new(&bytes);
+        let mut archive = zip::ZipArchive::new(cursor).expect("zip");
+        let mut sec0 = archive.by_name("Contents/section0.xml").expect("section0");
+        let mut xml = String::new();
+        std::io::Read::read_to_string(&mut sec0, &mut xml).expect("read");
+        assert!(
+            xml.contains(r#"flowWithText="0""#),
+            "수식 flowWithText=false 는 0으로 방출되어야 한다: {}",
+            xml
+        );
+        drop(sec0);
+
+        let parsed = parse_hwpx(&bytes).expect("parse back");
+        let parsed_eq = parsed.sections[0].paragraphs[0]
+            .controls
+            .iter()
+            .find_map(|ctrl| match ctrl {
+                Control::Equation(eq) => Some(eq),
+                _ => None,
+            })
+            .expect("equation control");
+        assert!(
+            !parsed_eq.common.flow_with_text,
+            "수식 flowWithText=false 는 재파싱 뒤에도 보존되어야 한다"
+        );
+    }
+
+    #[test]
     fn equation_control_between_text_runs_roundtrips_position() {
         use crate::model::control::{Control, Equation};
         use crate::model::page::ColumnDef;
