@@ -32,9 +32,40 @@ use crate::renderer::{
 // rendering.rs에서 paragraphs + endnote_paragraphs를 합쳐서 전달.
 use super::pagination::{
     estimate_footnote_note_height, footnote_between_notes_margin_px,
-    footnote_separator_overhead_px, ColumnContent, EndnoteParaSource, EndnoteRef, FootnoteRef,
-    FootnoteSource, HeaderFooterRef, PageContent, PageItem, PaginationResult,
+    footnote_separator_overhead_px, ColumnContent, EndnoteDeferral, EndnoteParaSource, EndnoteRef,
+    FootnoteRef, FootnoteSource, HeaderFooterRef, PageContent, PageItem, PaginationResult,
 };
+
+/// [미주 배치] `en_ref` 의 미주 본문(en_ctrl)을 해석한다. 현재 구역 미주면 본문
+/// paragraphs 에서, END_OF_DOCUMENT 로 문서 끝에 모인 앞 구역 미주면 deferral
+/// 목록에서 찾는다. (참조 표시 위첨자는 원 위치에 남고 본문만 여기서 렌더.)
+fn resolve_endnote_content<'a>(
+    en_ref: &EndnoteRef,
+    section_index: usize,
+    paragraphs: &'a [Paragraph],
+    deferral: &'a EndnoteDeferral<'a>,
+) -> Option<&'a crate::model::footnote::Endnote> {
+    if en_ref.section_index == section_index {
+        match paragraphs
+            .get(en_ref.para_index)
+            .and_then(|p| p.controls.get(en_ref.control_index))
+        {
+            Some(Control::Endnote(en_ctrl)) => Some(en_ctrl.as_ref()),
+            _ => None,
+        }
+    } else if let EndnoteDeferral::RenderAll(deferred) = deferral {
+        deferred
+            .iter()
+            .find(|d| {
+                d.reff.section_index == en_ref.section_index
+                    && d.reff.para_index == en_ref.para_index
+                    && d.reff.control_index == en_ref.control_index
+            })
+            .map(|d| &d.endnote)
+    } else {
+        None
+    }
+}
 
 fn note_number_format_from_hwp_code(code: u8) -> RenderNumberFormat {
     match code {
@@ -1993,6 +2024,7 @@ impl TypesetEngine {
             force_break_before,
             false,
             false,
+            EndnoteDeferral::None,
         )
     }
 
@@ -2022,6 +2054,7 @@ impl TypesetEngine {
         force_break_before: &std::collections::HashSet<usize>,
         is_hwp3_source: bool,
         is_hwpx_source: bool,
+        endnote_deferral: EndnoteDeferral<'_>,
     ) -> PaginationResult {
         let layout = PageLayoutInfo::from_page_def(page_def, column_def, self.dpi);
         self.is_hwpx_source.set(is_hwpx_source);
@@ -3502,6 +3535,22 @@ impl TypesetEngine {
             variant_prev_para_idx = Some(para_idx);
         }
 
+        // [미주 배치 — Hancom EndnoteEndOfSection/EndnoteEndOfDocument]
+        // 기본(None)/단일 구역: 이 구역 미주를 구역 끝에 렌더 (구역 끝 ≡ 문서 끝).
+        // Suppress(END_OF_DOCUMENT 비-마지막 구역): 참조 표시는 인라인 유지, 본문은
+        //   문서 끝으로 미루므로 여기서 비운다.
+        // RenderAll(END_OF_DOCUMENT 마지막 구역): 앞선 구역 미주(문서 순서) → 이 구역
+        //   미주 순으로 endnote_refs 앞에 이어 붙여 모두 문서 끝에 렌더한다.
+        match &endnote_deferral {
+            EndnoteDeferral::Suppress => st.endnotes.clear(),
+            EndnoteDeferral::RenderAll(deferred) => {
+                let mut merged: Vec<EndnoteRef> = deferred.iter().map(|d| d.reff.clone()).collect();
+                merged.append(&mut st.endnotes);
+                st.endnotes = merged;
+            }
+            EndnoteDeferral::None => {}
+        }
+
         // [Task #836] 미주 paragraphs를 본문 흐름에 가상 삽입
         // 한컴 정합: 미주는 섹션 마지막에 일반 본문처럼 2단 레이아웃 플로우를 따름
         // 미주 paragraphs를 endnote_paragraphs Vec에 모으고, ENDNOTE_PARA_BASE 이상 인덱스로 마킹
@@ -3536,8 +3585,11 @@ impl TypesetEngine {
             }
 
             for (en_ref_idx, en_ref) in endnote_refs.iter().enumerate() {
-                if let Some(para) = paragraphs.get(en_ref.para_index) {
-                    if let Some(Control::Endnote(en_ctrl)) = para.controls.get(en_ref.control_index)
+                // [미주 배치] 현재 구역 미주는 본문 paragraphs 에서, 문서 끝으로 미뤄진
+                // 앞 구역 미주(RenderAll)는 deferral 목록에서 본문(en_ctrl)을 해석한다.
+                if let Some(en_ctrl) =
+                    resolve_endnote_content(en_ref, section_index, paragraphs, &endnote_deferral)
+                {
                     {
                         if !emitted_endnote_separator {
                             if let (Some(shape), Some(profile)) =
@@ -11849,6 +11901,53 @@ impl TypesetEngine {
     /// 비-TAC 블록 표의 조판: fits → place / split(Break Token 기반).
     /// 기존 Paginator의 split_table_rows와 동일한 세밀한 분할 로직.
     #[allow(clippy::too_many_arguments)]
+    fn pre_emit_visible_rowbreak_host_text(
+        &self,
+        st: &mut TypesetState,
+        para_idx: usize,
+        para: &Paragraph,
+        composed_all: &[ComposedParagraph],
+        styles: &ResolvedStyleSet,
+    ) -> bool {
+        if st.col_count != 1 || st.current_items.is_empty() || !para_has_visible_text(para) {
+            return false;
+        }
+        if st.pre_emitted_host_paras.contains(&para_idx) {
+            return true;
+        }
+        let already_emitted = st.current_items.iter().any(|item| {
+            matches!(item, PageItem::FullParagraph { para_index }
+                | PageItem::PartialParagraph { para_index, start_line: 0, .. }
+                if *para_index == para_idx)
+        });
+        if already_emitted {
+            st.pre_emitted_host_paras.insert(para_idx);
+            return true;
+        }
+        let col_w = st
+            .layout
+            .column_areas
+            .get(st.current_column as usize)
+            .map(|a| a.width)
+            .unwrap_or(st.layout.body_area.width);
+        let host_fmt = self.format_paragraph(para, composed_all.get(para_idx), styles, Some(col_w));
+        let host_lines = host_fmt.line_heights.len();
+        let host_h = host_fmt.line_advances_sum(0..host_lines);
+        // [Task #1763] 저장 flow 로 같은 쪽 후보임이 확인된 경우와 동일하게, host
+        // 줄 자체는 추가 안전마진 없이 본문 가용 높이로 판정한다.
+        if host_lines == 0 || st.current_height + host_h > st.available_height() {
+            return false;
+        }
+        st.current_items.push(PageItem::PartialParagraph {
+            para_index: para_idx,
+            start_line: 0,
+            end_line: host_lines,
+        });
+        st.current_height += host_h;
+        st.pre_emitted_host_paras.insert(para_idx);
+        true
+    }
+
     /// [Task #1753] 지연 이월되는 visible-host 자리차지 표의 후속 문단 선행 채움.
     ///
     /// 한글은 자리차지(TopAndBottom·vert=Para) RowBreak 표가 현재 쪽 잔여 공간에 안
@@ -11894,6 +11993,15 @@ impl TypesetEngine {
             return;
         };
         let body_h_hu = crate::renderer::px_to_hwpunit(st.layout.body_area.height, self.dpi);
+        // [Task #1811] HWPX 의 누적좌표 RowBreak 문서는 host 줄 pre-emit 자체를
+        // 저장 vpos 가드보다 먼저 수행한다. 쪽 내부 vpos 를 가진 HWP/HWP3/일반 HWPX
+        // 경로는 기존처럼 같은 쪽 저장 flow 확인 뒤에만 pre-emit 한다.
+        let pre_emit_before_vpos_check = st.is_hwpx_source && host_vpos > body_h_hu;
+        if pre_emit_before_vpos_check
+            && !self.pre_emit_visible_rowbreak_host_text(st, para_idx, para, composed_all, styles)
+        {
+            return;
+        }
         if host_vpos < 0 || host_vpos > body_h_hu {
             return; // 누적좌표 등 — 저장 flow 로 같은 쪽 여부를 알 수 없음
         }
@@ -11903,30 +12011,10 @@ impl TypesetEngine {
             .get(st.current_column as usize)
             .map(|a| a.width)
             .unwrap_or(st.layout.body_area.width);
-        // [Task #1755] host 텍스트 줄을 이월 전 쪽에 pre-emit (한글: 제목 줄은 anchor
-        // 흐름 위치 = 이월 전 쪽 하단). layout 의 마지막 fragment 뒤 host 렌더는
-        // pre_emitted_host_paras 신호로 억제된다. 후속 문단 prefill 보다 먼저 배치해
-        // 한글 순서(제목 → 후속 문단)를 유지하고, host 줄이 안 들어가면 prefill 도
-        // 하지 않는다(순서 역전 방지 — 한글도 이때는 전부 다음 쪽).
-        if !st.pre_emitted_host_paras.contains(&para_idx) {
-            let host_fmt =
-                self.format_paragraph(para, composed_all.get(para_idx), styles, Some(col_w));
-            let host_lines = host_fmt.line_heights.len();
-            let host_h = host_fmt.line_advances_sum(0..host_lines);
-            // [Task #1763] prefill 후보는 저장 vpos 로 같은-쪽 인코딩이 보증되므로
-            // 추가 안전마진 없이 본문 가용 높이로 판정한다 (측정 정밀화 후 저장 flow
-            // 와 정확 일치하는 누적에서 진짜 fit(2814765 pi53, 여유 2.1px)이 여분
-            // 4px 마진에 탈락하는 회귀 방지).
-            if host_lines == 0 || st.current_height + host_h > st.available_height() {
-                return;
-            }
-            st.current_items.push(PageItem::PartialParagraph {
-                para_index: para_idx,
-                start_line: 0,
-                end_line: host_lines,
-            });
-            st.current_height += host_h;
-            st.pre_emitted_host_paras.insert(para_idx);
+        if !pre_emit_before_vpos_check
+            && !self.pre_emit_visible_rowbreak_host_text(st, para_idx, para, composed_all, styles)
+        {
+            return;
         }
         let end = paragraphs_all.len().min(para_idx + 1 + MAX_PREFILL);
         for next_idx in (para_idx + 1)..end {
@@ -12555,6 +12643,30 @@ impl TypesetEngine {
                 );
                 st.advance_column_or_new_page();
             }
+        }
+
+        // [Task #1811] visible-host RowBreak 자리차지 표가 현재 쪽에서 곧바로 부분
+        // 분할되면, layout 단계의 fragment host 후처리보다 먼저 문서 흐름의 host 텍스트
+        // 줄을 소비한다. 기준은 샘플명이 아니라 같은 문단의 visible text 와 RowBreak
+        // 자리차지 표 속성이다.
+        let host_vpos_is_cumulative = para
+            .line_segs
+            .iter()
+            .find(|ls| !is_synthetic_line_seg(ls))
+            .is_some_and(|seg| {
+                seg.vertical_pos
+                    > crate::renderer::px_to_hwpunit(st.layout.body_area.height, self.dpi)
+            });
+        if st.is_hwpx_source
+            && host_vpos_is_cumulative
+            && !table.common.treat_as_char
+            && is_para_topbottom_float(&table.common)
+            && matches!(
+                table.page_break,
+                crate::model::table::TablePageBreak::RowBreak
+            )
+        {
+            self.pre_emit_visible_rowbreak_host_text(st, para_idx, para, composed_all, styles);
         }
 
         // 행 단위 + 인트라-로우 분할 루프 (기존 Paginator split_table_rows 동일)
@@ -14258,6 +14370,7 @@ mod tests {
             &std::collections::HashSet::new(),
             false,
             false,
+            EndnoteDeferral::None,
         );
 
         let expected = footnote_separator_overhead_px(&shape, DEFAULT_DPI)
