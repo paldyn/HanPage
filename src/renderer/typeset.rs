@@ -303,6 +303,9 @@ struct TypesetState {
     /// [Task #1147] HWPX 원본 여부 — HWPX 의 LINE_SEG 시멘틱은 빈 앵커 TopAndBottom 표에서
     /// host_line_spacing 을 표 다음 갭으로 더하지 않음. HWP5/HWP3 와 분리.
     is_hwpx_source: bool,
+    /// 문서 전체에 실제 저장 LineSeg가 있는지 여부. HWP5-origin CFB라도 LineSeg가 전부
+    /// 비어 있으면 저장 vpos 기반 흐름이 아니라 재조판 흐름으로 취급한다.
+    has_stored_line_segs: bool,
     /// [Task #362] 한컴 빈 줄 감추기 옵션 (SectionDef bit 19). true 이면 페이지 시작에서
     /// overflow 유발하는 빈 paragraph 최대 2개까지 height=0 처리.
     hide_empty_line: bool,
@@ -1363,6 +1366,7 @@ impl TypesetState {
             is_hwp3_variant: false,
             is_hwp3_source: false,
             is_hwpx_source: false,
+            has_stored_line_segs: false,
             hide_empty_line: false,
             hidden_empty_lines: 0,
             hidden_empty_page_idx: usize::MAX,
@@ -2095,6 +2099,9 @@ impl TypesetEngine {
         // [Task #1472] format_paragraph 의 미주 수식 indent_scale 보정용.
         self.is_hwp3_variant.set(is_hwp3_variant);
         st.is_hwpx_source = is_hwpx_source;
+        st.has_stored_line_segs = paragraphs
+            .iter()
+            .any(|p| p.line_segs.iter().any(|ls| !is_synthetic_line_seg(ls)));
         st.skip_spacing_before_prededuct = skip_spacing_before_prededuct;
         st.current_zone_design_spacing_px = column_def_design_spacing_px(column_def, self.dpi);
 
@@ -12134,6 +12141,20 @@ impl TypesetEngine {
 
         let host_spacing_total = ft.host_spacing.before + ft.host_spacing.after;
         let mut table_total = ft.effective_height + host_spacing_total;
+        let declared_empty_para_float_total = if !st.is_hwpx_source
+            && !table.common.treat_as_char
+            && is_para_topbottom_float(&table.common)
+            && !para_has_visible_text(para)
+            && matches!(
+                table.page_break,
+                crate::model::table::TablePageBreak::RowBreak
+            ) {
+            let declared_height = hwpunit_to_px(table.common.height as i32, self.dpi).max(0.0);
+            (declared_height > 0.0).then_some(declared_height + host_spacing_total)
+        } else {
+            None
+        };
+        let mut reserve_declared_table_total = false;
 
         // [Task #1046 Stage 1] 표 측정 드리프트 진단: 페이지네이터 effective_height vs
         // MeasuredTable 행높이 합(+cell_spacing). RHWP_TABLE_DRIFT=1 시 출력.
@@ -12355,6 +12376,29 @@ impl TypesetEngine {
             && table_total <= available
         {
             st.advance_column_or_new_page();
+        }
+
+        if let Some(declared_total) = declared_empty_para_float_total {
+            // 빈 host 문단의 자리차지 RowBreak 표는 렌더러가 문서에 저장된 표 선언
+            // 높이를 하한으로 그린다. 저장 LineSeg가 있는 HWP5 문서는 이 선언 높이가
+            // 원본 흐름 경계와 함께 쓰이므로 선언 기준으로 이월한다. LineSeg가 없는
+            // HWP5-origin 계열은 셀 내용 측정 흐름을 우선하되, 측정치로는 fit 이지만
+            // 선언 높이로는 현재 쪽 하단과 겹치는 경우만 선언 기준으로 이월한다.
+            let measured_fits_current = st.current_height + table_total <= available;
+            let declared_overflows_current = st.current_height + declared_total > available;
+            if !st.current_items.is_empty()
+                && declared_overflows_current
+                && (st.has_stored_line_segs || measured_fits_current)
+                && declared_total <= available
+            {
+                st.advance_column_or_new_page();
+                reserve_declared_table_total = true;
+            }
+        }
+        if reserve_declared_table_total {
+            if let Some(declared_total) = declared_empty_para_float_total {
+                table_total = table_total.max(declared_total);
+            }
         }
 
         let current_column_has_only_overlay_shapes = st.current_height <= 0.5
