@@ -40,11 +40,22 @@ HWP/HWPX → PNG(Skia raster, AI 파이프라인/VLM 연동). 상세: [export_pn
 - `--scale <배율>` (기본 1.0), `--dpi <값>`(pHYs 메타 + scale 자동), `--max-dimension <픽셀>`(longest edge)
 - `--vlm-target <프리셋>` — claude / gpt4v-low / gpt4v-high(gpt4v) / gemini / qwen-vl(qwen) / llava
 
-### `export-pdf <파일> [-o 출력.pdf] [-p 페이지]`
+### `export-pdf <파일> [옵션]`
 HWP/HWPX → PDF (svg2pdf + pdf-writer).
+- `-o <파일>`, `--output <파일>` — 출력 PDF 파일(기본 `output/<입력명>.pdf`)
+- `-p <번호>`, `--page <번호>` — 0-based 단일 페이지 선택. 생략하면 전체 문서를 다중 페이지 PDF로 내보낸다.
+- `--font-path <경로>` — PDF 변환 fontdb에 추가할 폰트 탐색 경로(여러 번 지정 가능)
+- `--fallback-serif <family>` — PDF serif generic fallback family
+- `--fallback-sans <family>` — PDF sans-serif generic fallback family
+- `--fallback-mono <family>` — PDF monospace generic fallback family
+- `--equation-font <family>` — PDF 수식 SVG의 우선 font-family
 - `DocumentCore::render_page_pdf_native`, `render_pages_pdf_native`, `render_document_pdf_native`
   native API와 같은 SVG-derived PDF export 경로를 사용한다.
-- `-p`는 0-based 단일 페이지 선택이며, 생략하면 전체 문서를 다중 페이지 PDF로 내보낸다.
+- fallback family 옵션 미지정 시 OS별 기본값을 사용한다.
+  - Windows: `바탕` / `맑은 고딕` / `D2Coding`
+  - Linux: `Noto Serif CJK KR` / `Noto Sans CJK KR` / `Noto Sans Mono CJK KR`
+  - macOS: `AppleMyungjo` / `Apple SD Gothic Neo` / `Menlo`
+- 선택한 fallback family 또는 수식 폰트가 fontdb에 없으면 warning을 출력한다.
 - direct/vector `PageLayerTree → PDF` backend는 아직 후속 작업이다.
 
 ### `export-text <파일> [옵션]`

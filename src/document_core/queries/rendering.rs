@@ -386,6 +386,19 @@ impl DocumentCore {
     /// direct/vector PDF backend is introduced.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn render_pages_pdf_native(&self, page_nums: &[u32]) -> Result<Vec<u8>, HwpError> {
+        self.render_pages_pdf_native_with_options(
+            page_nums,
+            &crate::renderer::pdf::PdfExportOptions::default(),
+        )
+    }
+
+    /// PDF export for an explicit 0-based page selection with font options.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn render_pages_pdf_native_with_options(
+        &self,
+        page_nums: &[u32],
+        options: &crate::renderer::pdf::PdfExportOptions,
+    ) -> Result<Vec<u8>, HwpError> {
         if page_nums.is_empty() {
             return Err(HwpError::RenderError(
                 "PDF export requires at least one page".to_string(),
@@ -396,7 +409,8 @@ impl DocumentCore {
         for &page_num in page_nums {
             svg_pages.push(self.render_page_svg_native(page_num)?);
         }
-        crate::renderer::pdf::svgs_to_pdf(&svg_pages).map_err(HwpError::RenderError)
+        crate::renderer::pdf::svgs_to_pdf_with_options(&svg_pages, options)
+            .map_err(HwpError::RenderError)
     }
 
     /// PDF export for the full document.
@@ -404,6 +418,16 @@ impl DocumentCore {
     pub fn render_document_pdf_native(&self) -> Result<Vec<u8>, HwpError> {
         let pages: Vec<u32> = (0..self.page_count()).collect();
         self.render_pages_pdf_native(&pages)
+    }
+
+    /// PDF export for the full document with font options.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn render_document_pdf_native_with_options(
+        &self,
+        options: &crate::renderer::pdf::PdfExportOptions,
+    ) -> Result<Vec<u8>, HwpError> {
+        let pages: Vec<u32> = (0..self.page_count()).collect();
+        self.render_pages_pdf_native_with_options(&pages, options)
     }
 
     /// SVG 렌더링 (폰트 임베딩 옵션 포함)

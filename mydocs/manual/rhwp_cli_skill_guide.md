@@ -38,6 +38,7 @@ Claude: rhwp export-svg samples/3-09월_교육_통합_2023.hwp -o output/svg -p 
 | "sample.hwp 1쪽 SVG로 빼줘" | `export-svg sample.hwp -p 0` |
 | "전체를 PNG로, Claude Vision 입력용" | `export-png sample.hwp --vlm-target claude` |
 | "PDF로 변환" | `export-pdf sample.hwp -o out.pdf` |
+| "PDF 변환 시 한글 fallback 폰트 지정" | `export-pdf sample.hwp -o out.pdf --fallback-serif "Noto Serif CJK KR" --fallback-sans "Noto Sans CJK KR"` |
 | "본문 텍스트만 뽑아줘" | `export-text sample.hwp` |
 | "5쪽이 어떻게 배치됐는지" | `dump-pages sample.hwp -p 4` |
 | "3번 문단 조판 구조" | `dump sample.hwp -s 0 -p 3` |
