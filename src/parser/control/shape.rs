@@ -124,6 +124,13 @@ pub(crate) fn parse_gso_control(ctrl_data: &[u8], child_records: &[Record]) -> C
         }
     }
 
+    // 빈 묶음: 자식 SHAPE_COMPONENT/CONTAINER 태그가 없어도 component ctrl_id 가
+    // '$con' 이면 컨테이너다 (HWP3 변환 서식류의 children=0 묶음이 사각형으로 오분류
+    // → 라운드트립 렌더 대변위, #1892).
+    if drawing.shape_attr.ctrl_id == tags::SHAPE_CONTAINER_ID {
+        is_container = true;
+    }
+
     // 캡션 파싱: SHAPE_COMPONENT 앞의 LIST_HEADER는 캡션
     let mut caption: Option<Caption> = None;
     if let Some(comp_idx) = shape_comp_idx {
@@ -785,11 +792,16 @@ fn parse_container_children(child_records: &[Record]) -> Vec<ShapeObject> {
             && child_slice[1..].iter().any(|r| {
                 r.tag_id == tags::HWPTAG_SHAPE_COMPONENT && r.level > child_slice[0].level
             });
-        // CONTAINER 태그가 있거나 하위 SHAPE_COMPONENT가 있으면 중첩 Group
+        // CONTAINER 태그가 있거나 하위 SHAPE_COMPONENT가 있으면 중첩 Group.
+        // 자식이 없어도 component ctrl_id 가 '$con' 이면 빈 묶음이다 (#1892 —
+        // 사각형 폴백으로 빠지면 재파스 렌더 트리가 Group→Rect 로 갈라진다).
         let has_container_tag = child_slice[1..]
             .iter()
             .any(|r| r.tag_id == tags::HWPTAG_SHAPE_COMPONENT_CONTAINER);
-        if has_container_tag || has_nested_shapes {
+        if has_container_tag
+            || has_nested_shapes
+            || child_drawing.shape_attr.ctrl_id == tags::SHAPE_CONTAINER_ID
+        {
             let mut group = GroupShape::default();
             group.shape_attr = child_drawing.shape_attr.clone();
             group.children = parse_container_children(child_slice);

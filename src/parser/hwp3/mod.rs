@@ -100,7 +100,9 @@ fn hwp3_page_border_fill(
 /// serialize_common_obj_attr이 common.attr 값을 직접 기록하므로,
 /// 필드를 설정한 뒤 반드시 이 함수로 attr을 갱신해야 저장→재열기 후 속성이 유지된다.
 fn build_common_obj_attr(common: &crate::model::shape::CommonObjAttr) -> u32 {
-    use crate::model::shape::{HorzAlign, HorzRelTo, TextWrap, VertAlign, VertRelTo};
+    use crate::model::shape::{
+        HorzAlign, HorzRelTo, SizeCriterion, TextWrap, VertAlign, VertRelTo,
+    };
     let mut attr: u32 = 0;
     if common.treat_as_char {
         attr |= 0x01;
@@ -137,6 +139,22 @@ fn build_common_obj_attr(common: &crate::model::shape::CommonObjAttr) -> u32 {
         TextWrap::InFrontOfText => 3,
         _ => 0,
     }) << 21;
+    // 크기 기준 (bit 15-17 너비 / 18-19 높이). HWP3 개체 크기는 항상 HWPUNIT
+    // 절대값(IR 기본 Absolute)인데, 종전엔 이 비트를 누락해 0(Paper 퍼센트)으로
+    // 저장 → 재파스 시 종이비례 해석으로 개체가 종이×(크기/10000)배 팽창 (#1892
+    // 대법원 서식 라운드트립 5449px). 파서 디코드(parse_common_obj_attr)와 동일 매핑.
+    attr |= (match common.width_criterion {
+        SizeCriterion::Paper => 0u32,
+        SizeCriterion::Page => 1,
+        SizeCriterion::Column => 2,
+        SizeCriterion::Para => 3,
+        SizeCriterion::Absolute => 4,
+    }) << 15;
+    attr |= (match common.height_criterion {
+        SizeCriterion::Paper => 0u32,
+        SizeCriterion::Page => 1,
+        _ => 2,
+    }) << 18;
     attr
 }
 
