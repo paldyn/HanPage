@@ -127,15 +127,22 @@ HWP 내장 썸네일(PrvImage) 추출.
 
 ## 3. 변환·비교
 
-### `convert <입력.hwp|.hwpx> <출력.hwp>`
+### `convert <입력.hwp|.hwpx> <출력.hwp> [--verify] [--verify-pages]`
 배포용(읽기전용) HWP → 편집 가능 HWP 변환. 출력은 항상 `.hwp`.
+- `--verify` — 저장 후 산출물을 재파싱하여 어댑터 적용 후 IR과 재로딩 IR 차이를 검출한다.
+  차이가 있으면 산출물은 남기고 종료 코드 3으로 실패한다.
+- `--verify-pages` — 저장 전 문서 페이지 수와 저장 후 재로딩 페이지 수를 비교한다.
+  불일치하면 산출물은 남기고 종료 코드 4로 실패한다.
 
-### `export-hwpx <입력.hwp|.hwpx> [출력.hwpx]` (#1868)
+### `export-hwpx <입력.hwp|.hwpx> [출력.hwpx] [--verify] [--verify-pages]` (#1868, #1638)
 HWP 문서를 HWPX(ZIP+XML)로 변환 저장. `convert`(배포용 해제)와 별개의 포맷 변환 명령.
 - 입력 포맷 자동 감지(HWP5/HWP3/HWPX — HWPX 입력은 재직렬화).
 - 출력 생략 시 입력과 같은 폴더에 `<입력 stem>.hwpx`. 입력==출력 경로면 거부(원본 보호).
-- 검증: HWP→HWPX 산출물의 페이지네이션 정합은 `tools/roundtrip_fidelity_harness.py` 로
-  대조 가능(HWPX→HWP 역방향 왕복).
+- `--verify` — 변환 후 산출물을 재파싱하여 원본 IR과 산출물 IR 차이를 검출한다.
+  차이가 있으면 산출물은 남기고 종료 코드 3으로 실패한다.
+- `--verify-pages` — 변환 전/후 렌더 페이지 수를 비교한다.
+  불일치하면 산출물은 남기고 종료 코드 4로 실패한다.
+- 더 넓은 시각 정합은 `tools/roundtrip_fidelity_harness.py` 또는 `render-diff`로 별도 대조한다.
 
 ### `ir-diff <파일A.hwpx> <파일B.hwp> [-s <구역>] [-p <문단>] [--summary] [--max-lines N]`
 두 파일의 IR 비교(HWPX↔HWP 불일치 검출). 상세: [ir_diff_command.md](ir_diff_command.md)
