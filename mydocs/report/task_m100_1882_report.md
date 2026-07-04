@@ -1,0 +1,78 @@
+# task_m100_1882 최종 결과보고서 — C1c 차트 스타일 4갭 보정
+
+- 이슈: **#1882** (C1c, #1431 Track C 하위)
+- 브랜치: `local/task1882` (from `local/devel` = upstream/devel a433b0d8)
+- 마일스톤: M100
+- 상태: 구현·검증 완료, 작업지시자 시각판정 대기 (studio dev 서버 기동)
+
+## 1. 목표 / 결과
+
+렌더되는 전 차트 종류(25종, stock 2종 제외)에 공통이던 한컴 정답지 대비 **스타일 4갭**을
+보정했다. 핵심 발견: 샘플 XML에 스타일 값이 사실상 없어(범례 제외) 본 작업은 XML 파싱이
+아니라 **한컴 기본 스타일 재현**이었다.
+
+| 갭 | 종전 | 이후 (= 한컴 2022 정답지 실측) |
+|---|---|---|
+| ① 제목 | 미렌더 | 자동 제목 **"차트 제목"** 상단 중앙, regular weight(400) |
+| ② 팔레트 | 녹색-우선(#70AD47…) | **#6183D7 파랑→#FE813B 주황→#B0B0B0 회색→#FCD801 노랑** (PDF 픽셀 실측) |
+| ③ 범례 | 하단 가로 고정 | `c:legendPos="r"` 파싱 → **우측 세로 스택** (플롯 세로 중앙) |
+| ④ Y축 | max가 데이터에 붙음 | **경계 headroom + step 기반 눈금** — 막대 5.0→0~6 라벨 0,2,4,6 / scatter Y 4.0→0~5 / X 2.6→0.5 간격 유지 |
+
+## 2. 설계 결정
+
+- **④ `nice_range` → `nice_axis(min,max) → (min',max',step)`**: 데이터 max가 step 경계에
+  정확히 걸리면 +1 step 확장 후 step 재계산(ceil-nice), 비경계면 step 유지. 이 조건부
+  규칙이 실측 앵커 3점을 동시에 만족하는 유일한 단순 규칙. 격자 전용 함수 분리는 막대
+  기하와의 범위 불일치(플롯 초과) 위험으로 기각 — 반환 통합 후 전 호출처 일괄 이관.
+  percentStacked는 (0,100,20) 명시 전달로 종전 출력과 동일(무회귀).
+- **① 모델 플래그 방식**: `has_title_elem`/`auto_title_deleted` 추가, `chart.title`은 명시
+  텍스트 전용 유지 → 파서의 빈 차트 조기 반환 가드 무변경 (placeholder 회귀 원천 차단).
+- **② `DEFAULT_PALETTE`만 교체**(앞 4색 실측, 이후 유추 — 주석 구분). `scheme_color`는
+  의도적 무변경 (schemeClr=문서 테마 참조 의미, 코퍼스 미사용, 변경 시 기존 테스트 무근거 파손).
+- **③ `LegendPos` default=Bottom**: legend 없는 XML·모델 직접 구성 테스트는 현행 하단 유지.
+  Right만 우측 세로 신설(Left/Top 하단 폴백 — 코퍼스 전 샘플 r). 좁은 차트(w×0.30<50px)는
+  하단 폴백 — clamp min>max 패닉 가드 (자동 보안 리뷰 지적 → 즉시 수정, 6d0829d7).
+
+## 3. 단계별 요약
+
+| 단계 | 내용 | 커밋 |
+|---|---|---|
+| Stage 1 | 갭② 팔레트: DEFAULT_PALETTE 한컴 실측값 교체 | `73dcb560` |
+| Stage 2 | 갭④ 축: nice_axis + render_value_grid step화 + 앵커 3점 테스트 | `9caf475f` |
+| Stage 3 | 갭① 자동 제목: 모델 플래그 + autoTitleDeleted 파싱 + weight 400 | `58ba5b80` |
+| Stage 4 | 갭③ 범례: LegendPos + legendPos 파싱 + 우측 세로 배치 | `0bd80319` |
+| — | Stage 4 보완: 좁은 차트 clamp 패닉 가드 | `6d0829d7` |
+| Stage 5 | 통합 테스트 4건 + 전체 회귀 + 27종 시각 산출 | `d476a1dc` |
+
+수정 파일: `src/ooxml_chart/{mod,parser,renderer}.rs` + 신규 `tests/issue_1882_chart_style_gaps.rs`.
+shape_layout 등 배선 무수정. 전 단계 TDD(선실패 확인 후 구현). 무관 rustfmt churn 없음.
+
+## 4. 검증
+
+```
+cargo test --lib ooxml_chart                     → 45 passed (기존 32 + C1c 13)
+cargo test --test issue_1882_chart_style_gaps    → 4 passed  (4갭 회귀 가드)
+cargo test --test issue_1431_scatter             → 1 passed  (placeholder 0건 무회귀)
+cargo test --test issue_1453_chart_3d_ofpie_routing → 2 passed (percent 축 가드 포함)
+cargo test (전체)                                 → 전부 통과 (exit 0)
+cargo clippy --all-targets -- -D warnings         → 경고 0
+```
+
+- 기존 테스트 갱신 1건뿐: `test_render_scatter_decimal_axis_labels` `2.4`→`2.5`
+  (X축 0.6→0.5 간격 — 의도된 스펙 변경, 구현계획서 명기).
+- **시각검증**: 27종 hwpx 전수 `output/poc/chart_c1c/all/` SVG+PNG 산출. 막대(묶은/누적/백프로)·
+  라인·원형·분산형 대표 확인 — 4갭 전부 정답지 정합. 작업지시자 판정용 **WASM 재빌드 +
+  studio dev 서버 기동** (studio는 #1456 수정 포함 트리 — 차트 첫로드 공백 없음).
+
+## 5. 알려진 편차 / 잔여 (범위 밖)
+
+- 콤보 보조축(실측 앵커 없음): max 10 → 축 0~15 (50% headroom, 과확장 수용).
+- stock 2종 placeholder 유지(**C2**), scatter 시리즈별 마커 모양(다이아몬드/사각형 — C2 fidelity),
+  3D 입체감·ofPie 보조플롯(C2), 레거시 `src/ole_chart/` 스타일 갭(#1251 후속).
+- 팔레트 5번째 이후 색은 유추(코퍼스 최대 4시리즈 — 실측 불가, 주석 명기).
+
+## 6. 후속
+
+- 본 보고서 승인 + 작업지시자 시각판정 후 origin(fork) push → upstream `devel` PR
+  (`Refs #1431`, `#1882`).
+- #1431 트래킹: C1c 체크 갱신은 PR merge 후. 잔여 Track C = **C1d 라인 누적** / **C2 stock+fidelity**.
