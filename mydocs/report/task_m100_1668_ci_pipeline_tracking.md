@@ -19,6 +19,7 @@
 - #1667 최종 보고서: `mydocs/report/task_m100_1667_report.md`
 - #1665 원천 측정 문서: `mydocs/report/task_m100_1665_measurement.md`
 - #1665 최종 보고서: `mydocs/report/task_m100_1665_report.md`
+- #1668 최종 보고서: `mydocs/report/task_m100_1668_report.md`
 
 문서 PR #1701은 정책/측정 기록만 포함한다. 실제 CI workflow 변경은 후속 코드 PR #1702에서 다루며, #1702
 관측값은 draft 코드 PR run 기준 비교 자료다. #1702가 merge되기 전에는 workflow 변경이 `devel`에 반영된
@@ -55,6 +56,10 @@ Build & Test 기본 feature test 중복 step 제거까지 확인했다. `Swatine
 PR / `devel` push 모두에서 Build & Test critical path를 줄였음을 확인했다. PR 표본 22개 기준 P50 8m47s,
 P90 9m10s이고, `devel` push 표본 19개 기준 P50 10m38s, P90 11m34s다. `devel` push checks 완료 P90
 17m39s는 runner queue 대기 영향이 크므로 critical path와 분리해 해석한다.
+
+2026-07-04 #1668 최종 보고에서는 부모 이슈 전체 before/after를 재정리했다. before는 #1702 merge 후
+#1739 merge 전의 순수 #1664 구간, after는 #1665 merge 이후 successful full CI 표본으로 삼는다. PR
+`Build & Test` 비교 wall time은 P50 22m34s에서 8m47s로, P90 23m46s에서 9m10s로 줄었다.
 
 ## 메인테이너 결정사항
 
@@ -645,7 +650,7 @@ cache / 회귀 가드:
 
 ## 다음 확인 항목
 
-1. #1665는 final report comment와 문서 PR 반영 후 close 후보로 본다.
+1. #1668은 최종 보고 코멘트와 문서 PR 반영 후 close 후보로 본다.
 2. OPEN PR cache는 계속 생성될 수 있으므로, cleanup은 closed/merged PR ref만 대상으로 유지한다.
 3. cleanup 자동화가 필요해지면 #1667 범위 재오픈보다 별도 이슈/PR에서 `pull_request.closed` + allowlist 정책으로 검토한다.
-4. 모든 하위 이슈가 close된 뒤 #1668에는 전체 CI 개선 롤업을 별도 코멘트로 남긴다.
+4. PDF/그래프 보고서는 `task_m100_1668_report.md`의 시각화용 데이터를 원천으로 별도 산출한다.
