@@ -1085,6 +1085,27 @@ impl DocumentCore {
                     }
                 }
             }
+            // [Task #1893] 삭제 수술의 IR 불변성 완성용 스냅샷 — 삭제 전 char_offsets 는
+            // 원본 문자 인덱스→utf16 위치 매핑의 유일한 근거다. removal 좌표는 전부
+            // 수집-시점(원본) 인덱스이므로, 원본 스냅샷으로 utf16 범위를 구해
+            // char_shapes 경계를 함께 시프트해야 직렬화→재파스가 고정점이 된다.
+            // (종전엔 text/field_ranges 만 고쳐 char_offsets/char_count/char_shapes 가
+            // stale — 그 불일치 IR 을 저장하면 재파스 정준형과 조판이 갈라져
+            // 라운드트립 렌더 752px 분기·빈 줄 추가가 발생했다.)
+            let orig_offsets: Vec<u32> = para.char_offsets.clone();
+            let orig_chars: Vec<char> = para.text.chars().collect();
+            let offsets_valid = orig_offsets.len() == orig_chars.len();
+            fn utf16_width(c: char) -> u32 {
+                if c == '\t' {
+                    8
+                } else if (c as u32) > 0xFFFF {
+                    2
+                } else {
+                    1
+                }
+            }
+            let mut any_removed = false;
+
             // 뒤에서부터 삭제 (인덱스 안정성 유지)
             for &(fri, start, end) in removals.iter().rev() {
                 let chars: Vec<char> = para.text.chars().collect();
@@ -1111,7 +1132,40 @@ impl DocumentCore {
                         other.end_char_idx -= removed_len;
                     }
                 }
+                any_removed = true;
+
+                // [Task #1893] char_offsets/char_shapes/char_count 직접 수술 — 원본 utf16
+                // 좌표 기준. 역순 처리라 오른쪽 removal 의 시프트가 왼쪽 utf16 좌표에 영향
+                // 없고, 삭제 폭(u_end−u_start)은 원본 스냅샷 불변량이다. 컨트롤/필드 마커의
+                // 8유닛 갭 구조는 기존 오프셋에 이미 올바르게 인코딩되어 있으므로 감산만으로
+                // 보존된다 (rebuild_char_offsets 의 선행-컨트롤 휴리스틱은 문단 서두 0-length
+                // 필드의 end 마커를 컨트롤로 오산해 begin 갭을 유실 — 필드쌍 교차 페어링 유발).
+                if offsets_valid && start < end && end <= orig_offsets.len() {
+                    let u_start = orig_offsets[start];
+                    // 삭제 폭 = 삭제 문자들의 utf16 폭만. orig_offsets[end] 는 필드 end
+                    // 마커의 8유닛 갭을 건너뛴 다음 문자 위치라 갭까지 폭에 포함되어
+                    // 후속 오프셋에서 마커 갭이 소실된다(슬롯 방출 위치 붕괴).
+                    let u_end = orig_offsets[end - 1] + utf16_width(orig_chars[end - 1]);
+                    let width = u_end.saturating_sub(u_start);
+                    // 삭제 구간의 오프셋 엔트리 제거 + 후속 엔트리 감산.
+                    para.char_offsets.drain(start..end);
+                    for off in para.char_offsets.iter_mut().skip(start) {
+                        *off = off.saturating_sub(width);
+                    }
+                    para.char_count = para.char_count.saturating_sub(width);
+                    for cs in &mut para.char_shapes {
+                        if cs.start_pos >= u_end {
+                            cs.start_pos -= width;
+                        } else if cs.start_pos > u_start {
+                            // 삭제 범위 내부 경계 → zero-width run 으로 시작점에 고정
+                            // (한컴도 필드값 삭제 시 zero-width char run 을 남긴다 —
+                            // 원본 서식의 자식 없는 <hp:run/> 33개와 동일 표현).
+                            cs.start_pos = u_start;
+                        }
+                    }
+                }
             }
+            let _ = any_removed;
         }
 
         fn process_table(table: &mut crate::model::table::Table) {

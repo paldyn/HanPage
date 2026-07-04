@@ -680,8 +680,25 @@ fn render_runs(para: &Paragraph, ctx: &mut SerializeContext) -> String {
                 );
             }
             render_control_slot(&mut splitter.content, slots[slot_idx], ctx);
+            let emitted_ctrl_idx = slot_ctrl_indices[slot_idx];
             slot_idx += 1;
             expected_utf16_pos = expected_utf16_pos.saturating_add(8);
+            // [Task #1893] 이 슬롯이 0-length 필드(start==end==idx)의 fieldBegin 이면
+            // 그 fieldEnd 를 즉시 이어서 방출 — 같은 갭의 end 몫 8유닛을 다음 슬롯이
+            // 가로채 begin 들이 연속 배치되면 재파스 LIFO 페어링이 교차된다
+            // (fr(0,0)+(50,50) → fr(0,50)+(0,0), 빈 누름틀 placeholder 소실/줄바꿈 분기).
+            for (i, fr) in para.field_ranges.iter().enumerate() {
+                if !field_end_emitted[i]
+                    && fr.start_char_idx == fr.end_char_idx
+                    && fr.end_char_idx == idx
+                    && fr.control_idx == emitted_ctrl_idx
+                {
+                    splitter.cut_before(expected_utf16_pos);
+                    emit_field_end(&mut splitter.content, para, fr.control_idx);
+                    expected_utf16_pos = expected_utf16_pos.saturating_add(8);
+                    field_end_emitted[i] = true;
+                }
+            }
         }
 
         // [Task #1556] 고아 fieldEnd (char_idx == idx): 문자 push 전에 8유닛 슬롯 방출.
@@ -803,12 +820,24 @@ fn render_runs(para: &Paragraph, ctx: &mut SerializeContext) -> String {
         &mut tab_idx,
     );
 
-    // end_char_idx >= text.len() 인 경우 루프에서 감지되지 않으므로 루프 후에 처리
+    // end_char_idx >= text.len() 인 경우 루프에서 감지되지 않으므로 루프 후에 처리.
+    // [Task #1893] 단, 문단 끝의 0-length 필드(start == end == text.len())는 자기
+    // fieldBegin 슬롯이 아직 아래 잔여 슬롯 루프에 남아 있다 — 여기서 먼저 방출하면
+    // fieldEnd 가 fieldBegin 앞에 놓여 재파스가 고아 end + 미닫힘 begin 으로 해석,
+    // field_range 가 소실된다(빈 누름틀 안내문 placeholder 미렌더 → 라운드트립 렌더
+    // 분기). begin 슬롯 방출 직후로 지연한다(중간 위치 0-length 는 pre-char 경로가
+    // 동일 규칙으로 처리 — #1407).
     for (i, fr) in para.field_ranges.iter().enumerate() {
         if !field_end_emitted[i] {
+            let begin_slot_pending = fr.start_char_idx == fr.end_char_idx
+                && slot_ctrl_indices[slot_idx..].contains(&fr.control_idx);
+            if begin_slot_pending {
+                continue;
+            }
             splitter.cut_before(expected_utf16_pos);
             emit_field_end(&mut splitter.content, para, fr.control_idx);
             expected_utf16_pos = expected_utf16_pos.saturating_add(8);
+            field_end_emitted[i] = true;
         }
     }
 
@@ -837,8 +866,31 @@ fn render_runs(para: &Paragraph, ctx: &mut SerializeContext) -> String {
             );
         }
         render_control_slot(&mut splitter.content, slots[slot_idx], ctx);
+        let emitted_ctrl_idx = slot_ctrl_indices[slot_idx];
         slot_idx += 1;
         expected_utf16_pos = expected_utf16_pos.saturating_add(8);
+        // [Task #1893] 위에서 지연한 문단 끝 0-length 필드의 fieldEnd 를 자기
+        // fieldBegin 슬롯 직후에 방출 — begin→end 순서 보존.
+        for (i, fr) in para.field_ranges.iter().enumerate() {
+            if !field_end_emitted[i]
+                && fr.start_char_idx == fr.end_char_idx
+                && fr.control_idx == emitted_ctrl_idx
+            {
+                splitter.cut_before(expected_utf16_pos);
+                emit_field_end(&mut splitter.content, para, fr.control_idx);
+                expected_utf16_pos = expected_utf16_pos.saturating_add(8);
+                field_end_emitted[i] = true;
+            }
+        }
+    }
+    // [Task #1893] 방어: 지연분이 슬롯 루프에서 매칭되지 못했으면 말미에 방출(종전 동작).
+    for (i, fr) in para.field_ranges.iter().enumerate() {
+        if !field_end_emitted[i] {
+            splitter.cut_before(expected_utf16_pos);
+            emit_field_end(&mut splitter.content, para, fr.control_idx);
+            expected_utf16_pos = expected_utf16_pos.saturating_add(8);
+            field_end_emitted[i] = true;
+        }
     }
     if bm_inorder {
         // 마지막 슬롯 뒤(컨트롤 순서 후미)의 trailing bookmark.
