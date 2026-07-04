@@ -12,6 +12,7 @@
 //! - #182: HWPX writer Picture 직렬화 분기 추가 (별도 작업자)
 
 use crate::model::document::{Document, Section};
+use crate::model::page::PageDef;
 use crate::model::paragraph::{CharShapeRef, LineSeg, Paragraph};
 use crate::parser::ingest::schema::{IngestDocument, StemBlock};
 
@@ -22,7 +23,16 @@ use crate::parser::ingest::schema::{IngestDocument, StemBlock};
 /// - 마지막 문제는 끝 빈 문단 없음
 pub fn build_exam_paper(ingest: &IngestDocument) -> Document {
     let mut doc = Document::default();
-    doc.sections.push(Section::default());
+    init_exam_doc_info(&mut doc, &ingest.default_font);
+
+    let mut section = Section::default();
+    section.section_def.page_def = page_def_from_ingest(ingest.page_size);
+    section.section_def.page_border_fill.border_fill_id = 1;
+    section.section_def.page_border_fill.spacing_left = 1417;
+    section.section_def.page_border_fill.spacing_right = 1417;
+    section.section_def.page_border_fill.spacing_top = 1417;
+    section.section_def.page_border_fill.spacing_bottom = 1417;
+    doc.sections.push(section);
 
     let total_questions = ingest.questions.len();
     for (q_idx, q) in ingest.questions.iter().enumerate() {
@@ -66,6 +76,74 @@ pub fn build_exam_paper(ingest: &IngestDocument) -> Document {
     }
 
     doc
+}
+
+fn init_exam_doc_info(doc: &mut Document, default_font: &str) {
+    use crate::model::style::{BorderFill, CharShape, Font, ParaShape, Style, TabDef};
+
+    let font_name = if default_font.trim().is_empty() {
+        "함초롬바탕"
+    } else {
+        default_font.trim()
+    };
+    let font = Font {
+        name: font_name.to_string(),
+        alt_type: 1,
+        ..Default::default()
+    };
+    doc.doc_info.font_faces = vec![vec![font]; 7];
+    doc.doc_info.border_fills = vec![BorderFill::default()];
+    doc.doc_info.tab_defs = vec![TabDef::default()];
+
+    let mut char_shape = CharShape {
+        font_ids: [0; 7],
+        ratios: [100; 7],
+        relative_sizes: [100; 7],
+        base_size: 1000,
+        text_color: 0x000000,
+        shade_color: 0,
+        underline_color: 0x000000,
+        shadow_color: 0x000000,
+        strike_color: 0x000000,
+        border_fill_id: 1,
+        ..Default::default()
+    };
+    char_shape.spacings = [0; 7];
+    char_shape.char_offsets = [0; 7];
+    doc.doc_info.char_shapes = vec![char_shape];
+
+    doc.doc_info.para_shapes = vec![ParaShape {
+        attr1: (1 << 7) | (1 << 8),
+        line_spacing: 160,
+        border_fill_id: 1,
+        tab_def_id: 0,
+        ..Default::default()
+    }];
+    doc.doc_info.styles = vec![Style {
+        local_name: "바탕글".to_string(),
+        english_name: "Normal".to_string(),
+        style_type: 0,
+        next_style_id: 0,
+        lang_id: 1042,
+        para_shape_id: 0,
+        char_shape_id: 0,
+        ..Default::default()
+    }];
+}
+
+fn page_def_from_ingest(page_size: crate::parser::ingest::schema::PageSize) -> PageDef {
+    let mut page_def = PageDef::a4_default();
+    if (page_size.width_mm - 210.0).abs() > f32::EPSILON
+        || (page_size.height_mm - 297.0).abs() > f32::EPSILON
+    {
+        page_def.width = mm_to_hwpunit(page_size.width_mm);
+        page_def.height = mm_to_hwpunit(page_size.height_mm);
+    }
+    page_def
+}
+
+fn mm_to_hwpunit(mm: f32) -> u32 {
+    ((mm.max(0.0) as f64) * 7200.0 / 25.4).round() as u32
 }
 
 /// 첫 stem 텍스트에 `{q.number}. ` 접두어를 적용하는 정책 결정.
@@ -144,6 +222,13 @@ mod tests {
         assert_eq!(doc.sections[0].paragraphs[0].text, "1. 다음 글의 주제는?");
         assert_eq!(doc.sections[0].paragraphs[1].text, "① A");
         assert_eq!(doc.sections[0].paragraphs[2].text, "② B");
+    }
+
+    #[test]
+    fn test_build_single_question_serializes_to_hwpx() {
+        let ingest = parse_ingest_str(minimal_ingest_json()).unwrap();
+        let doc = build_exam_paper(&ingest);
+        crate::serializer::serialize_hwpx(&doc).expect("exam ingest document serializes to HWPX");
     }
 
     #[test]
