@@ -1,6 +1,7 @@
 use std::env;
 use std::fs;
 use std::path::Path;
+use std::process;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -154,8 +155,12 @@ fn print_help() {
     );
     println!("                              예: --fallback-sans \"Apple SD Gothic Neo\"");
     println!();
-    println!("  export-hwpx <입력.hwp|입력.hwpx> [출력.hwpx]");
+    println!("  export-hwpx <입력.hwp|입력.hwpx> [출력.hwpx] [--verify] [--verify-pages]");
     println!("      HWP 문서를 HWPX(ZIP+XML)로 변환 저장. 출력 생략 시 <입력 stem>.hwpx");
+    println!(
+        "      --verify              변환 후 산출물을 재파싱해 IR 차이를 검출 (차이 시 exit 3)"
+    );
+    println!("      --verify-pages        변환 전/후 렌더 페이지 수를 비교 (불일치 시 exit 4)");
     println!();
     println!("  info <파일.hwp>");
     println!("      HWP 파일 정보 표시");
@@ -211,8 +216,10 @@ fn print_help() {
     println!("  hwp5-cell-header-probe <oracle.hwp> <generated.hwp> --out-dir <폴더>");
     println!("      표 셀 LIST_HEADER/PARA_HEADER 계약 축별 판정용 HWP probe 생성");
     println!();
-    println!("  convert <입력.hwp|입력.hwpx> <출력.hwp>");
+    println!("  convert <입력.hwp|입력.hwpx> <출력.hwp> [--verify] [--verify-pages]");
     println!("      배포용(읽기전용) HWP를 편집 가능한 HWP로 변환");
+    println!("      --verify              저장 후 재파싱 IR 차이를 검출 (차이 시 exit 3)");
+    println!("      --verify-pages        저장 전/후 렌더 페이지 수를 비교 (불일치 시 exit 4)");
     println!();
     println!("  build-from-ingest <ingest.json> [--media-dir <dir>] -o <out.hwpx>");
     println!("      ingest JSON(시험문제 등)을 HWPX로 생성 (rhwp-exam-ingest 파이프라인)");
@@ -3950,15 +3957,86 @@ fn diag_document(args: &[String]) {
     }
 }
 
-fn convert_hwp(args: &[String]) {
-    if args.len() < 2 {
-        eprintln!("오류: 입력 파일과 출력 파일 경로를 지정해주세요.");
-        eprintln!("사용법: rhwp convert <입력.hwp|입력.hwpx> <출력.hwp>");
-        return;
+#[derive(Debug, Default, Clone, Copy)]
+struct ConversionVerifyOptions {
+    verify: bool,
+    verify_pages: bool,
+}
+
+impl ConversionVerifyOptions {
+    fn enabled(self) -> bool {
+        self.verify || self.verify_pages
+    }
+}
+
+fn parse_conversion_verify_args(
+    args: &[String],
+    usage: &str,
+    min_positionals: usize,
+    max_positionals: usize,
+) -> Result<(Vec<String>, ConversionVerifyOptions), String> {
+    let mut positionals = Vec::new();
+    let mut options = ConversionVerifyOptions::default();
+
+    for arg in args {
+        match arg.as_str() {
+            "--verify" => options.verify = true,
+            "--verify-pages" => options.verify_pages = true,
+            value if value.starts_with('-') => {
+                return Err(format!("알 수 없는 옵션: {}\n사용법: {}", value, usage));
+            }
+            value => positionals.push(value.to_string()),
+        }
     }
 
-    let input_path = &args[0];
-    let output_path = &args[1];
+    if positionals.len() < min_positionals || positionals.len() > max_positionals {
+        return Err(format!("사용법: {}", usage));
+    }
+
+    Ok((positionals, options))
+}
+
+fn print_ir_verify_failure(diff: &rhwp::serializer::hwpx::roundtrip::IrDiff, converted: &str) {
+    eprintln!(
+        "검증 실패(--verify): {} 재파싱 후 IR 차이 {}건",
+        converted,
+        diff.differences.len()
+    );
+    for difference in diff.differences.iter().take(20) {
+        eprintln!("  [차이] {}", difference);
+    }
+    if diff.differences.len() > 20 {
+        eprintln!(
+            "  ... 이하 생략 (총 {}건, 상세 비교는 ir-diff 사용)",
+            diff.differences.len()
+        );
+    }
+}
+
+fn verify_reparse_failed_exit_code(options: ConversionVerifyOptions) -> i32 {
+    if options.verify {
+        3
+    } else {
+        4
+    }
+}
+
+fn convert_hwp(args: &[String]) {
+    let (positionals, verify_options) = match parse_conversion_verify_args(
+        args,
+        "rhwp convert <입력.hwp|입력.hwpx> <출력.hwp> [--verify] [--verify-pages]",
+        2,
+        2,
+    ) {
+        Ok(parsed) => parsed,
+        Err(message) => {
+            eprintln!("{}", message);
+            return;
+        }
+    };
+
+    let input_path = &positionals[0];
+    let output_path = &positionals[1];
 
     // 입력 파일 읽기
     let data = match fs::read(input_path) {
@@ -3978,6 +4056,11 @@ fn convert_hwp(args: &[String]) {
         }
     };
 
+    let page_count_before = if verify_options.verify_pages {
+        Some(doc.page_count())
+    } else {
+        None
+    };
     let was_distribution = doc.document().header.distribution;
     if !was_distribution {
         println!("{}: 이미 편집 가능한 문서입니다.", input_path);
@@ -4001,6 +4084,39 @@ fn convert_hwp(args: &[String]) {
         Ok(bytes) => match fs::write(output_path, &bytes) {
             Ok(_) => {
                 println!("저장 완료: {} ({}KB)", output_path, bytes.len() / 1024);
+                if verify_options.enabled() {
+                    let reloaded = match rhwp::wasm_api::HwpDocument::from_bytes(&bytes) {
+                        Ok(d) => d,
+                        Err(e) => {
+                            eprintln!("검증 실패: 저장된 HWP 재파싱 실패 - {}", e);
+                            process::exit(verify_reparse_failed_exit_code(verify_options));
+                        }
+                    };
+
+                    if let Some(before) = page_count_before {
+                        let after = reloaded.page_count();
+                        if before != after {
+                            eprintln!(
+                                "검증 실패(--verify-pages): 변환 전 {}쪽, 재파싱 후 {}쪽",
+                                before, after
+                            );
+                            process::exit(4);
+                        }
+                        println!("검증 통과(--verify-pages): {}쪽", before);
+                    }
+
+                    if verify_options.verify {
+                        let diff = rhwp::serializer::hwpx::roundtrip::diff_documents(
+                            doc.document(),
+                            reloaded.document(),
+                        );
+                        if !diff.is_empty() {
+                            print_ir_verify_failure(&diff, output_path);
+                            process::exit(3);
+                        }
+                        println!("검증 통과(--verify): IR 차이 없음");
+                    }
+                }
             }
             Err(e) => {
                 eprintln!("오류: 파일 저장 실패 - {}: {}", output_path, e);
@@ -4018,14 +4134,21 @@ fn convert_hwp(args: &[String]) {
 /// `export_hwpx_native()` 로 HWPX(ZIP) 직렬화한다. `convert`(배포용 해제 → .hwp 출력)와
 /// 별개의 포맷 변환 명령. 출력 생략 시 입력과 같은 폴더에 `<stem>.hwpx`.
 fn export_hwpx(args: &[String]) {
-    if args.is_empty() {
-        eprintln!("오류: 입력 파일 경로를 지정해주세요.");
-        eprintln!("사용법: rhwp export-hwpx <입력.hwp|입력.hwpx> [출력.hwpx]");
-        return;
-    }
+    let (positionals, verify_options) = match parse_conversion_verify_args(
+        args,
+        "rhwp export-hwpx <입력.hwp|입력.hwpx> [출력.hwpx] [--verify] [--verify-pages]",
+        1,
+        2,
+    ) {
+        Ok(parsed) => parsed,
+        Err(message) => {
+            eprintln!("{}", message);
+            return;
+        }
+    };
 
-    let input_path = std::path::Path::new(&args[0]);
-    let output_path = match args.get(1) {
+    let input_path = std::path::Path::new(&positionals[0]);
+    let output_path = match positionals.get(1) {
         Some(p) => std::path::PathBuf::from(p),
         None => input_path.with_extension("hwpx"),
     };
@@ -4064,6 +4187,12 @@ fn export_hwpx(args: &[String]) {
         }
     };
 
+    let page_count_before = if verify_options.verify_pages {
+        Some(doc.page_count())
+    } else {
+        None
+    };
+
     match doc.export_hwpx_native() {
         Ok(bytes) => match fs::write(&output_path, &bytes) {
             Ok(_) => {
@@ -4072,6 +4201,39 @@ fn export_hwpx(args: &[String]) {
                     output_path.display(),
                     bytes.len() / 1024
                 );
+                if verify_options.enabled() {
+                    let reloaded = match rhwp::wasm_api::HwpDocument::from_bytes(&bytes) {
+                        Ok(d) => d,
+                        Err(e) => {
+                            eprintln!("검증 실패: 저장된 HWPX 재파싱 실패 - {}", e);
+                            process::exit(verify_reparse_failed_exit_code(verify_options));
+                        }
+                    };
+
+                    if let Some(before) = page_count_before {
+                        let after = reloaded.page_count();
+                        if before != after {
+                            eprintln!(
+                                "검증 실패(--verify-pages): 변환 전 {}쪽, 재파싱 후 {}쪽",
+                                before, after
+                            );
+                            process::exit(4);
+                        }
+                        println!("검증 통과(--verify-pages): {}쪽", before);
+                    }
+
+                    if verify_options.verify {
+                        let diff = rhwp::serializer::hwpx::roundtrip::diff_documents(
+                            doc.document(),
+                            reloaded.document(),
+                        );
+                        if !diff.is_empty() {
+                            print_ir_verify_failure(&diff, &output_path.display().to_string());
+                            process::exit(3);
+                        }
+                        println!("검증 통과(--verify): IR 차이 없음");
+                    }
+                }
             }
             Err(e) => {
                 eprintln!("오류: 파일 저장 실패 - {}: {}", output_path.display(), e);
