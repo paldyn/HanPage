@@ -152,6 +152,39 @@ HWP 문서를 HWPX(ZIP+XML)로 변환 저장. `convert`(배포용 해제)와 별
 ### `build-from-ingest <ingest.json> [--media-dir <dir>] -o <out.hwpx>`
 ingest JSON(시험문제 등) → HWPX 생성. (rhwp-exam-ingest 파이프라인)
 
+- 이 명령은 PDF/HWP를 직접 분석하지 않는다. Vision/수동 분석/외부 도구가 만든
+  `ingest.json` 중간 표현을 rhwp HWPX 문서로 조립한다.
+- `-o`, `--output <out.hwpx>` 는 필수다.
+- `--media-dir <dir>` 는 `ingest.json` 의 `media[].id` 와 이미지 `stem_blocks[].ref` 를
+  해석할 기준 디렉터리다. 이미지가 없으면 생략한다.
+- 최소 입력 필드: `version`, `page_size`, `default_font`, `questions[]`.
+  각 문제는 `number`, `stem`, `stem_blocks`, `choices`, `media`, `auto_number` 를 사용할 수 있다.
+  자세한 스키마 모델은 `src/parser/ingest/schema.rs`, 예시는
+  `tools/rhwp-ingest/schema/sample_minimal.json` 을 기준으로 확인한다.
+- 시험지 e2e 검증은 생성만으로 끝내지 않고, 산출 HWPX를 다시 CLI로 확인한다.
+
+```bash
+rhwp build-from-ingest tools/rhwp-ingest/schema/sample_minimal.json \
+  -o output/poc/ingest/sample_minimal.hwpx
+
+rhwp export-text output/poc/ingest/sample_minimal.hwpx \
+  -o output/poc/ingest/text
+
+rhwp dump output/poc/ingest/sample_minimal.hwpx \
+  > output/poc/ingest/sample_minimal.dump.txt
+
+rhwp export-svg output/poc/ingest/sample_minimal.hwpx \
+  -o output/poc/ingest/svg
+```
+
+- 텍스트 보존 검증은 `ingest.json` 의 문제/지문/선택지 텍스트와 `export-text` 결과를 비교한다.
+- 구조 검증은 `dump` 로 ParaShape/CharShape/표·이미지 control 생성 여부를 확인한다.
+- 시각 검증이 필요하면 `export-svg` 산출물 또는 PDF 기준 비교를
+  [visual_sweep_guide.md](visual_sweep_guide.md)에 따라 수행한다.
+- 수식/도형/손글씨처럼 PDF 텍스트 레이어가 의미 정보를 잃는 항목은 `build-from-ingest` 단독으로
+  복원할 수 없다. 이 경우 ingest 단계에서 이미지/media 또는 전용 구조로 분류하고,
+  결함 유형을 hotfix/follow-up 으로 나누어 기록한다.
+
 ### `hwpx-roundtrip <파일.hwpx | --batch 폴더> [-o <출력폴더>] [--lineseg-report]`
 HWPX → IR → HWPX roundtrip 검증(**구조 보존 게이트**, #1315 baseline). 재조립 `.rt.hwpx` 와
 `inventory.tsv` 산출(기본 `output/poc/task1315`). 하드 실패 존재 시 종료 코드 1.
