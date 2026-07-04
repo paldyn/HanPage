@@ -12,6 +12,7 @@
 | `scripts/dashboard.html` | Chart.js 기반 대시보드 (HTML) |
 | `output/metrics.json` | 수집된 메트릭 데이터 (자동 생성, **비커밋** — `output/` 은 gitignore) |
 | `output/dashboard.html` | 대시보드 복사본 (자동 생성, 비커밋) |
+| `output/metrics_history/` | 실행별 이력 (최근 30개 롤링, 비커밋) — `metrics_history.json` 요약으로 델타 카드/추세 렌더 |
 | `mydocs/metrics/{날짜}/` | **커밋되는 스냅샷 보관소** — 의미 있는 시점의 측정 공유·추적 ([README](../metrics/README.md)) |
 
 ## 스냅샷 보관 (커밋해 공유)

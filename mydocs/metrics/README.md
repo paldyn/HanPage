@@ -5,7 +5,10 @@ gitignore 라 보존되지 않는다. **의미 있는 시점의 측정을 날짜
 
 ## 규약
 
-- 위치: `mydocs/metrics/{YYYY-MM-DD}/` — `metrics.json` + `dashboard.html` 세트(자체 완결 열람).
+- 위치: `mydocs/metrics/{YYYY-MM-DD}/` — `metrics.json` + `metrics_history.json`(추세 요약) +
+  `dashboard.html` 세트(자체 완결 열람 — 델타 카드/추세 차트 포함).
+- `output/metrics_history/` 는 실행별 단기 이력(최근 30개 롤링, 비커밋)이고, 본 보관소는
+  **의미 있는 시점의 장기 보존** — 두 축은 상보적이다.
 - **커밋 주기: 의미 있는 시점만** — 리팩토링 Phase 경계(#1883), 릴리즈, 코드 리뷰(r-code-review)
   시점. 매 실행 커밋은 하지 않는다.
 - 생성: `./scripts/metrics.sh --snapshot` (수집 후 오늘 날짜 폴더로 자동 복사).
