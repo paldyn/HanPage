@@ -187,6 +187,11 @@ struct DeferredTableControl {
     control_index: usize,
     is_first_placed: bool,
     is_last_placed: bool,
+    /// [Task #1860] 이 float 이 속한 문단의 **참 시작 흐름 높이**(선행 형제 control 이
+    /// current_height 를 전진시키기 전). 지연 배치 시점의 current_height 는 이미 선행
+    /// inline(캡션)을 반영해 out-of-flow float 예산을 과소평가하므로, 분할 예산 기준용
+    /// para_start 를 원 배치 시점 값으로 보존한다.
+    para_start_height: f64,
 }
 
 /// 호스트 문단의 spacing (표 전/후)
@@ -10889,6 +10894,11 @@ impl TypesetEngine {
                 mt,
                 styles,
                 para_start_height,
+                // [Task #1860] 예산 전용 참 para_start(원 배치 시점). 지연 배치의
+                // current_height 는 선행 캡션을 이미 반영하므로 out-of-flow float
+                // 예산이 이중차감된다. 렌더 위치(para_start_height)는 불변 유지하고
+                // 예산 계산에만 이 값을 쓴다.
+                deferred.para_start_height,
                 deferred.is_first_placed,
                 deferred.is_last_placed,
                 paragraphs,
@@ -11223,6 +11233,8 @@ impl TypesetEngine {
                             mt,
                             styles,
                             para_start_height,
+                            // [Task #1860] 비지연 경로: para_start_height 가 곧 참 para_start.
+                            para_start_height,
                             is_first_placed,
                             is_last_placed,
                             paragraphs_all,
@@ -11256,6 +11268,8 @@ impl TypesetEngine {
                                                 == Some(next_ctrl_idx),
                                             is_last_placed: last_placed_table
                                                 == Some(next_ctrl_idx),
+                                            // [Task #1860] 원 배치 시점의 참 para_start.
+                                            para_start_height,
                                         }
                                     })
                                 })
@@ -11887,6 +11901,53 @@ impl TypesetEngine {
     /// 비-TAC 블록 표의 조판: fits → place / split(Break Token 기반).
     /// 기존 Paginator의 split_table_rows와 동일한 세밀한 분할 로직.
     #[allow(clippy::too_many_arguments)]
+    fn pre_emit_visible_rowbreak_host_text(
+        &self,
+        st: &mut TypesetState,
+        para_idx: usize,
+        para: &Paragraph,
+        composed_all: &[ComposedParagraph],
+        styles: &ResolvedStyleSet,
+    ) -> bool {
+        if st.col_count != 1 || st.current_items.is_empty() || !para_has_visible_text(para) {
+            return false;
+        }
+        if st.pre_emitted_host_paras.contains(&para_idx) {
+            return true;
+        }
+        let already_emitted = st.current_items.iter().any(|item| {
+            matches!(item, PageItem::FullParagraph { para_index }
+                | PageItem::PartialParagraph { para_index, start_line: 0, .. }
+                if *para_index == para_idx)
+        });
+        if already_emitted {
+            st.pre_emitted_host_paras.insert(para_idx);
+            return true;
+        }
+        let col_w = st
+            .layout
+            .column_areas
+            .get(st.current_column as usize)
+            .map(|a| a.width)
+            .unwrap_or(st.layout.body_area.width);
+        let host_fmt = self.format_paragraph(para, composed_all.get(para_idx), styles, Some(col_w));
+        let host_lines = host_fmt.line_heights.len();
+        let host_h = host_fmt.line_advances_sum(0..host_lines);
+        // [Task #1763] 저장 flow 로 같은 쪽 후보임이 확인된 경우와 동일하게, host
+        // 줄 자체는 추가 안전마진 없이 본문 가용 높이로 판정한다.
+        if host_lines == 0 || st.current_height + host_h > st.available_height() {
+            return false;
+        }
+        st.current_items.push(PageItem::PartialParagraph {
+            para_index: para_idx,
+            start_line: 0,
+            end_line: host_lines,
+        });
+        st.current_height += host_h;
+        st.pre_emitted_host_paras.insert(para_idx);
+        true
+    }
+
     /// [Task #1753] 지연 이월되는 visible-host 자리차지 표의 후속 문단 선행 채움.
     ///
     /// 한글은 자리차지(TopAndBottom·vert=Para) RowBreak 표가 현재 쪽 잔여 공간에 안
@@ -11932,6 +11993,15 @@ impl TypesetEngine {
             return;
         };
         let body_h_hu = crate::renderer::px_to_hwpunit(st.layout.body_area.height, self.dpi);
+        // [Task #1811] HWPX 의 누적좌표 RowBreak 문서는 host 줄 pre-emit 자체를
+        // 저장 vpos 가드보다 먼저 수행한다. 쪽 내부 vpos 를 가진 HWP/HWP3/일반 HWPX
+        // 경로는 기존처럼 같은 쪽 저장 flow 확인 뒤에만 pre-emit 한다.
+        let pre_emit_before_vpos_check = st.is_hwpx_source && host_vpos > body_h_hu;
+        if pre_emit_before_vpos_check
+            && !self.pre_emit_visible_rowbreak_host_text(st, para_idx, para, composed_all, styles)
+        {
+            return;
+        }
         if host_vpos < 0 || host_vpos > body_h_hu {
             return; // 누적좌표 등 — 저장 flow 로 같은 쪽 여부를 알 수 없음
         }
@@ -11941,30 +12011,10 @@ impl TypesetEngine {
             .get(st.current_column as usize)
             .map(|a| a.width)
             .unwrap_or(st.layout.body_area.width);
-        // [Task #1755] host 텍스트 줄을 이월 전 쪽에 pre-emit (한글: 제목 줄은 anchor
-        // 흐름 위치 = 이월 전 쪽 하단). layout 의 마지막 fragment 뒤 host 렌더는
-        // pre_emitted_host_paras 신호로 억제된다. 후속 문단 prefill 보다 먼저 배치해
-        // 한글 순서(제목 → 후속 문단)를 유지하고, host 줄이 안 들어가면 prefill 도
-        // 하지 않는다(순서 역전 방지 — 한글도 이때는 전부 다음 쪽).
-        if !st.pre_emitted_host_paras.contains(&para_idx) {
-            let host_fmt =
-                self.format_paragraph(para, composed_all.get(para_idx), styles, Some(col_w));
-            let host_lines = host_fmt.line_heights.len();
-            let host_h = host_fmt.line_advances_sum(0..host_lines);
-            // [Task #1763] prefill 후보는 저장 vpos 로 같은-쪽 인코딩이 보증되므로
-            // 추가 안전마진 없이 본문 가용 높이로 판정한다 (측정 정밀화 후 저장 flow
-            // 와 정확 일치하는 누적에서 진짜 fit(2814765 pi53, 여유 2.1px)이 여분
-            // 4px 마진에 탈락하는 회귀 방지).
-            if host_lines == 0 || st.current_height + host_h > st.available_height() {
-                return;
-            }
-            st.current_items.push(PageItem::PartialParagraph {
-                para_index: para_idx,
-                start_line: 0,
-                end_line: host_lines,
-            });
-            st.current_height += host_h;
-            st.pre_emitted_host_paras.insert(para_idx);
+        if !pre_emit_before_vpos_check
+            && !self.pre_emit_visible_rowbreak_host_text(st, para_idx, para, composed_all, styles)
+        {
+            return;
         }
         let end = paragraphs_all.len().min(para_idx + 1 + MAX_PREFILL);
         for next_idx in (para_idx + 1)..end {
@@ -12008,6 +12058,11 @@ impl TypesetEngine {
         mt: Option<&MeasuredTable>,
         styles: &ResolvedStyleSet,
         para_start_height: f64,
+        // [Task #1860] 예산 전용 참 para_start(문단의 참 시작 흐름 높이). 대부분
+        // para_start_height 와 같으나, 지연 co-anchored 배치에선 para_start_height 가
+        // 라이브 current_height(선행 캡션 반영)라 out-of-flow float 예산이 이중차감된다.
+        // 렌더 위치는 para_start_height, 빈-host float 예산만 이 값을 쓴다.
+        budget_para_start_height: f64,
         is_first_placed: bool,
         is_last_placed: bool,
         // [Task #1753] 지연 이월 직전 후속 문단 prefill 용 전체 슬라이스.
@@ -12590,6 +12645,30 @@ impl TypesetEngine {
             }
         }
 
+        // [Task #1811] visible-host RowBreak 자리차지 표가 현재 쪽에서 곧바로 부분
+        // 분할되면, layout 단계의 fragment host 후처리보다 먼저 문서 흐름의 host 텍스트
+        // 줄을 소비한다. 기준은 샘플명이 아니라 같은 문단의 visible text 와 RowBreak
+        // 자리차지 표 속성이다.
+        let host_vpos_is_cumulative = para
+            .line_segs
+            .iter()
+            .find(|ls| !is_synthetic_line_seg(ls))
+            .is_some_and(|seg| {
+                seg.vertical_pos
+                    > crate::renderer::px_to_hwpunit(st.layout.body_area.height, self.dpi)
+            });
+        if st.is_hwpx_source
+            && host_vpos_is_cumulative
+            && !table.common.treat_as_char
+            && is_para_topbottom_float(&table.common)
+            && matches!(
+                table.page_break,
+                crate::model::table::TablePageBreak::RowBreak
+            )
+        {
+            self.pre_emit_visible_rowbreak_host_text(st, para_idx, para, composed_all, styles);
+        }
+
         // 행 단위 + 인트라-로우 분할 루프 (기존 Paginator split_table_rows 동일)
         let mut cursor_row: usize = 0;
         let mut is_continuation = false;
@@ -12653,8 +12732,39 @@ impl TypesetEngine {
                     0.0
                 }
             };
+            // [Task #1860] 빈 host out-of-flow para float(비-TAC, TopAndBottom,
+            // vert=Para, v_off>0, host 텍스트 없음)는 para_start + v_off 에 배치되는
+            // 개체다(#986/#1088/#157). 같은 문단의 선행 in-flow inline(예: tac 캡션 표,
+            // #1855 유사입법례 표의 "참고|유사입법례" 캡션)이 current_height 를 전진시켜도,
+            // float 은 para_start 기준에 놓여 세로로 겹치므로 아래로 쓰는 실가용은
+            // para_start 기준이다. page_avail 이 current_height 를 빼면 선행 inline 만큼
+            // 이중차감 → 분할 예산이 짧아져 RowBreak 컷이 소스 hard_break 보다 조기 발동
+            // (공공데이터법 라벨 −23pt / p45 +40.8pt). 이 클래스만 current_height 대신
+            // para_start_height 기준으로 예산을 잡는다.
+            let is_empty_host_column_float = !is_continuation
+                && !table.common.treat_as_char
+                && vert_offset_overhead > 0.0
+                && !para_has_non_whitespace_text(para);
             let page_avail = if is_continuation {
                 table_available
+            } else if is_empty_host_column_float {
+                // out-of-flow float 은 para_start + v_off 에 배치된다(#986/#1088/#157).
+                // 같은 문단의 선행 in-flow inline(예: tac 캡션 표)이 current_height 를
+                // para_start 위로 밀어도, float 은 para_start+v_off 부터 시작해 그 아래를
+                // 전부 쓴다 → 예산 기준은 current_height 가 아니라 참 para_start 다. 선행
+                // inline 이 없으면 budget_para_start==current_height 라 종전과 동일(#874 불변).
+                //
+                // 클램프: 지연(deferred) 배치가 페이지/컬럼 경계를 넘은 뒤 실행되면
+                // 저장된 para_start(원 페이지 흐름 좌표)가 새 페이지의 current_height 보다
+                // 커져 무효가 된다(pr-1674 pi=27 ci=1: 새 페이지 cur_h=0 에서 stale
+                // para_start 583.8 차감 → 예산 −584px → 조기 분할 +1쪽). 참 para_start 는
+                // 현재 흐름 높이를 초과할 수 없으므로 current_height 로 상한한다.
+                (table_available
+                    - budget_para_start_height.min(st.current_height)
+                    - caption_extra
+                    - host_before_overhead
+                    - vert_offset_overhead)
+                    .max(0.0)
             } else {
                 (table_available
                     - st.current_height
