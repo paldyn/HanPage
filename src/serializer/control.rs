@@ -1472,7 +1472,8 @@ fn group_container_component_data(
 ) -> Vec<u8> {
     use crate::parser::tags;
 
-    let mut data = serialize_shape_component(0x24636f6e, &group.shape_attr, top_level); // '$con'
+    let mut data =
+        serialize_shape_component(tags::SHAPE_CONTAINER_ID, &group.shape_attr, top_level); // '$con'
     let mut w = ByteWriter::new();
     w.write_u16(group.children.len() as u16).unwrap();
     for child in &group.children {
@@ -2007,15 +2008,21 @@ fn write_shape_component_base(
         let is_group_child = attr.group_level > 0;
         let cnt: u16 = if is_group_child { 2 } else { 1 };
         w.write_u16(cnt).unwrap();
-        // translation matrix [1, 0, tx, 0, 1, ty]
+        // translation matrix = identity [1, 0, 0, 0, 1, 0].
+        // 그룹 자식 위치의 단일 권위는 render_tx/ty 다 (렌더러 layout_group_child_*,
+        // object_ops 그룹 생성 모두 render_tx 기준). 위치를 의도한 작성자는 항상
+        // render_tx 를 명시하므로(그 경우 explicit 경로로 감), 이 폴백에 오는
+        // offset_x/y 는 위치가 아닌 메타데이터다(HWP3 relative_pos 등). 종전처럼
+        // offset 을 tx/ty 로 승격하면 재파스에서 render_tx 가 생겨 그룹 자식이
+        // offset 만큼 이동한다 (#1892 대법원 서식 최대 10485px 라운드트립 변위).
         w.write_f64(1.0).unwrap();
         w.write_f64(0.0).unwrap();
-        w.write_f64(attr.offset_x as f64).unwrap(); // tx (그룹 자식: 로컬 offset)
+        w.write_f64(0.0).unwrap(); // tx
         w.write_f64(0.0).unwrap();
         w.write_f64(1.0).unwrap();
-        w.write_f64(attr.offset_y as f64).unwrap(); // ty
-                                                    // scale matrix = identity [1, 0, 0, 0, 1, 0]
-                                                    // (스케일은 current_width/original_width 값으로 표현 — 행렬에 중복 기록하면 이중 적용됨)
+        w.write_f64(0.0).unwrap(); // ty
+                                   // scale matrix = identity [1, 0, 0, 0, 1, 0]
+                                   // (스케일은 current_width/original_width 값으로 표현 — 행렬에 중복 기록하면 이중 적용됨)
         w.write_f64(1.0).unwrap();
         w.write_f64(0.0).unwrap();
         w.write_f64(0.0).unwrap();
