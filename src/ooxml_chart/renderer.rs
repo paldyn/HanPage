@@ -197,7 +197,7 @@ fn estimate_axis_label_width(chart: &OoxmlChart, axis_group: u8) -> f64 {
     if series.is_empty() {
         return 16.0;
     }
-    let (vmin, vmax) = value_range_for(series.iter().cloned());
+    let (vmin, vmax, _) = value_range_for(series.iter().cloned());
     let fmt = series.first().and_then(|s| s.format_code.as_deref());
     let min_label = format_num(vmin, fmt);
     let max_label = format_num(vmax, fmt);
@@ -206,8 +206,8 @@ fn estimate_axis_label_width(chart: &OoxmlChart, axis_group: u8) -> f64 {
     (max_chars as f64 * 7.0 + 18.0).max(28.0)
 }
 
-/// 시리즈 부분집합에 대한 값 범위
-fn value_range_for<'a>(series: impl Iterator<Item = &'a OoxmlSeries>) -> (f64, f64) {
+/// 시리즈 부분집합에 대한 값 범위 `(min, max, step)`
+fn value_range_for<'a>(series: impl Iterator<Item = &'a OoxmlSeries>) -> (f64, f64, f64) {
     let mut min = f64::INFINITY;
     let mut max = f64::NEG_INFINITY;
     for s in series {
@@ -232,23 +232,18 @@ fn value_range_for<'a>(series: impl Iterator<Item = &'a OoxmlSeries>) -> (f64, f
     if max == min {
         max = min + 1.0;
     }
-    // Nice number 반올림 (눈금을 깔끔하게)
-    let (min_n, max_n) = nice_range(min, max, 5);
-    (min_n, max_n)
+    // Nice number 반올림 (눈금을 깔끔하게, 경계 headroom 포함)
+    nice_axis(min, max)
 }
 
-fn value_range(chart: &OoxmlChart) -> (f64, f64) {
+fn value_range(chart: &OoxmlChart) -> (f64, f64, f64) {
     value_range_for(chart.series.iter())
 }
 
-/// min~max 구간을 "깔끔한" 눈금으로 확장
-fn nice_range(min: f64, max: f64, target_ticks: usize) -> (f64, f64) {
-    if max <= min {
-        return (min, max);
-    }
-    let raw_step = (max - min) / target_ticks.max(1) as f64;
-    let mag = 10f64.powf(raw_step.abs().log10().floor());
-    let norm = raw_step / mag;
+/// raw 간격에 가장 가까운 "깔끔한" 눈금 간격 (1/2/5/10 × 10^n, 반올림 임계 1.5/3/7)
+fn floor_nice_step(raw: f64) -> f64 {
+    let mag = 10f64.powf(raw.abs().log10().floor());
+    let norm = raw / mag;
     let step = if norm < 1.5 {
         1.0
     } else if norm < 3.0 {
@@ -258,17 +253,54 @@ fn nice_range(min: f64, max: f64, target_ticks: usize) -> (f64, f64) {
     } else {
         10.0
     };
-    let step = step * mag;
-    let new_min = (min / step).floor() * step;
-    let new_max = (max / step).ceil() * step;
-    (new_min, new_max)
+    step * mag
 }
 
-/// 분산형 수치축 범위. 양수 데이터는 **0 기준선으로 clamp**한다 — 한컴 분산형 PDF 정합
-/// (정답지 X·Y 모두 0부터: 표식만있는분산형 X 0~3·Y 0~5). 막대/선 축(`value_range_for`)과
-/// 동일한 0-baseline 동작이라 차트 종류 간 일관성도 확보. nice_range로 눈금 정리.
-/// (상한 nice-scale 헤드룸 = 스타일 4갭 ④로 C1c 후속.) — C1b #1660.
-fn scatter_range(vals: impl Iterator<Item = f64>) -> (f64, f64) {
+/// raw 이상인 가장 작은 "깔끔한" 눈금 간격 (1/2/5/10 × 10^n)
+fn ceil_nice_step(raw: f64) -> f64 {
+    let mag = 10f64.powf(raw.abs().log10().floor());
+    let norm = raw / mag;
+    let step = if norm <= 1.0 {
+        1.0
+    } else if norm <= 2.0 {
+        2.0
+    } else if norm <= 5.0 {
+        5.0
+    } else {
+        10.0
+    };
+    step * mag
+}
+
+/// min~max 구간을 "깔끔한" 눈금으로 확장하고 `(min', max', step)`을 반환.
+///
+/// 한컴 정합(C1c #1882 갭④): 데이터 max가 step 경계에 정확히 걸리면 **+1 step
+/// headroom**을 두고, 확장된 범위에 대해 step을 재계산(ceil-nice)한다. 확장이
+/// 없으면 step을 유지한다 — 무조건 재계산하면 scatter X(2.6→0~3)의 0.5 간격이
+/// 1.0으로 승격돼 실측과 어긋난다. 실측 앵커 3점(`pdf/chart/` 한컴 2022):
+/// 막대 max 5.0→(0,6,2) 라벨 0,2,4,6 / scatter Y 4.0→(0,5,1) / X 2.6→(0,3,0.5).
+fn nice_axis(min: f64, max: f64) -> (f64, f64, f64) {
+    if max <= min {
+        return (min, max, 1.0);
+    }
+    let step0 = floor_nice_step((max - min) / 5.0);
+    let mut new_min = (min / step0).floor() * step0;
+    let mut new_max = (max / step0).ceil() * step0;
+    let mut step = step0;
+    if (new_max - max).abs() < step0 * 1e-6 {
+        new_max += step0; // headroom +1 step
+        step = ceil_nice_step((new_max - new_min) / 5.0);
+        new_max = (new_max / step).ceil() * step;
+        new_min = (new_min / step).floor() * step;
+    }
+    (new_min, new_max, step)
+}
+
+/// 분산형 수치축 범위 `(min, max, step)`. 양수 데이터는 **0 기준선으로 clamp**한다 —
+/// 한컴 분산형 PDF 정합(정답지 X·Y 모두 0부터: 표식만있는분산형 X 0~3·Y 0~5).
+/// 막대/선 축(`value_range_for`)과 동일한 0-baseline 동작이라 차트 종류 간 일관성도
+/// 확보. nice_axis로 눈금 정리(경계 headroom 포함, C1c #1882 갭④). — C1b #1660.
+fn scatter_range(vals: impl Iterator<Item = f64>) -> (f64, f64, f64) {
     let mut min = f64::INFINITY;
     let mut max = f64::NEG_INFINITY;
     for v in vals {
@@ -291,7 +323,7 @@ fn scatter_range(vals: impl Iterator<Item = f64>) -> (f64, f64) {
     if (max - min).abs() < 1e-9 {
         max = min + 1.0;
     }
-    nice_range(min, max, 5)
+    nice_axis(min, max)
 }
 
 // ---------------- Bar / Column (단일 축) ----------------
@@ -325,13 +357,14 @@ fn render_bars(
     let ser_count = chart.series.len().max(1);
 
     // 값축 범위: clustered=개별값, stacked=카테고리 합의 최대, percent=0~100%
-    let (vmin, vmax) = if percent {
-        (0.0, 100.0)
+    // (percent는 step 20 고정 = 종전 5등분 라벨 0/20/…/100%와 동일)
+    let (vmin, vmax, vstep) = if percent {
+        (0.0, 100.0, 20.0)
     } else if stacked {
         let max_sum = (0..cat_count)
             .map(|ci| category_positive_sum(chart, ci))
             .fold(0.0_f64, f64::max);
-        nice_range(0.0, max_sum.max(1.0), 5)
+        nice_axis(0.0, max_sum.max(1.0))
     } else {
         value_range(chart)
     };
@@ -349,6 +382,7 @@ fn render_bars(
         ph,
         vmin,
         vmax,
+        vstep,
         chart.series.first().and_then(|s| s.format_code.as_deref()),
         horizontal,
         false,
@@ -454,7 +488,7 @@ fn category_positive_sum(chart: &OoxmlChart, ci: usize) -> f64 {
 // ---------------- Line (단일 축) ----------------
 
 fn render_line(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f64, ph: f64) {
-    let (vmin, vmax) = value_range(chart);
+    let (vmin, vmax, vstep) = value_range(chart);
     let max_len = chart
         .series
         .iter()
@@ -477,6 +511,7 @@ fn render_line(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f64, 
         ph,
         vmin,
         vmax,
+        vstep,
         chart.series.first().and_then(|s| s.format_code.as_deref()),
         false,
         false,
@@ -526,8 +561,10 @@ fn render_scatter(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f6
         return;
     }
 
-    let (xmin, xmax) = scatter_range(chart.series.iter().flat_map(|s| s.x_values.iter().copied()));
-    let (ymin, ymax) = scatter_range(chart.series.iter().flat_map(|s| s.values.iter().copied()));
+    let (xmin, xmax, xstep) =
+        scatter_range(chart.series.iter().flat_map(|s| s.x_values.iter().copied()));
+    let (ymin, ymax, ystep) =
+        scatter_range(chart.series.iter().flat_map(|s| s.values.iter().copied()));
     let xspan = (xmax - xmin).max(1e-9);
     let yspan = (ymax - ymin).max(1e-9);
 
@@ -538,10 +575,10 @@ fn render_scatter(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f6
     ));
     // X축(하단, 수직 격자선) + Y축(좌측, 수평 격자선) — 둘 다 수치축, 소수 라벨
     render_value_grid(
-        svg, px, py, pw, ph, xmin, xmax, None, true, false, false, true,
+        svg, px, py, pw, ph, xmin, xmax, xstep, None, true, false, false, true,
     );
     render_value_grid(
-        svg, px, py, pw, ph, ymin, ymax, None, false, false, false, true,
+        svg, px, py, pw, ph, ymin, ymax, ystep, None, false, false, false, true,
     );
 
     let (show_line, smooth, show_markers) = chart.scatter_style.flags();
@@ -676,13 +713,13 @@ fn render_combo(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f64,
     let pri: Vec<&OoxmlSeries> = chart.series.iter().filter(|s| s.axis_group == 0).collect();
     let sec: Vec<&OoxmlSeries> = chart.series.iter().filter(|s| s.axis_group == 1).collect();
 
-    let (pri_min, pri_max) = if pri.is_empty() {
+    let (pri_min, pri_max, pri_step) = if pri.is_empty() {
         value_range(chart)
     } else {
         value_range_for(pri.iter().cloned())
     };
-    let (sec_min, sec_max) = if sec.is_empty() {
-        (0.0, 1.0)
+    let (sec_min, sec_max, sec_step) = if sec.is_empty() {
+        (0.0, 1.0, 0.2)
     } else {
         value_range_for(sec.iter().cloned())
     };
@@ -695,14 +732,15 @@ fn render_combo(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f64,
     // 기본축 격자 (좌측)
     let pri_fmt = pri.first().and_then(|s| s.format_code.as_deref());
     render_value_grid(
-        svg, px, py, pw, ph, pri_min, pri_max, pri_fmt, false, false, false, false,
+        svg, px, py, pw, ph, pri_min, pri_max, pri_step, pri_fmt, false, false, false, false,
     );
 
-    // 보조축 격자 (우측, 눈금만)
+    // 보조축 격자 (우측, 눈금만) — step 기반이라 기본축과 눈금 수가 다를 수 있음
+    // (보조축은 라벨만 출력하므로 격자선 불일치 없음)
     if !sec.is_empty() {
         let sec_fmt = sec.first().and_then(|s| s.format_code.as_deref());
         render_value_grid(
-            svg, px, py, pw, ph, sec_min, sec_max, sec_fmt, false, true, false, false,
+            svg, px, py, pw, ph, sec_min, sec_max, sec_step, sec_fmt, false, true, false, false,
         );
     }
 
@@ -826,12 +864,16 @@ fn render_value_grid(
     ph: f64,
     vmin: f64,
     vmax: f64,
+    step: f64,
     format_code: Option<&str>,
     horizontal: bool,
     secondary: bool,
     percent: bool,
     decimal: bool,
 ) {
+    // 비정수 step은 소수 라벨 강제 — format_num의 정수 반올림이 0.5 간격 라벨을
+    // "0,1,1,2…"로 손상시키는 것 차단 (C1c #1882 갭④)
+    let decimal = decimal || (step - step.round()).abs() > 1e-9;
     let label = |v: f64| -> String {
         if percent {
             format!("{}%", v.round() as i64)
@@ -841,9 +883,12 @@ fn render_value_grid(
             format_num(v, format_code)
         }
     };
-    let grid_lines = 5;
+    // step 기반 눈금: v = vmin + step*i (정수 루프 — 부동소수 누적 드리프트 방지)
+    let span = (vmax - vmin).max(1e-9);
+    let step = if step > 0.0 { step } else { span / 5.0 };
+    let grid_lines = (span / step).round().max(1.0) as usize;
     for i in 0..=grid_lines {
-        let t = i as f64 / grid_lines as f64;
+        let t = (step * i as f64) / span;
         if horizontal {
             let gx = px + pw * t;
             // 보조축일 때는 격자선 중복 방지, 라벨만
@@ -853,7 +898,7 @@ fn render_value_grid(
                     gx, py, gx, py + ph
                 ));
             }
-            let v = vmin + (vmax - vmin) * t;
+            let v = vmin + step * i as f64;
             svg.push_str(&format!(
                 "<text x=\"{:.2}\" y=\"{:.2}\" font-family=\"sans-serif\" font-size=\"10\" fill=\"#666\" text-anchor=\"middle\">{}</text>\n",
                 gx, py + ph + 12.0, xml_escape(&label(v))
@@ -866,7 +911,7 @@ fn render_value_grid(
                     px, gy, px + pw, gy
                 ));
             }
-            let v = vmin + (vmax - vmin) * t;
+            let v = vmin + step * i as f64;
             let (tx, anchor) = if secondary {
                 (px + pw + 4.0, "start")
             } else {
@@ -1256,10 +1301,10 @@ mod tests {
     #[test]
     fn test_render_scatter_decimal_axis_labels() {
         // 소수 데이터 → 소수 축 라벨 (format_num 정수 반올림이 아니라 format_axis_num).
-        // 0-baseline clamp 후 X 0~3 / Y 0~4 → 눈금 0.6/1.2/2.4/3.2 등 (소수 라벨).
+        // 0-baseline clamp 후 X 0~3(step 0.5) → 눈금 0.5/1.5/2.5 등 (소수 라벨). — C1c 갭④
         let svg = render_chart_svg(&scatter_chart(ScatterStyle::Marker), 0.0, 0.0, 400.0, 300.0);
         assert!(
-            svg.contains(">2.4<"),
+            svg.contains(">2.5<"),
             "분산형 축은 소수 라벨이어야 (정수 반올림 시 '2'로 손상)",
         );
         assert!(!svg.contains("차트 (미지원)"));
@@ -1270,5 +1315,58 @@ mod tests {
         // 양수 데이터 → 축이 0부터 (한컴 분산형 PDF 정합). 0 라벨이 X·Y에 존재.
         let svg = render_chart_svg(&scatter_chart(ScatterStyle::Marker), 0.0, 0.0, 400.0, 300.0);
         assert!(svg.contains(">0<"), "분산형 축은 0 기준선이어야");
+    }
+
+    // --- C1c (#1882) 갭④: Y축 headroom + step 기반 눈금 (한컴 실측 앵커 3점) ---
+
+    #[test]
+    fn test_axis_headroom_bar_max_on_boundary() {
+        // 한컴 실측 앵커: 막대 데이터 max 5.0(step 경계) → 축 0~6, step 재계산으로
+        // 성긴 라벨 0,2,4,6 (묶은세로막대형-2022.pdf).
+        let chart = OoxmlChart {
+            chart_type: OoxmlChartType::Column,
+            series: vec![
+                OoxmlSeries {
+                    values: vec![4.3, 2.5, 3.5, 4.5],
+                    series_type: OoxmlChartType::Column,
+                    ..Default::default()
+                },
+                OoxmlSeries {
+                    values: vec![2.0, 2.0, 3.0, 5.0],
+                    series_type: OoxmlChartType::Column,
+                    ..Default::default()
+                },
+            ],
+            categories: vec!["a".into(), "b".into(), "c".into(), "d".into()],
+            ..Default::default()
+        };
+        let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
+        for want in [">0<", ">2<", ">4<", ">6<"] {
+            assert!(svg.contains(want), "라벨 {want} 있어야 (0~6, step 2)");
+        }
+        for absent in [">1<", ">3<", ">5<"] {
+            assert!(!svg.contains(absent), "라벨 {absent} 없어야 (성긴 라벨)");
+        }
+    }
+
+    #[test]
+    fn test_axis_headroom_scatter_y_on_boundary() {
+        // 한컴 실측 앵커: scatter Y max 4.0(step 1 경계) → 축 0~5, 라벨 1 간격
+        // (표식만있는분산형-2022.pdf).
+        let mut chart = scatter_chart(ScatterStyle::Marker);
+        chart.series[0].values = vec![2.7, 3.2, 4.0];
+        let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
+        assert!(svg.contains(">5<"), "Y축 headroom: max 4.0 → 축 0~5");
+        assert!(svg.contains(">4<"), "step 1 라벨 유지");
+    }
+
+    #[test]
+    fn test_axis_no_headroom_when_max_off_boundary() {
+        // 한컴 실측 앵커: scatter X max 2.6(경계 아님) → 축 0~3, step 0.5 유지
+        // (무조건 step 재계산 시 1.0으로 승격되는 회귀 방지).
+        let svg = render_chart_svg(&scatter_chart(ScatterStyle::Marker), 0.0, 0.0, 400.0, 300.0);
+        for want in [">0.5<", ">2.5<", ">3<"] {
+            assert!(svg.contains(want), "X축 {want} 있어야 (0~3, step 0.5)");
+        }
     }
 }
