@@ -46,10 +46,11 @@ fn first_text_line_y(node: &RenderNode, pi: usize) -> Option<f64> {
 #[test]
 fn tac_image_paragraph_render_advance_matches_layout() {
     let tree = page_tree(8); // p9 (0-based)
+
     // (그림 문단 pi, 다음 문단 pi). 기대 전진 = lh(14.67) + ls(11.73) + sb(6.67) = 33.1px.
     for (img_pi, next_pi) in [(87usize, 88usize), (95, 96), (96, 97)] {
-        let y_img = first_text_line_y(&tree.root, img_pi)
-            .unwrap_or_else(|| panic!("pi={img_pi} TextLine"));
+        let y_img =
+            first_text_line_y(&tree.root, img_pi).unwrap_or_else(|| panic!("pi={img_pi} TextLine"));
         let y_next = first_text_line_y(&tree.root, next_pi)
             .unwrap_or_else(|| panic!("pi={next_pi} TextLine"));
         let advance = y_next - y_img;
