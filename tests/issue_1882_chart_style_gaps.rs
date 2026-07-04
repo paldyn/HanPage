@@ -30,7 +30,11 @@ fn for_both_exts(stem: &str, f: impl Fn(&str, &str)) {
 #[test]
 fn chart_auto_title_rendered() {
     // ① 코퍼스는 제목 텍스트가 없어도 한컴처럼 "차트 제목"을 렌더 (regular weight).
-    for stem in ["세로막대형/묶은세로막대형", "라인/꺽은선형", "원형/2차원원형"] {
+    for stem in [
+        "세로막대형/묶은세로막대형",
+        "라인/꺽은선형",
+        "원형/2차원원형",
+    ] {
         for_both_exts(stem, |rel, svg| {
             assert!(svg.contains("차트 제목"), "{rel}: 자동 제목 미렌더");
             assert!(
@@ -60,7 +64,10 @@ fn chart_axis_headroom_and_sparse_ticks() {
     // ④ 막대 데이터 max 5.0(step 경계) → 축 0~6, step 재계산 → 라벨 0,2,4,6.
     for_both_exts("세로막대형/묶은세로막대형", |rel, svg| {
         for want in [">0<", ">2<", ">4<", ">6<"] {
-            assert!(svg.contains(want), "{rel}: 축 라벨 {want} 없음 (0~6 step 2)");
+            assert!(
+                svg.contains(want),
+                "{rel}: 축 라벨 {want} 없음 (0~6 step 2)"
+            );
         }
         for absent in [">3<", ">5<"] {
             assert!(
@@ -79,29 +86,56 @@ fn chart_axis_headroom_and_sparse_ticks() {
     //    누적'세로' → 0~15 step 5 / 누적'가로' → 0~14 step 2.
     for_both_exts("세로막대형/누적세로막대형", |rel, svg| {
         for want in [">10<", ">15<"] {
-            assert!(svg.contains(want), "{rel}: 세로 누적 라벨 {want} 없음 (0~15 step 5)");
+            assert!(
+                svg.contains(want),
+                "{rel}: 세로 누적 라벨 {want} 없음 (0~15 step 5)"
+            );
         }
-        assert!(!svg.contains(">14<"), "{rel}: 세로 누적에 14 라벨 (step 2 회귀)");
+        assert!(
+            !svg.contains(">14<"),
+            "{rel}: 세로 누적에 14 라벨 (step 2 회귀)"
+        );
     });
     for_both_exts("가로막대형/누적가로막대형", |rel, svg| {
-        assert!(svg.contains(">14<"), "{rel}: 가로 누적 라벨 14 없음 (0~14 step 2)");
+        assert!(
+            svg.contains(">14<"),
+            "{rel}: 가로 누적 라벨 14 없음 (0~14 step 2)"
+        );
         assert!(!svg.contains(">15<"), "{rel}: 가로 누적에 15 라벨");
     });
     // ④ 3D 축 정책 (한컴 실측): 묶은 3D는 세로·가로 모두 0~5(무헤드룸),
     //    누적 3D 세로는 0~20(2D 15 + 1 step), 누적 3D 가로는 2D와 동일 0~14.
-    for stem in ["세로막대형/3차원묶은세로막대형", "가로막대형/3차원묶은가로막대형"] {
+    for stem in [
+        "세로막대형/3차원묶은세로막대형",
+        "가로막대형/3차원묶은가로막대형",
+    ] {
         for_both_exts(stem, |rel, svg| {
             assert!(svg.contains(">5<"), "{rel}: 3D 묶은 라벨 5 없음 (0~5)");
             assert!(!svg.contains(">6<"), "{rel}: 3D 묶은에 headroom(6) 적용됨");
         });
     }
-    for_both_exts("세로막대형/3차원누적세로막대형", |rel, svg| {
-        assert!(svg.contains(">20<"), "{rel}: 3D 누적세로 라벨 20 없음 (0~20)");
-    });
-    for_both_exts("가로막대형/3차원누적가로막대형", |rel, svg| {
-        assert!(svg.contains(">14<"), "{rel}: 3D 누적가로 라벨 14 없음 (0~14)");
-        assert!(!svg.contains(">20<"), "{rel}: 3D 누적가로에 세로용 과헤드룸 적용됨");
-    });
+    for_both_exts(
+        "세로막대형/3차원누적세로막대형",
+        |rel, svg| {
+            assert!(
+                svg.contains(">20<"),
+                "{rel}: 3D 누적세로 라벨 20 없음 (0~20)"
+            );
+        },
+    );
+    for_both_exts(
+        "가로막대형/3차원누적가로막대형",
+        |rel, svg| {
+            assert!(
+                svg.contains(">14<"),
+                "{rel}: 3D 누적가로 라벨 14 없음 (0~14)"
+            );
+            assert!(
+                !svg.contains(">20<"),
+                "{rel}: 3D 누적가로에 세로용 과헤드룸 적용됨"
+            );
+        },
+    );
 }
 
 #[test]

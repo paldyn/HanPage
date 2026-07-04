@@ -18,8 +18,7 @@ const DEFAULT_PALETTE: &[u32] = &[
     0xFFFCD801, // 노랑 (실측)
     0xFF5B9BD5, // 하늘 (유추)
     0xFF70AD47, // 초록 (유추)
-    0xFF9013FE,
-    0xFF50E3C2,
+    0xFF9013FE, 0xFF50E3C2,
 ];
 
 fn palette(i: usize) -> u32 {
@@ -111,8 +110,7 @@ pub fn render_chart_svg(chart: &OoxmlChart, x: f64, y: f64, w: f64, h: f64) -> S
     // 대신 우측 폭(legend_w)을 확보. 그 외 위치는 현행 하단 가로 유지.
     // `w * 0.30 >= 50.0` 가드: 폭이 좁으면(<167px) 하단 폴백 — 아래 clamp의
     // min(50)>max(w*0.30) 패닉 방지 (w는 문서 데이터가 결정). NaN도 false → 폴백.
-    let legend_right =
-        legend_visible && chart.legend_pos == LegendPos::Right && w * 0.30 >= 50.0;
+    let legend_right = legend_visible && chart.legend_pos == LegendPos::Right && w * 0.30 >= 50.0;
     let legend_h = if legend_visible && !legend_right {
         22.0
     } else {
@@ -131,9 +129,8 @@ pub fn render_chart_svg(chart: &OoxmlChart, x: f64, y: f64, w: f64, h: f64) -> S
     };
     // 좌측 여유: 세로 차트는 값축 숫자 라벨, **가로 막대는 카테고리 라벨**("항목 1" 등)이
     // 좌측에 오므로 카테고리 폭 기준 — 숫자 폭(2자≈32px)으로 잡으면 라벨이 잘림.
-    let horizontal_bars = chart.chart_type == OoxmlChartType::Bar
-        && !chart.is_combo()
-        && !chart.has_secondary_axis;
+    let horizontal_bars =
+        chart.chart_type == OoxmlChartType::Bar && !chart.is_combo() && !chart.has_secondary_axis;
     let left_pad = if horizontal_bars {
         estimate_category_label_width(chart, w)
     } else {
@@ -534,20 +531,16 @@ fn render_bars(
                 };
                 let color = series_color(ser, si);
                 if horizontal {
-                    let cy = py
-                        + cat_slot(ci)
-                        + (cat_span - bar_span_total) / 2.0
-                        + bar_w * si as f64;
+                    let cy =
+                        py + cat_slot(ci) + (cat_span - bar_span_total) / 2.0 + bar_w * si as f64;
                     let bw = pw * t;
                     svg.push_str(&format!(
                         "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"{}\"/>\n",
                         px, cy, bw.max(0.0), bar_w * 0.95, color
                     ));
                 } else {
-                    let cx = px
-                        + cat_slot(ci)
-                        + (cat_span - bar_span_total) / 2.0
-                        + bar_w * si as f64;
+                    let cx =
+                        px + cat_slot(ci) + (cat_span - bar_span_total) / 2.0 + bar_w * si as f64;
                     let bh = ph * t;
                     let by = py + ph - bh;
                     svg.push_str(&format!(
@@ -1252,7 +1245,10 @@ mod tests {
         let i_blue = svg.find("#6183d7").expect("시리즈1 파랑");
         let i_orange = svg.find("#fe813b").expect("시리즈2 주황");
         let i_gray = svg.find("#b0b0b0").expect("시리즈3 회색");
-        assert!(i_blue < i_orange && i_orange < i_gray, "팔레트 순서: 파랑→주황→회색");
+        assert!(
+            i_blue < i_orange && i_orange < i_gray,
+            "팔레트 순서: 파랑→주황→회색"
+        );
         assert!(!svg.contains("#70ad47"), "구 녹색-우선 팔레트 미사용");
     }
 
@@ -1492,7 +1488,10 @@ mod tests {
 
     /// `hwp-chart-legend` 그룹 안 첫 `<text>`의 지정 속성 값
     fn legend_first_text_attr(svg: &str, attr: &str) -> f64 {
-        let g = svg.split("class=\"hwp-chart-legend\"").nth(1).expect("범례 그룹");
+        let g = svg
+            .split("class=\"hwp-chart-legend\"")
+            .nth(1)
+            .expect("범례 그룹");
         let text = g.split("<text ").nth(1).expect("범례 텍스트");
         let pat = format!("{attr}=\"");
         let s = text.find(&pat).expect("attr") + pat.len();
@@ -1553,14 +1552,22 @@ mod tests {
                 series_type: OoxmlChartType::Bar,
                 ..Default::default()
             }],
-            categories: vec!["항목 1".into(), "항목 2".into(), "항목 3".into(), "항목 4".into()],
+            categories: vec![
+                "항목 1".into(),
+                "항목 2".into(),
+                "항목 3".into(),
+                "항목 4".into(),
+            ],
             ..Default::default()
         };
         let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
         let chunk = svg.split(">항목 1<").next().expect("카테고리 라벨");
         let tag_start = chunk.rfind("<text ").expect("text 태그");
         let x = attr_f64_of(&chunk[tag_start..], "x=\"").expect("x 속성");
-        assert!(x >= 45.0, "카테고리 라벨 anchor x={x} — 라벨 폭(≈40px)만큼 왼쪽 여백 필요");
+        assert!(
+            x >= 45.0,
+            "카테고리 라벨 anchor x={x} — 라벨 폭(≈40px)만큼 왼쪽 여백 필요"
+        );
     }
 
     fn attr_f64_of(tag: &str, pat: &str) -> Option<f64> {
@@ -1574,7 +1581,10 @@ mod tests {
         // 폭이 좁으면(w*0.30 < 50) clamp(50, w*0.30)이 min>max로 패닉하던 결함 가드 —
         // 하단 폴백으로 렌더되고 패닉하지 않아야 한다. NaN 폭도 패닉 금지.
         let svg = render_chart_svg(&named_chart(LegendPos::Right), 0.0, 0.0, 100.0, 80.0);
-        assert!(svg.contains("hwp-chart-legend"), "좁은 차트는 하단 폴백 범례");
+        assert!(
+            svg.contains("hwp-chart-legend"),
+            "좁은 차트는 하단 폴백 범례"
+        );
         let _ = render_chart_svg(&named_chart(LegendPos::Right), 0.0, 0.0, f64::NAN, 80.0);
     }
 
@@ -1621,7 +1631,10 @@ mod tests {
         chart.categories = vec!["a".into(), "b".into(), "c".into(), "d".into()];
         let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
         for want in [">5<", ">10<", ">15<"] {
-            assert!(svg.contains(want), "세로 누적 라벨 {want} 있어야 (0~15 step 5)");
+            assert!(
+                svg.contains(want),
+                "세로 누적 라벨 {want} 있어야 (0~15 step 5)"
+            );
         }
         for absent in [">14<", ">2<", ">4<"] {
             assert!(!svg.contains(absent), "세로 누적 라벨 {absent} 없어야");
@@ -1642,7 +1655,10 @@ mod tests {
         chart.categories = vec!["a".into(), "b".into(), "c".into(), "d".into()];
         let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
         for want in [">2<", ">14<"] {
-            assert!(svg.contains(want), "가로 누적 라벨 {want} 있어야 (0~14 step 2)");
+            assert!(
+                svg.contains(want),
+                "가로 누적 라벨 {want} 있어야 (0~14 step 2)"
+            );
         }
         assert!(!svg.contains(">15<"), "가로 누적은 0~14 (15 아님)");
     }
@@ -1670,7 +1686,10 @@ mod tests {
         };
         let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
         for want in [">1<", ">3<", ">5<", ">6<"] {
-            assert!(svg.contains(want), "가로 묶은 라벨 {want} 있어야 (0~6 step 1)");
+            assert!(
+                svg.contains(want),
+                "가로 묶은 라벨 {want} 있어야 (0~6 step 1)"
+            );
         }
     }
 
@@ -1692,9 +1711,15 @@ mod tests {
             };
             let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
             for want in [">1<", ">4<", ">5<"] {
-                assert!(svg.contains(want), "{chart_type:?}: 3D 묶은 라벨 {want} (0~5 step 1)");
+                assert!(
+                    svg.contains(want),
+                    "{chart_type:?}: 3D 묶은 라벨 {want} (0~5 step 1)"
+                );
             }
-            assert!(!svg.contains(">6<"), "{chart_type:?}: 3D 묶은은 headroom 없음 (0~5)");
+            assert!(
+                !svg.contains(">6<"),
+                "{chart_type:?}: 3D 묶은은 headroom 없음 (0~5)"
+            );
         }
     }
 
