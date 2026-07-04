@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 # rhwp 코드 품질 메트릭 수집 스크립트
-# 사용법: ./scripts/metrics.sh
+# 사용법: ./scripts/metrics.sh [--snapshot]
 # 결과: output/metrics.json + output/dashboard.html (자동 복사)
+# --snapshot: 수집 후 mydocs/metrics/{오늘날짜}/ 로 보관 (커밋해 공유 —
+#             리팩토링 Phase 경계/릴리즈/코드 리뷰 등 의미 있는 시점만)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 OUTPUT_DIR="$PROJECT_DIR/output"
+SNAPSHOT=false
+[ "${1:-}" = "--snapshot" ] && SNAPSHOT=true
 
 mkdir -p "$OUTPUT_DIR"
 
@@ -161,6 +165,16 @@ if [ -f "$SCRIPT_DIR/dashboard.html" ]; then
     cp "$SCRIPT_DIR/dashboard.html" "$OUTPUT_DIR/dashboard.html"
     echo ""
     echo "대시보드: $OUTPUT_DIR/dashboard.html"
+fi
+
+# ── 스냅샷 보관 (--snapshot) ──
+if [ "$SNAPSHOT" = true ]; then
+    SNAP_DIR="$PROJECT_DIR/mydocs/metrics/$(date +%F)"
+    mkdir -p "$SNAP_DIR"
+    cp "$OUTPUT_DIR/metrics.json" "$SNAP_DIR/metrics.json"
+    cp "$SCRIPT_DIR/dashboard.html" "$SNAP_DIR/dashboard.html"
+    echo ""
+    echo "스냅샷 보관: $SNAP_DIR (mydocs/metrics/README.md 목록도 갱신할 것)"
 fi
 
 echo ""
