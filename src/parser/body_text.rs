@@ -290,7 +290,15 @@ fn parse_para_text(data: &[u8]) -> (String, Vec<u32>, Vec<FieldRange>, Vec<[u16;
                     ext[k] = u16::from_le_bytes([data[bp], data[bp + 1]]);
                 }
             }
-            tab_extended.push(ext);
+            // 직렬화기의 "데이터 없음" 마커([0,...,0,0x0009] — body_text.rs 탭 방출부)는
+            // IR 에 싣지 않는다. 한컴 실측 탭 확장은 ext[2] 고바이트=종류 enum+1 이라
+            // 전부 0 일 수 없고, 이 마커를 tab_extended 로 실으면 레이아웃이 ext[0]=0 을
+            // 탭 결과 위치로 해석해 탭이 무폭이 된다 (#1892 — tab_extended 없던 HWP3
+            // 문단이 라운드트립 후 탭 스톱을 잃는 렌더 분기).
+            let is_null_ext = ext[..6].iter().all(|&v| v == 0) && ext[6] == 0x0009;
+            if !is_null_ext {
+                tab_extended.push(ext);
+            }
             pos += 16;
         } else if ch == 0x000A {
             // 줄 끝: char 컨트롤 (1 code unit = 2바이트)
