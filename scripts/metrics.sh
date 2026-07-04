@@ -152,7 +152,10 @@ for hfile in $(ls -t "$HISTORY_DIR"/metrics_*.json 2>/dev/null | head -20 | tac)
     tf=$(python3 -c "import json; d=json.load(open('$hfile')); print(d['tests']['failed'])" 2>/dev/null || echo "0")
     cw=$(python3 -c "import json; d=json.load(open('$hfile')); print(d['clippy']['warnings'])" 2>/dev/null || echo "0")
     cc=$(python3 -c "import json; d=json.load(open('$hfile')); print(len(d.get('cognitive_complexity',[])))" 2>/dev/null || echo "0")
-    cv=$(python3 -c "import json; d=json.load(open('$hfile')); print(d.get('coverage','null'))" 2>/dev/null || echo "null")
+    # json.dumps 로 출력해야 커버리지 미수집(None)이 JSON null 로 직렬화된다.
+    # (print(None)은 파이썬 리터럴 "None"을 써서 metrics_history.json 전체가 무효 JSON이 됨
+    #  → dashboard.html 의 추세/델타 카드가 조용히 비어 보이는 버그)
+    cv=$(python3 -c "import json; d=json.load(open('$hfile')); print(json.dumps(d.get('coverage')))" 2>/dev/null || echo "null")
     fl=$(python3 -c "import json; d=json.load(open('$hfile')); print(len(d.get('file_lines',[])))" 2>/dev/null || echo "0")
     if [ "$sfirst" = true ]; then sfirst=false; else SUMMARY+=","; fi
     SUMMARY+="{\"timestamp\":\"$ts\",\"tests_passed\":$tp,\"tests_failed\":$tf,\"clippy_warnings\":$cw,\"cc_count\":$cc,\"coverage\":$cv,\"file_count\":$fl}"
@@ -172,6 +175,8 @@ if [ "$SNAPSHOT" = true ]; then
     SNAP_DIR="$PROJECT_DIR/mydocs/metrics/$(date +%F)"
     mkdir -p "$SNAP_DIR"
     cp "$OUTPUT_DIR/metrics.json" "$SNAP_DIR/metrics.json"
+    # 추세 요약도 포함 — 없으면 dashboard.html 의 델타 카드/추세 차트가 비어 보인다.
+    cp "$OUTPUT_DIR/metrics_history.json" "$SNAP_DIR/metrics_history.json" 2>/dev/null || true
     cp "$SCRIPT_DIR/dashboard.html" "$SNAP_DIR/dashboard.html"
     echo ""
     echo "스냅샷 보관: $SNAP_DIR (mydocs/metrics/README.md 목록도 갱신할 것)"
