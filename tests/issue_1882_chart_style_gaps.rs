@@ -87,6 +87,21 @@ fn chart_axis_headroom_and_sparse_ticks() {
         assert!(svg.contains(">14<"), "{rel}: 가로 누적 라벨 14 없음 (0~14 step 2)");
         assert!(!svg.contains(">15<"), "{rel}: 가로 누적에 15 라벨");
     });
+    // ④ 3D 축 정책 (한컴 실측): 묶은 3D는 세로·가로 모두 0~5(무헤드룸),
+    //    누적 3D 세로는 0~20(2D 15 + 1 step), 누적 3D 가로는 2D와 동일 0~14.
+    for stem in ["세로막대형/3차원묶은세로막대형", "가로막대형/3차원묶은가로막대형"] {
+        for_both_exts(stem, |rel, svg| {
+            assert!(svg.contains(">5<"), "{rel}: 3D 묶은 라벨 5 없음 (0~5)");
+            assert!(!svg.contains(">6<"), "{rel}: 3D 묶은에 headroom(6) 적용됨");
+        });
+    }
+    for_both_exts("세로막대형/3차원누적세로막대형", |rel, svg| {
+        assert!(svg.contains(">20<"), "{rel}: 3D 누적세로 라벨 20 없음 (0~20)");
+    });
+    for_both_exts("가로막대형/3차원누적가로막대형", |rel, svg| {
+        assert!(svg.contains(">14<"), "{rel}: 3D 누적가로 라벨 14 없음 (0~14)");
+        assert!(!svg.contains(">20<"), "{rel}: 3D 누적가로에 세로용 과헤드룸 적용됨");
+    });
 }
 
 #[test]

@@ -46,6 +46,10 @@ pub struct OoxmlChart {
     pub scatter_style: ScatterStyle,
     /// 범례 위치 (`c:legendPos`). 한컴 코퍼스는 전 샘플 `val="r"`. (C1c #1882 갭③)
     pub legend_pos: LegendPos,
+    /// 3D plot(`bar3DChart`/`pie3DChart`) 여부. 렌더는 2D 근사(C1a)지만 한컴 3D
+    /// 엔진의 축 정책이 2D와 달라(묶은 0~5 무헤드룸/누적세로 과헤드룸) 축 계산에
+    /// 사용. 입체감 렌더는 후속(C2). (C1c #1882 시각판정 반영)
+    pub is_3d: bool,
 }
 
 /// 범례 위치 (`c:legendPos`). C1c #1882 갭③.

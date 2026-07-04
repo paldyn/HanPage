@@ -261,12 +261,8 @@ fn estimate_axis_label_width(chart: &OoxmlChart, axis_group: u8) -> f64 {
     (max_chars as f64 * 7.0 + 18.0).max(28.0)
 }
 
-/// 시리즈 부분집합에 대한 값 범위 `(min, max, step)`. `target_ticks`는 축 방향별
-/// 눈금 밀도(`VERTICAL_AXIS_TICKS`/`HORIZONTAL_AXIS_TICKS`).
-fn value_range_for<'a>(
-    series: impl Iterator<Item = &'a OoxmlSeries>,
-    target_ticks: f64,
-) -> (f64, f64, f64) {
+/// 시리즈 부분집합의 원시 값 범위 (0-baseline clamp + 퇴화 방어, nice 반올림 전)
+fn raw_value_bounds<'a>(series: impl Iterator<Item = &'a OoxmlSeries>) -> (f64, f64) {
     let mut min = f64::INFINITY;
     let mut max = f64::NEG_INFINITY;
     for s in series {
@@ -291,6 +287,16 @@ fn value_range_for<'a>(
     if max == min {
         max = min + 1.0;
     }
+    (min, max)
+}
+
+/// 시리즈 부분집합에 대한 값 범위 `(min, max, step)`. `target_ticks`는 축 방향별
+/// 눈금 밀도(`VERTICAL_AXIS_TICKS`/`HORIZONTAL_AXIS_TICKS`).
+fn value_range_for<'a>(
+    series: impl Iterator<Item = &'a OoxmlSeries>,
+    target_ticks: f64,
+) -> (f64, f64, f64) {
+    let (min, max) = raw_value_bounds(series);
     // Nice number 반올림 (눈금을 깔끔하게, 경계 headroom 포함)
     nice_axis(min, max, target_ticks)
 }
@@ -330,15 +336,22 @@ const HORIZONTAL_AXIS_TICKS: f64 = 5.0;
 /// 데이터(합 12.3)가 세로 누적 0~15 step 5, 가로 누적 0~14 step 2로 실측됨.
 /// 3차원 계열의 고유 축(묶은 0~5 무헤드룸/누적 0~20 과헤드룸)은 2D 근사 범위 밖(C2).
 fn nice_axis(min: f64, max: f64, target_ticks: f64) -> (f64, f64, f64) {
+    let (new_min, mut new_max, step) = nice_axis_no_headroom(min, max, target_ticks);
+    if (new_max - max).abs() < step * 1e-6 {
+        new_max += step; // 경계 headroom +1 step (step 유지)
+    }
+    (new_min, new_max, step)
+}
+
+/// `nice_axis`의 경계 headroom 없는 변형 — 한컴 3D 묶은막대 실측(세로·가로 모두
+/// 0~5: 데이터 max 5.0이 step 1 경계에 걸려도 확장하지 않음)용.
+fn nice_axis_no_headroom(min: f64, max: f64, target_ticks: f64) -> (f64, f64, f64) {
     if max <= min {
         return (min, max, 1.0);
     }
     let step = floor_nice_step((max - min) / target_ticks);
     let new_min = (min / step).floor() * step;
-    let mut new_max = (max / step).ceil() * step;
-    if (new_max - max).abs() < step * 1e-6 {
-        new_max += step; // 경계 headroom +1 step (step 유지)
-    }
+    let new_max = (max / step).ceil() * step;
     (new_min, new_max, step)
 }
 
@@ -416,7 +429,18 @@ fn render_bars(
         let max_sum = (0..cat_count)
             .map(|ci| category_positive_sum(chart, ci))
             .fold(0.0_f64, f64::max);
-        nice_axis(0.0, max_sum.max(1.0), ticks)
+        let (mn, mx, st) = nice_axis(0.0, max_sum.max(1.0), ticks);
+        if chart.is_3d && !horizontal {
+            // 한컴 3D 누적'세로' 실측: 2D(0~15) + 1 step = 0~20. 가로는 2D와 동일(0~14).
+            (mn, mx + st, st)
+        } else {
+            (mn, mx, st)
+        }
+    } else if chart.is_3d {
+        // 한컴 3D 묶은막대 실측: 세로·가로 모두 촘촘 눈금(5칸) + 경계 headroom 없음
+        // (max 5.0 → 0~5 step 1; 2D의 0~6과 다름)
+        let (mn, mx) = raw_value_bounds(chart.series.iter());
+        nice_axis_no_headroom(mn, mx, HORIZONTAL_AXIS_TICKS)
     } else {
         value_range(chart, ticks)
     };
@@ -450,6 +474,13 @@ fn render_bars(
         (span, span * 0.7)
     };
 
+    // 가로 막대는 카테고리를 아래→위로 배치 (한컴 실측: 항목 1이 맨 아래).
+    // 세로는 왼→오른쪽 그대로.
+    let cat_slot = |ci: usize| -> f64 {
+        let idx = if horizontal { cat_count - 1 - ci } else { ci };
+        cat_span * idx as f64
+    };
+
     if stacked {
         // 누적: 카테고리당 단일 막대, 시리즈를 아래/왼쪽부터 쌓음.
         // percent → 카테고리 합으로 정규화(전체 길이 = 100%), stacked → vmax로 정규화.
@@ -469,7 +500,10 @@ fn render_bars(
                 let v = ser.values.get(ci).copied().unwrap_or(0.0).max(0.0);
                 let color = series_color(ser, si);
                 let base = px;
-                let cell = py + cat_span * ci as f64 + (cat_span - bar_span_total) / 2.0;
+                // 셀 시작: 가로=세로축(py) 기준, 세로=가로축(px) 기준
+                let cell = if horizontal { py } else { px }
+                    + cat_slot(ci)
+                    + (cat_span - bar_span_total) / 2.0;
                 if horizontal {
                     let seg = pw * (v / denom);
                     svg.push_str(&format!(
@@ -501,7 +535,7 @@ fn render_bars(
                 let color = series_color(ser, si);
                 if horizontal {
                     let cy = py
-                        + cat_span * ci as f64
+                        + cat_slot(ci)
                         + (cat_span - bar_span_total) / 2.0
                         + bar_w * si as f64;
                     let bw = pw * t;
@@ -511,7 +545,7 @@ fn render_bars(
                     ));
                 } else {
                     let cx = px
-                        + cat_span * ci as f64
+                        + cat_slot(ci)
                         + (cat_span - bar_span_total) / 2.0
                         + bar_w * si as f64;
                     let bh = ph * t;
@@ -997,7 +1031,9 @@ fn render_category_labels(
             break;
         }
         if horizontal {
-            let cy = py + cat_span * ci as f64 + cat_span / 2.0 + 3.0;
+            // 가로 막대: 카테고리 아래→위 (한컴 실측 — 막대 배치와 동일 순서)
+            let row = cat_count - 1 - ci;
+            let cy = py + cat_span * row as f64 + cat_span / 2.0 + 3.0;
             svg.push_str(&format!(
                 "<text x=\"{:.2}\" y=\"{:.2}\" font-family=\"sans-serif\" font-size=\"10\" fill=\"#333\" text-anchor=\"end\">{}</text>\n",
                 px - 4.0, cy, xml_escape(cat)
@@ -1636,6 +1672,102 @@ mod tests {
         for want in [">1<", ">3<", ">5<", ">6<"] {
             assert!(svg.contains(want), "가로 묶은 라벨 {want} 있어야 (0~6 step 1)");
         }
+    }
+
+    #[test]
+    fn test_axis_3d_clustered_no_headroom() {
+        // 한컴 실측: 3D 묶은막대는 세로·가로 모두 0~5 step 1 — 촘촘 눈금 + 경계
+        // headroom 없음 (2D 묶은세로 0~6 step 2 / 2D 묶은가로 0~6 step 1과 다름).
+        for chart_type in [OoxmlChartType::Column, OoxmlChartType::Bar] {
+            let chart = OoxmlChart {
+                chart_type,
+                is_3d: true,
+                series: vec![OoxmlSeries {
+                    values: vec![4.3, 2.5, 3.5, 5.0],
+                    series_type: chart_type,
+                    ..Default::default()
+                }],
+                categories: vec!["a".into(), "b".into(), "c".into(), "d".into()],
+                ..Default::default()
+            };
+            let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
+            for want in [">1<", ">4<", ">5<"] {
+                assert!(svg.contains(want), "{chart_type:?}: 3D 묶은 라벨 {want} (0~5 step 1)");
+            }
+            assert!(!svg.contains(">6<"), "{chart_type:?}: 3D 묶은은 headroom 없음 (0~5)");
+        }
+    }
+
+    #[test]
+    fn test_axis_3d_stacked_vertical_extra_headroom() {
+        // 한컴 실측: 3D 누적'세로'(합 max 12.3) → 0~20 step 5 (2D 15 + 1 step).
+        let mut chart = bars_chart(BarGrouping::Stacked);
+        chart.is_3d = true;
+        chart.series[0].values = vec![4.3, 2.5, 3.5, 4.5];
+        chart.series[1].values = vec![2.4, 4.4, 1.8, 2.8];
+        chart.series[2].values = vec![2.0, 2.0, 3.0, 5.0];
+        chart.categories = vec!["a".into(), "b".into(), "c".into(), "d".into()];
+        let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
+        assert!(svg.contains(">20<"), "3D 누적세로는 0~20 (2D 15 + 1 step)");
+        assert!(!svg.contains(">14<"));
+
+        // 3D 누적'가로'는 2D 가로와 동일 (0~14 step 2, 실측).
+        let mut hchart = chart.clone();
+        hchart.chart_type = OoxmlChartType::Bar;
+        for s in &mut hchart.series {
+            s.series_type = OoxmlChartType::Bar;
+        }
+        let hsvg = render_chart_svg(&hchart, 0.0, 0.0, 400.0, 300.0);
+        assert!(hsvg.contains(">14<"), "3D 누적가로는 2D와 동일 0~14");
+        assert!(!hsvg.contains(">16<") && !hsvg.contains(">20<"));
+    }
+
+    #[test]
+    fn test_horizontal_bar_categories_bottom_up() {
+        // 한컴 실측: 가로막대는 카테고리를 아래→위로 배치 (항목 1이 맨 아래).
+        let chart = OoxmlChart {
+            chart_type: OoxmlChartType::Bar,
+            series: vec![OoxmlSeries {
+                values: vec![1.0, 2.0],
+                series_type: OoxmlChartType::Bar,
+                ..Default::default()
+            }],
+            categories: vec!["catA".into(), "catB".into()],
+            ..Default::default()
+        };
+        let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
+        let y_of = |label: &str| -> f64 {
+            let chunk = svg.split(&format!(">{label}<")).next().expect("라벨");
+            let tag = &chunk[chunk.rfind("<text ").expect("text")..];
+            attr_f64_of(tag, "y=\"").expect("y")
+        };
+        assert!(
+            y_of("catA") > y_of("catB"),
+            "첫 카테고리(catA)가 아래쪽(y 큼)이어야: catA={} catB={}",
+            y_of("catA"),
+            y_of("catB"),
+        );
+    }
+
+    #[test]
+    fn test_stacked_vertical_bars_align_with_category_labels() {
+        // 누적 세로 막대 x가 plot_y 기반으로 계산되던 결함 가드 — 막대 중심이
+        // 카테고리 라벨 중심과 일치해야 한다 (y 오프셋이 있는 배치에서 검증).
+        let svg = render_chart_svg(&bars_chart(BarGrouping::Stacked), 0.0, 100.0, 400.0, 300.0);
+        let label_chunk = svg.split(">a<").next().expect("라벨 a");
+        let label_x = attr_f64_of(
+            &label_chunk[label_chunk.rfind("<text ").expect("text")..],
+            "x=\"",
+        )
+        .expect("라벨 x");
+        let bar_chunk = svg.split("fill=\"#6183d7\"").next().expect("첫 파랑 막대");
+        let bar_tag = &bar_chunk[bar_chunk.rfind("<rect ").expect("rect")..];
+        let bar_center = attr_f64_of(bar_tag, "x=\"").expect("x")
+            + attr_f64_of(bar_tag, "width=\"").expect("w") / 2.0;
+        assert!(
+            (bar_center - label_x).abs() < 2.0,
+            "누적 막대 중심({bar_center})과 라벨 중심({label_x}) 불일치",
+        );
     }
 
     #[test]

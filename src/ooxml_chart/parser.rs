@@ -193,15 +193,24 @@ fn handle_start(e: &quick_xml::events::BytesStart, chart: &mut OoxmlChart, st: &
         }
         b"bar3DChart" => {
             // 3D 막대 — 2D 근사(C1a #1453). barDir 핸들러가 col/bar를 그대로 채워
-            // 파싱 종료 후처리가 Column↔Bar를 확정한다.
+            // 파싱 종료 후처리가 Column↔Bar를 확정한다. is_3d는 축 정책용(C1c).
             chart.chart_type = OoxmlChartType::Column;
+            chart.is_3d = true;
             st.cur_plot_type = Some(OoxmlChartType::Column);
             st.cur_plot_ax_ids.clear();
             st.cur_plot_series_start = chart.series.len();
         }
-        b"pie3DChart" | b"ofPieChart" => {
-            // 3D 원형 / ofPie — 단일 원형으로 2D 근사(C1a #1453).
-            // 입체감·보조플롯(원형대원형의 2차 원, 원형대막대의 막대)은 후속(C2).
+        b"pie3DChart" => {
+            // 3D 원형 — 단일 원형으로 2D 근사(C1a #1453). 입체감은 후속(C2).
+            chart.chart_type = OoxmlChartType::Pie;
+            chart.is_3d = true;
+            st.cur_plot_type = Some(OoxmlChartType::Pie);
+            st.cur_plot_ax_ids.clear();
+            st.cur_plot_series_start = chart.series.len();
+        }
+        b"ofPieChart" => {
+            // ofPie — 단일 원형으로 2D 근사(C1a #1453).
+            // 보조플롯(원형대원형의 2차 원, 원형대막대의 막대)은 후속(C2).
             chart.chart_type = OoxmlChartType::Pie;
             st.cur_plot_type = Some(OoxmlChartType::Pie);
             st.cur_plot_ax_ids.clear();
@@ -555,6 +564,14 @@ mod tests {
 </c:chart></c:chartSpace>"#;
         let c = parse_chart_xml(xml.as_bytes()).expect("parse OK");
         assert_eq!(c.legend_pos, LegendPos::Right);
+    }
+
+    #[test]
+    fn test_parse_is_3d_flag() {
+        // bar3DChart → is_3d (축 정책용). 2D barChart는 false.
+        let xml3d = br#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea><c:bar3DChart><c:barDir val="col"/><c:ser><c:val><c:numCache><c:pt idx="0"><c:v>3</c:v></c:pt></c:numCache></c:val></c:ser></c:bar3DChart></c:plotArea></c:chart></c:chartSpace>"#;
+        assert!(parse_chart_xml(xml3d).expect("parse OK").is_3d);
+        assert!(!parse_chart_xml(BAR_XML.as_bytes()).expect("parse OK").is_3d);
     }
 
     #[test]
