@@ -15,6 +15,7 @@ fn main() {
         Some("export-pdf") => export_pdf(&args[2..]),
         Some("export-text") => export_text(&args[2..]),
         Some("export-markdown") => export_markdown(&args[2..]),
+        Some("export-hwpx") => export_hwpx(&args[2..]),
         Some("info") => show_info(&args[2..]),
         Some("dump") => dump_controls(&args[2..]),
         Some("dump-note-shape") => dump_note_shape(&args[2..]),
@@ -137,6 +138,9 @@ fn print_help() {
     println!();
     println!("  export-pdf <파일.hwp> [-o 출력.pdf] [-p 페이지]");
     println!("      HWP 파일을 PDF로 내보내기 (svg2pdf + pdf-writer)");
+    println!();
+    println!("  export-hwpx <입력.hwp|입력.hwpx> [출력.hwpx]");
+    println!("      HWP 문서를 HWPX(ZIP+XML)로 변환 저장. 출력 생략 시 <입력 stem>.hwpx");
     println!();
     println!("  info <파일.hwp>");
     println!("      HWP 파일 정보 표시");
@@ -3882,6 +3886,77 @@ fn convert_hwp(args: &[String]) {
         },
         Err(e) => {
             eprintln!("오류: 직렬화 실패 - {}", e);
+        }
+    }
+}
+
+/// `rhwp export-hwpx <입력.hwp|입력.hwpx> [출력.hwpx]` — HWP→HWPX 직접 변환 (#1868).
+///
+/// 파서가 포맷을 자동 감지(HWP5/HWP3/HWPX)해 `Document` IR 로 읽고
+/// `export_hwpx_native()` 로 HWPX(ZIP) 직렬화한다. `convert`(배포용 해제 → .hwp 출력)와
+/// 별개의 포맷 변환 명령. 출력 생략 시 입력과 같은 폴더에 `<stem>.hwpx`.
+fn export_hwpx(args: &[String]) {
+    if args.is_empty() {
+        eprintln!("오류: 입력 파일 경로를 지정해주세요.");
+        eprintln!("사용법: rhwp export-hwpx <입력.hwp|입력.hwpx> [출력.hwpx]");
+        return;
+    }
+
+    let input_path = std::path::Path::new(&args[0]);
+    let output_path = match args.get(1) {
+        Some(p) => std::path::PathBuf::from(p),
+        None => input_path.with_extension("hwpx"),
+    };
+    if output_path
+        .extension()
+        .map(|e| !e.eq_ignore_ascii_case("hwpx"))
+        .unwrap_or(true)
+    {
+        eprintln!(
+            "경고: 출력 확장자가 .hwpx 가 아닙니다: {}",
+            output_path.display()
+        );
+    }
+    if output_path == input_path {
+        eprintln!("오류: 입력과 출력 경로가 같습니다. 원본을 덮어쓰지 않습니다.");
+        return;
+    }
+
+    let data = match fs::read(input_path) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!(
+                "오류: 파일을 읽을 수 없습니다 - {}: {}",
+                input_path.display(),
+                e
+            );
+            return;
+        }
+    };
+
+    let doc = match rhwp::wasm_api::HwpDocument::from_bytes(&data) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("오류: 문서 파싱 실패 - {}", e);
+            return;
+        }
+    };
+
+    match doc.export_hwpx_native() {
+        Ok(bytes) => match fs::write(&output_path, &bytes) {
+            Ok(_) => {
+                println!(
+                    "저장 완료: {} ({}KB)",
+                    output_path.display(),
+                    bytes.len() / 1024
+                );
+            }
+            Err(e) => {
+                eprintln!("오류: 파일 저장 실패 - {}: {}", output_path.display(), e);
+            }
+        },
+        Err(e) => {
+            eprintln!("오류: HWPX 직렬화 실패 - {}", e);
         }
     }
 }
