@@ -102,7 +102,8 @@ PASS 0/15 → **5/15**, 악화 0.
 ### 회귀 게이트
 
 - `tests/issue_1892.rs` 4건 (렌더 자기정합 2 + IR 핀 2) PASS
-- cargo test 전 스위트: <!-- CARGO_TEST_RESULT -->
+- cargo test 전 스위트: **PASS** (GitHub Actions 최신 head 기준 `Build default-feature tests` /
+  `Build & Test` 성공, maintainer 로컬 `cargo test --profile release-test --tests` 통과)
 - big_hwp 2,500 A/B (origin/devel base exe vs fix exe): **회귀 0 / 개선 2**
   (admrul_0646 OVER 247→PASS, admrul_0645 465→323). 비-PASS 6→5, STRUCT/PAGE/LOAD_FAIL 0 유지.
 - big_hwpx 2,500 A/B: **완전 동일** (PASS 2483/STRUCT 9/OVER 8 양측 일치, 파일별
