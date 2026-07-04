@@ -3536,12 +3536,79 @@ impl TypesetEngine {
         }
 
         // [미주 배치 — Hancom EndnoteEndOfSection/EndnoteEndOfDocument]
+        self.typeset_section_endnotes(
+            &mut st,
+            paragraphs,
+            composed,
+            styles,
+            section_index,
+            page_def,
+            measured_tables,
+            endnote_shape,
+            &endnote_deferral,
+        );
+
+        // 마지막 항목 처리
+        self.flush_deferred_table_controls(
+            &mut st,
+            paragraphs,
+            composed,
+            styles,
+            measured_tables,
+            None,
+        );
+        if !st.current_items.is_empty() {
+            st.flush_column_always();
+        }
+        st.ensure_page();
+
+        // 페이지 번호 + 머리말/꼬리말 할당
+        Self::finalize_pages(
+            &mut st.pages,
+            &hf_entries,
+            &page_number_pos,
+            &new_page_numbers,
+            &page_hides,
+            section_index,
+        );
+
+        PaginationResult {
+            pages: st.pages,
+            wrap_around_paras: Vec::new(),
+            hidden_empty_paras: st.hidden_empty_paras,
+            pre_emitted_host_paras: st.pre_emitted_host_paras,
+            endnotes: st.endnotes,
+            endnote_paragraphs: st.endnote_paragraphs,
+            endnote_para_sources: st.endnote_para_sources,
+            endnote_between_notes_hu: st.endnote_between_notes_hu,
+            endnote_separator_above_hu: st.endnote_separator_above_hu,
+            endnote_separator_below_hu: st.endnote_separator_below_hu,
+        }
+    }
+
+    /// [Task #1904] 미주(endnote) 가상 삽입·배치 — `typeset_section_with_variant` 에서
+    /// 동작 불변 추출 (1차 리팩토링 라운드 1). 미주 deferral 을 정리한 뒤 `st.endnotes` 를
+    /// 본문 흐름 뒤에 배치한다 (#836 한컴 정합: 미주는 섹션 끝 2단 플로우).
+    /// 소스-포맷(is_hwp3/is_hwpx) 분기 비접촉 블록.
+    #[allow(clippy::too_many_arguments)]
+    fn typeset_section_endnotes(
+        &self,
+        st: &mut TypesetState,
+        paragraphs: &[Paragraph],
+        composed: &[ComposedParagraph],
+        styles: &ResolvedStyleSet,
+        section_index: usize,
+        page_def: &PageDef,
+        measured_tables: &[MeasuredTable],
+        endnote_shape: Option<&FootnoteShape>,
+        endnote_deferral: &EndnoteDeferral<'_>,
+    ) {
         // 기본(None)/단일 구역: 이 구역 미주를 구역 끝에 렌더 (구역 끝 ≡ 문서 끝).
         // Suppress(END_OF_DOCUMENT 비-마지막 구역): 참조 표시는 인라인 유지, 본문은
         //   문서 끝으로 미루므로 여기서 비운다.
         // RenderAll(END_OF_DOCUMENT 마지막 구역): 앞선 구역 미주(문서 순서) → 이 구역
         //   미주 순으로 endnote_refs 앞에 이어 붙여 모두 문서 끝에 렌더한다.
-        match &endnote_deferral {
+        match endnote_deferral {
             EndnoteDeferral::Suppress => st.endnotes.clear(),
             EndnoteDeferral::RenderAll(deferred) => {
                 let mut merged: Vec<EndnoteRef> = deferred.iter().map(|d| d.reff.clone()).collect();
@@ -8772,7 +8839,7 @@ impl TypesetEngine {
                                 None
                             };
                             maybe_register_square_picture_wrap_anchor(
-                                &mut st,
+                                &mut *st,
                                 paragraphs,
                                 en_para,
                                 en_para_idx,
@@ -9044,7 +9111,7 @@ impl TypesetEngine {
                                     }
                                 }
                             }
-                            activate_square_picture_wrap_for_para(&mut st, en_para_idx, en_para);
+                            activate_square_picture_wrap_for_para(&mut *st, en_para_idx, en_para);
                             // 다음 미주의 base 가 될 본 미주 bottom 기록.
                             if split_endnote_emitted {
                                 prev_en_bottom_vpos = None;
@@ -9061,43 +9128,6 @@ impl TypesetEngine {
                     }
                 }
             }
-        }
-
-        // 마지막 항목 처리
-        self.flush_deferred_table_controls(
-            &mut st,
-            paragraphs,
-            composed,
-            styles,
-            measured_tables,
-            None,
-        );
-        if !st.current_items.is_empty() {
-            st.flush_column_always();
-        }
-        st.ensure_page();
-
-        // 페이지 번호 + 머리말/꼬리말 할당
-        Self::finalize_pages(
-            &mut st.pages,
-            &hf_entries,
-            &page_number_pos,
-            &new_page_numbers,
-            &page_hides,
-            section_index,
-        );
-
-        PaginationResult {
-            pages: st.pages,
-            wrap_around_paras: Vec::new(),
-            hidden_empty_paras: st.hidden_empty_paras,
-            pre_emitted_host_paras: st.pre_emitted_host_paras,
-            endnotes: st.endnotes,
-            endnote_paragraphs: st.endnote_paragraphs,
-            endnote_para_sources: st.endnote_para_sources,
-            endnote_between_notes_hu: st.endnote_between_notes_hu,
-            endnote_separator_above_hu: st.endnote_separator_above_hu,
-            endnote_separator_below_hu: st.endnote_separator_below_hu,
         }
     }
 
