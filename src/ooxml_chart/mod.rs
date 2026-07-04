@@ -44,6 +44,22 @@ pub struct OoxmlChart {
     pub grouping: BarGrouping,
     /// 분산형 `c:scatterStyle` (표식/직선/곡선). scatter 렌더러만 사용. (C1b #1660)
     pub scatter_style: ScatterStyle,
+    /// 범례 위치 (`c:legendPos`). 한컴 코퍼스는 전 샘플 `val="r"`. (C1c #1882 갭③)
+    pub legend_pos: LegendPos,
+}
+
+/// 범례 위치 (`c:legendPos`). C1c #1882 갭③.
+///
+/// 기본값 Bottom — `c:legend`/`legendPos` 미존재 시 현행 하단 배치를 유지한다
+/// (모델을 직접 구성하는 기존 테스트·XML 보호). Right만 우측 세로 스택으로
+/// 렌더하며 Left/Top은 하단 폴백(코퍼스 전 샘플이 r — 확장은 후속).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LegendPos {
+    #[default]
+    Bottom,
+    Right,
+    Left,
+    Top,
 }
 
 /// 막대 차트 그룹화 방식 (`c:grouping`). line 누적은 미지원(C1d).

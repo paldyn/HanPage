@@ -9,7 +9,7 @@
 //! - `<c:valAx>`에서 `<c:axId>`와 `<c:axPos>` 수집 → axId→primary/secondary 매핑 생성
 //! - 파싱 완료 시 시리즈의 axis_ids를 primary/secondary 집합과 비교해 axis_group 지정
 
-use super::{BarGrouping, OoxmlChart, OoxmlChartType, OoxmlSeries, ScatterStyle};
+use super::{BarGrouping, LegendPos, OoxmlChart, OoxmlChartType, OoxmlSeries, ScatterStyle};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::collections::HashMap;
@@ -271,6 +271,18 @@ fn handle_start(e: &quick_xml::events::BytesStart, chart: &mut OoxmlChart, st: &
                 chart.auto_title_deleted = matches!(val.as_str(), "1" | "true");
             }
         }
+        b"legendPos" => {
+            // C1c #1882 갭③: 한컴 코퍼스는 전 샘플 r(우측). legendPos는 c:legend
+            // 안에서만 등장하므로 상태 플래그 불요.
+            if let Some(val) = attr_val(e, "val") {
+                chart.legend_pos = match val.as_str() {
+                    "r" => LegendPos::Right,
+                    "l" => LegendPos::Left,
+                    "t" => LegendPos::Top,
+                    _ => LegendPos::Bottom,
+                };
+            }
+        }
         b"v" => {
             st.in_v = true;
             st.cur_text_buf.clear();
@@ -528,6 +540,28 @@ mod tests {
         let c = parse_chart_xml(titleless_bar_xml("1").as_bytes()).expect("parse OK");
         assert!(c.has_title_elem);
         assert!(c.auto_title_deleted, "val=1 → 자동 제목 억제");
+    }
+
+    // --- C1c (#1882) 갭③: 범례 위치 ---
+
+    #[test]
+    fn test_parse_legend_pos_right() {
+        // 한컴 코퍼스 실태: <c:legend><c:legendPos val="r"/></c:legend> (plotArea 뒤)
+        let xml = r#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart>
+<c:plotArea><c:barChart><c:barDir val="col"/><c:ser>
+  <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>3</c:v></c:pt></c:numCache></c:numRef></c:val>
+</c:ser></c:barChart></c:plotArea>
+<c:legend><c:legendPos val="r"/><c:overlay val="0"/></c:legend>
+</c:chart></c:chartSpace>"#;
+        let c = parse_chart_xml(xml.as_bytes()).expect("parse OK");
+        assert_eq!(c.legend_pos, LegendPos::Right);
+    }
+
+    #[test]
+    fn test_parse_legend_pos_default_bottom() {
+        // legend/legendPos 미존재 → 기본 Bottom (현행 하단 배치 유지)
+        let c = parse_chart_xml(titleless_bar_xml("0").as_bytes()).expect("parse OK");
+        assert_eq!(c.legend_pos, LegendPos::Bottom);
     }
 
     #[test]

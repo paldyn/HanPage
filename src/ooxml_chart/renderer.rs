@@ -4,7 +4,7 @@
 //! - 세로/가로 막대, 꺾은선, 원형
 //! - **콤보 차트** (bar + line) 및 **이중 Y축** 지원
 
-use super::{BarGrouping, OoxmlChart, OoxmlChartType, OoxmlSeries, ScatterStyle};
+use super::{BarGrouping, LegendPos, OoxmlChart, OoxmlChartType, OoxmlSeries, ScatterStyle};
 
 /// 기본 시리즈 색상 팔레트 (시리즈 색상 미지정 시 순환 사용)
 ///
@@ -106,8 +106,23 @@ pub fn render_chart_svg(chart: &OoxmlChart, x: f64, y: f64, w: f64, h: f64) -> S
 
     // 영역 분할
     let title_h = if effective_title.is_some() { 22.0 } else { 4.0 };
-    let legend_h = if chart.series.iter().any(|s| !s.name.is_empty()) {
+    let legend_visible = chart.series.iter().any(|s| !s.name.is_empty());
+    // C1c #1882 갭③: legendPos=r(한컴 코퍼스 전 샘플)은 우측 세로 스택 — 하단 슬롯
+    // 대신 우측 폭(legend_w)을 확보. 그 외 위치는 현행 하단 가로 유지.
+    let legend_right = legend_visible && chart.legend_pos == LegendPos::Right;
+    let legend_h = if legend_visible && !legend_right {
         22.0
+    } else {
+        0.0
+    };
+    let legend_w = if legend_right {
+        let max_chars = legend_items(chart)
+            .iter()
+            .map(|(label, _, _)| label.chars().count())
+            .max()
+            .unwrap_or(0);
+        // 스와치 10 + 간격 8 + CJK ~10px/자 (플롯 최소폭은 아래 .max(10.0)이 방어)
+        (max_chars as f64 * 10.0 + 26.0).clamp(50.0, w * 0.30)
     } else {
         0.0
     };
@@ -121,7 +136,7 @@ pub fn render_chart_svg(chart: &OoxmlChart, x: f64, y: f64, w: f64, h: f64) -> S
     let bottom_pad = 26.0;
     let plot_x = x + left_pad;
     let plot_y = y + title_h + 4.0;
-    let plot_w = (w - left_pad - right_pad).max(10.0);
+    let plot_w = (w - left_pad - right_pad - legend_w).max(10.0);
     let plot_h = (h - title_h - legend_h - bottom_pad).max(10.0);
 
     if let Some(ref title) = effective_title {
@@ -137,14 +152,18 @@ pub fn render_chart_svg(chart: &OoxmlChart, x: f64, y: f64, w: f64, h: f64) -> S
     // 파이 차트는 단독 경로
     if chart.chart_type == OoxmlChartType::Pie {
         render_pie(&mut svg, chart, plot_x, plot_y, plot_w, plot_h);
-        render_legend(
-            &mut svg,
-            chart,
-            x + 8.0,
-            y + h - legend_h,
-            w - 16.0,
-            legend_h,
-        );
+        if legend_right {
+            render_legend_right(&mut svg, chart, x + w - legend_w + 4.0, plot_y, plot_h);
+        } else {
+            render_legend(
+                &mut svg,
+                chart,
+                x + 8.0,
+                y + h - legend_h,
+                w - 16.0,
+                legend_h,
+            );
+        }
         svg.push_str("</g>\n");
         return svg;
     }
@@ -168,14 +187,18 @@ pub fn render_chart_svg(chart: &OoxmlChart, x: f64, y: f64, w: f64, h: f64) -> S
         }
     }
 
-    render_legend(
-        &mut svg,
-        chart,
-        x + 8.0,
-        y + h - legend_h,
-        w - 16.0,
-        legend_h,
-    );
+    if legend_right {
+        render_legend_right(&mut svg, chart, x + w - legend_w + 4.0, plot_y, plot_h);
+    } else {
+        render_legend(
+            &mut svg,
+            chart,
+            x + 8.0,
+            y + h - legend_h,
+            w - 16.0,
+            legend_h,
+        );
+    }
     svg.push_str("</g>\n");
     svg
 }
@@ -969,12 +992,9 @@ fn render_category_labels(
 
 // ---------------- Legend ----------------
 
-fn render_legend(svg: &mut String, chart: &OoxmlChart, x: f64, y: f64, w: f64, _h: f64) {
-    let n = chart.series.len();
-    if n == 0 {
-        return;
-    }
-    let items: Vec<(String, u32, OoxmlChartType)> = match chart.chart_type {
+/// 범례 항목 목록 `(라벨, 색상, 시리즈 타입)`. pie는 카테고리별, 그 외는 시리즈별.
+fn legend_items(chart: &OoxmlChart) -> Vec<(String, u32, OoxmlChartType)> {
+    match chart.chart_type {
         OoxmlChartType::Pie => {
             let first = chart.series.first();
             first
@@ -1009,34 +1029,72 @@ fn render_legend(svg: &mut String, chart: &OoxmlChart, x: f64, y: f64, w: f64, _
                 (label, color, s.series_type)
             })
             .collect(),
-    };
+    }
+}
 
+/// 범례 스와치 1개: 라인 시리즈는 선, 그 외 10×10 사각형. `cy` = 행 세로 중심.
+fn push_legend_swatch(svg: &mut String, ix: f64, cy: f64, color: u32, stype: OoxmlChartType) {
+    if stype == OoxmlChartType::Line {
+        svg.push_str(&format!(
+            "<line x1=\"{:.2}\" y1=\"{:.2}\" x2=\"{:.2}\" y2=\"{:.2}\" stroke=\"{}\" stroke-width=\"2\"/>\n",
+            ix, cy, ix + 14.0, cy, color_hex(color)
+        ));
+    } else {
+        svg.push_str(&format!(
+            "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"10\" height=\"10\" fill=\"{}\"/>\n",
+            ix,
+            cy - 6.0,
+            color_hex(color)
+        ));
+    }
+}
+
+/// 하단 가로 범례 (legendPos=b 및 기본값)
+fn render_legend(svg: &mut String, chart: &OoxmlChart, x: f64, y: f64, w: f64, _h: f64) {
+    if chart.series.is_empty() {
+        return;
+    }
+    let items = legend_items(chart);
+
+    svg.push_str("<g class=\"hwp-chart-legend\">\n");
     // 가운데 정렬: 항목 개수로 총 너비 계산
     let item_w = 100.0_f64.min((w / items.len().max(1) as f64).max(60.0));
     let total_w = item_w * items.len() as f64;
     let start_x = x + (w - total_w) / 2.0;
     for (i, (label, color, stype)) in items.iter().enumerate() {
         let ix = start_x + item_w * i as f64;
-        let cy = y + 11.0;
-        // 라인 시리즈는 작은 선 + 점, 막대/파이는 사각형
-        if *stype == OoxmlChartType::Line {
-            svg.push_str(&format!(
-                "<line x1=\"{:.2}\" y1=\"{:.2}\" x2=\"{:.2}\" y2=\"{:.2}\" stroke=\"{}\" stroke-width=\"2\"/>\n",
-                ix, cy, ix + 14.0, cy, color_hex(*color)
-            ));
-        } else {
-            svg.push_str(&format!(
-                "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"10\" height=\"10\" fill=\"{}\"/>\n",
-                ix,
-                y + 5.0,
-                color_hex(*color)
-            ));
-        }
+        push_legend_swatch(svg, ix, y + 11.0, *color, *stype);
         svg.push_str(&format!(
             "<text x=\"{:.2}\" y=\"{:.2}\" font-family=\"sans-serif\" font-size=\"10\" fill=\"#333\">{}</text>\n",
             ix + 18.0, y + 14.0, xml_escape(label)
         ));
     }
+    svg.push_str("</g>\n");
+}
+
+/// 우측 세로 범례 (legendPos=r — 한컴 코퍼스 전 샘플). 플롯 세로 중앙 정렬.
+/// C1c #1882 갭③.
+fn render_legend_right(svg: &mut String, chart: &OoxmlChart, x: f64, y: f64, h: f64) {
+    if chart.series.is_empty() {
+        return;
+    }
+    let items = legend_items(chart);
+    let row_h = 16.0;
+    let total_h = row_h * items.len() as f64;
+    let start_y = y + ((h - total_h) / 2.0).max(0.0);
+
+    svg.push_str("<g class=\"hwp-chart-legend\">\n");
+    for (i, (label, color, stype)) in items.iter().enumerate() {
+        let cy = start_y + row_h * i as f64 + row_h / 2.0;
+        push_legend_swatch(svg, x, cy, *color, *stype);
+        svg.push_str(&format!(
+            "<text x=\"{:.2}\" y=\"{:.2}\" font-family=\"sans-serif\" font-size=\"10\" fill=\"#333\">{}</text>\n",
+            x + 18.0,
+            cy + 3.0,
+            xml_escape(label)
+        ));
+    }
+    svg.push_str("</g>\n");
 }
 
 #[cfg(test)]
@@ -1370,6 +1428,59 @@ mod tests {
         assert!(!render_chart_svg(&deleted, 0.0, 0.0, 400.0, 300.0).contains("차트 제목"));
         // has_title_elem=false (기본값) → 자동 제목 없음
         assert!(!render_chart_svg(&base, 0.0, 0.0, 400.0, 300.0).contains("차트 제목"));
+    }
+
+    // --- C1c (#1882) 갭③: 범례 우측 배치 ---
+
+    /// `hwp-chart-legend` 그룹 안 첫 `<text>`의 지정 속성 값
+    fn legend_first_text_attr(svg: &str, attr: &str) -> f64 {
+        let g = svg.split("class=\"hwp-chart-legend\"").nth(1).expect("범례 그룹");
+        let text = g.split("<text ").nth(1).expect("범례 텍스트");
+        let pat = format!("{attr}=\"");
+        let s = text.find(&pat).expect("attr") + pat.len();
+        let e = s + text[s..].find('"').expect("attr close");
+        text[s..e].parse().expect("f64")
+    }
+
+    fn named_chart(legend_pos: LegendPos) -> OoxmlChart {
+        OoxmlChart {
+            chart_type: OoxmlChartType::Column,
+            legend_pos,
+            series: vec![
+                OoxmlSeries {
+                    name: "계열 1".into(),
+                    values: vec![1.0, 2.0],
+                    series_type: OoxmlChartType::Column,
+                    ..Default::default()
+                },
+                OoxmlSeries {
+                    name: "계열 2".into(),
+                    values: vec![3.0, 4.0],
+                    series_type: OoxmlChartType::Column,
+                    ..Default::default()
+                },
+            ],
+            categories: vec!["a".into(), "b".into()],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_render_legend_right_vertical() {
+        // legendPos=Right → 범례가 플롯 우측(x > 차트 폭 65%)에 세로 스택.
+        let svg = render_chart_svg(&named_chart(LegendPos::Right), 0.0, 0.0, 400.0, 300.0);
+        let tx = legend_first_text_attr(&svg, "x");
+        assert!(tx > 260.0, "우측 범례 텍스트 x={tx} > 260 이어야");
+        let ty = legend_first_text_attr(&svg, "y");
+        assert!(ty < 250.0, "우측 범례는 플롯 세로 중앙부(y={ty} < 250)여야");
+    }
+
+    #[test]
+    fn test_render_legend_bottom_default_unchanged() {
+        // 기본(Bottom) → 종전 하단 가로 배치 유지.
+        let svg = render_chart_svg(&named_chart(LegendPos::Bottom), 0.0, 0.0, 400.0, 300.0);
+        let ty = legend_first_text_attr(&svg, "y");
+        assert!(ty > 270.0, "하단 범례 텍스트 y={ty} > 270 이어야");
     }
 
     // --- C1c (#1882) 갭④: Y축 headroom + step 기반 눈금 (한컴 실측 앵커 3점) ---
