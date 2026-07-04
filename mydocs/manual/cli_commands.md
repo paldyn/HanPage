@@ -96,7 +96,14 @@ HWP 내장 썸네일(PrvImage) 추출.
 ## 3. 변환·비교
 
 ### `convert <입력.hwp|.hwpx> <출력.hwp>`
-배포용(읽기전용) HWP → 편집 가능 HWP 변환.
+배포용(읽기전용) HWP → 편집 가능 HWP 변환. 출력은 항상 `.hwp`.
+
+### `export-hwpx <입력.hwp|.hwpx> [출력.hwpx]` (#1868)
+HWP 문서를 HWPX(ZIP+XML)로 변환 저장. `convert`(배포용 해제)와 별개의 포맷 변환 명령.
+- 입력 포맷 자동 감지(HWP5/HWP3/HWPX — HWPX 입력은 재직렬화).
+- 출력 생략 시 입력과 같은 폴더에 `<입력 stem>.hwpx`. 입력==출력 경로면 거부(원본 보호).
+- 검증: HWP→HWPX 산출물의 페이지네이션 정합은 `tools/roundtrip_fidelity_harness.py` 로
+  대조 가능(HWPX→HWP 역방향 왕복).
 
 ### `ir-diff <파일A.hwpx> <파일B.hwp> [-s <구역>] [-p <문단>] [--summary] [--max-lines N]`
 두 파일의 IR 비교(HWPX↔HWP 불일치 검출). 상세: [ir_diff_command.md](ir_diff_command.md)
