@@ -471,15 +471,21 @@ fn serialize_column_def(cd: &ColumnDef, level: u16, records: &mut Vec<Record>) {
 fn serialize_table(table: &Table, level: u16, records: &mut Vec<Record>) {
     // CTRL_HEADER: raw_ctrl_data는 CommonObjAttr 전체 (attr 포함)
     // Task 271에서 파싱 변경: ctrl_data 전체 = CommonObjAttr
-    records.push(make_ctrl_record(
-        tags::CTRL_TABLE,
-        level,
-        if !table.raw_ctrl_data.is_empty() {
-            &table.raw_ctrl_data
-        } else {
-            &[]
-        },
-    ));
+    // [Issue #1916] raw 부재 시 CommonObjAttr 를 IR 에서 재구성한다. 종전처럼 빈
+    // ctrl data 를 쓰면 재로드 시 treat_as_char/flowWithText/wrap 등 개체 공통속성
+    // 전체가 디폴트로 소실된다 (hwpdocs 10k 서베이 12건 — raw_ctrl_data 미보존
+    // HWP5 원본). hwpx_to_hwp 어댑터 Stage 2 의 합성(한컴 인식 검증)과 동일 계약.
+    let synthesized_ctrl_data;
+    let ctrl_data: &[u8] = if !table.raw_ctrl_data.is_empty() {
+        &table.raw_ctrl_data
+    } else {
+        synthesized_ctrl_data =
+            crate::document_core::converters::common_obj_attr_writer::serialize_common_obj_attr(
+                &table.common,
+            );
+        &synthesized_ctrl_data
+    };
+    records.push(make_ctrl_record(tags::CTRL_TABLE, level, ctrl_data));
 
     // 캡션 (TABLE 이전, level+1)
     if let Some(ref caption) = table.caption {
