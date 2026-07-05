@@ -28,9 +28,15 @@ interface ReRenderPolicy {
   reuseStaticOverlay: boolean;
 }
 
+interface LayerSummaryCacheEntry {
+  key: string;
+  summary: LayerPlaneSummary;
+}
+
 export class PageRenderer {
   private reRenderTimers = new Map<number, ReturnType<typeof setTimeout>[]>();
   private imageRetryCounts = new Map<number, string>();
+  private layerSummaryCache = new Map<number, LayerSummaryCacheEntry>();
   private flowSplitSupported: boolean | null = null;
 
   constructor(
@@ -50,11 +56,12 @@ export class PageRenderer {
     context: PageRenderContext = {},
   ): void {
     if (this.backend === 'canvaskit') {
+      this.layerSummaryCache.delete(pageIdx);
       this.renderPageCanvasKit(pageIdx, canvas, renderScale);
       return;
     }
 
-    const layers = this.getLayerPlaneSummary(pageIdx);
+    const layers = this.getLayerPlaneSummary(pageIdx, canvas, renderScale, context);
     const preferStaticFlow = this.shouldUseStaticFlowReuse(context, layers);
     let reuseStaticFlow = this.renderFlowCanvas(pageIdx, canvas, renderScale, preferStaticFlow);
 
@@ -74,6 +81,7 @@ export class PageRenderer {
       this.drawMarginGuides(pageIdx, canvas, renderScale);
       overlays = this.applyOverlays(pageIdx, canvas, renderScale, dpr, context, layers, false);
     }
+    this.rememberLayerPlaneSummary(pageIdx, canvas, renderScale, layers);
     // rawSvg(차트/OLE)도 web_canvas draw_image 비동기 디코드 경로를 타므로
     // image 와 함께 재렌더 트리거 카운트에 합산한다(#1456).
     this.scheduleReRender(pageIdx, canvas, renderScale, overlays.imageCount + overlays.rawSvgCount, {
@@ -306,6 +314,7 @@ export class PageRenderer {
   }
 
   removePageLayers(parent: HTMLElement, pageIdx: number): void {
+    this.layerSummaryCache.delete(pageIdx);
     parent.querySelectorAll(
       `[data-rhwp-overlay-page="${pageIdx}"],` +
       `[data-rhwp-overlay="background-${pageIdx}"],` +
@@ -348,6 +357,7 @@ export class PageRenderer {
   }
 
   removeAllPageLayers(parent: HTMLElement): void {
+    this.layerSummaryCache.clear();
     parent.querySelectorAll(
       '[data-rhwp-overlay-page],' +
       '[data-rhwp-overlay^="background-"],' +
@@ -402,10 +412,53 @@ export class PageRenderer {
     }
   }
 
-  private getLayerPlaneSummary(pageIdx: number): LayerPlaneSummary {
+  private getLayerPlaneSummary(
+    pageIdx: number,
+    canvas: HTMLCanvasElement,
+    renderScale: number,
+    context: PageRenderContext,
+  ): LayerPlaneSummary {
+    const cacheKey = this.buildLayerSummaryCacheKey(pageIdx, canvas, renderScale);
+    if (context.reason === 'text-edit' && context.allowStaticOverlayReuse === true) {
+      const cached = this.layerSummaryCache.get(pageIdx);
+      if (cached?.key === cacheKey) return { ...cached.summary };
+    }
+
     const overlaySummary = this.getLayerPlaneSummaryFromOverlayImages(pageIdx);
-    if (overlaySummary) return overlaySummary;
-    return this.getLayerPlaneSummaryFromTree(pageIdx);
+    if (overlaySummary) {
+      this.layerSummaryCache.set(pageIdx, { key: cacheKey, summary: overlaySummary });
+      return overlaySummary;
+    }
+    const treeSummary = this.getLayerPlaneSummaryFromTree(pageIdx);
+    this.layerSummaryCache.set(pageIdx, { key: cacheKey, summary: treeSummary });
+    return treeSummary;
+  }
+
+  private rememberLayerPlaneSummary(
+    pageIdx: number,
+    canvas: HTMLCanvasElement,
+    renderScale: number,
+    summary: LayerPlaneSummary,
+  ): void {
+    this.layerSummaryCache.set(pageIdx, {
+      key: this.buildLayerSummaryCacheKey(pageIdx, canvas, renderScale),
+      summary: { ...summary },
+    });
+  }
+
+  private buildLayerSummaryCacheKey(
+    pageIdx: number,
+    canvas: HTMLCanvasElement,
+    renderScale: number,
+  ): string {
+    return [
+      `page=${pageIdx}`,
+      `scale=${renderScale}`,
+      `width=${canvas.width}`,
+      `height=${canvas.height}`,
+      `profile=${this.renderProfile}`,
+      `backend=${this.backend}`,
+    ].join('|');
   }
 
   private getLayerPlaneSummaryFromOverlayImages(pageIdx: number): LayerPlaneSummary | null {
@@ -684,10 +737,12 @@ export class PageRenderer {
 
   resetImageRetryState(): void {
     this.imageRetryCounts.clear();
+    this.layerSummaryCache.clear();
   }
 
   dispose(): void {
     this.cancelAll();
+    this.layerSummaryCache.clear();
     this.canvaskitRenderer?.dispose();
     this.canvaskitRenderer = null;
   }

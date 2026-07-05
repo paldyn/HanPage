@@ -59,12 +59,21 @@ Stage 1 계측으로 두 병목을 분리했다.
 - `253E-empty`, `143E`가 실제 runtime에서 `flow-dynamic` + `flow-static` 경로를 타고,
   반복 입력 2회차부터 `flow-dynamic`만 다시 렌더링함을 확인했다.
 
+### Stage 7 - 빠른 연속 입력 coalescing
+
+- `CanvasView`가 `text-edit` page invalidation을 `requestAnimationFrame` 단위로 합치도록 바꿨다.
+- 같은 페이지에 빠르게 들어온 여러 text-edit invalidation은 최신 상태만 한 번 렌더한다.
+- `PageRenderer`가 text-edit fast path에서 page layer summary cache를 재사용하도록 바꿨다.
+- `복학원서.hwp` 20회 연속 입력+무효화 probe의 key handler 평균이 63.24ms/key에서 0.12ms/key로 내려갔다.
+
 ## 3. 주요 변경 파일
 
 | 파일 | 내용 |
 |------|------|
 | `rhwp-studio/src/view/canvas-view.ts` | text-edit invalidation context 전달 |
+| `rhwp-studio/src/view/canvas-view.ts` | Stage 7: text-edit invalidation requestAnimationFrame coalescing |
 | `rhwp-studio/src/view/page-renderer.ts` | overlay summary 우선 사용, overlay canvas 재사용, static flow 분리, delayed rerender policy 분리 |
+| `rhwp-studio/src/view/page-renderer.ts` | Stage 7: text-edit layer summary cache |
 | `rhwp-studio/src/core/wasm-bridge.ts` | `flow-dynamic`, `flow-static` bridge 계약 추가 |
 | `src/document_core/queries/rendering.rs` | overlay summary에 flow image/rawSvg count 추가 |
 | `src/renderer/web_canvas.rs` | `LayerFilter::FlowDynamic`, `LayerFilter::FlowStatic` 추가 |
@@ -119,6 +128,11 @@ VITE_URL="http://127.0.0.1:7700" \
 node /private/tmp/rhwp_stage6_probe_twice.mjs --mode=headless
 ```
 
+```bash
+CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+node /private/tmp/rhwp_task1918_rapid_input_probe.mjs --mode=headless
+```
+
 Native bench 결과는 Stage 1과 같은 범위였고, 일반 표 샘플 `table-001.hwp`는 여전히 render 3.4ms 수준이다.
 
 ## 5. 성능 관찰
@@ -139,6 +153,18 @@ Native bench 결과는 Stage 1과 같은 범위였고, 일반 표 샘플 `table-
 | `253E-empty` | `flow-dynamic` 1, `flow-static` 1 | `flow-dynamic` 1 | 5.5ms |
 | `143E` | `flow-dynamic` 1, `flow-static` 1 | `flow-dynamic` 1 | 10.3ms |
 
+Stage 7 빠른 연속 입력 probe 결과:
+
+| 샘플 | Stage 6 key 평균 | Stage 7 key 평균 | Stage 7 filtered render |
+|------|------------------|------------------|--------------------------|
+| `복학원서.hwp` | 63.24ms/key | 0.12ms/key | `flow` 1회 |
+| `253E-empty` | 15.72ms/key | 0.04ms/key | `flow-dynamic` 1회, `flow-static` 1회 |
+| `143E` | 10.69ms/key | 0.09ms/key | `flow-dynamic` 1회, `flow-static` 1회 |
+| `통합재정통계(2011.10월).hwp` | 6.55ms/key | 0.30ms/key | `flow` 1회 |
+
+Stage 7 probe에서는 20회 invalidation이 page당 1회 렌더로 합쳐졌고, text-edit 구간에서
+`getPageOverlayImages`는 호출되지 않았다.
+
 ## 6. Docker WASM 검증
 
 Docker Desktop 앱은 없었지만 Colima가 설치되어 있었다.
@@ -157,6 +183,7 @@ Docker Desktop 앱은 없었지만 Colima가 설치되어 있었다.
 
 - `복학원서.hwp` 계열: background/behind/front overlay 반복 렌더 제거
 - `253E-empty`, `143E` 계열: flow 내부 정적 이미지/OLE를 `flow-static`으로 분리하고 반복 입력에서 재사용
+- 빠른 연속 입력: text-edit invalidation coalescing으로 키 입력 이벤트가 매번 canvas 렌더를 기다리지 않음
 
 #1456 RawSvg/OLE 첫 로드 재렌더 E2E도 새 WASM runtime에서 통과했다.
 PR 전 runtime 성능 검증까지 완료된 상태다.

@@ -23,6 +23,8 @@ export class CanvasView {
   private pages: PageInfo[] = [];
   private currentVisiblePages: number[] = [];
   private unsubscribers: (() => void)[] = [];
+  private pendingTextEditRefreshes = new Map<number, PageRenderContext>();
+  private textEditRefreshRafId: number | null = null;
 
   constructor(
     private container: HTMLElement,
@@ -113,6 +115,7 @@ export class CanvasView {
     const prefetchSet = new Set(prefetchPages);
     for (const pageIdx of this.canvasPool.activePages) {
       if (!prefetchSet.has(pageIdx)) {
+        this.cancelPendingTextEditRefresh(pageIdx);
         this.pageRenderer.cancelReRender(pageIdx);
         this.pageRenderer.removePageLayers(this.scrollContent, pageIdx);
         this.removeGridOverlay(pageIdx);
@@ -214,6 +217,7 @@ export class CanvasView {
 
     if (wasGrid || isGrid) {
       // 그리드 관련 변경 시 전체 재렌더링
+      this.cancelPendingTextEditRefresh();
       this.releaseAllRenderedPages();
       this.pageRenderer.cancelAll();
     }
@@ -244,6 +248,7 @@ export class CanvasView {
     this.viewportManager.setScrollTop(newCenter - vpHeight / 2);
 
     // 모든 Canvas 재렌더링
+    this.cancelPendingTextEditRefresh();
     this.releaseAllRenderedPages();
     this.pageRenderer.cancelAll();
     this.updateVisiblePages();
@@ -269,6 +274,7 @@ export class CanvasView {
     this.recalcLayout();
 
     // 보이는 페이지 재렌더링
+    this.cancelPendingTextEditRefresh();
     this.releaseAllRenderedPages();
     this.pageRenderer.cancelAll();
     this.updateVisiblePages();
@@ -292,9 +298,43 @@ export class CanvasView {
         : { reason: 'unknown', allowStaticOverlayReuse: false };
 
     if (!Number.isInteger(pageIndex) || pageIndex < 0) {
+      this.cancelPendingTextEditRefresh();
       this.refreshPages();
       return;
     }
+
+    const pageCount = this.wasm.pageCount;
+    if (pageCount !== this.pages.length || pageIndex >= pageCount) {
+      this.cancelPendingTextEditRefresh();
+      this.refreshPages();
+      return;
+    }
+
+    if (renderContext.reason === 'text-edit') {
+      this.scheduleTextEditPageRefresh(pageIndex, renderContext);
+      return;
+    }
+
+    this.cancelPendingTextEditRefresh(pageIndex);
+    this.refreshInvalidatedPageNow(pageIndex, renderContext);
+  }
+
+  private scheduleTextEditPageRefresh(pageIndex: number, renderContext: PageRenderContext): void {
+    this.pendingTextEditRefreshes.set(pageIndex, renderContext);
+    if (this.textEditRefreshRafId !== null) return;
+
+    this.textEditRefreshRafId = requestAnimationFrame(() => {
+      this.textEditRefreshRafId = null;
+      const pending = Array.from(this.pendingTextEditRefreshes.entries());
+      this.pendingTextEditRefreshes.clear();
+      for (const [pendingPageIndex, pendingContext] of pending) {
+        this.refreshInvalidatedPageNow(pendingPageIndex, pendingContext);
+      }
+    });
+  }
+
+  private refreshInvalidatedPageNow(pageIndex: number, renderContext: PageRenderContext): void {
+    if (this.pages.length === 0) return;
 
     const pageCount = this.wasm.pageCount;
     if (pageCount !== this.pages.length || pageIndex >= pageCount) {
@@ -314,8 +354,22 @@ export class CanvasView {
     }
   }
 
+  private cancelPendingTextEditRefresh(pageIndex?: number): void {
+    if (typeof pageIndex === 'number') {
+      this.pendingTextEditRefreshes.delete(pageIndex);
+    } else {
+      this.pendingTextEditRefreshes.clear();
+    }
+    if (this.pendingTextEditRefreshes.size > 0) return;
+    if (this.textEditRefreshRafId !== null) {
+      cancelAnimationFrame(this.textEditRefreshRafId);
+      this.textEditRefreshRafId = null;
+    }
+  }
+
   /** 리소스를 정리한다 */
   private reset(): void {
+    this.cancelPendingTextEditRefresh();
     this.pageRenderer.cancelAll();
     this.releaseAllRenderedPages();
     this.currentVisiblePages = [];

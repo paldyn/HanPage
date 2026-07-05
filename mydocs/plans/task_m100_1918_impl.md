@@ -285,9 +285,60 @@ frontSig={front image bbox/wrap/effect/brightness/contrast/opacity/crop/transfor
 | 3 | `Task #1918: Stage 3 - text edit overlay canvas 재사용` |
 | 4 | `Task #1918: Stage 4 - flow 정적 이미지 재렌더 정책 분리` |
 | 5 | `Task #1918: Stage 5 - 성능 검증 및 보고` |
+| 6 | `Task #1918: Stage 6 - WASM runtime 검증` |
+| 7 | `Task #1918: Stage 7 - text edit 렌더 coalescing` |
 
 기능 변경과 문서/보고서 변경은 stage 단위 안에서만 함께 묶고, 무관한 포맷 변경은 포함하지 않는다.
 
-## 7. 승인 요청
+## 7. Stage 7 후속 구현 계획
 
-위 5단계 구현계획으로 Stage 1을 시작해도 되는지 확인 부탁드립니다.
+### 배경
+
+Stage 6까지의 개선으로 정적 overlay와 flow-static 반복 렌더링은 줄었지만,
+빠른 연속 키 입력에서는 여전히 `document-page-invalidated`가 입력 이벤트 안에서 즉시 동기 렌더링을 실행한다.
+
+2026-07-05 추가 계측 결과:
+
+| 샘플 | mutation only | mutation + page invalidation |
+|------|---------------|------------------------------|
+| `samples/복학원서.hwp` | 20회 평균 0.3ms/key | 20회 평균 63.2ms/key |
+| `samples/253E164F57A1BC6934-empty.hwp` | 20회 평균 0.09ms/key | 20회 평균 15.7ms/key |
+| `samples/143E433F503322BD33.hwp` | 20회 평균 0.08ms/key | 20회 평균 10.7ms/key |
+| `samples/통합재정통계(2011.10월).hwp` | 20회 평균 0.35ms/key | 20회 평균 6.55ms/key |
+
+즉 표 텍스트 mutation은 충분히 빠르며, 문제는 각 키 입력이 렌더 완료를 기다리는 구조다.
+
+### 목표
+
+- text-edit page-local invalidation을 즉시 렌더하지 않고 animation frame 단위로 합친다.
+- 같은 페이지에 빠르게 들어온 text-edit invalidation은 중간 렌더를 생략하고 최신 상태만 그린다.
+- text-edit에서 overlay summary가 변하지 않는 동안 `getPageOverlayImages`를 매 키마다 호출하지 않는다.
+
+### 작업
+
+1. `CanvasView.refreshInvalidatedPage`에 text-edit 전용 pending queue를 추가한다.
+   - `requestAnimationFrame`으로 페이지별 invalidation을 coalesce한다.
+   - non-text invalidation, full refresh, zoom/resize/reset에서는 pending 작업을 취소한다.
+2. `PageRenderer`에 page/layer summary cache를 추가한다.
+   - text-edit + static reuse 허용 시, 같은 page/scale/canvas size/render profile/backend key가 맞으면 이전 summary를 재사용한다.
+   - full refresh, non-text refresh, overlay 제거, `resetImageRetryState`, `dispose`에서 캐시를 제거한다.
+3. 정적 계약 테스트를 보강한다.
+   - CanvasView가 `requestAnimationFrame` 기반 text-edit coalescing을 가진다.
+   - non-text 경로는 즉시 refresh를 유지한다.
+   - PageRenderer가 text-edit summary cache를 조건부로 사용하고 reset 경로에서 비운다.
+4. 성능 probe를 재실행한다.
+   - `복학원서` 20회 연속 입력에서 key handler 평균 시간이 크게 내려가는지 확인한다.
+   - `통합재정통계` 일반 표 편집 무회귀를 확인한다.
+
+### 가드레일
+
+- 표 구조 변경, 문단 분할/병합, full `document-changed`는 coalescing 대상이 아니다.
+- cursor/caret 갱신은 기존 입력 처리 후 바로 수행한다. 지연되는 것은 페이지 canvas 렌더뿐이다.
+- zoom, resize, canvas release 이후 stale 렌더가 늦게 실행되지 않도록 pending queue를 취소한다.
+- CanvasKit backend는 기존 경로를 유지한다.
+
+## 8. 승인 이력
+
+- Stage 1 시작 승인: 2026-07-05
+- Stage 2-6 진행 승인: 2026-07-05
+- Stage 7 후속 개선 진행 승인: 2026-07-05
