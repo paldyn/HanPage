@@ -12,6 +12,8 @@ import type { LayerRenderProfile } from '@/core/types';
 import { applyGridOverlayBox, createGridClipCornerOverlay, createGridOverlay } from './grid-overlay';
 import { getGridViewSettings } from './grid-settings';
 
+const TEXT_EDIT_STATIC_LAYER_VERIFY_DELAY_MS = 800;
+
 export class CanvasView {
   private virtualScroll: VirtualScroll;
   private canvasPool: CanvasPool;
@@ -25,6 +27,7 @@ export class CanvasView {
   private unsubscribers: (() => void)[] = [];
   private pendingTextEditRefreshes = new Map<number, PageRenderContext>();
   private textEditRefreshRafId: number | null = null;
+  private textEditStaticLayerVerifyTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
   constructor(
     private container: HTMLElement,
@@ -116,6 +119,7 @@ export class CanvasView {
     for (const pageIdx of this.canvasPool.activePages) {
       if (!prefetchSet.has(pageIdx)) {
         this.cancelPendingTextEditRefresh(pageIdx);
+        this.cancelTextEditStaticLayerVerification(pageIdx);
         this.pageRenderer.cancelReRender(pageIdx);
         this.pageRenderer.removePageLayers(this.scrollContent, pageIdx);
         this.removeGridOverlay(pageIdx);
@@ -187,8 +191,9 @@ export class CanvasView {
     }
 
     // WASM이 Canvas 크기를 자동 설정한다 (물리 픽셀 = 페이지크기 × zoom × DPR)
+    let renderResult = { needsTextEditStaticLayerVerification: false };
     try {
-      this.pageRenderer.renderPage(pageIdx, canvas, renderScale, zoom, dpr, renderContext);
+      renderResult = this.pageRenderer.renderPage(pageIdx, canvas, renderScale, zoom, dpr, renderContext);
     } catch (e) {
       console.error(`[CanvasView] 페이지 ${pageIdx} 렌더링 실패:`, e);
       this.pageRenderer.removePageLayers(this.scrollContent, pageIdx);
@@ -200,6 +205,11 @@ export class CanvasView {
     canvas.style.width = `${canvas.width / dpr}px`;
     canvas.style.height = `${canvas.height / dpr}px`;
     this.renderGridOverlay(pageIdx, canvas);
+    if (renderResult.needsTextEditStaticLayerVerification) {
+      this.scheduleTextEditStaticLayerVerification(pageIdx);
+    } else if (renderContext.reason !== 'text-edit') {
+      this.cancelTextEditStaticLayerVerification(pageIdx);
+    }
     return true;
   }
 
@@ -218,6 +228,7 @@ export class CanvasView {
     if (wasGrid || isGrid) {
       // 그리드 관련 변경 시 전체 재렌더링
       this.cancelPendingTextEditRefresh();
+      this.cancelTextEditStaticLayerVerification();
       this.releaseAllRenderedPages();
       this.pageRenderer.cancelAll();
     }
@@ -249,6 +260,7 @@ export class CanvasView {
 
     // 모든 Canvas 재렌더링
     this.cancelPendingTextEditRefresh();
+    this.cancelTextEditStaticLayerVerification();
     this.releaseAllRenderedPages();
     this.pageRenderer.cancelAll();
     this.updateVisiblePages();
@@ -275,6 +287,7 @@ export class CanvasView {
 
     // 보이는 페이지 재렌더링
     this.cancelPendingTextEditRefresh();
+    this.cancelTextEditStaticLayerVerification();
     this.releaseAllRenderedPages();
     this.pageRenderer.cancelAll();
     this.updateVisiblePages();
@@ -299,6 +312,7 @@ export class CanvasView {
 
     if (!Number.isInteger(pageIndex) || pageIndex < 0) {
       this.cancelPendingTextEditRefresh();
+      this.cancelTextEditStaticLayerVerification();
       this.refreshPages();
       return;
     }
@@ -306,6 +320,7 @@ export class CanvasView {
     const pageCount = this.wasm.pageCount;
     if (pageCount !== this.pages.length || pageIndex >= pageCount) {
       this.cancelPendingTextEditRefresh();
+      this.cancelTextEditStaticLayerVerification();
       this.refreshPages();
       return;
     }
@@ -316,10 +331,12 @@ export class CanvasView {
     }
 
     this.cancelPendingTextEditRefresh(pageIndex);
+    this.cancelTextEditStaticLayerVerification(pageIndex);
     this.refreshInvalidatedPageNow(pageIndex, renderContext);
   }
 
   private scheduleTextEditPageRefresh(pageIndex: number, renderContext: PageRenderContext): void {
+    this.cancelTextEditStaticLayerVerification(pageIndex);
     this.pendingTextEditRefreshes.set(pageIndex, renderContext);
     if (this.textEditRefreshRafId !== null) return;
 
@@ -367,9 +384,33 @@ export class CanvasView {
     }
   }
 
+  private scheduleTextEditStaticLayerVerification(pageIndex: number): void {
+    this.cancelTextEditStaticLayerVerification(pageIndex);
+    const timer = setTimeout(() => {
+      this.textEditStaticLayerVerifyTimers.delete(pageIndex);
+      this.refreshInvalidatedPageNow(pageIndex, { reason: 'unknown', allowStaticOverlayReuse: false });
+    }, TEXT_EDIT_STATIC_LAYER_VERIFY_DELAY_MS);
+    this.textEditStaticLayerVerifyTimers.set(pageIndex, timer);
+  }
+
+  private cancelTextEditStaticLayerVerification(pageIndex?: number): void {
+    if (typeof pageIndex === 'number') {
+      const timer = this.textEditStaticLayerVerifyTimers.get(pageIndex);
+      if (timer) clearTimeout(timer);
+      this.textEditStaticLayerVerifyTimers.delete(pageIndex);
+      return;
+    }
+
+    for (const timer of this.textEditStaticLayerVerifyTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.textEditStaticLayerVerifyTimers.clear();
+  }
+
   /** 리소스를 정리한다 */
   private reset(): void {
     this.cancelPendingTextEditRefresh();
+    this.cancelTextEditStaticLayerVerification();
     this.pageRenderer.cancelAll();
     this.releaseAllRenderedPages();
     this.currentVisiblePages = [];

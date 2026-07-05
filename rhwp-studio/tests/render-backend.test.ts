@@ -179,9 +179,21 @@ test('CanvasView coalesces text-edit invalidations before rerendering a page', (
   assert.match(source, /cancelAnimationFrame\(this\.textEditRefreshRafId\)/);
 });
 
+test('CanvasView verifies reused static layers after text-edit idle', () => {
+  const source = readFileSync(new URL('../src/view/canvas-view.ts', import.meta.url), 'utf8');
+  assert.match(source, /TEXT_EDIT_STATIC_LAYER_VERIFY_DELAY_MS/);
+  assert.match(source, /textEditStaticLayerVerifyTimers = new Map<number,\s*ReturnType<typeof setTimeout>>\(\)/);
+  assert.match(source, /needsTextEditStaticLayerVerification/);
+  assert.match(source, /scheduleTextEditStaticLayerVerification\(pageIdx\)/);
+  assert.match(source, /cancelTextEditStaticLayerVerification\(pageIndex\)/);
+  assert.match(source, /refreshInvalidatedPageNow\(pageIndex,\s*\{\s*reason:\s*'unknown',\s*allowStaticOverlayReuse:\s*false\s*\}\)/);
+});
+
 test('PageRenderer reuses static overlay canvases only when the overlay key matches', () => {
   const source = readFileSync(new URL('../src/view/page-renderer.ts', import.meta.url), 'utf8');
   assert.match(source, /export interface PageRenderContext/);
+  assert.match(source, /export interface PageRenderResult/);
+  assert.match(source, /needsTextEditStaticLayerVerification/);
   assert.match(source, /context\.reason === 'text-edit' && context\.allowStaticOverlayReuse === true/);
   assert.match(source, /if \(!allowReuse\) \{/);
   assert.match(source, /this\.removePageLayers\(parent,\s*pageIdx\);/);

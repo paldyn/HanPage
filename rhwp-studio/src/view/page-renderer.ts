@@ -19,6 +19,10 @@ export interface PageRenderContext {
   allowStaticOverlayReuse?: boolean;
 }
 
+export interface PageRenderResult {
+  needsTextEditStaticLayerVerification: boolean;
+}
+
 type OverlayLayerKind = 'background' | 'behind' | 'front';
 type StaticCanvasLayerKind = OverlayLayerKind | 'flow-static';
 
@@ -54,11 +58,11 @@ export class PageRenderer {
     _displayScale: number,
     dpr: number,
     context: PageRenderContext = {},
-  ): void {
+  ): PageRenderResult {
     if (this.backend === 'canvaskit') {
       this.layerSummaryCache.delete(pageIdx);
       this.renderPageCanvasKit(pageIdx, canvas, renderScale);
-      return;
+      return { needsTextEditStaticLayerVerification: false };
     }
 
     const layers = this.getLayerPlaneSummary(pageIdx, canvas, renderScale, context);
@@ -89,6 +93,12 @@ export class PageRenderer {
       reuseStaticFlow,
       reuseStaticOverlay: context.reason === 'text-edit' && context.allowStaticOverlayReuse === true,
     });
+    return {
+      needsTextEditStaticLayerVerification:
+        context.reason === 'text-edit' &&
+        context.allowStaticOverlayReuse === true &&
+        (reuseStaticFlow || layers.hasBehind || layers.hasFront),
+    };
   }
 
   getBackend(): RenderBackend {

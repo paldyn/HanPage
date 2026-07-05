@@ -66,14 +66,27 @@ Stage 1 계측으로 두 병목을 분리했다.
 - `PageRenderer`가 text-edit fast path에서 page layer summary cache를 재사용하도록 바꿨다.
 - `복학원서.hwp` 20회 연속 입력+무효화 probe의 key handler 평균이 63.24ms/key에서 0.12ms/key로 내려갔다.
 
+### Stage 8 - fast path 안전성 보강
+
+- page-local text edit을 작은 같은 셀 삽입/삭제로 더 좁혔다.
+- 긴 단일 paste, 줄바꿈/탭 삽입, 큰 삭제, 편집 전후 page index 변화는 full refresh로 보낸다.
+- text-edit에서 정적 overlay/static flow를 재사용한 경우 800ms idle 검증 렌더를 예약한다.
+- 새 text-edit, full refresh, zoom/resize/reset, canvas release에서는 idle 검증 타이머를 취소한다.
+- Stage 8 probe에서도 key handler 평균은 모든 샘플에서 1ms 미만을 유지했다.
+
 ## 3. 주요 변경 파일
 
 | 파일 | 내용 |
 |------|------|
 | `rhwp-studio/src/view/canvas-view.ts` | text-edit invalidation context 전달 |
 | `rhwp-studio/src/view/canvas-view.ts` | Stage 7: text-edit invalidation requestAnimationFrame coalescing |
+| `rhwp-studio/src/view/canvas-view.ts` | Stage 8: static layer idle verification refresh |
 | `rhwp-studio/src/view/page-renderer.ts` | overlay summary 우선 사용, overlay canvas 재사용, static flow 분리, delayed rerender policy 분리 |
 | `rhwp-studio/src/view/page-renderer.ts` | Stage 7: text-edit layer summary cache |
+| `rhwp-studio/src/view/page-renderer.ts` | Stage 8: static layer verification result |
+| `rhwp-studio/src/engine/input-edit-invalidation.ts` | Stage 8: page-local text edit 범위 제한 |
+| `rhwp-studio/src/engine/command.ts` | Stage 8: text edit payload hint |
+| `rhwp-studio/src/engine/input-handler.ts` | Stage 8: text edit payload/page index hint 전달 |
 | `rhwp-studio/src/core/wasm-bridge.ts` | `flow-dynamic`, `flow-static` bridge 계약 추가 |
 | `src/document_core/queries/rendering.rs` | overlay summary에 flow image/rawSvg count 추가 |
 | `src/renderer/web_canvas.rs` | `LayerFilter::FlowDynamic`, `LayerFilter::FlowStatic` 추가 |
@@ -81,6 +94,7 @@ Stage 1 계측으로 두 병목을 분리했다.
 | `tests/issue_850_answer_sheet_name_hit_test.rs` | compact summary 계약 보정 |
 | `tests/issue_938.rs` | overlay summary flow count 회귀 가드 추가 |
 | `rhwp-studio/tests/render-backend.test.ts` | PageRenderer static overlay/static flow 정책 정적 계약 테스트 추가 |
+| `rhwp-studio/tests/input-edit-invalidation.test.ts` | Stage 8: 긴 paste/페이지 이동/큰 삭제 full refresh 가드 |
 
 ## 4. 검증
 
@@ -165,6 +179,17 @@ Stage 7 빠른 연속 입력 probe 결과:
 Stage 7 probe에서는 20회 invalidation이 page당 1회 렌더로 합쳐졌고, text-edit 구간에서
 `getPageOverlayImages`는 호출되지 않았다.
 
+Stage 8 안전성 보강 후 빠른 연속 입력 probe 결과:
+
+| 샘플 | Stage 7 key 평균 | Stage 8 key 평균 | Stage 8 filtered render |
+|------|------------------|------------------|--------------------------|
+| `복학원서.hwp` | 0.12ms/key | 0.24ms/key | `flow` 2회, `background/behind/front` 각 1회 |
+| `253E-empty` | 0.04ms/key | 0.13ms/key | `flow-dynamic` 1회, `flow-static` 1회, idle `flow` 1회 |
+| `143E` | 0.09ms/key | 0.24ms/key | `flow-dynamic` 1회, `flow-static` 1회, idle `flow` 1회 |
+| `통합재정통계(2011.10월).hwp` | 0.30ms/key | 0.15ms/key | `flow` 1회 |
+
+Stage 8에서는 정적 레이어 문서에 idle 검증 렌더가 추가되지만, 입력 이벤트 경로의 평균 비용은 1ms 미만이다.
+
 ## 6. Docker WASM 검증
 
 Docker Desktop 앱은 없었지만 Colima가 설치되어 있었다.
@@ -184,6 +209,15 @@ Docker Desktop 앱은 없었지만 Colima가 설치되어 있었다.
 - `복학원서.hwp` 계열: background/behind/front overlay 반복 렌더 제거
 - `253E-empty`, `143E` 계열: flow 내부 정적 이미지/OLE를 `flow-static`으로 분리하고 반복 입력에서 재사용
 - 빠른 연속 입력: text-edit invalidation coalescing으로 키 입력 이벤트가 매번 canvas 렌더를 기다리지 않음
+- PR 전 안전성: 긴 paste/페이지 이동/큰 삭제는 full refresh로 되돌리고, 정적 레이어 재사용은 idle 검증 렌더로 회복
 
 #1456 RawSvg/OLE 첫 로드 재렌더 E2E도 새 WASM runtime에서 통과했다.
 PR 전 runtime 성능 검증까지 완료된 상태다.
+
+## 8. 후속 이슈 후보
+
+Stage 8에서 PR 범위의 최소 안전장치는 넣었지만, 다음 일반화 작업은 별도 이슈로 분리하는 것이 적절하다.
+
+- 같은 셀 편집이 실제 페이지 로컬인지 layout/page signature로 판정하는 일반화
+- static layer summary key에 bbox/signature를 포함해 위치 변화까지 감지하는 정밀 캐시 키
+- 다양한 HWP fixture 기반 자동 성능/시각 회귀 probe 정식화

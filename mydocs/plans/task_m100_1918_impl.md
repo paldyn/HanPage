@@ -287,6 +287,7 @@ frontSig={front image bbox/wrap/effect/brightness/contrast/opacity/crop/transfor
 | 5 | `Task #1918: Stage 5 - 성능 검증 및 보고` |
 | 6 | `Task #1918: Stage 6 - WASM runtime 검증` |
 | 7 | `Task #1918: Stage 7 - text edit 렌더 coalescing` |
+| 8 | `Task #1918: Stage 8 - text edit fast path 안전성 보강` |
 
 기능 변경과 문서/보고서 변경은 stage 단위 안에서만 함께 묶고, 무관한 포맷 변경은 포함하지 않는다.
 
@@ -337,8 +338,50 @@ Stage 6까지의 개선으로 정적 overlay와 flow-static 반복 렌더링은 
 - zoom, resize, canvas release 이후 stale 렌더가 늦게 실행되지 않도록 pending queue를 취소한다.
 - CanvasKit backend는 기존 경로를 유지한다.
 
-## 8. 승인 이력
+## 8. Stage 8 안전성 보강 계획
+
+### 배경
+
+Stage 7 검증 후 작업지시자가 직접 `rhwp-studio`에서 워터마크 포함 문서의 빠른 표 입력 지연이
+만족스럽게 개선되었음을 확인했다. 다만 PR 전 리뷰에서 다음 두 가지 잔여 리스크가 확인되었다.
+
+1. 같은 셀 `insertText`/`deleteText`가 항상 페이지 로컬 변경이라는 보장은 없다.
+   - 긴 단일 줄 paste, 페이지 경계 근처 표 셀, 자동 행 높이 변화가 큰 셀은 다른 페이지 배치를
+     움직일 수 있다.
+2. 정적 레이어 재사용은 flow 이미지/OLE/rawSvg 개수와 캔버스 크기 중심의 key를 사용한다.
+   - 개체 개수는 같지만 bbox만 바뀌는 문서에서는 다음 full refresh 전까지 stale layer가 보일 수 있다.
+
+### 목표
+
+- 이번 PR 안에서 text-edit fast path의 직접 부작용 가능성을 줄이는 최소 안전장치를 추가한다.
+- 성능 개선 효과를 유지하되, 레이아웃 변화 가능성이 큰 입력은 기존 full refresh로 되돌린다.
+- PR 본문에 남길 수 있도록 처리 범위와 후속 일반화 범위를 명확히 분리한다.
+
+### 작업
+
+1. page-local 판정 가드 보강
+   - 같은 셀 text edit이라도 단일 명령 텍스트가 줄바꿈/탭을 포함하거나 길이가 큰 경우 full refresh로 보낸다.
+   - plain text paste fallback처럼 `InsertTextCommand`를 쓰는 경로가 과도하게 fast path를 타지 않도록 한다.
+2. 정적 레이어 stale 방어
+   - text-edit fast path에서 정적 레이어 재사용 후 idle/trailing full page refresh 또는 보수적 재검증을 적용할지 검토한다.
+   - 성능 회귀가 작고 구현이 단순한 쪽을 우선한다.
+3. 회귀 테스트 보강
+   - page-local 허용 조건이 `insertText`/`deleteText`의 작은 같은 셀 편집으로 제한되는지 테스트한다.
+   - paste/Enter/선택 삭제/구조 변경 경로가 기존 full refresh에 남는지 정적 계약 테스트를 추가한다.
+4. 문서화
+   - Stage 8 완료 보고서에 이번 PR에서 처리한 안전장치와 후속 이슈로 남길 일반화 항목을 분리 기록한다.
+   - 최종 보고서와 오늘 할일을 갱신한다.
+
+### 가드레일
+
+- Stage 8은 안전성 마감 작업이므로 대규모 레이아웃 diff/signature 설계는 포함하지 않는다.
+- 워터마크 문서의 빠른 연속 입력 성능 개선을 되돌리지 않는다.
+- source 수정 전 작업지시자 승인을 받은 뒤 구현한다.
+
+## 9. 승인 이력
 
 - Stage 1 시작 승인: 2026-07-05
 - Stage 2-6 진행 승인: 2026-07-05
 - Stage 7 후속 개선 진행 승인: 2026-07-05
+- Stage 8 안전성 보강 계획 수립: 2026-07-05
+- Stage 8 안전성 보강 구현 진행 승인: 2026-07-05
