@@ -471,15 +471,21 @@ fn serialize_column_def(cd: &ColumnDef, level: u16, records: &mut Vec<Record>) {
 fn serialize_table(table: &Table, level: u16, records: &mut Vec<Record>) {
     // CTRL_HEADER: raw_ctrl_data는 CommonObjAttr 전체 (attr 포함)
     // Task 271에서 파싱 변경: ctrl_data 전체 = CommonObjAttr
-    records.push(make_ctrl_record(
-        tags::CTRL_TABLE,
-        level,
-        if !table.raw_ctrl_data.is_empty() {
-            &table.raw_ctrl_data
-        } else {
-            &[]
-        },
-    ));
+    //
+    // [#1916] raw_ctrl_data 부재 시(HWPX 파스 IR·편집기 신설 표 등) 종전에는
+    // 빈 데이터를 방출해 재파스 CommonObjAttr 전체(treat_as_char/wrap/
+    // flowWithText 등)가 기본값으로 붕괴했다. 다른 GSO 컨트롤과 동일하게
+    // IR 의 common 으로 합성한다 (attr=0 이면 pack_common_attr_bits 경유 —
+    // flow_with_text bit 13 포함). HWP5 파스본(raw 보존)·어댑터 경로(Stage 2
+    // 합성)는 raw_ctrl_data 가 채워져 있어 동작 불변.
+    let composed_common;
+    let ctrl_data: &[u8] = if !table.raw_ctrl_data.is_empty() {
+        &table.raw_ctrl_data
+    } else {
+        composed_common = serialize_common_obj_attr(&table.common);
+        &composed_common
+    };
+    records.push(make_ctrl_record(tags::CTRL_TABLE, level, ctrl_data));
 
     // 캡션 (TABLE 이전, level+1)
     if let Some(ref caption) = table.caption {

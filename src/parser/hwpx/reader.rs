@@ -23,7 +23,13 @@ use super::HwpxError;
 pub const MAX_XML_SIZE: usize = 32 * 1024 * 1024; // 32 MB
 
 /// BinData(이미지·폰트 등) 엔트리당 압축 해제 상한.
-pub const MAX_BINDATA_SIZE: usize = 64 * 1024 * 1024; // 64 MB
+///
+/// [#1917] 종전 64MB 는 실문서를 거부했다 — 정부 보도자료 계열에 비압축
+/// BMP/TIF 대형 이미지가 실재한다 (10k 서베이: 최대 103.7MB BMP, 한글은
+/// 정상 열람). 로드 거부는 그림 소실 + 재직렬화에서 pic 컨트롤 드롭(왕복
+/// 데이터 손실)으로 이어지므로 512MB 로 상향한다. zip-bomb 방어(무제한
+/// read_to_end 차단)라는 목적은 유지된다.
+pub const MAX_BINDATA_SIZE: usize = 512 * 1024 * 1024; // 512 MB
 
 /// `reader`에서 최대 `max` 바이트까지 읽는다. 초과 시 `InvalidData` 에러.
 ///
