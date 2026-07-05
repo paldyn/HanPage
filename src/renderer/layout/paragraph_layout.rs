@@ -258,6 +258,37 @@ fn line_is_leading_empty_equation_tac_guide(
         && line_has_strict_equation_tac_control(para, comp, tac_offsets_px, line_idx + 1)
 }
 
+/// [#1925 추출] `layout_empty_runs_line` 줄-스코프 스칼라 입력 묶음.
+#[derive(Clone, Copy)]
+struct EmptyRunsLineVars {
+    alignment: crate::model::style::Alignment,
+    available_width: f64,
+    effective_col_x: f64,
+    effective_margin_left: f64,
+    x_start: f64,
+    /// 이 줄 끝의 문서 char 좌표 (원본: char_offset)
+    line_char_end: usize,
+    y: f64,
+    baseline: f64,
+    raw_lh: f64,
+    runs_all_whitespace: bool,
+    max_fs: f64,
+    line_spacing_px: f64,
+    /// para_topbottom_line_vpos_base.is_some()
+    has_topbottom_vpos_base: bool,
+    is_last_line_of_para: bool,
+    defer_empty_line_control_marker: bool,
+    line_flow_height: f64,
+    section_index: usize,
+    para_index: usize,
+}
+/// [#1925 추출] `estimate_line_run_widths` 결과 — est 사전 폭 추정 산출물.
+struct LineWidthEst {
+    /// 추정 종료 x (초기값 기준 누적 점유 폭 계산용)
+    est_x: f64,
+    /// 추정에 포함된 tac 개체 폭 합
+    included_tac_width: f64,
+}
 fn tac_offsets_for_line(
     comp: &ComposedParagraph,
     tac_offsets_px: &[(usize, f64, usize)],
@@ -1962,9 +1993,18 @@ impl LayoutEngine {
                 (font_lh, ensure_min_baseline(font_bl, max_fs))
             } else if has_tac_shape
                 && !empty_tac_guide_has_explicit_shape_height
+                && (cell_ctx.is_none() || max_fs > 0.0)
                 && raw_lh > max_fs * 1.5
             {
                 // Shape와 텍스트가 같은 줄에 있으면 Shape 높이가 line_height에 포함된다.
+                // [#1842] 셀 내부에서 max_fs=0(텍스트 없는 tac-전용 줄)이면 이 보정의
+                // 전제("Shape 와 텍스트의 baseline 정렬")가 성립하지 않는다 — 종전에는
+                // raw_lh > 0*1.5 가 항상 참이라 font_lh=0 으로 퇴화해, 셀 내부
+                // tac 묶음 전용 문단의 저장 lh(예: 3401HU)가 소실되고 후속 블록이
+                // 통째로 당겨졌다 (3114781 p2 −33pt, 한글 2022 오라클 정합 확인).
+                // 본문(cell_ctx 없음)은 reserved/skip-advance 보상 기계가 이 축소값을
+                // 전제로 한컴 정합을 이미 이루고 있어(sample16 issue_1116 한컴 핀)
+                // 종전 동작을 유지한다.
                 let font_lh = max_fs * 1.2; // 폰트 크기의 120%
                 let font_bl = max_fs * 0.85;
                 (font_lh, ensure_min_baseline(font_bl, max_fs))
@@ -2280,280 +2320,24 @@ impl LayoutEngine {
             // treat_as_char 이미지 폭도 포함하여 정확한 폭 산출
             // [Task #604 Stage 2] wrap_anchor 가 있는 줄: line_cs_offset 을 est_x 기준점에
             // 포함 (line_x_offset 은 col_area.x 기준 상대좌표).
-            let mut est_x = effective_margin_left + line_cs_offset + inline_offset;
-            let est_x_start = est_x;
-            let mut pending_right_tab_est: Option<(f64, u8, u8)> = None;
-            let mut pending_right_leader_digit_est = false;
-            let mut run_char_pos_est = comp_line.char_start;
-            let mut included_tac_width_in_est = 0.0f64;
-            // cross-run 탭 감지용 inline_tabs(composed.tab_extended) 커서 — Task #290
-            let mut inline_tab_cursor_est: usize = 0;
-            for (run_idx_est, run) in comp_line.runs.iter().enumerate() {
-                let run_char_count_est = if run.char_overlap.is_some() {
-                    let chars: Vec<char> = run.text.chars().collect();
-                    crate::renderer::composer::char_overlap_advance_units(&chars)
-                } else {
-                    run.text.chars().count()
-                };
-                let run_char_end_est = run_char_pos_est + run_char_count_est;
-                let mut ts = resolved_to_text_style(styles, run.char_style_id, run.lang_index);
-                ts.default_tab_width = tab_width;
-                ts.tab_stops = tab_stops.clone();
-                ts.auto_tab_right = auto_tab_right;
-                ts.available_width = available_width;
-                ts.text_start_offset = effective_margin_left;
-                ts.inline_tabs = composed.tab_extended.clone();
-                if pending_right_leader_digit_est {
-                    if run.text.trim().is_empty() {
-                        pending_right_leader_digit_est = true;
-                    } else {
-                        if run.text.trim().chars().all(|ch| ch.is_ascii_digit()) {
-                            if let Some(tab) = tab_stops
-                                .iter()
-                                .rev()
-                                .find(|tab| tab.tab_type == 1 && tab.fill_type != 0)
-                            {
-                                let digit_w = estimate_text_width(run.text.trim(), &ts);
-                                let target =
-                                    if composed.tab_extended.is_empty() && available_width > 0.0 {
-                                        effective_margin_left + available_width
-                                    } else {
-                                        tab.position
-                                    };
-                                let gap = if composed.tab_extended.is_empty() {
-                                    0.0
-                                } else {
-                                    ts.font_size * 0.25
-                                };
-                                est_x = target - gap - digit_w;
-                            }
-                        }
-                        pending_right_leader_digit_est = false;
-                    }
-                }
-                // 교차 run 오른쪽/가운데 탭: 이 run의 시작 위치를 역방향으로 조정
-                if let Some((tab_pos, tab_type, fill_type)) = pending_right_tab_est.take() {
-                    // [Task #279] 공백만 있는 run 은 right/center tab 정렬 단위가 아니다.
-                    // (장제목 케이스: " " 단독 run → carry-over)
-                    if (tab_type == 1 || tab_type == 2) && run.text.trim().is_empty() {
-                        pending_right_tab_est = Some((tab_pos, tab_type, fill_type));
-                    } else {
-                        ts.line_x_offset = est_x;
-                        // [Task #279] 리더(fill_type ≠ 0) 가 있는 RIGHT 탭은 "이 줄 우측 끝까지" 의미.
-                        // 셀 안 문단에서는 col_area 가 이미 cell padding 적용된 inner_area 이므로
-                        // `effective_margin_left + available_width` 가 inner 우측 끝.
-                        // [Task #874] auto_tab_right 의 tab_pos = available_width (text-start
-                        // 상대). RIGHT 탭은 모두 col-start 좌표계로 변환 시 effective_margin_left
-                        // 더해야 함. 종전엔 fill_type ≠ 0 만 변환되어 leader 없는 auto_right tab
-                        // (shortcut.hwp 인쇄/개체 모양 복사 등) 가 ~27 px 왼쪽으로 밀려 렌더됨.
-                        let effective_pos = if tab_type == 1 {
-                            effective_margin_left
-                                + (if fill_type != 0 {
-                                    available_width
-                                } else {
-                                    tab_pos
-                                })
-                        } else {
-                            tab_pos
-                        };
-                        // [Issue #842 #4] 탭 다음 콘텐츠가 여러 composed run 으로 쪼개진 경우
-                        // (스크립트·char-shape 경계) 전체 블록 폭 기준으로 정렬해야 마지막 글자가
-                        // 탭스톱에 맞는다. (선행 공백 run "예 16" 케이스도 합산에 포함되어 동작 유지.)
-                        let run_w = right_tab_block_width(
-                            &comp_line.runs,
-                            run_idx_est,
-                            styles,
-                            tab_width,
-                            &tab_stops,
-                            auto_tab_right,
-                            available_width,
-                        );
-                        match tab_type {
-                            1 => {
-                                est_x = effective_pos - run_w;
-                            }
-                            2 => {
-                                est_x = effective_pos - run_w / 2.0;
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                // 글자겹침 run: PUA 다자리 숫자는 1글자 폭, 그 외는 font_size * char_count
-                if run.char_overlap.is_some() {
-                    let fs = if ts.font_size > 0.0 {
-                        ts.font_size
-                    } else {
-                        12.0
-                    };
-                    let chars: Vec<char> = run.text.chars().collect();
-                    let w =
-                        fs * crate::renderer::composer::char_overlap_advance_units(&chars) as f64;
-                    est_x += w;
-                    run_char_pos_est = run_char_end_est;
-                    inline_tab_cursor_est += run.text.chars().filter(|c| *c == '\t').count();
-                    continue;
-                }
-                // treat_as_char 분기점 처리: run 내 tac 위치에서 이미지 폭 삽입
-                // 마지막 run에서는 run_char_end 위치의 TAC도 포함
-                //
-                // [Task #1219] TAC 소스를 줄-경계 정규 집합 `line_tac_offsets`
-                // (= tac_offsets_for_line, 렌더 경로와 동일한 `pos < 다음 줄 시작`
-                // 엄격 미만 규칙)로 통일한다. 전역 tac_offsets_px 를 run 경계로
-                // 재필터링하면 줄 끝 위치(== 다음 줄 선두)의 수식이 현재 줄 폭에
-                // 오포함되어(문26 라인0 에 다음 줄 `a₁=b₁=1` 55px) 거짓 오버플로우
-                // → 본문 한글 압축이 발생했다. line_tac_offsets 는 이미 줄-범위로
-                // 필터링되어 있으므로 run 범위 필터만 적용한다.
-                //
-                // [Task #1285] 단, 오른쪽 정렬된 셀 안에서 `TAC 표 + 공백 + TAC 표`가
-                // 같은 마지막 줄에 놓이는 경우 두 번째 TAC 표는 run 끝 위치(pos == end)에
-                // 기록된다. 일반 줄 경계 판정에는 포함하지 않고, 위에서 좁게 만든
-                // line_tac_offsets_for_width 에만 넣어 부모 줄 오른쪽 정렬 폭을 맞춘다.
-                let run_chars_est: Vec<char> = run.text.chars().collect();
-                let mut seg_start_est = 0usize;
-                let is_last_run_est_tac = run_char_end_est
-                    >= comp_line
-                        .runs
-                        .iter()
-                        .map(|r| r.text.chars().count())
-                        .sum::<usize>()
-                        + comp_line.char_start;
-                for &(tac_abs_pos, tac_w, _) in
-                    line_tac_offsets_for_width.iter().filter(|(pos, _, _)| {
-                        *pos >= run_char_pos_est
-                            && (*pos < run_char_end_est
-                                || (is_last_run_est_tac && *pos == run_char_end_est))
-                    })
-                {
-                    let tac_rel = tac_abs_pos - run_char_pos_est;
-                    if seg_start_est < tac_rel {
-                        let seg: String = run_chars_est[seg_start_est..tac_rel].iter().collect();
-                        ts.line_x_offset = est_x;
-                        est_x += estimate_text_width(&seg, &ts);
-                    }
-                    est_x += tac_w;
-                    included_tac_width_in_est += tac_w;
-                    seg_start_est = tac_rel;
-                }
-                // 마지막 세그먼트 처리
-                let remaining_est: String = run_chars_est[seg_start_est..].iter().collect();
-                ts.line_x_offset = est_x;
-                // [Task #874 #2] composer lang split (예: "F3→Alt+I" → "F3"/"→"/"Alt+I")
-                // 으로 auto_tab_right post-tab 콘텐츠가 후속 run 으로 흩어진 경우, 현재
-                // run 내부 seg_w 만으로는 우측 정렬 위치가 어긋남. 후속 run 합산을 미리
-                // 계산해 ts.right_tab_block_width_override 로 주입한다.
-                if auto_tab_right
-                    && remaining_est.contains('\t')
-                    && run_idx_est + 1 < comp_line.runs.len()
-                {
-                    let tab_byte = remaining_est.rfind('\t').unwrap();
-                    let post_tab: String = remaining_est[tab_byte + '\t'.len_utf8()..].to_string();
-                    let no_more_tabs_after_in_run = !post_tab.contains('\t');
-                    let no_tabs_in_subsequent = comp_line
-                        .runs
-                        .iter()
-                        .skip(run_idx_est + 1)
-                        .all(|r| !r.text.contains('\t'));
-                    if no_more_tabs_after_in_run && no_tabs_in_subsequent {
-                        let mut ts_measure = ts.clone();
-                        ts_measure.right_tab_block_width_override = None;
-                        let post_tab_w = estimate_text_width(&post_tab, &ts_measure);
-                        let subsequent_w = right_tab_block_width(
-                            &comp_line.runs,
-                            run_idx_est + 1,
-                            styles,
-                            tab_width,
-                            &tab_stops,
-                            auto_tab_right,
-                            available_width,
-                        );
-                        ts.right_tab_block_width_override = Some(post_tab_w + subsequent_w);
-                    }
-                }
-                if !remaining_est.is_empty() {
-                    est_x += estimate_text_width(&remaining_est, &ts);
-                }
-                // run이 \t로 끝나면 다음 run에 오른쪽/가운데 탭 조정 필요 — Task #290:
-                // inline_tabs(composed.tab_extended) 가 LEFT 를 명시하면 cross-run pending 을 설정하지 않는다.
-                // [Task #279] trailing 공백 (\t 뒤에 따라오는 ' ') 도 허용 — 목차 소제목의
-                // 들여쓰기 문단에서 한컴이 "\t " 형태로 저장하는 케이스가 있음.
-                let trimmed_end = run
-                    .text
-                    .trim_end_matches(|c: char| c == ' ' || c == '\u{2007}');
-                if trimmed_end.ends_with('\t') {
-                    let run_tab_count = run.text.chars().filter(|c| *c == '\t').count();
-                    if run_tab_count > 0 {
-                        let last_inline_idx = inline_tab_cursor_est + run_tab_count - 1;
-                        pending_right_tab_est = resolve_last_tab_pending(
-                            &run.text,
-                            last_inline_idx,
-                            &composed.tab_extended,
-                            &ts,
-                            &tab_stops,
-                            tab_width,
-                            auto_tab_right,
-                            available_width,
-                        );
-                    }
-                }
-                if run.text.contains('\t')
-                    && run
-                        .text
-                        .rsplit_once('\t')
-                        .map(|(_, after)| after.trim().is_empty())
-                        .unwrap_or(false)
-                    && tab_stops
-                        .iter()
-                        .any(|tab| tab.tab_type == 1 && tab.fill_type != 0)
-                {
-                    pending_right_leader_digit_est = true;
-                }
-                // 각주 마커 폭: run 내에 각주가 있으면 마커 위첨자 폭 추가
-                let is_last_run_est = run_char_end_est
-                    >= comp_line
-                        .runs
-                        .iter()
-                        .map(|r| r.text.chars().count())
-                        .sum::<usize>()
-                        + comp_line.char_start;
-                for &(fpos, fnum, ctrl_idx) in composed.footnote_positions.iter() {
-                    // [Task #1219 Stage 1b] 선두 미주 마커는 endnote_marker_x_advance
-                    // 가 풀사이즈 선두 마커로 렌더하고 그 폭을 inline_offset 에 이미
-                    // 반영했다(available_width 에서 차감). 렌더 경로는 이 미주의 인라인
-                    // 위첨자를 그리지 않으므로(문26 "공" x=78=선두 마커 끝), 측정에서도
-                    // est_x 에 위첨자 폭을 더하면 이중 계상 → 거짓 오버플로우.
-                    // start_line==0 의 미주(= endnote_marker_x_advance 처리 대상)는 제외.
-                    let is_leading_endnote_marker = is_leading_endnote_marker_rendered_as_prefix(
-                        para,
-                        ctrl_idx,
-                        line_idx,
-                        start_line,
-                        fpos,
-                        comp_line.char_start,
-                    );
-                    if is_leading_endnote_marker {
-                        continue;
-                    }
-                    if fpos >= run_char_pos_est
-                        && (fpos < run_char_end_est
-                            || (is_last_run_est && fpos == run_char_end_est))
-                    {
-                        let fn_text = note_marker_text_from_control(
-                            para.and_then(|p| p.controls.get(ctrl_idx)),
-                            fnum,
-                        );
-                        let sup_size = (ts.font_size * 0.55).max(7.0);
-                        let sup_ts = TextStyle {
-                            font_size: sup_size,
-                            font_family: ts.font_family.clone(),
-                            ..Default::default()
-                        };
-                        est_x += estimate_text_width(&fn_text, &sup_ts);
-                    }
-                }
-                run_char_pos_est = run_char_end_est;
-                inline_tab_cursor_est += run.text.chars().filter(|c| *c == '\t').count();
-            }
+            let est_x_start = effective_margin_left + line_cs_offset + inline_offset;
+            let line_width_est = self.estimate_line_run_widths(
+                comp_line,
+                composed,
+                para,
+                styles,
+                &tab_stops,
+                tab_width,
+                auto_tab_right,
+                &line_tac_offsets_for_width,
+                effective_margin_left,
+                available_width,
+                start_line,
+                line_idx,
+                est_x_start,
+            );
+            let est_x = line_width_est.est_x;
+            let included_tac_width_in_est = line_width_est.included_tac_width;
             // 교차 run 탭으로 인한 역방향 이동이 있을 수 있으므로
             // est_x 차이로 정확한 점유 폭을 계산
             let mut total_text_width = (est_x - est_x_start).max(0.0);
@@ -4202,178 +3986,38 @@ impl LayoutEngine {
 
             // runs가 비어있으면 빈 TextRun 생성 (빈 셀 편집용)
             if comp_line.runs.is_empty() {
-                let mut empty_line_mark_x = x_start;
-                let mut empty_line_logical_end = char_offset;
-                // runs가 없는 빈 줄에서 treat_as_char 이미지 렌더링
-                // 테이블 셀 내부에서는 table_layout.rs가 layout_picture로 이미 처리하므로 스킵.
-                // 셀 외부에서 해당 줄 범위에 걸린 TAC만 여기서 렌더링.
-                let empty_line_tac_allowed =
-                    cell_ctx.is_none() || is_caption_cell_context(cell_ctx.as_ref());
-                if empty_line_tac_allowed && !line_tac_offsets.is_empty() {
-                    if let (Some(p), Some(bdc)) = (para, bin_data_content) {
-                        // TAC 이미지 전체 폭 계산 후 문단 정렬 적용
-                        let total_tac_width: f64 =
-                            line_tac_offsets.iter().map(|(_, w, _)| *w).sum();
-                        let align_offset = match alignment {
-                            Alignment::Center | Alignment::Distribute => {
-                                (available_width - total_tac_width).max(0.0) / 2.0
-                            }
-                            Alignment::Right => (available_width - total_tac_width).max(0.0),
-                            _ => 0.0, // Left, Justify
-                        };
-                        let mut img_x = effective_col_x + effective_margin_left + align_offset;
-                        for &(_, tac_w, tac_ci) in &line_tac_offsets {
-                            if let Some(ctrl) = p.controls.get(tac_ci) {
-                                // [Issue #476] 빈 문단 + 인라인 Shape: inline_pos 등록 후 shape_layout 이 그리도록 위임.
-                                // 등록하지 않으면 layout_shape 가 inline_pos=None 으로 받아 fallback 위치에 그리거나,
-                                // #476 의 fallback 차단 분기로 박스가 누락된다.
-                                if let Control::Shape(shape) = ctrl {
-                                    let common = shape.common();
-                                    let shape_h_hu = (common.height as i32)
-                                        .max(shape.shape_attr().current_height as i32);
-                                    let shape_h = hwpunit_to_px(shape_h_hu, self.dpi);
-                                    let shape_y = (y + baseline - shape_h).max(y);
-                                    tree.set_inline_shape_position(
-                                        section_index,
-                                        para_index,
-                                        tac_ci,
-                                        cell_ctx.as_ref(),
-                                        img_x,
-                                        shape_y,
-                                    );
-                                    img_x += tac_w;
-                                    empty_line_mark_x = img_x;
-                                    empty_line_logical_end += 1;
-                                    continue;
-                                }
-                                if let Control::Picture(pic) = ctrl {
-                                    let pic_h = hwpunit_to_px(pic.common.height as i32, self.dpi);
-                                    // LINE_SEG vpos가 TopAndBottom 흐름 위치를 이미 담고 있으면
-                                    // sibling 예약 높이를 다시 더하지 않는다.
-                                    let sibling_reserved_px =
-                                        if para_topbottom_line_vpos_base.is_some() {
-                                            0.0
-                                        } else {
-                                            hwpunit_to_px(
-                                                calc_sibling_topandbottom_reserved_hu(&p.controls),
-                                                self.dpi,
-                                            )
-                                        };
-                                    if raw_lh + 4.0 >= pic_h {
-                                        current_line_reserved_tac_picture_height = Some(pic_h);
-                                    }
-                                    let label_extra = tac_picture_label_extra_for_line(
-                                        cell_ctx.as_ref(),
-                                        runs_all_whitespace,
-                                        raw_lh,
-                                        current_line_reserved_tac_picture_height,
-                                        max_fs,
-                                        line_spacing_px,
-                                    );
-                                    let base_img_y = if label_extra > 0.0 {
-                                        y + label_extra
-                                    } else {
-                                        (y + baseline - pic_h).max(y)
-                                    };
-                                    let img_y = base_img_y + sibling_reserved_px;
-                                    let bin_data_id = pic.image_attr.bin_data_id;
-                                    let image_data =
-                                        find_bin_data(bdc, bin_data_id).map(|c| c.data.clone());
-                                    let crop = {
-                                        let c = &pic.crop;
-                                        if c.right > c.left
-                                            && c.bottom > c.top
-                                            && (c.left != 0
-                                                || c.top != 0
-                                                || c.right != 0
-                                                || c.bottom != 0)
-                                        {
-                                            Some((c.left, c.top, c.right, c.bottom))
-                                        } else {
-                                            None
-                                        }
-                                    };
-                                    let original_size_hu = if pic.shape_attr.original_width > 0
-                                        && pic.shape_attr.original_height > 0
-                                    {
-                                        Some((
-                                            pic.shape_attr.original_width,
-                                            pic.shape_attr.original_height,
-                                        ))
-                                    } else {
-                                        None
-                                    };
-                                    // [Task #1151 v7 항목 7] ImageNode 생성 helper 통합.
-                                    let img_node = make_picture_image_node(
-                                        tree,
-                                        pic,
-                                        section_index,
-                                        para_index,
-                                        tac_ci,
-                                        cell_ctx.as_ref(),
-                                        crop,
-                                        original_size_hu,
-                                        bin_data_id,
-                                        image_data,
-                                        BoundingBox::new(img_x, img_y, tac_w, pic_h),
-                                    );
-                                    line_node.children.push(img_node);
-                                    // [Task #418/#376] layout_shape_item 의 Task #347 분기 (빈 문단 +
-                                    // TAC Picture 직접 emit) 와 이중 렌더링되지 않도록 인라인 위치를
-                                    // 등록한다. layout_shape_item 은 등록된 경우 push 를 스킵한다.
-                                    tree.set_inline_shape_position(
-                                        section_index,
-                                        para_index,
-                                        tac_ci,
-                                        cell_ctx.as_ref(),
-                                        img_x,
-                                        img_y,
-                                    );
-                                    img_x += tac_w;
-                                    empty_line_mark_x = img_x;
-                                    empty_line_logical_end += 1;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                let run_id = tree.next_id();
-                let (text_style, char_shape_id) =
-                    paragraph_active_text_style(styles, para, char_offset);
-                let run_node = RenderNode::new(
-                    run_id,
-                    RenderNodeType::TextRun(TextRunNode {
-                        text: String::new(),
-                        style: text_style,
-                        char_shape_id,
-                        para_shape_id: Some(composed.para_style_id),
-                        section_index: Some(section_index),
-                        para_index: Some(para_index),
-                        char_start: Some(empty_line_logical_end),
-                        cell_context: cell_ctx.clone(),
-                        is_para_end: is_last_line_of_para && !defer_empty_line_control_marker,
-                        is_line_break_end: comp_line.has_line_break
-                            && !defer_empty_line_control_marker,
-                        rotation: 0.0,
-                        is_vertical: false,
-                        char_overlap: None,
-                        border_fill_id: 0,
-                        baseline,
-                        field_marker: FieldMarkerType::None,
-                    }),
-                    BoundingBox::new(
-                        empty_line_mark_x,
+                self.layout_empty_runs_line(
+                    tree,
+                    &mut line_node,
+                    comp_line,
+                    composed,
+                    para,
+                    bin_data_content,
+                    styles,
+                    &cell_ctx,
+                    &line_tac_offsets,
+                    EmptyRunsLineVars {
+                        alignment,
+                        available_width,
+                        effective_col_x,
+                        effective_margin_left,
+                        x_start,
+                        line_char_end: char_offset,
                         y,
-                        if empty_line_mark_x > x_start {
-                            0.0
-                        } else {
-                            available_width
-                        },
+                        baseline,
+                        raw_lh,
+                        runs_all_whitespace,
+                        max_fs,
+                        line_spacing_px,
+                        has_topbottom_vpos_base: para_topbottom_line_vpos_base.is_some(),
+                        is_last_line_of_para,
+                        defer_empty_line_control_marker,
                         line_flow_height,
-                    ),
+                        section_index,
+                        para_index,
+                    },
+                    &mut current_line_reserved_tac_picture_height,
                 );
-                line_node.children.push(run_node);
             }
 
             // [Task #287] 빈 runs 줄의 TAC 수식 인라인 처리
@@ -4622,330 +4266,25 @@ impl LayoutEngine {
                 }
             }
 
-            // ClickHere 필드 처리: 안내문 + 조판부호 마커 ([누름틀 시작]/[누름틀 끝])
-            // char_x_map을 이용하여 필드 위치에 맞는 x 좌표 계산
+            // ClickHere 필드 처리: 안내문 + 조판부호 마커 — #1925 추출
             if let Some(p) = para {
-                let line_char_end = char_offset;
-                let line_char_start = comp_line.char_start;
-                let active = self.active_field.borrow();
-                let ctrl_codes = self.show_control_codes.get();
-
-                // char_x_map에서 특정 char_idx에 해당하는 x 좌표를 보간 계산
-                let find_x_for_char = |target: usize| -> f64 {
-                    for i in 0..char_x_map.len().saturating_sub(1) {
-                        let (c0, x0) = char_x_map[i];
-                        let (c1, x1) = char_x_map[i + 1];
-                        if target >= c0 && target <= c1 {
-                            if c1 == c0 {
-                                return x0;
-                            }
-                            let ratio = (target - c0) as f64 / (c1 - c0) as f64;
-                            return x0 + ratio * (x1 - x0);
-                        }
-                    }
-                    char_x_map.last().map(|&(_, xv)| xv).unwrap_or(x)
-                };
-
-                // 마커 삽입 정보 수집 (오른쪽→왼쪽 순으로 shift 처리)
-                struct MarkerInsert {
-                    marker_x: f64,
-                    marker_w: f64,
-                    node: RenderNode,
-                }
-                let mut markers: Vec<MarkerInsert> = Vec::new();
-
-                for fr in &p.field_ranges {
-                    if let Some(Control::Field(field)) = p.controls.get(fr.control_idx) {
-                        if field.field_type != crate::model::control::FieldType::ClickHere {
-                            continue;
-                        }
-                        let is_empty = fr.start_char_idx == fr.end_char_idx;
-                        let start_in_line = fr.start_char_idx >= line_char_start
-                            && fr.start_char_idx <= line_char_end;
-                        let end_in_line =
-                            fr.end_char_idx >= line_char_start && fr.end_char_idx <= line_char_end;
-
-                        if !start_in_line && !end_in_line {
-                            continue;
-                        }
-
-                        let is_active =
-                            if let Some((af_sec, af_para, af_ctrl, ref af_cell)) = *active {
-                                if af_sec != section_index
-                                    || af_para != para_index
-                                    || af_ctrl != fr.control_idx
-                                {
-                                    false
-                                } else {
-                                    // cell_path 전체 일치 확인
-                                    match (af_cell, &cell_ctx) {
-                                        (None, None) => true,
-                                        (Some(af_path), Some(ctx)) => {
-                                            // af_path와 ctx.path의 (control_index, cell_index) 쌍이 모두 일치해야 함
-                                            af_path.len() == ctx.path.len()
-                                                && af_path.iter().zip(ctx.path.iter()).all(
-                                                    |(&(ac, ax, _ap), entry)| {
-                                                        ac == entry.control_index
-                                                            && ax == entry.cell_index
-                                                    },
-                                                )
-                                        }
-                                        _ => false,
-                                    }
-                                }
-                            } else {
-                                false
-                            };
-
-                        let base_run = comp_line.runs.last().or(comp_line.runs.first());
-                        let base_style = if let Some(run) = base_run {
-                            resolved_to_text_style(styles, run.char_style_id, run.lang_index)
-                        } else {
-                            resolved_to_text_style(styles, 0, 0)
-                        };
-
-                        // [누름틀 시작] 마커 — fr.start_char_idx 위치에 삽입
-                        if ctrl_codes && start_in_line {
-                            let mut marker_style = base_style.clone();
-                            marker_style.color = 0x0066CC; // BGR: 주황색 (#CC6600)
-                            marker_style.font_size *= 0.55;
-                            let marker_text = "[누름틀 시작]";
-                            let marker_w = estimate_text_width(marker_text, &marker_style);
-                            let marker_x = find_x_for_char(fr.start_char_idx);
-                            let m_id = tree.next_id();
-                            let m_node = RenderNode::new(
-                                m_id,
-                                RenderNodeType::TextRun(TextRunNode {
-                                    text: marker_text.to_string(),
-                                    style: marker_style,
-                                    char_shape_id: None,
-                                    para_shape_id: Some(composed.para_style_id),
-                                    section_index: Some(section_index),
-                                    para_index: Some(para_index),
-                                    char_start: None,
-                                    cell_context: cell_ctx.clone(),
-                                    is_para_end: false,
-                                    is_line_break_end: false,
-                                    rotation: 0.0,
-                                    is_vertical: false,
-                                    char_overlap: None,
-                                    border_fill_id: 0,
-                                    baseline,
-                                    field_marker: FieldMarkerType::FieldBegin,
-                                }),
-                                BoundingBox::new(marker_x, y, marker_w, line_height),
-                            );
-                            markers.push(MarkerInsert {
-                                marker_x,
-                                marker_w,
-                                node: m_node,
-                            });
-                        }
-
-                        // 빈 필드 커서 앵커: getCursorRect가 필드 시작 위치를 찾을 수 있도록
-                        // char_start를 설정한 zero-width 노드 삽입
-                        if is_empty && start_in_line {
-                            let anchor_x = find_x_for_char(fr.start_char_idx);
-                            let anchor_id = tree.next_id();
-                            let anchor_node = RenderNode::new(
-                                anchor_id,
-                                RenderNodeType::TextRun(TextRunNode {
-                                    text: String::new(),
-                                    style: base_style.clone(),
-                                    char_shape_id: None,
-                                    para_shape_id: Some(composed.para_style_id),
-                                    section_index: Some(section_index),
-                                    para_index: Some(para_index),
-                                    char_start: Some(fr.start_char_idx),
-                                    cell_context: cell_ctx.clone(),
-                                    is_para_end: false,
-                                    is_line_break_end: false,
-                                    rotation: 0.0,
-                                    is_vertical: false,
-                                    char_overlap: None,
-                                    border_fill_id: 0,
-                                    baseline,
-                                    field_marker: FieldMarkerType::None,
-                                }),
-                                BoundingBox::new(anchor_x, y, 0.0, line_height),
-                            );
-                            markers.push(MarkerInsert {
-                                marker_x: anchor_x,
-                                marker_w: 0.0,
-                                node: anchor_node,
-                            });
-                        }
-
-                        // 빈 필드 안내문 (활성 필드가 아닐 때만)
-                        if is_empty && !is_active && start_in_line {
-                            if let Some(guide) = field.guide_text() {
-                                let mut guide_style = base_style.clone();
-                                guide_style.color = 0x0000FF; // BGR: 빨간색
-                                guide_style.italic = true;
-                                let guide_width = estimate_text_width(guide, &guide_style);
-                                // 안내문은 [누름틀 시작] 마커 뒤에 위치
-                                let guide_x = find_x_for_char(fr.start_char_idx);
-                                let guide_id = tree.next_id();
-                                let guide_node = RenderNode::new(
-                                    guide_id,
-                                    RenderNodeType::TextRun(TextRunNode {
-                                        text: guide.to_string(),
-                                        style: guide_style,
-                                        char_shape_id: None,
-                                        para_shape_id: Some(composed.para_style_id),
-                                        section_index: Some(section_index),
-                                        para_index: Some(para_index),
-                                        char_start: None,
-                                        cell_context: cell_ctx.clone(),
-                                        is_para_end: false,
-                                        is_line_break_end: false,
-                                        rotation: 0.0,
-                                        is_vertical: false,
-                                        char_overlap: None,
-                                        border_fill_id: 0,
-                                        baseline,
-                                        field_marker: FieldMarkerType::None,
-                                    }),
-                                    BoundingBox::new(guide_x, y, guide_width, line_height),
-                                );
-                                markers.push(MarkerInsert {
-                                    marker_x: guide_x,
-                                    marker_w: guide_width,
-                                    node: guide_node,
-                                });
-                            }
-                        }
-
-                        // [누름틀 끝] 마커 — fr.end_char_idx 위치에 삽입
-                        if ctrl_codes && end_in_line {
-                            let mut marker_style = base_style.clone();
-                            marker_style.color = 0x0066CC; // BGR: 주황색
-                            marker_style.font_size *= 0.55;
-                            let marker_text = "[누름틀 끝]";
-                            let marker_w = estimate_text_width(marker_text, &marker_style);
-                            let marker_x = find_x_for_char(fr.end_char_idx);
-                            let m_id = tree.next_id();
-                            let m_node = RenderNode::new(
-                                m_id,
-                                RenderNodeType::TextRun(TextRunNode {
-                                    text: marker_text.to_string(),
-                                    style: marker_style,
-                                    char_shape_id: None,
-                                    para_shape_id: Some(composed.para_style_id),
-                                    section_index: Some(section_index),
-                                    para_index: Some(para_index),
-                                    char_start: None,
-                                    cell_context: cell_ctx.clone(),
-                                    is_para_end: false,
-                                    is_line_break_end: false,
-                                    rotation: 0.0,
-                                    is_vertical: false,
-                                    char_overlap: None,
-                                    border_fill_id: 0,
-                                    baseline,
-                                    field_marker: FieldMarkerType::FieldEnd,
-                                }),
-                                BoundingBox::new(marker_x, y, marker_w, line_height),
-                            );
-                            markers.push(MarkerInsert {
-                                marker_x,
-                                marker_w,
-                                node: m_node,
-                            });
-                        }
-                    }
-                }
-
-                // 책갈피 조판부호 마커
-                if ctrl_codes {
-                    let ctrl_positions =
-                        crate::document_core::helpers::find_logical_control_positions(p);
-                    for (ci, ctrl) in p.controls.iter().enumerate() {
-                        if let Control::Bookmark(_bm) = ctrl {
-                            let char_pos = ctrl_positions.get(ci).copied().unwrap_or(0);
-                            if char_pos >= line_char_start && char_pos <= line_char_end {
-                                let base_run = comp_line.runs.last().or(comp_line.runs.first());
-                                let bm_base_style = if let Some(run) = base_run {
-                                    resolved_to_text_style(
-                                        styles,
-                                        run.char_style_id,
-                                        run.lang_index,
-                                    )
-                                } else {
-                                    resolved_to_text_style(styles, 0, 0)
-                                };
-                                let mut marker_style = bm_base_style;
-                                marker_style.color = 0x0000FF; // BGR: 빨간색 (#FF0000)
-                                marker_style.font_size *= 0.55;
-                                let marker_text = "[책갈피]".to_string();
-                                let marker_w = estimate_text_width(&marker_text, &marker_style);
-                                let marker_x = find_x_for_char(char_pos);
-                                let m_id = tree.next_id();
-                                let m_node = RenderNode::new(
-                                    m_id,
-                                    RenderNodeType::TextRun(TextRunNode {
-                                        text: marker_text,
-                                        style: marker_style,
-                                        char_shape_id: None,
-                                        para_shape_id: Some(composed.para_style_id),
-                                        section_index: Some(section_index),
-                                        para_index: Some(para_index),
-                                        char_start: None,
-                                        cell_context: cell_ctx.clone(),
-                                        is_para_end: false,
-                                        is_line_break_end: false,
-                                        rotation: 0.0,
-                                        is_vertical: false,
-                                        char_overlap: None,
-                                        border_fill_id: 0,
-                                        baseline,
-                                        field_marker: FieldMarkerType::None,
-                                    }),
-                                    BoundingBox::new(marker_x, y, marker_w, line_height),
-                                );
-                                markers.push(MarkerInsert {
-                                    marker_x,
-                                    marker_w,
-                                    node: m_node,
-                                });
-                            }
-                        }
-                    }
-                }
-
-                // 도형 조판부호 마커는 텍스트 런 루프 내에서 직접 처리됨 (MarkerInsert 불사용)
-
-                // 마커를 왼쪽부터 삽입하면서, 각 마커 뒤의 기존 노드와 이후 마커를 오른쪽으로 shift
-                // zero-width 앵커(커서 위치용)는 shift하지 않고 원래 위치 유지
-                markers.sort_by(|a, b| {
-                    a.marker_x
-                        .partial_cmp(&b.marker_x)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                });
-                let mut accumulated_shift = 0.0_f64;
-                for mi in 0..markers.len() {
-                    let mw = markers[mi].marker_w;
-                    if mw == 0.0 {
-                        // zero-width 앵커: shift 없이 원래 위치 유지
-                        continue;
-                    }
-                    let shift_x = markers[mi].marker_x + accumulated_shift;
-                    // 기존 children 중 이 마커 위치 이후의 노드를 오른쪽으로 shift
-                    for child in line_node.children.iter_mut() {
-                        if child.bbox.x >= shift_x {
-                            child.bbox.x += mw;
-                        }
-                    }
-                    // 이미 삽입된 마커도 shift (이전 마커 중 이 위치 이후에 있는 것)
-                    // → accumulated_shift로 처리됨
-                    markers[mi].node.bbox.x = shift_x;
-                    accumulated_shift += mw;
-                }
-                // 모든 마커 노드를 children에 추가
-                for mi in markers {
-                    line_node.children.push(mi.node);
-                }
-                x += accumulated_shift;
+                x += self.layout_click_here_and_bookmark_markers(
+                    tree,
+                    &mut line_node,
+                    p,
+                    comp_line,
+                    &char_x_map,
+                    styles,
+                    composed.para_style_id,
+                    section_index,
+                    para_index,
+                    &cell_ctx,
+                    char_offset,
+                    x,
+                    y,
+                    line_height,
+                    baseline,
+                );
             }
 
             // 강제 줄바꿈(\n)이 이 줄에서 제거되었으므로 char_offset에 1을 더하여
@@ -5055,9 +4394,12 @@ impl LayoutEngine {
             let skip_advance_empty_line = skip_advance_empty_wrap
                 || skip_advance_empty_tac_picture
                 || skip_advance_empty_tac_lead;
-            if std::env::var("RHWP_DEBUG_PARA_TAC").is_ok()
-                && (para_index == 651 || para_index == 652)
-            {
+            // RHWP_DEBUG_PARA_TAC="95,96,97" — 대상 pi 를 콤마 목록으로 지정 (빈 값/all=전체).
+            if std::env::var("RHWP_DEBUG_PARA_TAC").is_ok_and(|v| {
+                v.is_empty()
+                    || v == "all"
+                    || v.split(',').any(|t| t.trim().parse() == Ok(para_index))
+            }) {
                 eprintln!(
                     "  TAC_ADV pi={} line_idx={} y={:.1} raw_lh={:.1} lh={:.1} ls={:.1} label_extra={:.1} whitespace={} cur_pic={:?} prev_pic={:?} skip_wrap={} skip_pic={} skip={}",
                     para_index,
@@ -5223,6 +4565,826 @@ impl LayoutEngine {
         }
 
         y
+    }
+
+    /// [#1925 추출] ClickHere 필드 처리(안내문, [누름틀 시작/끝] 조판부호 마커)와
+    /// 책갈피 조판부호 마커. char_x_map 보간으로 필드 위치의 x 좌표를 계산해
+    /// 마커 노드를 삽입하고, 마커 폭만큼 기존 노드를 오른쪽으로 shift 한다.
+    /// 반환값 accumulated_shift 는 caller 가 라인 커서 x 에 가산한다.
+    #[allow(clippy::too_many_arguments)]
+    fn layout_click_here_and_bookmark_markers(
+        &self,
+        tree: &mut PageRenderTree,
+        line_node: &mut RenderNode,
+        p: &Paragraph,
+        comp_line: &crate::renderer::composer::ComposedLine,
+        char_x_map: &[(usize, f64)],
+        styles: &ResolvedStyleSet,
+        para_style_id: u16,
+        section_index: usize,
+        para_index: usize,
+        cell_ctx: &Option<CellContext>,
+        line_char_end: usize,
+        x: f64,
+        y: f64,
+        line_height: f64,
+        baseline: f64,
+    ) -> f64 {
+        // line_char_end: 파라미터로 수령 (원본: char_offset)
+        let line_char_start = comp_line.char_start;
+        let active = self.active_field.borrow();
+        let ctrl_codes = self.show_control_codes.get();
+
+        // char_x_map에서 특정 char_idx에 해당하는 x 좌표를 보간 계산
+        let find_x_for_char = |target: usize| -> f64 {
+            for i in 0..char_x_map.len().saturating_sub(1) {
+                let (c0, x0) = char_x_map[i];
+                let (c1, x1) = char_x_map[i + 1];
+                if target >= c0 && target <= c1 {
+                    if c1 == c0 {
+                        return x0;
+                    }
+                    let ratio = (target - c0) as f64 / (c1 - c0) as f64;
+                    return x0 + ratio * (x1 - x0);
+                }
+            }
+            char_x_map.last().map(|&(_, xv)| xv).unwrap_or(x)
+        };
+
+        // 마커 삽입 정보 수집 (오른쪽→왼쪽 순으로 shift 처리)
+        struct MarkerInsert {
+            marker_x: f64,
+            marker_w: f64,
+            node: RenderNode,
+        }
+        let mut markers: Vec<MarkerInsert> = Vec::new();
+
+        for fr in &p.field_ranges {
+            if let Some(Control::Field(field)) = p.controls.get(fr.control_idx) {
+                if field.field_type != crate::model::control::FieldType::ClickHere {
+                    continue;
+                }
+                let is_empty = fr.start_char_idx == fr.end_char_idx;
+                let start_in_line =
+                    fr.start_char_idx >= line_char_start && fr.start_char_idx <= line_char_end;
+                let end_in_line =
+                    fr.end_char_idx >= line_char_start && fr.end_char_idx <= line_char_end;
+
+                if !start_in_line && !end_in_line {
+                    continue;
+                }
+
+                let is_active = if let Some((af_sec, af_para, af_ctrl, ref af_cell)) = *active {
+                    if af_sec != section_index || af_para != para_index || af_ctrl != fr.control_idx
+                    {
+                        false
+                    } else {
+                        // cell_path 전체 일치 확인
+                        match (af_cell, cell_ctx) {
+                            (None, None) => true,
+                            (Some(af_path), Some(ctx)) => {
+                                // af_path와 ctx.path의 (control_index, cell_index) 쌍이 모두 일치해야 함
+                                af_path.len() == ctx.path.len()
+                                    && af_path.iter().zip(ctx.path.iter()).all(
+                                        |(&(ac, ax, _ap), entry)| {
+                                            ac == entry.control_index && ax == entry.cell_index
+                                        },
+                                    )
+                            }
+                            _ => false,
+                        }
+                    }
+                } else {
+                    false
+                };
+
+                let base_run = comp_line.runs.last().or(comp_line.runs.first());
+                let base_style = if let Some(run) = base_run {
+                    resolved_to_text_style(styles, run.char_style_id, run.lang_index)
+                } else {
+                    resolved_to_text_style(styles, 0, 0)
+                };
+
+                // [누름틀 시작] 마커 — fr.start_char_idx 위치에 삽입
+                if ctrl_codes && start_in_line {
+                    let mut marker_style = base_style.clone();
+                    marker_style.color = 0x0066CC; // BGR: 주황색 (#CC6600)
+                    marker_style.font_size *= 0.55;
+                    let marker_text = "[누름틀 시작]";
+                    let marker_w = estimate_text_width(marker_text, &marker_style);
+                    let marker_x = find_x_for_char(fr.start_char_idx);
+                    let m_id = tree.next_id();
+                    let m_node = RenderNode::new(
+                        m_id,
+                        RenderNodeType::TextRun(TextRunNode {
+                            text: marker_text.to_string(),
+                            style: marker_style,
+                            char_shape_id: None,
+                            para_shape_id: Some(para_style_id),
+                            section_index: Some(section_index),
+                            para_index: Some(para_index),
+                            char_start: None,
+                            cell_context: cell_ctx.clone(),
+                            is_para_end: false,
+                            is_line_break_end: false,
+                            rotation: 0.0,
+                            is_vertical: false,
+                            char_overlap: None,
+                            border_fill_id: 0,
+                            baseline,
+                            field_marker: FieldMarkerType::FieldBegin,
+                        }),
+                        BoundingBox::new(marker_x, y, marker_w, line_height),
+                    );
+                    markers.push(MarkerInsert {
+                        marker_x,
+                        marker_w,
+                        node: m_node,
+                    });
+                }
+
+                // 빈 필드 커서 앵커: getCursorRect가 필드 시작 위치를 찾을 수 있도록
+                // char_start를 설정한 zero-width 노드 삽입
+                if is_empty && start_in_line {
+                    let anchor_x = find_x_for_char(fr.start_char_idx);
+                    let anchor_id = tree.next_id();
+                    let anchor_node = RenderNode::new(
+                        anchor_id,
+                        RenderNodeType::TextRun(TextRunNode {
+                            text: String::new(),
+                            style: base_style.clone(),
+                            char_shape_id: None,
+                            para_shape_id: Some(para_style_id),
+                            section_index: Some(section_index),
+                            para_index: Some(para_index),
+                            char_start: Some(fr.start_char_idx),
+                            cell_context: cell_ctx.clone(),
+                            is_para_end: false,
+                            is_line_break_end: false,
+                            rotation: 0.0,
+                            is_vertical: false,
+                            char_overlap: None,
+                            border_fill_id: 0,
+                            baseline,
+                            field_marker: FieldMarkerType::None,
+                        }),
+                        BoundingBox::new(anchor_x, y, 0.0, line_height),
+                    );
+                    markers.push(MarkerInsert {
+                        marker_x: anchor_x,
+                        marker_w: 0.0,
+                        node: anchor_node,
+                    });
+                }
+
+                // 빈 필드 안내문 (활성 필드가 아닐 때만)
+                if is_empty && !is_active && start_in_line {
+                    if let Some(guide) = field.guide_text() {
+                        let mut guide_style = base_style.clone();
+                        guide_style.color = 0x0000FF; // BGR: 빨간색
+                        guide_style.italic = true;
+                        let guide_width = estimate_text_width(guide, &guide_style);
+                        // 안내문은 [누름틀 시작] 마커 뒤에 위치
+                        let guide_x = find_x_for_char(fr.start_char_idx);
+                        let guide_id = tree.next_id();
+                        let guide_node = RenderNode::new(
+                            guide_id,
+                            RenderNodeType::TextRun(TextRunNode {
+                                text: guide.to_string(),
+                                style: guide_style,
+                                char_shape_id: None,
+                                para_shape_id: Some(para_style_id),
+                                section_index: Some(section_index),
+                                para_index: Some(para_index),
+                                char_start: None,
+                                cell_context: cell_ctx.clone(),
+                                is_para_end: false,
+                                is_line_break_end: false,
+                                rotation: 0.0,
+                                is_vertical: false,
+                                char_overlap: None,
+                                border_fill_id: 0,
+                                baseline,
+                                field_marker: FieldMarkerType::None,
+                            }),
+                            BoundingBox::new(guide_x, y, guide_width, line_height),
+                        );
+                        markers.push(MarkerInsert {
+                            marker_x: guide_x,
+                            marker_w: guide_width,
+                            node: guide_node,
+                        });
+                    }
+                }
+
+                // [누름틀 끝] 마커 — fr.end_char_idx 위치에 삽입
+                if ctrl_codes && end_in_line {
+                    let mut marker_style = base_style.clone();
+                    marker_style.color = 0x0066CC; // BGR: 주황색
+                    marker_style.font_size *= 0.55;
+                    let marker_text = "[누름틀 끝]";
+                    let marker_w = estimate_text_width(marker_text, &marker_style);
+                    let marker_x = find_x_for_char(fr.end_char_idx);
+                    let m_id = tree.next_id();
+                    let m_node = RenderNode::new(
+                        m_id,
+                        RenderNodeType::TextRun(TextRunNode {
+                            text: marker_text.to_string(),
+                            style: marker_style,
+                            char_shape_id: None,
+                            para_shape_id: Some(para_style_id),
+                            section_index: Some(section_index),
+                            para_index: Some(para_index),
+                            char_start: None,
+                            cell_context: cell_ctx.clone(),
+                            is_para_end: false,
+                            is_line_break_end: false,
+                            rotation: 0.0,
+                            is_vertical: false,
+                            char_overlap: None,
+                            border_fill_id: 0,
+                            baseline,
+                            field_marker: FieldMarkerType::FieldEnd,
+                        }),
+                        BoundingBox::new(marker_x, y, marker_w, line_height),
+                    );
+                    markers.push(MarkerInsert {
+                        marker_x,
+                        marker_w,
+                        node: m_node,
+                    });
+                }
+            }
+        }
+
+        // 책갈피 조판부호 마커
+        if ctrl_codes {
+            let ctrl_positions = crate::document_core::helpers::find_logical_control_positions(p);
+            for (ci, ctrl) in p.controls.iter().enumerate() {
+                if let Control::Bookmark(_bm) = ctrl {
+                    let char_pos = ctrl_positions.get(ci).copied().unwrap_or(0);
+                    if char_pos >= line_char_start && char_pos <= line_char_end {
+                        let base_run = comp_line.runs.last().or(comp_line.runs.first());
+                        let bm_base_style = if let Some(run) = base_run {
+                            resolved_to_text_style(styles, run.char_style_id, run.lang_index)
+                        } else {
+                            resolved_to_text_style(styles, 0, 0)
+                        };
+                        let mut marker_style = bm_base_style;
+                        marker_style.color = 0x0000FF; // BGR: 빨간색 (#FF0000)
+                        marker_style.font_size *= 0.55;
+                        let marker_text = "[책갈피]".to_string();
+                        let marker_w = estimate_text_width(&marker_text, &marker_style);
+                        let marker_x = find_x_for_char(char_pos);
+                        let m_id = tree.next_id();
+                        let m_node = RenderNode::new(
+                            m_id,
+                            RenderNodeType::TextRun(TextRunNode {
+                                text: marker_text,
+                                style: marker_style,
+                                char_shape_id: None,
+                                para_shape_id: Some(para_style_id),
+                                section_index: Some(section_index),
+                                para_index: Some(para_index),
+                                char_start: None,
+                                cell_context: cell_ctx.clone(),
+                                is_para_end: false,
+                                is_line_break_end: false,
+                                rotation: 0.0,
+                                is_vertical: false,
+                                char_overlap: None,
+                                border_fill_id: 0,
+                                baseline,
+                                field_marker: FieldMarkerType::None,
+                            }),
+                            BoundingBox::new(marker_x, y, marker_w, line_height),
+                        );
+                        markers.push(MarkerInsert {
+                            marker_x,
+                            marker_w,
+                            node: m_node,
+                        });
+                    }
+                }
+            }
+        }
+
+        // 도형 조판부호 마커는 텍스트 런 루프 내에서 직접 처리됨 (MarkerInsert 불사용)
+
+        // 마커를 왼쪽부터 삽입하면서, 각 마커 뒤의 기존 노드와 이후 마커를 오른쪽으로 shift
+        // zero-width 앵커(커서 위치용)는 shift하지 않고 원래 위치 유지
+        markers.sort_by(|a, b| {
+            a.marker_x
+                .partial_cmp(&b.marker_x)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let mut accumulated_shift = 0.0_f64;
+        for mi in 0..markers.len() {
+            let mw = markers[mi].marker_w;
+            if mw == 0.0 {
+                // zero-width 앵커: shift 없이 원래 위치 유지
+                continue;
+            }
+            let shift_x = markers[mi].marker_x + accumulated_shift;
+            // 기존 children 중 이 마커 위치 이후의 노드를 오른쪽으로 shift
+            for child in line_node.children.iter_mut() {
+                if child.bbox.x >= shift_x {
+                    child.bbox.x += mw;
+                }
+            }
+            // 이미 삽입된 마커도 shift (이전 마커 중 이 위치 이후에 있는 것)
+            // → accumulated_shift로 처리됨
+            markers[mi].node.bbox.x = shift_x;
+            accumulated_shift += mw;
+        }
+        // 모든 마커 노드를 children에 추가
+        for mi in markers {
+            line_node.children.push(mi.node);
+        }
+        accumulated_shift
+    }
+
+    /// [#1925 추출] 정렬/탭 계산용 est 사전 폭 추정 run 패스.
+    /// 렌더 노드를 만들지 않고 run 폭·탭 진행만 시뮬레이션해, 줄의 점유 폭
+    /// (`est_x`)과 추정에 포함된 tac 개체 폭 합(`included_tac_width`)을 구한다.
+    #[allow(clippy::too_many_arguments)]
+    fn estimate_line_run_widths(
+        &self,
+        comp_line: &crate::renderer::composer::ComposedLine,
+        composed: &ComposedParagraph,
+        para: Option<&Paragraph>,
+        styles: &ResolvedStyleSet,
+        tab_stops: &[TabStop],
+        tab_width: f64,
+        auto_tab_right: bool,
+        line_tac_offsets_for_width: &[(usize, f64, usize)],
+        effective_margin_left: f64,
+        available_width: f64,
+        start_line: usize,
+        line_idx: usize,
+        est_x_init: f64,
+    ) -> LineWidthEst {
+        let mut est_x = est_x_init;
+        let mut pending_right_tab_est: Option<(f64, u8, u8)> = None;
+        let mut pending_right_leader_digit_est = false;
+        let mut run_char_pos_est = comp_line.char_start;
+        let mut included_tac_width_in_est = 0.0f64;
+        // cross-run 탭 감지용 inline_tabs(composed.tab_extended) 커서 — Task #290
+        let mut inline_tab_cursor_est: usize = 0;
+        for (run_idx_est, run) in comp_line.runs.iter().enumerate() {
+            let run_char_count_est = if run.char_overlap.is_some() {
+                let chars: Vec<char> = run.text.chars().collect();
+                crate::renderer::composer::char_overlap_advance_units(&chars)
+            } else {
+                run.text.chars().count()
+            };
+            let run_char_end_est = run_char_pos_est + run_char_count_est;
+            let mut ts = resolved_to_text_style(styles, run.char_style_id, run.lang_index);
+            ts.default_tab_width = tab_width;
+            ts.tab_stops = tab_stops.to_vec();
+            ts.auto_tab_right = auto_tab_right;
+            ts.available_width = available_width;
+            ts.text_start_offset = effective_margin_left;
+            ts.inline_tabs = composed.tab_extended.clone();
+            if pending_right_leader_digit_est {
+                if run.text.trim().is_empty() {
+                    pending_right_leader_digit_est = true;
+                } else {
+                    if run.text.trim().chars().all(|ch| ch.is_ascii_digit()) {
+                        if let Some(tab) = tab_stops
+                            .iter()
+                            .rev()
+                            .find(|tab| tab.tab_type == 1 && tab.fill_type != 0)
+                        {
+                            let digit_w = estimate_text_width(run.text.trim(), &ts);
+                            let target =
+                                if composed.tab_extended.is_empty() && available_width > 0.0 {
+                                    effective_margin_left + available_width
+                                } else {
+                                    tab.position
+                                };
+                            let gap = if composed.tab_extended.is_empty() {
+                                0.0
+                            } else {
+                                ts.font_size * 0.25
+                            };
+                            est_x = target - gap - digit_w;
+                        }
+                    }
+                    pending_right_leader_digit_est = false;
+                }
+            }
+            // 교차 run 오른쪽/가운데 탭: 이 run의 시작 위치를 역방향으로 조정
+            if let Some((tab_pos, tab_type, fill_type)) = pending_right_tab_est.take() {
+                // [Task #279] 공백만 있는 run 은 right/center tab 정렬 단위가 아니다.
+                // (장제목 케이스: " " 단독 run → carry-over)
+                if (tab_type == 1 || tab_type == 2) && run.text.trim().is_empty() {
+                    pending_right_tab_est = Some((tab_pos, tab_type, fill_type));
+                } else {
+                    ts.line_x_offset = est_x;
+                    // [Task #279] 리더(fill_type ≠ 0) 가 있는 RIGHT 탭은 "이 줄 우측 끝까지" 의미.
+                    // 셀 안 문단에서는 col_area 가 이미 cell padding 적용된 inner_area 이므로
+                    // `effective_margin_left + available_width` 가 inner 우측 끝.
+                    // [Task #874] auto_tab_right 의 tab_pos = available_width (text-start
+                    // 상대). RIGHT 탭은 모두 col-start 좌표계로 변환 시 effective_margin_left
+                    // 더해야 함. 종전엔 fill_type ≠ 0 만 변환되어 leader 없는 auto_right tab
+                    // (shortcut.hwp 인쇄/개체 모양 복사 등) 가 ~27 px 왼쪽으로 밀려 렌더됨.
+                    let effective_pos = if tab_type == 1 {
+                        effective_margin_left
+                            + (if fill_type != 0 {
+                                available_width
+                            } else {
+                                tab_pos
+                            })
+                    } else {
+                        tab_pos
+                    };
+                    // [Issue #842 #4] 탭 다음 콘텐츠가 여러 composed run 으로 쪼개진 경우
+                    // (스크립트·char-shape 경계) 전체 블록 폭 기준으로 정렬해야 마지막 글자가
+                    // 탭스톱에 맞는다. (선행 공백 run "예 16" 케이스도 합산에 포함되어 동작 유지.)
+                    let run_w = right_tab_block_width(
+                        &comp_line.runs,
+                        run_idx_est,
+                        styles,
+                        tab_width,
+                        &tab_stops,
+                        auto_tab_right,
+                        available_width,
+                    );
+                    match tab_type {
+                        1 => {
+                            est_x = effective_pos - run_w;
+                        }
+                        2 => {
+                            est_x = effective_pos - run_w / 2.0;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            // 글자겹침 run: PUA 다자리 숫자는 1글자 폭, 그 외는 font_size * char_count
+            if run.char_overlap.is_some() {
+                let fs = if ts.font_size > 0.0 {
+                    ts.font_size
+                } else {
+                    12.0
+                };
+                let chars: Vec<char> = run.text.chars().collect();
+                let w = fs * crate::renderer::composer::char_overlap_advance_units(&chars) as f64;
+                est_x += w;
+                run_char_pos_est = run_char_end_est;
+                inline_tab_cursor_est += run.text.chars().filter(|c| *c == '\t').count();
+                continue;
+            }
+            // treat_as_char 분기점 처리: run 내 tac 위치에서 이미지 폭 삽입
+            // 마지막 run에서는 run_char_end 위치의 TAC도 포함
+            //
+            // [Task #1219] TAC 소스를 줄-경계 정규 집합 `line_tac_offsets`
+            // (= tac_offsets_for_line, 렌더 경로와 동일한 `pos < 다음 줄 시작`
+            // 엄격 미만 규칙)로 통일한다. 전역 tac_offsets_px 를 run 경계로
+            // 재필터링하면 줄 끝 위치(== 다음 줄 선두)의 수식이 현재 줄 폭에
+            // 오포함되어(문26 라인0 에 다음 줄 `a₁=b₁=1` 55px) 거짓 오버플로우
+            // → 본문 한글 압축이 발생했다. line_tac_offsets 는 이미 줄-범위로
+            // 필터링되어 있으므로 run 범위 필터만 적용한다.
+            //
+            // [Task #1285] 단, 오른쪽 정렬된 셀 안에서 `TAC 표 + 공백 + TAC 표`가
+            // 같은 마지막 줄에 놓이는 경우 두 번째 TAC 표는 run 끝 위치(pos == end)에
+            // 기록된다. 일반 줄 경계 판정에는 포함하지 않고, 위에서 좁게 만든
+            // line_tac_offsets_for_width 에만 넣어 부모 줄 오른쪽 정렬 폭을 맞춘다.
+            let run_chars_est: Vec<char> = run.text.chars().collect();
+            let mut seg_start_est = 0usize;
+            let is_last_run_est_tac = run_char_end_est
+                >= comp_line
+                    .runs
+                    .iter()
+                    .map(|r| r.text.chars().count())
+                    .sum::<usize>()
+                    + comp_line.char_start;
+            for &(tac_abs_pos, tac_w, _) in
+                line_tac_offsets_for_width.iter().filter(|(pos, _, _)| {
+                    *pos >= run_char_pos_est
+                        && (*pos < run_char_end_est
+                            || (is_last_run_est_tac && *pos == run_char_end_est))
+                })
+            {
+                let tac_rel = tac_abs_pos - run_char_pos_est;
+                if seg_start_est < tac_rel {
+                    let seg: String = run_chars_est[seg_start_est..tac_rel].iter().collect();
+                    ts.line_x_offset = est_x;
+                    est_x += estimate_text_width(&seg, &ts);
+                }
+                est_x += tac_w;
+                included_tac_width_in_est += tac_w;
+                seg_start_est = tac_rel;
+            }
+            // 마지막 세그먼트 처리
+            let remaining_est: String = run_chars_est[seg_start_est..].iter().collect();
+            ts.line_x_offset = est_x;
+            // [Task #874 #2] composer lang split (예: "F3→Alt+I" → "F3"/"→"/"Alt+I")
+            // 으로 auto_tab_right post-tab 콘텐츠가 후속 run 으로 흩어진 경우, 현재
+            // run 내부 seg_w 만으로는 우측 정렬 위치가 어긋남. 후속 run 합산을 미리
+            // 계산해 ts.right_tab_block_width_override 로 주입한다.
+            if auto_tab_right
+                && remaining_est.contains('\t')
+                && run_idx_est + 1 < comp_line.runs.len()
+            {
+                let tab_byte = remaining_est.rfind('\t').unwrap();
+                let post_tab: String = remaining_est[tab_byte + '\t'.len_utf8()..].to_string();
+                let no_more_tabs_after_in_run = !post_tab.contains('\t');
+                let no_tabs_in_subsequent = comp_line
+                    .runs
+                    .iter()
+                    .skip(run_idx_est + 1)
+                    .all(|r| !r.text.contains('\t'));
+                if no_more_tabs_after_in_run && no_tabs_in_subsequent {
+                    let mut ts_measure = ts.clone();
+                    ts_measure.right_tab_block_width_override = None;
+                    let post_tab_w = estimate_text_width(&post_tab, &ts_measure);
+                    let subsequent_w = right_tab_block_width(
+                        &comp_line.runs,
+                        run_idx_est + 1,
+                        styles,
+                        tab_width,
+                        &tab_stops,
+                        auto_tab_right,
+                        available_width,
+                    );
+                    ts.right_tab_block_width_override = Some(post_tab_w + subsequent_w);
+                }
+            }
+            if !remaining_est.is_empty() {
+                est_x += estimate_text_width(&remaining_est, &ts);
+            }
+            // run이 \t로 끝나면 다음 run에 오른쪽/가운데 탭 조정 필요 — Task #290:
+            // inline_tabs(composed.tab_extended) 가 LEFT 를 명시하면 cross-run pending 을 설정하지 않는다.
+            // [Task #279] trailing 공백 (\t 뒤에 따라오는 ' ') 도 허용 — 목차 소제목의
+            // 들여쓰기 문단에서 한컴이 "\t " 형태로 저장하는 케이스가 있음.
+            let trimmed_end = run
+                .text
+                .trim_end_matches(|c: char| c == ' ' || c == '\u{2007}');
+            if trimmed_end.ends_with('\t') {
+                let run_tab_count = run.text.chars().filter(|c| *c == '\t').count();
+                if run_tab_count > 0 {
+                    let last_inline_idx = inline_tab_cursor_est + run_tab_count - 1;
+                    pending_right_tab_est = resolve_last_tab_pending(
+                        &run.text,
+                        last_inline_idx,
+                        &composed.tab_extended,
+                        &ts,
+                        &tab_stops,
+                        tab_width,
+                        auto_tab_right,
+                        available_width,
+                    );
+                }
+            }
+            if run.text.contains('\t')
+                && run
+                    .text
+                    .rsplit_once('\t')
+                    .map(|(_, after)| after.trim().is_empty())
+                    .unwrap_or(false)
+                && tab_stops
+                    .iter()
+                    .any(|tab| tab.tab_type == 1 && tab.fill_type != 0)
+            {
+                pending_right_leader_digit_est = true;
+            }
+            // 각주 마커 폭: run 내에 각주가 있으면 마커 위첨자 폭 추가
+            let is_last_run_est = run_char_end_est
+                >= comp_line
+                    .runs
+                    .iter()
+                    .map(|r| r.text.chars().count())
+                    .sum::<usize>()
+                    + comp_line.char_start;
+            for &(fpos, fnum, ctrl_idx) in composed.footnote_positions.iter() {
+                // [Task #1219 Stage 1b] 선두 미주 마커는 endnote_marker_x_advance
+                // 가 풀사이즈 선두 마커로 렌더하고 그 폭을 inline_offset 에 이미
+                // 반영했다(available_width 에서 차감). 렌더 경로는 이 미주의 인라인
+                // 위첨자를 그리지 않으므로(문26 "공" x=78=선두 마커 끝), 측정에서도
+                // est_x 에 위첨자 폭을 더하면 이중 계상 → 거짓 오버플로우.
+                // start_line==0 의 미주(= endnote_marker_x_advance 처리 대상)는 제외.
+                let is_leading_endnote_marker = is_leading_endnote_marker_rendered_as_prefix(
+                    para,
+                    ctrl_idx,
+                    line_idx,
+                    start_line,
+                    fpos,
+                    comp_line.char_start,
+                );
+                if is_leading_endnote_marker {
+                    continue;
+                }
+                if fpos >= run_char_pos_est
+                    && (fpos < run_char_end_est || (is_last_run_est && fpos == run_char_end_est))
+                {
+                    let fn_text = note_marker_text_from_control(
+                        para.and_then(|p| p.controls.get(ctrl_idx)),
+                        fnum,
+                    );
+                    let sup_size = (ts.font_size * 0.55).max(7.0);
+                    let sup_ts = TextStyle {
+                        font_size: sup_size,
+                        font_family: ts.font_family.clone(),
+                        ..Default::default()
+                    };
+                    est_x += estimate_text_width(&fn_text, &sup_ts);
+                }
+            }
+            run_char_pos_est = run_char_end_est;
+            inline_tab_cursor_est += run.text.chars().filter(|c| *c == '\t').count();
+        }
+        LineWidthEst {
+            est_x,
+            included_tac_width: included_tac_width_in_est,
+        }
+    }
+
+    /// [#1925 추출] runs 가 비어있는 줄 처리 — 빈 TextRun 생성(빈 셀 편집용)과
+    /// 셀 외부 빈 줄의 treat_as_char 이미지/Shape 인라인 렌더링.
+    #[allow(clippy::too_many_arguments)]
+    fn layout_empty_runs_line(
+        &self,
+        tree: &mut PageRenderTree,
+        line_node: &mut RenderNode,
+        comp_line: &crate::renderer::composer::ComposedLine,
+        composed: &ComposedParagraph,
+        para: Option<&Paragraph>,
+        bin_data_content: Option<&[BinDataContent]>,
+        styles: &ResolvedStyleSet,
+        cell_ctx: &Option<CellContext>,
+        line_tac_offsets: &[(usize, f64, usize)],
+        vars: EmptyRunsLineVars,
+        current_line_reserved_tac_picture_height: &mut Option<f64>,
+    ) {
+        let mut empty_line_mark_x = vars.x_start;
+        let mut empty_line_logical_end = vars.line_char_end;
+        // runs가 없는 빈 줄에서 treat_as_char 이미지 렌더링
+        // 테이블 셀 내부에서는 table_layout.rs가 layout_picture로 이미 처리하므로 스킵.
+        // 셀 외부에서 해당 줄 범위에 걸린 TAC만 여기서 렌더링.
+        let empty_line_tac_allowed =
+            cell_ctx.is_none() || is_caption_cell_context(cell_ctx.as_ref());
+        if empty_line_tac_allowed && !line_tac_offsets.is_empty() {
+            if let (Some(p), Some(bdc)) = (para, bin_data_content) {
+                // TAC 이미지 전체 폭 계산 후 문단 정렬 적용
+                let total_tac_width: f64 = line_tac_offsets.iter().map(|(_, w, _)| *w).sum();
+                let align_offset = match vars.alignment {
+                    Alignment::Center | Alignment::Distribute => {
+                        (vars.available_width - total_tac_width).max(0.0) / 2.0
+                    }
+                    Alignment::Right => (vars.available_width - total_tac_width).max(0.0),
+                    _ => 0.0, // Left, Justify
+                };
+                let mut img_x = vars.effective_col_x + vars.effective_margin_left + align_offset;
+                for &(_, tac_w, tac_ci) in line_tac_offsets {
+                    if let Some(ctrl) = p.controls.get(tac_ci) {
+                        // [Issue #476] 빈 문단 + 인라인 Shape: inline_pos 등록 후 shape_layout 이 그리도록 위임.
+                        // 등록하지 않으면 layout_shape 가 inline_pos=None 으로 받아 fallback 위치에 그리거나,
+                        // #476 의 fallback 차단 분기로 박스가 누락된다.
+                        if let Control::Shape(shape) = ctrl {
+                            let common = shape.common();
+                            let shape_h_hu = (common.height as i32)
+                                .max(shape.shape_attr().current_height as i32);
+                            let shape_h = hwpunit_to_px(shape_h_hu, self.dpi);
+                            let shape_y = (vars.y + vars.baseline - shape_h).max(vars.y);
+                            tree.set_inline_shape_position(
+                                vars.section_index,
+                                vars.para_index,
+                                tac_ci,
+                                cell_ctx.as_ref(),
+                                img_x,
+                                shape_y,
+                            );
+                            img_x += tac_w;
+                            empty_line_mark_x = img_x;
+                            empty_line_logical_end += 1;
+                            continue;
+                        }
+                        if let Control::Picture(pic) = ctrl {
+                            let pic_h = hwpunit_to_px(pic.common.height as i32, self.dpi);
+                            // LINE_SEG vpos가 TopAndBottom 흐름 위치를 이미 담고 있으면
+                            // sibling 예약 높이를 다시 더하지 않는다.
+                            let sibling_reserved_px = if vars.has_topbottom_vpos_base {
+                                0.0
+                            } else {
+                                hwpunit_to_px(
+                                    calc_sibling_topandbottom_reserved_hu(&p.controls),
+                                    self.dpi,
+                                )
+                            };
+                            if vars.raw_lh + 4.0 >= pic_h {
+                                *current_line_reserved_tac_picture_height = Some(pic_h);
+                            }
+                            let label_extra = tac_picture_label_extra_for_line(
+                                cell_ctx.as_ref(),
+                                vars.runs_all_whitespace,
+                                vars.raw_lh,
+                                *current_line_reserved_tac_picture_height,
+                                vars.max_fs,
+                                vars.line_spacing_px,
+                            );
+                            let base_img_y = if label_extra > 0.0 {
+                                vars.y + label_extra
+                            } else {
+                                (vars.y + vars.baseline - pic_h).max(vars.y)
+                            };
+                            let img_y = base_img_y + sibling_reserved_px;
+                            let bin_data_id = pic.image_attr.bin_data_id;
+                            let image_data =
+                                find_bin_data(bdc, bin_data_id).map(|c| c.data.clone());
+                            let crop = {
+                                let c = &pic.crop;
+                                if c.right > c.left
+                                    && c.bottom > c.top
+                                    && (c.left != 0 || c.top != 0 || c.right != 0 || c.bottom != 0)
+                                {
+                                    Some((c.left, c.top, c.right, c.bottom))
+                                } else {
+                                    None
+                                }
+                            };
+                            let original_size_hu = if pic.shape_attr.original_width > 0
+                                && pic.shape_attr.original_height > 0
+                            {
+                                Some((
+                                    pic.shape_attr.original_width,
+                                    pic.shape_attr.original_height,
+                                ))
+                            } else {
+                                None
+                            };
+                            // [Task #1151 v7 항목 7] ImageNode 생성 helper 통합.
+                            let img_node = make_picture_image_node(
+                                tree,
+                                pic,
+                                vars.section_index,
+                                vars.para_index,
+                                tac_ci,
+                                cell_ctx.as_ref(),
+                                crop,
+                                original_size_hu,
+                                bin_data_id,
+                                image_data,
+                                BoundingBox::new(img_x, img_y, tac_w, pic_h),
+                            );
+                            line_node.children.push(img_node);
+                            // [Task #418/#376] layout_shape_item 의 Task #347 분기 (빈 문단 +
+                            // TAC Picture 직접 emit) 와 이중 렌더링되지 않도록 인라인 위치를
+                            // 등록한다. layout_shape_item 은 등록된 경우 push 를 스킵한다.
+                            tree.set_inline_shape_position(
+                                vars.section_index,
+                                vars.para_index,
+                                tac_ci,
+                                cell_ctx.as_ref(),
+                                img_x,
+                                img_y,
+                            );
+                            img_x += tac_w;
+                            empty_line_mark_x = img_x;
+                            empty_line_logical_end += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        let run_id = tree.next_id();
+        let (text_style, char_shape_id) =
+            paragraph_active_text_style(styles, para, vars.line_char_end);
+        let run_node = RenderNode::new(
+            run_id,
+            RenderNodeType::TextRun(TextRunNode {
+                text: String::new(),
+                style: text_style,
+                char_shape_id,
+                para_shape_id: Some(composed.para_style_id),
+                section_index: Some(vars.section_index),
+                para_index: Some(vars.para_index),
+                char_start: Some(empty_line_logical_end),
+                cell_context: cell_ctx.clone(),
+                is_para_end: vars.is_last_line_of_para && !vars.defer_empty_line_control_marker,
+                is_line_break_end: comp_line.has_line_break
+                    && !vars.defer_empty_line_control_marker,
+                rotation: 0.0,
+                is_vertical: false,
+                char_overlap: None,
+                border_fill_id: 0,
+                baseline: vars.baseline,
+                field_marker: FieldMarkerType::None,
+            }),
+            BoundingBox::new(
+                empty_line_mark_x,
+                vars.y,
+                if empty_line_mark_x > vars.x_start {
+                    0.0
+                } else {
+                    vars.available_width
+                },
+                vars.line_flow_height,
+            ),
+        );
+        line_node.children.push(run_node);
     }
 
     /// 원본 문단 데이터로 레이아웃 (ComposedParagraph 없는 경우 fallback)

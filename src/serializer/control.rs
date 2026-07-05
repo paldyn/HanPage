@@ -471,15 +471,21 @@ fn serialize_column_def(cd: &ColumnDef, level: u16, records: &mut Vec<Record>) {
 fn serialize_table(table: &Table, level: u16, records: &mut Vec<Record>) {
     // CTRL_HEADER: raw_ctrl_data는 CommonObjAttr 전체 (attr 포함)
     // Task 271에서 파싱 변경: ctrl_data 전체 = CommonObjAttr
-    records.push(make_ctrl_record(
-        tags::CTRL_TABLE,
-        level,
-        if !table.raw_ctrl_data.is_empty() {
-            &table.raw_ctrl_data
-        } else {
-            &[]
-        },
-    ));
+    //
+    // [#1916] raw_ctrl_data 부재 시(HWPX 파스 IR·편집기 신설 표 등) 종전에는
+    // 빈 데이터를 방출해 재파스 CommonObjAttr 전체(treat_as_char/wrap/
+    // flowWithText 등)가 기본값으로 붕괴했다. 다른 GSO 컨트롤과 동일하게
+    // IR 의 common 으로 합성한다 (attr=0 이면 pack_common_attr_bits 경유 —
+    // flow_with_text bit 13 포함). HWP5 파스본(raw 보존)·어댑터 경로(Stage 2
+    // 합성)는 raw_ctrl_data 가 채워져 있어 동작 불변.
+    let composed_common;
+    let ctrl_data: &[u8] = if !table.raw_ctrl_data.is_empty() {
+        &table.raw_ctrl_data
+    } else {
+        composed_common = serialize_common_obj_attr(&table.common);
+        &composed_common
+    };
+    records.push(make_ctrl_record(tags::CTRL_TABLE, level, ctrl_data));
 
     // 캡션 (TABLE 이전, level+1)
     if let Some(ref caption) = table.caption {
@@ -1071,8 +1077,15 @@ fn serialize_picture_data(pic: &Picture) -> Vec<u8> {
         w.write_u32(pic.instance_id).unwrap();
         w.write_u32(0).unwrap(); // image_effect_extra
                                  // 원본 이미지 크기(HWPUNIT) + 플래그(1): 한컴 호환 추가 9바이트
-        w.write_u32(pic.crop.right as u32).unwrap(); // original width in HWPUNIT
-        w.write_u32(pic.crop.bottom as u32).unwrap(); // original height in HWPUNIT
+                                 // [#1929] IR img_dim(HWPX hp:imgDim 대응)이 있으면 우선 기록 —
+                                 // 종전 crop 폴백만으로는 HWPX→HWP5 왕복에서 imgDim 소실.
+        let (dim_w, dim_h) = if pic.img_dim != (0, 0) {
+            pic.img_dim
+        } else {
+            (pic.crop.right as u32, pic.crop.bottom as u32)
+        };
+        w.write_u32(dim_w).unwrap(); // original width
+        w.write_u32(dim_h).unwrap(); // original height
         w.write_u8(pic.image_attr.transparency_alpha_byte())
             .unwrap();
     }
