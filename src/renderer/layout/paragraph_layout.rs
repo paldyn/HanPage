@@ -282,6 +282,46 @@ struct EmptyRunsLineVars {
     section_index: usize,
     para_index: usize,
 }
+/// [#2003] run 방출 루프의 줄-간 캐리오버 묶음 (Copy 스칼라 9종) — 값 전달 + 반환.
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
+struct RunEmitState {
+    x: f64,
+    y: f64,
+    baseline: f64,
+    raw_lh: f64,
+    run_char_pos: usize,
+    inline_tab_cursor_render: usize,
+    pending_right_tab_render: Option<(f64, u8, u8)>,
+    pending_right_leader_digit_render: bool,
+    current_line_reserved_tac_picture_height: Option<f64>,
+}
+
+/// [#2003] run 방출 루프의 줄-스코프 읽기 스칼라 묶음.
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
+struct RunEmitVars {
+    alignment: crate::model::style::Alignment,
+    auto_tab_right: bool,
+    available_width: f64,
+    effective_margin_left: f64,
+    end: usize,
+    extra_char_sp: f64,
+    extra_dash_sp: f64,
+    extra_word_sp: f64,
+    has_tabs: bool,
+    is_last_line_of_para: bool,
+    line_height: f64,
+    line_idx: usize,
+    line_spacing_px: f64,
+    max_fs: f64,
+    runs_all_whitespace: bool,
+    start_line: usize,
+    tab_width: f64,
+    section_index: usize,
+    para_index: usize,
+}
+
 /// [#1925 추출] `estimate_line_run_widths` 결과 — est 사전 폭 추정 산출물.
 struct LineWidthEst {
     /// 추정 종료 x (초기값 기준 누적 점유 폭 계산용)
