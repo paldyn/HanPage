@@ -4,6 +4,7 @@
 //!
 //! 재현 문서 (tracked 공개 샘플):
 //! `samples/issue1949_giant_cell_nested_tables_perf.hwpx` (해양수산부 별표, 0.3MB).
+//! `samples/issue1949_giant_cell_nested_tables_perf.hwp` (같은 기준의 HWP 저장본).
 //! 바깥 3×1 RowBreak 표의 셀[2] = 2507문단 + 중첩표 수십 개, 한컴 2024 기준
 //! PDF와 같이 115쪽에 걸침.
 //!
@@ -29,6 +30,13 @@ fn giant_cell_rowbreak_table_renders_all_pages_without_blowup() {
     let doc = load_doc("samples/issue1949_giant_cell_nested_tables_perf.hwpx");
     let pages = doc.page_count();
     assert_eq!(pages, 115, "issue1949/1999: 기준 PDF와 쪽수 불일치");
+
+    let hwp_doc = load_doc("samples/issue1949_giant_cell_nested_tables_perf.hwp");
+    assert_eq!(
+        hwp_doc.page_count(),
+        115,
+        "issue1949/1999: HWP 저장본이 기준 PDF와 쪽수 불일치"
+    );
 
     // 전체 페이지 렌더 — 캐시가 없으면 O(pages×cell) 로 사실상 완료 불가.
     let mut nonempty_mid = false;
