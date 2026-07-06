@@ -32,7 +32,7 @@ import { initThemeSync, setThemeMode, getThemeMode, getEffectiveTheme } from '@/
 import { analyzeDocumentFonts } from '@/core/document-font-status';
 import { detectLocalFonts, getLocalFontState, loadStoredLocalFonts } from '@/core/local-fonts';
 import { userSettings } from '@/core/user-settings';
-import { AutosaveManager } from '@/recovery/autosave-manager';
+import { AutosaveManager, type AutosaveScheduleSettings, type AutosaveStatus } from '@/recovery/autosave-manager';
 import { clearAutosaveDrafts, deleteAutosaveDraft, listAutosaveDrafts, type AutosaveDraft } from '@/recovery/autosave-store';
 import { recoveryFileName } from '@/recovery/recovery-format';
 import { showAutosaveRecoveryDialog } from '@/recovery/recovery-ui';
@@ -54,6 +54,8 @@ const documentState = new DocumentDirtyState(eventBus);
 documentState.installBeforeUnload(window);
 const autosaveManager = new AutosaveManager({
   exportBytes: () => wasm.exportHwp(),
+  schedule: autosaveScheduleFromUserSettings(),
+  onStatus: handleAutosaveStatus,
 });
 autosaveManager.connect(eventBus);
 initThemeSync((effective, mode) => {
@@ -151,6 +153,57 @@ const sbMessage = () => document.getElementById('sb-message')!;
 const sbPage = () => document.getElementById('sb-page')!;
 const sbSection = () => document.getElementById('sb-section')!;
 const sbZoomVal = () => document.getElementById('sb-zoom-val')!;
+let autosaveStatusRestoreTimer: ReturnType<typeof setTimeout> | null = null;
+let autosavePreviousMessage: string | null = null;
+
+function autosaveScheduleFromUserSettings(): AutosaveScheduleSettings {
+  const settings = userSettings.getAutosaveSettings();
+  return {
+    recoveryEnabled: settings.recoveryEnabled,
+    recoveryIntervalMs: settings.recoveryIntervalMinutes * 60_000,
+    idleEnabled: settings.idleSaveEnabled,
+    idleDelayMs: settings.idleDelaySeconds * 1_000,
+  };
+}
+
+function handleAutosaveStatus(status: AutosaveStatus): void {
+  const message = document.getElementById('sb-message');
+  if (!message) return;
+  if (autosaveStatusRestoreTimer) {
+    clearTimeout(autosaveStatusRestoreTimer);
+    autosaveStatusRestoreTimer = null;
+  }
+
+  if (status.state === 'saving') {
+    if (autosavePreviousMessage === null) {
+      autosavePreviousMessage = message.textContent ?? '';
+    }
+    message.textContent = '복구용 자동 저장 중...';
+    return;
+  }
+
+  const restoreTarget = autosavePreviousMessage;
+  autosavePreviousMessage = null;
+  const nextMessage = status.state === 'saved'
+    ? `복구용 자동 저장 완료 (${formatBytes(status.byteLength)})`
+    : '복구용 자동 저장 실패';
+  message.textContent = nextMessage;
+  if (restoreTarget !== null) {
+    autosaveStatusRestoreTimer = setTimeout(() => {
+      if (message.textContent === nextMessage) {
+        message.textContent = restoreTarget;
+      }
+      autosaveStatusRestoreTimer = null;
+    }, status.state === 'saved' ? 1_600 : 4_000);
+  }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const kib = bytes / 1024;
+  if (kib < 1024) return `${kib.toFixed(1)} KiB`;
+  return `${(kib / 1024).toFixed(1)} MiB`;
+}
 
 function waitForNextPaint(): Promise<void> {
   return new Promise((resolve) => {
@@ -575,6 +628,10 @@ function setupEventListeners(): void {
     if (wasm.pageCount > 0) {
       canvasView?.loadDocument();
     }
+  });
+
+  eventBus.on('autosave-settings-changed', () => {
+    autosaveManager.updateSchedule(autosaveScheduleFromUserSettings());
   });
 
   // 필드 정보 표시
