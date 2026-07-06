@@ -486,7 +486,9 @@ impl LayoutEngine {
         if common.treat_as_char || !matches!(common.text_wrap, TextWrap::TopAndBottom) {
             return 0.0;
         }
-        let object_height = hwpunit_to_px(common.height as i32, self.dpi);
+        let object_height = hwpunit_to_px(common.height as i32, self.dpi)
+            + hwpunit_to_px(common.margin.top as i32, self.dpi)
+            + hwpunit_to_px(common.margin.bottom as i32, self.dpi);
         if matches!(common.vert_rel_to, VertRelTo::Para) {
             if common.flow_with_text {
                 hwpunit_to_px((common.vertical_offset as i32).max(0), self.dpi) + object_height
@@ -3085,13 +3087,14 @@ impl LayoutEngine {
                                     // 가 advance 시킨 para_y 가 아닌 anchor 시점(para_y_before_compose)을 기준
                                     // 으로 해야 cell-clip 영역 내부에 정확히 배치된다. (exam_science 2번 보기 ⑤
                                     // 등 5개 이미지에서 line_height(약 15.32px) 만큼 아래로 밀려 잘림.)
-                                    let anchor_y = if matches!(
+                                    let top_and_bottom_para = matches!(
                                         pic.common.text_wrap,
                                         crate::model::shape::TextWrap::TopAndBottom
                                     ) && matches!(
                                         pic.common.vert_rel_to,
                                         crate::model::shape::VertRelTo::Para
-                                    ) {
+                                    );
+                                    let anchor_y = if top_and_bottom_para {
                                         para.line_segs
                                             .first()
                                             .filter(|seg| seg.vertical_pos >= 0)
@@ -5335,6 +5338,31 @@ impl LayoutEngine {
         }
     }
 
+    fn is_non_inline_control_flow_unit(unit: &CellUnit) -> bool {
+        unit.vis_start == unit.vis_end
+            && !unit.empty_spacer
+            && unit.nested_row.is_none()
+            && !unit.mixed_nested_fragment
+            && !unit.mixed_nested_trailing
+            && unit.mixed_nested_content_height <= 0.0
+    }
+
+    fn would_orphan_non_inline_flow_before_spacer(
+        units: &[CellUnit],
+        j: usize,
+        consumed_height: f64,
+        avail_height: f64,
+    ) -> bool {
+        let Some(next) = units.get(j + 1) else {
+            return false;
+        };
+        Self::is_non_inline_control_flow_unit(&units[j])
+            && next.empty_spacer
+            && !next.hard_break_before
+            && consumed_height + units[j].height <= avail_height
+            && consumed_height + units[j].height + next.height > avail_height
+    }
+
     fn should_absorb_midpage_saved_vpos_reset(
         &self,
         table: &crate::model::table::Table,
@@ -5508,6 +5536,14 @@ impl LayoutEngine {
                     }
                     break;
                 }
+                if j > start
+                    && Self::would_orphan_non_inline_flow_before_spacer(&units, j, h, avail_height)
+                {
+                    // TopAndBottom 개체만 쪽 하단에 남기고 뒤 spacer 를 다음 쪽으로 보내면
+                    // 기준 렌더러와 달리 그림이 한 쪽 앞당겨진다. 개체+spacer 묶음이 함께
+                    // 들어가지 못할 때는 개체 유닛부터 다음 조각에서 시작하게 한다.
+                    break;
+                }
                 h += u.height;
                 j += 1;
             }
@@ -5648,6 +5684,13 @@ impl LayoutEngine {
                         j += 1;
                         continue;
                     }
+                    break;
+                }
+                if j > start
+                    && Self::would_orphan_non_inline_flow_before_spacer(&units, j, h, avail_height)
+                {
+                    // `advance_row_cut` 과 같은 CellUnit 구조 판정이다. 행블록 컷에서도
+                    // TopAndBottom 개체 유닛이 뒤 spacer 와 분리되어 고립되지 않게 한다.
                     break;
                 }
                 h += u.height;
@@ -6685,6 +6728,28 @@ mod row_cut_tests {
         }
     }
 
+    #[test]
+    fn test_topandbottom_flow_height_includes_margins() {
+        // TopAndBottom + Para + flow_with_text 그림은 실제 렌더 y가
+        // vertical_offset + margin.top부터 시작하므로, 예약 높이도
+        // vertical_offset + margin.top + height + margin.bottom이어야 한다.
+        let eng = LayoutEngine::new(96.0);
+        let mut para = non_inline_picture_para(0);
+        let Control::Picture(pic) = &mut para.controls[0] else {
+            panic!("그림 컨트롤 아님");
+        };
+        pic.common.vertical_offset = 720;
+        pic.common.height = 7200;
+        pic.common.margin.top = 720;
+        pic.common.margin.bottom = 1440;
+
+        let h = eng.paragraph_cell_non_inline_controls_flow_height(&para.controls);
+        assert!(
+            (h - 134.4).abs() < 0.01,
+            "TopAndBottom flow height에 margin이 포함되어야 함: {h}"
+        );
+    }
+
     fn composed_text(text: &str) -> ComposedParagraph {
         ComposedParagraph {
             lines: vec![ComposedLine {
@@ -6935,6 +7000,61 @@ mod row_cut_tests {
         assert!(
             r2.end_cut[0] > r.end_cut[0],
             "다음 컷에서 그림 흐름 유닛이 전진함"
+        );
+    }
+
+    #[test]
+    fn test_advance_row_cut_non_inline_flow_unit_not_orphaned_before_spacer() {
+        // RowBreak 거대 셀에서 TopAndBottom 그림 flow 유닛만 쪽 하단에 들어가고,
+        // 바로 뒤 spacer 가 다음 쪽으로 밀리면 기준 렌더러보다 그림이 한 쪽 앞선다.
+        // 그림 유닛+뒤 spacer 묶음이 함께 들어가지 못하면 그림 유닛부터 다음 조각으로 넘긴다.
+        let eng = LayoutEngine::new(96.0);
+        let styles = ResolvedStyleSet::default();
+        let t = rowbreak_table(vec![cell(
+            0,
+            0,
+            vec![
+                visible_text_para(1, 0),
+                non_inline_picture_para(1200),
+                empty_overlay_para(1, 2400),
+                visible_text_para(1, 3600),
+            ],
+        )]);
+        let units = eng.cell_units(&t.cells[0], &t, &styles);
+        let picture_unit = units
+            .iter()
+            .position(|unit| {
+                unit.vis_start == unit.vis_end
+                    && !unit.empty_spacer
+                    && unit.nested_row.is_none()
+                    && !unit.mixed_nested_fragment
+            })
+            .expect("그림 flow 유닛 존재");
+        let spacer_unit = picture_unit + 1;
+        assert!(units[spacer_unit].empty_spacer, "그림 뒤 spacer 존재");
+
+        let before_picture: f64 = units[..picture_unit].iter().map(|unit| unit.height).sum();
+        let picture_height = units[picture_unit].height;
+        let spacer_height = units[spacer_unit].height;
+        let avail = before_picture + picture_height + spacer_height * 0.5;
+
+        let r = eng.advance_row_cut(&t, 0, &[], avail, &styles);
+        assert_eq!(
+            r.end_cut,
+            vec![picture_unit],
+            "그림만 들어가고 뒤 spacer 가 빠지는 컷은 만들지 않음"
+        );
+
+        let b = eng.advance_row_block_cut(&t, 0, 1, &[], avail, &styles);
+        assert_eq!(
+            b.end_cut, r.end_cut,
+            "행블록 컷도 같은 orphan 방지 조건을 적용"
+        );
+
+        let r2 = eng.advance_row_cut(&t, 0, &r.end_cut, 1_000.0, &styles);
+        assert!(
+            r2.end_cut[0] > spacer_unit,
+            "다음 조각에서는 그림과 spacer 를 함께 전진"
         );
     }
 
