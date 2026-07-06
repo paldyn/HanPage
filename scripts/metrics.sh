@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # rhwp 코드 품질 메트릭 수집 스크립트
-# 사용법: ./scripts/metrics.sh [--snapshot]
+# 사용법: ./scripts/metrics.sh [--snapshot [라벨]] [--no-coverage]
 # 결과: output/metrics.json + output/dashboard.html (자동 복사)
-# --snapshot: 수집 후 mydocs/metrics/{오늘날짜}/ 로 보관 (커밋해 공유 —
-#             리팩토링 Phase 경계/릴리즈/코드 리뷰 등 의미 있는 시점만)
+# --snapshot [라벨]: 수집 후 mydocs/metrics/{오늘날짜}[-라벨]/ 로 보관 (커밋해 공유 —
+#             리팩토링 Phase 경계/릴리즈/코드 리뷰 등 의미 있는 시점만).
+#             라벨을 주면 같은 날짜에 여러 스냅샷을 덮어쓰기 없이 보관할 수 있다
+#             (예: --snapshot r1 → mydocs/metrics/2026-07-04-r1/).
+# --no-coverage: cargo-tarpaulin 커버리지 측정 생략 (수십 분 소요 회피용 — coverage=null)
 
 set -euo pipefail
 
@@ -11,7 +14,23 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 OUTPUT_DIR="$PROJECT_DIR/output"
 SNAPSHOT=false
-[ "${1:-}" = "--snapshot" ] && SNAPSHOT=true
+SNAPSHOT_LABEL=""
+RUN_COVERAGE=true
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --snapshot)
+            SNAPSHOT=true
+            # 다음 인자가 옵션이 아니면 라벨로 소비
+            if [ $# -gt 1 ] && [ "${2#--}" = "$2" ]; then
+                SNAPSHOT_LABEL="$2"
+                shift
+            fi
+            ;;
+        --no-coverage) RUN_COVERAGE=false ;;
+        *) echo "알 수 없는 옵션: $1" >&2; exit 2 ;;
+    esac
+    shift
+done
 
 mkdir -p "$OUTPUT_DIR"
 
@@ -98,12 +117,16 @@ TEST_PASSED=$(echo "$TEST_OUTPUT" | grep "^test result:" | grep -oP '\d+(?= pass
 TEST_FAILED=$(echo "$TEST_OUTPUT" | grep "^test result:" | grep -oP '\d+(?= failed)' | awk '{s+=$1}END{print s+0}')
 TEST_IGNORED=$(echo "$TEST_OUTPUT" | grep "^test result:" | grep -oP '\d+(?= ignored)' | awk '{s+=$1}END{print s+0}')
 
-# ── 5. 커버리지 (cargo-tarpaulin 있을 때만) ──
-echo "[5/5] 커버리지 측정..."
+# ── 5. 커버리지 (cargo-tarpaulin 있을 때만, --no-coverage 로 생략 가능) ──
 COVERAGE="null"
-if command -v cargo-tarpaulin &> /dev/null; then
+if [ "$RUN_COVERAGE" = false ]; then
+    echo "[5/5] 커버리지 측정 생략 (--no-coverage)"
+elif command -v cargo-tarpaulin &> /dev/null; then
+    echo "[5/5] 커버리지 측정..."
     TARP_OUTPUT=$(cargo tarpaulin --manifest-path "$PROJECT_DIR/Cargo.toml" --skip-clean 2>&1 || true)
     COVERAGE=$(echo "$TARP_OUTPUT" | grep -oP '[\d.]+(?=% coverage)' | tail -1 || echo "null")
+else
+    echo "[5/5] 커버리지 측정 생략 (cargo-tarpaulin 미설치)"
 fi
 
 # ── 타임스탬프 ──
@@ -172,7 +195,10 @@ fi
 
 # ── 스냅샷 보관 (--snapshot) ──
 if [ "$SNAPSHOT" = true ]; then
-    SNAP_DIR="$PROJECT_DIR/mydocs/metrics/$(date +%F)"
+    SNAP_DIR="$PROJECT_DIR/mydocs/metrics/$(date +%F)${SNAPSHOT_LABEL:+-$SNAPSHOT_LABEL}"
+    if [ -d "$SNAP_DIR" ]; then
+        echo "경고: $SNAP_DIR 이미 존재 — 덮어쓰지 않으려면 --snapshot <라벨> 로 구분할 것" >&2
+    fi
     mkdir -p "$SNAP_DIR"
     cp "$OUTPUT_DIR/metrics.json" "$SNAP_DIR/metrics.json"
     # 추세 요약도 포함 — 없으면 dashboard.html 의 델타 카드/추세 차트가 비어 보인다.
@@ -189,6 +215,8 @@ echo ""
 echo "요약:"
 echo "  파일 수: $(echo "$FILE_LINES_JSON" | grep -o '"file"' | wc -l)"
 echo "  Clippy 경고: $CLIPPY_WARNINGS"
-echo "  Cognitive Complexity > 25: $(echo "$CC_JSON" | grep -o '"complexity"' | wc -l)개 함수"
+CC_TOTAL=$(echo "$CC_JSON" | grep -o '"complexity"' | wc -l)
+CC_OVER25=$(echo "$CC_JSON" | grep -oE '"complexity":[0-9]+' | awk -F: '$2 > 25' | wc -l)
+echo "  Cognitive Complexity > 25: ${CC_OVER25}개 함수 (측정 대상 전체 ${CC_TOTAL}개)"
 echo "  테스트: $TEST_PASSED passed / $TEST_FAILED failed / $TEST_IGNORED ignored"
 echo "  커버리지: $COVERAGE"
