@@ -252,7 +252,7 @@ pub struct ParaShape {
     pub head_type: HeadType,
     /// 문단 수준 (0~6 → 1~7수준, attr1 bit 25~27)
     pub para_level: u8,
-    /// [#1984] HWPX breakSetting@breakLatinWord 원문 보존
+    /// [#1986] HWPX breakSetting@breakLatinWord 원문 보존
     /// (BREAK_WORD/KEEP_WORD/HYPHENATION). 파서 미수집 시 None → 직렬화 기본값
     /// KEEP_WORD. 값이 3가지라 attr1 비트 인코딩 대신 원문 보존으로 무손실 방출.
     /// 꼬리말·표셀 등 재계산 경로에서 줄나눔이 달라져 레이아웃이 갈리는 것을 막는다.
