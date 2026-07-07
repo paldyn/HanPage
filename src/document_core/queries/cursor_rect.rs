@@ -2662,6 +2662,45 @@ impl DocumentCore {
         path_json: &str,
         char_offset: usize,
     ) -> Result<String, HwpError> {
+        self.get_cursor_rect_by_path_with_hint(
+            section_idx,
+            parent_para_idx,
+            path_json,
+            char_offset,
+            None,
+        )
+    }
+
+    /// [#2021] 후보 페이지를 힌트 페이지(±1) 우선으로 재배열한다 — 거대 표처럼 호스트
+    /// 문단이 수십 페이지에 걸칠 때, 캐시 무효화 직후의 선형 페이지 트리 재빌드 탐색이
+    /// 캐럿 페이지 인덱스에 비례해 커지는 것을 차단한다 (탐색 순서만 변경, 좌표 불변).
+    fn order_pages_by_hint(pages: Vec<u32>, hint_page: Option<u32>) -> Vec<u32> {
+        let Some(hint) = hint_page else { return pages };
+        let mut ordered = Vec::with_capacity(pages.len());
+        for cand in [Some(hint), hint.checked_sub(1), hint.checked_add(1)]
+            .into_iter()
+            .flatten()
+        {
+            if pages.contains(&cand) && !ordered.contains(&cand) {
+                ordered.push(cand);
+            }
+        }
+        for p in pages {
+            if !ordered.contains(&p) {
+                ordered.push(p);
+            }
+        }
+        ordered
+    }
+
+    pub(crate) fn get_cursor_rect_by_path_with_hint(
+        &self,
+        section_idx: usize,
+        parent_para_idx: usize,
+        path_json: &str,
+        char_offset: usize,
+        hint_page: Option<u32>,
+    ) -> Result<String, HwpError> {
         use crate::renderer::layout::{compute_char_positions, CellContext, CellPathEntry};
         use crate::renderer::render_tree::{RenderNode, RenderNodeType};
 
@@ -2672,8 +2711,11 @@ impl DocumentCore {
 
         let _para = self.resolve_paragraph_by_path(section_idx, parent_para_idx, &path)?;
 
-        // 커서 좌표를 렌더 트리에서 찾기
-        let pages = self.find_pages_for_paragraph(section_idx, parent_para_idx)?;
+        // 커서 좌표를 렌더 트리에서 찾기 ([#2021] 힌트 페이지 우선 탐색)
+        let pages = Self::order_pages_by_hint(
+            self.find_pages_for_paragraph(section_idx, parent_para_idx)?,
+            hint_page,
+        );
 
         fn table_ctx_from_node(
             node: &RenderNode,
@@ -5134,6 +5176,58 @@ mod tests {
                 page,
                 t.elapsed().as_secs_f64() * 1000.0
             );
+        }
+    }
+
+    /// [#2021] 힌트 탐색 동등성 핀 — 힌트 유/무·오힌트 fallback 모두 좌표 완전 일치.
+    #[test]
+    fn issue_2021_hint_search_equivalence() {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("samples/issue1949_giant_cell_nested_tables_perf.hwp");
+        let bytes = std::fs::read(&p).expect("read sample");
+        let core = crate::document_core::DocumentCore::from_bytes(&bytes).expect("parse");
+        let doc = core.document();
+        let mut host = None;
+        'outer: for (pi, para) in doc.sections[0].paragraphs.iter().enumerate() {
+            for (ci, c) in para.controls.iter().enumerate() {
+                if matches!(c, crate::model::control::Control::Table(_)) {
+                    host = Some((pi, ci));
+                    break 'outer;
+                }
+            }
+        }
+        let (host_pi, host_ci) = host.expect("표 없음");
+        let total = core.page_count() as u32;
+        for cell in 0..3usize {
+            let path = format!(
+                r#"[{{"controlIndex":{},"cellIndex":{},"cellParaIndex":0}}]"#,
+                host_ci, cell
+            );
+            core.invalidate_page_tree_cache();
+            let base = core
+                .get_cursor_rect_by_path_with_hint(0, host_pi, &path, 0, None)
+                .expect("base rect");
+            // 정힌트(정답 페이지) / 오힌트(마지막 페이지·범위 밖) 전부 동일해야 한다.
+            let base_page: u32 = base
+                .split("\"pageIndex\":")
+                .nth(1)
+                .and_then(|s| s.split(&[',', '}'][..]).next())
+                .and_then(|s| s.trim().parse().ok())
+                .expect("pageIndex");
+            for hint in [
+                Some(base_page),
+                Some(total.saturating_sub(1)),
+                Some(total + 7),
+            ] {
+                core.invalidate_page_tree_cache();
+                let hinted = core
+                    .get_cursor_rect_by_path_with_hint(0, host_pi, &path, 0, hint)
+                    .expect("hinted rect");
+                assert_eq!(
+                    base, hinted,
+                    "#2021 힌트 {hint:?} 좌표 불일치 (cell {cell})"
+                );
+            }
         }
     }
 }
