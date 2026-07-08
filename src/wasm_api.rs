@@ -4784,6 +4784,28 @@ impl HwpDocument {
         .map_err(|e| e.into())
     }
 
+    /// [#2021] 경로 기반 커서 좌표 조회 + 페이지 힌트 — 직전 캐럿 페이지를 전달하면
+    /// 해당 페이지(±1)를 먼저 탐색해, 거대 표 문서에서 캐시 무효화 직후의 선형 페이지
+    /// 재빌드 비용을 피한다. 힌트가 틀려도 종전 전체 탐색으로 fallback (좌표 불변).
+    #[wasm_bindgen(js_name = getCursorRectByPathNear)]
+    pub fn get_cursor_rect_by_path_near(
+        &self,
+        section_idx: u32,
+        parent_para_idx: u32,
+        path_json: &str,
+        char_offset: u32,
+        hint_page: u32,
+    ) -> Result<String, JsValue> {
+        self.get_cursor_rect_by_path_with_hint(
+            section_idx as usize,
+            parent_para_idx as usize,
+            path_json,
+            char_offset as usize,
+            Some(hint_page),
+        )
+        .map_err(|e| e.into())
+    }
+
     /// 경로 기반 셀 정보 조회 (중첩 표용).
     ///
     /// 반환: JSON `{"row":N,"col":N,"rowSpan":N,"colSpan":N}`
@@ -6760,6 +6782,14 @@ impl HwpDocument {
     #[wasm_bindgen(js_name = getBookmarks)]
     pub fn get_bookmarks(&self) -> Result<String, JsValue> {
         self.core.get_bookmarks_native().map_err(|e| e.into())
+    }
+
+    /// 문서 구조(개요/조문) 트리를 JSON으로 반환 (사이드바 목차 네비게이션용)
+    ///
+    /// `mode`: `"auto"` | `"outline"` | `"clause"` (인식 불가 시 `auto`).
+    #[wasm_bindgen(js_name = getStructure)]
+    pub fn get_structure(&self, mode: &str) -> Result<String, JsValue> {
+        self.core.get_structure_native(mode).map_err(|e| e.into())
     }
 
     /// 책갈피 추가

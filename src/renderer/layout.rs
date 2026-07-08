@@ -55,6 +55,26 @@ struct ColumnItemCtx<'a> {
 
 const ENDNOTE_BETWEEN_NOTES_BASE_FLOW_HU: i32 = 1984;
 
+#[derive(Debug, Clone, Copy)]
+struct TacReceiptSealLine {
+    shift_px: f64,
+    line_height_px: f64,
+    baseline_px: f64,
+    vpos_hu: i32,
+    char_style_id: u32,
+    lang_index: usize,
+    para_style_id: u16,
+    filler_count: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TacPostF081cLine {
+    count: usize,
+    baseline_px: f64,
+    char_style_id: u32,
+    lang_index: usize,
+}
+
 fn effective_tac_segment_width_hu(para: &Paragraph, fallback_width_hu: i32) -> i32 {
     let seg_width = para.line_segs.first().map(|s| s.segment_width).unwrap_or(0);
     if seg_width > 0 {
@@ -133,6 +153,272 @@ fn square_wrap_first_narrow_line_vpos_px(
         return None;
     }
     Some(hwpunit_to_px(narrow_vpos - base_vpos, dpi))
+}
+
+fn table_contains_receipt_title(table: &crate::model::table::Table) -> bool {
+    table.cells.iter().any(|cell| {
+        cell.paragraphs
+            .iter()
+            .any(|para| para.text.contains("Filing Receipt") || para.text.contains("접 수 증"))
+    })
+}
+
+fn tac_receipt_filler_prefix(
+    para: &Paragraph,
+    composed: Option<&ComposedParagraph>,
+    table: &crate::model::table::Table,
+    control_index: usize,
+    dpi: f64,
+) -> Option<TacReceiptSealLine> {
+    if control_index != 0
+        || !table.common.treat_as_char
+        || para.line_segs.len() < 2
+        || !table_contains_receipt_title(table)
+    {
+        return None;
+    }
+
+    let comp = composed?;
+    let first_line = comp.lines.first()?;
+    let mut filler_count = 0usize;
+    let mut first_style = None;
+    for run in &first_line.runs {
+        first_style.get_or_insert((run.char_style_id, run.lang_index));
+        for ch in run.text.chars() {
+            match ch {
+                '\u{F081C}' => filler_count += 1,
+                // 한컴 전용 날인 기호가 같이 저장된 변형도 같은 선으로 취급한다.
+                '\u{F012B}' | '\u{FFFC}' | ' ' | '\t' | '\r' | '\n' => {}
+                _ => return None,
+            }
+        }
+    }
+    if filler_count < 16 {
+        return None;
+    }
+
+    let first_seg = para.line_segs.first()?;
+    let table_seg = para.line_segs.get(1)?;
+    let delta_hu = table_seg.vertical_pos - first_seg.vertical_pos;
+    if delta_hu <= 0 {
+        return None;
+    }
+    let shift_px = hwpunit_to_px(delta_hu, dpi);
+    if shift_px < 4.0 {
+        return None;
+    }
+
+    let (char_style_id, lang_index) = first_style.unwrap_or((0, 0));
+    Some(TacReceiptSealLine {
+        shift_px,
+        line_height_px: hwpunit_to_px(first_seg.line_height, dpi),
+        baseline_px: hwpunit_to_px(first_seg.baseline_distance, dpi),
+        vpos_hu: first_seg.vertical_pos,
+        char_style_id,
+        lang_index,
+        para_style_id: comp.para_style_id,
+        filler_count,
+    })
+}
+
+fn receipt_seal_line_text(
+    filler_count: usize,
+    style: &TextStyle,
+    available_width: f64,
+) -> (String, f64) {
+    let mut side_count = (filler_count.saturating_sub(3) / 2).clamp(8, 96);
+    let build =
+        |count: usize| -> String { format!("{}(인){}", "-".repeat(count), "-".repeat(count)) };
+    let mut text = build(side_count);
+    let mut width = estimate_text_width(&text, style);
+
+    while width > available_width && side_count > 8 {
+        side_count -= 1;
+        text = build(side_count);
+        width = estimate_text_width(&text, style);
+    }
+    while width < available_width * 0.96 && side_count < 128 {
+        let next = build(side_count + 1);
+        let next_width = estimate_text_width(&next, style);
+        if next_width > available_width {
+            break;
+        }
+        side_count += 1;
+        text = next;
+        width = next_width;
+    }
+
+    (text, width)
+}
+
+fn push_tac_receipt_seal_line(
+    tree: &mut PageRenderTree,
+    col_node: &mut RenderNode,
+    section_index: usize,
+    para_index: usize,
+    line_top: f64,
+    col_area: &LayoutRect,
+    styles: &ResolvedStyleSet,
+    seal: TacReceiptSealLine,
+) {
+    let mut style = resolved_to_text_style(styles, seal.char_style_id, seal.lang_index);
+    style.available_width = col_area.width;
+    let (text, width) = receipt_seal_line_text(seal.filler_count, &style, col_area.width);
+    let line_height = seal.line_height_px.max(style.font_size * 1.2).max(1.0);
+    let baseline = seal.baseline_px.max(if style.font_size > 0.0 {
+        style.font_size * 0.85
+    } else {
+        10.0
+    });
+    let line_id = tree.next_id();
+    let mut line_node = RenderNode::new(
+        line_id,
+        RenderNodeType::TextLine(TextLineNode::with_para_vpos(
+            line_height,
+            baseline,
+            section_index,
+            para_index,
+            0,
+            seal.vpos_hu,
+        )),
+        BoundingBox::new(col_area.x, line_top, col_area.width, line_height),
+    );
+    let run_id = tree.next_id();
+    let run_node = RenderNode::new(
+        run_id,
+        RenderNodeType::TextRun(TextRunNode {
+            text,
+            style,
+            char_shape_id: Some(seal.char_style_id),
+            para_shape_id: Some(seal.para_style_id),
+            section_index: Some(section_index),
+            para_index: Some(para_index),
+            char_start: None,
+            cell_context: None,
+            is_para_end: false,
+            is_line_break_end: false,
+            rotation: 0.0,
+            is_vertical: false,
+            char_overlap: None,
+            border_fill_id: 0,
+            baseline,
+            field_marker: FieldMarkerType::None,
+        }),
+        BoundingBox::new(
+            col_area.x + (col_area.width - width).max(0.0) / 2.0,
+            line_top,
+            width.min(col_area.width),
+            line_height,
+        ),
+    );
+    line_node.children.push(run_node);
+    col_node.children.push(line_node);
+}
+
+fn f081c_marker_count(chars: &[char]) -> Option<usize> {
+    let count = chars.len();
+    if (1..=2).contains(&count) && chars.iter().all(|ch| *ch == '\u{F081C}') {
+        Some(count)
+    } else {
+        None
+    }
+}
+
+fn tac_receipt_post_f081c_line(
+    para: &Paragraph,
+    composed: Option<&ComposedParagraph>,
+    table: &crate::model::table::Table,
+    control_index: usize,
+    dpi: f64,
+) -> Option<TacPostF081cLine> {
+    if control_index != 0
+        || !table.common.treat_as_char
+        || para.line_segs.len() < 2
+        || !table_contains_receipt_title(table)
+    {
+        return None;
+    }
+
+    let positions = crate::document_core::find_control_text_positions(para);
+    let table_pos = *positions.get(control_index)?;
+    let text_chars: Vec<char> = para.text.chars().collect();
+    if table_pos >= text_chars.len() {
+        return None;
+    }
+    let next_control_pos = positions
+        .iter()
+        .enumerate()
+        .filter_map(|(ci, pos)| {
+            (ci != control_index && *pos > table_pos).then_some((*pos).min(text_chars.len()))
+        })
+        .min()
+        .unwrap_or(text_chars.len());
+    let marker_chars = text_chars.get(table_pos..next_control_pos)?;
+    let count = f081c_marker_count(marker_chars)?;
+
+    let comp = composed?;
+    let line = comp.lines.iter().find(|line| {
+        line.char_start == table_pos
+            && line
+                .runs
+                .iter()
+                .flat_map(|run| run.text.chars())
+                .eq(marker_chars.iter().copied())
+    })?;
+    let run = line.runs.first()?;
+    Some(TacPostF081cLine {
+        count,
+        baseline_px: hwpunit_to_px(line.baseline_distance, dpi),
+        char_style_id: run.char_style_id,
+        lang_index: run.lang_index,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_tac_post_f081c_line(
+    tree: &mut PageRenderTree,
+    col_node: &mut RenderNode,
+    section_index: usize,
+    para_index: usize,
+    table: &crate::model::table::Table,
+    table_y_start: f64,
+    col_area: &LayoutRect,
+    styles: &ResolvedStyleSet,
+    marker: TacPostF081cLine,
+    dpi: f64,
+) {
+    let style = resolved_to_text_style(styles, marker.char_style_id, marker.lang_index);
+    let font_size = if style.font_size > 0.0 {
+        style.font_size
+    } else {
+        12.0
+    };
+    let table_width_hu: u32 = table.get_column_widths().iter().sum();
+    let marker_x = col_area.x + hwpunit_to_px(table_width_hu as i32, dpi);
+    let width = (font_size * 0.45 * marker.count as f64).max(4.0);
+    let stroke_width = (font_size * 0.055).clamp(0.5, 1.0);
+    let line_y = table_y_start + marker.baseline_px - font_size * 0.26;
+    let mut line = LineNode::new(
+        marker_x,
+        line_y,
+        marker_x + width,
+        line_y,
+        LineStyle {
+            color: style.color,
+            width: stroke_width,
+            dash: StrokeDash::Solid,
+            ..Default::default()
+        },
+    );
+    line.section_index = Some(section_index);
+    line.para_index = Some(para_index);
+
+    let id = tree.next_id();
+    col_node.children.push(RenderNode::new(
+        id,
+        RenderNodeType::Line(line),
+        BoundingBox::new(marker_x, line_y - stroke_width / 2.0, width, stroke_width),
+    ));
 }
 
 fn table_has_detached_para_flow_object(table: &crate::model::table::Table) -> bool {
@@ -889,6 +1175,49 @@ pub(crate) fn para_has_overlay_shape(para: &Paragraph) -> bool {
     })
 }
 
+/// [#2019] 문단이 "부동 개체 전용 빈 앵커"인지 — 텍스트가 없고 모든 컨트롤이 부동
+/// (자리차지 아님, tac=false) Shape/Picture/Table 인 경우.
+///
+/// 별지 서식(양식) 문단이 여기 해당한다: 부동 글상자·도형·표가 빈 앵커 문단에 매달려
+/// Paper/Para 절대위치로 배치된다. 이 문단들을 일반 flow 로 취급하면 높이 예약 /
+/// 단나누기 페이지분할 / zone 오프셋에 섹션 누적 vpos 사용이 겹쳐 페이지가 과분할된다
+/// (74312 별지 서식: rhwp 81p vs 한글 18p).
+///
+/// 주의: 이 게이트는 81쪽 산란을 막는 부분 완화다. stored LINE_SEG vpos/line_height 를
+/// 무조건 버리는 것이 한글 모델은 아니며, #2019 v3 에서는 Paper 앵커 절대 개체 extent 를
+/// page-local pagination 에 반영해 PI-page/시각 정합을 별도로 해결해야 한다.
+///
+/// 자리차지(TopAndBottom)·tac=true 는 개체가 흐름 공간을 실제로 차지하므로 제외.
+/// Shape/Picture 는 통과·글앞·글뒤만(Square 는 그림 좌우 흘림이 흔해 제외, 회귀 차단).
+/// Table 은 부동 배치가 어울림(Square) 표준이므로 어울림 포함.
+pub(crate) fn para_is_floating_overlay_anchor(para: &Paragraph) -> bool {
+    use crate::model::shape::TextWrap;
+    if !para.text.trim().is_empty() || para.controls.is_empty() {
+        return false;
+    }
+    let shape_floating = |tac: bool, wrap: TextWrap| -> bool {
+        !tac && matches!(
+            wrap,
+            TextWrap::InFrontOfText | TextWrap::BehindText | TextWrap::Through
+        )
+    };
+    para.controls.iter().all(|c| match c {
+        Control::Shape(s) => shape_floating(s.common().treat_as_char, s.common().text_wrap),
+        Control::Picture(pic) => shape_floating(pic.common.treat_as_char, pic.common.text_wrap),
+        Control::Table(t) => {
+            !t.common.treat_as_char
+                && matches!(
+                    t.common.text_wrap,
+                    TextWrap::InFrontOfText
+                        | TextWrap::BehindText
+                        | TextWrap::Through
+                        | TextWrap::Square
+                )
+        }
+        _ => false,
+    })
+}
+
 pub struct LayoutEngine {
     /// DPI
     dpi: f64,
@@ -939,6 +1268,8 @@ pub struct LayoutEngine {
     /// [Task #1755] 지연 이월 표의 host 텍스트 줄이 typeset 에서 이월 전 쪽에
     /// PartialParagraph 로 pre-emit 된 문단 집합 — 마지막 fragment 뒤 host 렌더 억제.
     pre_emitted_host_paras: std::cell::RefCell<std::collections::HashSet<usize>>,
+    /// [#2015] pre-emit 한 host 텍스트 높이(px) — vert_offset 이중계상 보정용.
+    pre_emitted_host_heights: std::cell::RefCell<std::collections::HashMap<usize, f64>>,
     /// 렌더용 가상 미주 문단 시작 인덱스
     endnote_para_base: std::cell::Cell<usize>,
     /// 가상 미주 문단별 원본 위치
@@ -1004,8 +1335,8 @@ mod utils;
 pub(crate) use paragraph_layout::ensure_min_baseline;
 pub(crate) use text_measurement::{
     compute_char_positions, estimate_text_width, estimate_text_width_unrounded,
-    extract_tab_leaders_with_extended, find_next_tab_stop, is_cjk_char, resolved_to_text_style,
-    split_into_clusters,
+    extract_tab_leaders_with_extended, find_next_tab_stop, is_cjk_char, is_halfwidth_cjk_quote,
+    resolved_to_text_style, split_into_clusters,
 };
 // [Task #826] map_pua_bullet_char 는 통합 테스트 (tests/issue_826.rs) 에서 직접 검증
 // (PUA substitution 매핑 정합) — pub 노출.
@@ -1042,6 +1373,7 @@ impl LayoutEngine {
             last_item_endnote_equation_tail_line_box: std::cell::Cell::new(false),
             hidden_empty_paras: std::cell::RefCell::new(std::collections::HashSet::new()),
             pre_emitted_host_paras: std::cell::RefCell::new(std::collections::HashSet::new()),
+            pre_emitted_host_heights: std::cell::RefCell::new(std::collections::HashMap::new()),
             endnote_para_base: std::cell::Cell::new(usize::MAX),
             endnote_para_sources: std::cell::RefCell::new(Vec::new()),
             endnote_between_notes_hu: std::cell::Cell::new(0),
@@ -1248,6 +1580,11 @@ impl LayoutEngine {
     /// [Task #1755] 이월 전 쪽에 host 텍스트가 pre-emit 된 문단 집합 설정
     pub fn set_pre_emitted_host_paras(&self, paras: &std::collections::HashSet<usize>) {
         *self.pre_emitted_host_paras.borrow_mut() = paras.clone();
+    }
+
+    /// [#2015] pre-emit 된 host 텍스트 높이 맵 설정 (vert_offset 이중계상 보정용)
+    pub fn set_pre_emitted_host_heights(&self, heights: &std::collections::HashMap<usize, f64>) {
+        *self.pre_emitted_host_heights.borrow_mut() = heights.clone();
     }
 
     /// 렌더용 가상 미주 문단과 원본 Endnote 내부 문단의 매핑을 설정한다.
@@ -5896,6 +6233,76 @@ impl LayoutEngine {
                     } else {
                         0.0
                     };
+                let table_visual_height = mt
+                    .map(|m| m.total_height)
+                    .filter(|h| *h > 0.0)
+                    .unwrap_or_else(|| hwpunit_to_px(t.common.height as i32, self.dpi));
+                let tac_receipt_seal_line = if is_tac && inline_pos.is_none() {
+                    tac_receipt_filler_prefix(
+                        para,
+                        composed.get(para_index),
+                        t,
+                        control_index,
+                        self.dpi,
+                    )
+                } else {
+                    None
+                };
+                let tac_post_f081c_line = if is_tac && inline_pos.is_none() {
+                    tac_receipt_post_f081c_line(
+                        para,
+                        composed.get(para_index),
+                        t,
+                        control_index,
+                        self.dpi,
+                    )
+                } else {
+                    None
+                };
+                // [#2019 v3] 빈 앵커에 매달린 Paper/Page 기준 Square 표는 본문 flow 표가
+                // 아니라 페이지 절대좌표 부동 표다. 표 자체는 선언 y 에 그리되, 뒤따르는
+                // 문단을 표 아래로 밀지 않는다.
+                let paper_page_square_empty_top = if !is_tac
+                    && tbl_is_square
+                    && !para_has_visible_text(para)
+                    && matches!(
+                        t.common.vert_rel_to,
+                        crate::model::shape::VertRelTo::Paper
+                            | crate::model::shape::VertRelTo::Page
+                    ) {
+                    let v_off = hwpunit_to_px(signed_hwpunit(t.common.vertical_offset), self.dpi);
+                    let (ref_y, ref_h) = match t.common.vert_rel_to {
+                        crate::model::shape::VertRelTo::Page => {
+                            (layout.body_area.y, layout.body_area.height)
+                        }
+                        _ => (0.0, layout.page_height),
+                    };
+                    let om_top =
+                        if matches!(t.common.vert_rel_to, crate::model::shape::VertRelTo::Paper) {
+                            hwpunit_to_px(t.outer_margin_top as i32, self.dpi)
+                        } else {
+                            0.0
+                        };
+                    let om_bottom =
+                        if matches!(t.common.vert_rel_to, crate::model::shape::VertRelTo::Paper) {
+                            hwpunit_to_px(t.outer_margin_bottom as i32, self.dpi)
+                        } else {
+                            0.0
+                        };
+                    Some(match t.common.vert_align {
+                        crate::model::shape::VertAlign::Top
+                        | crate::model::shape::VertAlign::Inside => ref_y + v_off + om_top,
+                        crate::model::shape::VertAlign::Center => {
+                            ref_y + (ref_h - table_visual_height) / 2.0 + v_off
+                        }
+                        crate::model::shape::VertAlign::Bottom
+                        | crate::model::shape::VertAlign::Outside => {
+                            ref_y + ref_h - table_visual_height - v_off - om_bottom
+                        }
+                    })
+                } else {
+                    None
+                };
                 // vert=Paper로 body_area 위에 배치되는 표
                 // 본문 영역 외부(머리말/꼬리말 자리)에 그려지는 페이지/페이퍼 앵커 TopAndBottom 표는
                 // 본문 흐름의 y_offset을 진행시키지 않고 out-of-flow로 paper_images에 렌더한다.
@@ -5996,6 +6403,8 @@ impl LayoutEngine {
                     };
                     let table_y_start = if let Some((_, _, _, lane_top, _)) = para_float_lane_info {
                         lane_top
+                    } else if let Some(abs_y) = paper_page_square_empty_top {
+                        abs_y
                     } else if let Some((_, iy)) = inline_pos {
                         iy
                     } else if is_current_visible_para_float {
@@ -6085,12 +6494,24 @@ impl LayoutEngine {
                     } else {
                         table_y_start
                     };
+                    let table_y_start = if let Some(seal_line) = tac_receipt_seal_line {
+                        let line_top = table_y_start;
+                        push_tac_receipt_seal_line(
+                            tree,
+                            col_node,
+                            page_content.section_index,
+                            para_index,
+                            line_top,
+                            col_area,
+                            styles,
+                            seal_line,
+                        );
+                        table_y_start + seal_line.shift_px
+                    } else {
+                        table_y_start
+                    };
                     let allow_para_top_bleed = is_current_visible_para_float
                         && signed_hwpunit(t.common.vertical_offset) < 0;
-                    let table_visual_height = mt
-                        .map(|m| m.total_height)
-                        .filter(|h| *h > 0.0)
-                        .unwrap_or_else(|| hwpunit_to_px(t.common.height as i32, self.dpi));
                     let table_visual_end = if tac_already_rendered_inline {
                         table_y_start + table_visual_height
                     } else {
@@ -6127,6 +6548,20 @@ impl LayoutEngine {
                             None,
                             marker_x,
                             table_y_start,
+                        );
+                    }
+                    if let Some(marker_line) = tac_post_f081c_line {
+                        push_tac_post_f081c_line(
+                            tree,
+                            col_node,
+                            page_content.section_index,
+                            para_index,
+                            t,
+                            table_y_start,
+                            col_area,
+                            styles,
+                            marker_line,
+                            self.dpi,
                         );
                     }
                     if is_first_empty_para_float_control && !is_tac {
@@ -6171,6 +6606,8 @@ impl LayoutEngine {
                         } else {
                             table_y_before.max(table_visual_end + visible_outer_bottom_px)
                         }
+                    } else if paper_page_square_empty_top.is_some() {
+                        table_y_before
                     } else if table_visual_shift > 0.0 {
                         (table_visual_end - table_visual_shift).max(table_y_before)
                     } else {
