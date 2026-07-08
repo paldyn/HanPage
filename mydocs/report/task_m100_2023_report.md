@@ -11,6 +11,7 @@
 - GitHub 명시적 멘션 리뷰 요청 댓글: https://github.com/edwardkim/rhwp/issues/2023#issuecomment-4901538662
 - v2 보완 계획서: `mydocs/plans/task_m100_2023_frontend_refactoring_plan_v2.md`
 - GitHub v2 리뷰 요청 댓글: https://github.com/edwardkim/rhwp/issues/2023#issuecomment-4917066612
+- GitHub 문서 전용 PR: https://github.com/edwardkim/rhwp/pull/2080
 
 ## 1. 수행 결과
 
@@ -161,3 +162,4 @@ v2 결정 사항:
 - v2 승인 전 실행 하위 이슈는 만들지 않는다.
 - v2 승인 후에도 우선 Phase 0 baseline freeze와 Phase A `assets/fonts` canonical 이슈만 만든다.
 - #2023에 v2 리뷰 요청 코멘트를 게시했다.
+- GitHub에서 리뷰 가능한 문서 전용 PR #2080을 생성했다.

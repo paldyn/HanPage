@@ -9,6 +9,7 @@
 - 관련 진단: `mydocs/tech/task_m100_2023_frontend_diagnosis.md`
 - 관련 guardrail: `mydocs/tech/task_m100_2023_frontend_contract_guardrails.md`
 - GitHub v2 리뷰 요청 댓글: https://github.com/edwardkim/rhwp/issues/2023#issuecomment-4917066612
+- GitHub 문서 전용 PR: https://github.com/edwardkim/rhwp/pull/2080
 
 ## 0. 리뷰 반영 결론
 

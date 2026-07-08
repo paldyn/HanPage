@@ -1,6 +1,7 @@
 @edwardkim @jangster77 리뷰 감사합니다. 두 분 의견을 반영해 v2 방향을 다음처럼 정리했습니다.
 
 게시 댓글: https://github.com/edwardkim/rhwp/issues/2023#issuecomment-4917066612
+문서 전용 PR: https://github.com/edwardkim/rhwp/pull/2080
 
 ## 반영 방향
 
@@ -34,5 +35,7 @@
 ## v2 산출물
 
 위 내용을 `mydocs/plans/task_m100_2023_frontend_refactoring_plan_v2.md`에 반영했습니다.
+
+GitHub에서 바로 확인 가능한 문서 전용 PR은 #2080입니다.
 
 v2를 기준으로 다시 리뷰 부탁드립니다. 리뷰 승인 후에만 Phase 0/A 하위 이슈를 분리하겠습니다.
