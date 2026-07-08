@@ -5607,109 +5607,14 @@ impl TypesetEngine {
             {
                 split_endnote_to_fit
                     .and_then(|split_line| {
-                        let mut local_paras: Vec<Paragraph> = Vec::new();
-                        let mut local_indices: Vec<(usize, usize)> = Vec::new();
-                        for pi in st
-                            .current_items
-                            .iter()
-                            .filter_map(page_item_para_index)
-                            .chain(std::iter::once(en_para_idx))
-                        {
-                            if local_indices.iter().any(|(global, _)| *global == pi) {
-                                continue;
-                            }
-                            if let Some(p) =
-                                paragraph_by_global_index(paragraphs, &st.endnote_paragraphs, pi)
-                            {
-                                let local = local_paras.len();
-                                local_paras.push(p.clone());
-                                local_indices.push((pi, local));
-                            }
-                        }
-                        let lookup_local = |pi: usize, indices: &[(usize, usize)]| {
-                            indices
-                                .iter()
-                                .find_map(|(global, local)| (*global == pi).then_some(*local))
-                        };
-                        let first_vpos = st
-                            .current_items
-                            .iter()
-                            .filter_map(page_item_para_index)
-                            .find_map(|pi| {
-                            paragraph_by_global_index(paragraphs, &st.endnote_paragraphs, pi)
-                                .and_then(|p| p.line_segs.first())
-                                .map(|seg| seg.vertical_pos)
-                        })?;
-                        let mut hc = HeightCursor::new(
-                            self.dpi,
-                            0.0,
+                        let predicted_y = self.predict_endnote_render_y(
+                            st,
+                            paragraphs,
+                            styles,
                             available,
-                            st.current_start_height,
-                            Some(first_vpos),
-                            st.skip_spacing_before_prededuct,
-                            false,
-                            st.current_endnote_flow && st.current_start_height < -0.5,
-                            st.current_endnote_flow,
-                        );
-                        hc.endnote_between_notes_hu = st.endnote_between_notes_hu;
-                        let mut y = st.current_start_height;
-                        for item in &st.current_items {
-                            let Some(pi) = page_item_para_index(item) else {
-                                continue;
-                            };
-                            let Some(local) = lookup_local(pi, &local_indices) else {
-                                continue;
-                            };
-                            y = hc.vpos_adjust(y, local, &local_paras, &styles);
-                            let item_para = &local_paras[local];
-                            let item_composed =
-                                crate::renderer::composer::compose_paragraph(item_para);
-                            let item_fmt = self.format_paragraph(
-                                item_para,
-                                Some(&item_composed),
-                                &styles,
-                                Some(en_col_w),
-                            );
-                            y += match item {
-                                PageItem::PartialParagraph {
-                                    start_line,
-                                    end_line,
-                                    ..
-                                } => item_fmt.line_advances_sum(*start_line..*end_line),
-                                PageItem::FullParagraph { .. } => item_fmt.total_height,
-                                _ => 0.0,
-                            };
-                            let current_vpos_rewinds_from_prev = hc
-                                .prev_layout_para
-                                .and_then(|prev_local| {
-                                    let prev_first = local_paras
-                                        .get(prev_local)
-                                        .and_then(|p| p.line_segs.first())
-                                        .map(|seg| seg.vertical_pos)?;
-                                    let curr_first = local_paras
-                                        .get(local)
-                                        .and_then(|p| p.line_segs.first())
-                                        .map(|seg| seg.vertical_pos)?;
-                                    Some(curr_first < prev_first)
-                                })
-                                .unwrap_or(false);
-                            if matches!(
-                                item,
-                                PageItem::PartialParagraph { start_line, .. }
-                                    if *start_line > 0
-                            ) || current_vpos_rewinds_from_prev
-                            {
-                                hc.prev_layout_para = None;
-                                hc.vpos_page_base = None;
-                                hc.vpos_lazy_base = None;
-                            } else {
-                                hc.prev_layout_para = Some(local);
-                            }
-                            hc.prev_item_was_partial_table =
-                                matches!(item, PageItem::PartialTable { .. });
-                        }
-                        let local = lookup_local(en_para_idx, &local_indices)?;
-                        let predicted_y = hc.vpos_adjust(y, local, &local_paras, &styles);
+                            en_col_w,
+                            en_para_idx,
+                        )?;
                         let split_head_h = fmt.line_advances_sum(0..split_line);
                         Some(
                             predicted_y + split_head_h
@@ -6156,110 +6061,14 @@ impl TypesetEngine {
                 && fmt.line_heights.len() == 1
                 && !st.current_items.is_empty()
             {
-                let mut local_paras: Vec<Paragraph> = Vec::new();
-                let mut local_indices: Vec<(usize, usize)> = Vec::new();
-                for pi in st
-                    .current_items
-                    .iter()
-                    .filter_map(page_item_para_index)
-                    .chain(std::iter::once(en_para_idx))
-                {
-                    if local_indices.iter().any(|(global, _)| *global == pi) {
-                        continue;
-                    }
-                    if let Some(p) =
-                        paragraph_by_global_index(paragraphs, &st.endnote_paragraphs, pi)
-                    {
-                        let local = local_paras.len();
-                        local_paras.push(p.clone());
-                        local_indices.push((pi, local));
-                    }
-                }
-                let lookup_local = |pi: usize, indices: &[(usize, usize)]| {
-                    indices
-                        .iter()
-                        .find_map(|(global, local)| (*global == pi).then_some(*local))
-                };
-                let first_vpos = st
-                    .current_items
-                    .iter()
-                    .filter_map(page_item_para_index)
-                    .find_map(|pi| {
-                        paragraph_by_global_index(paragraphs, &st.endnote_paragraphs, pi)
-                            .and_then(|p| p.line_segs.first())
-                            .map(|seg| seg.vertical_pos)
-                    });
-                let predicted_y = first_vpos.and_then(|page_base| {
-                    let mut hc = HeightCursor::new(
-                        self.dpi,
-                        0.0,
-                        available,
-                        st.current_start_height,
-                        Some(page_base),
-                        st.skip_spacing_before_prededuct,
-                        false,
-                        st.current_endnote_flow && st.current_start_height < -0.5,
-                        st.current_endnote_flow,
-                    );
-                    hc.endnote_between_notes_hu = st.endnote_between_notes_hu;
-                    let mut y = st.current_start_height;
-                    for item in &st.current_items {
-                        let Some(pi) = page_item_para_index(item) else {
-                            continue;
-                        };
-                        let Some(local) = lookup_local(pi, &local_indices) else {
-                            continue;
-                        };
-                        y = hc.vpos_adjust(y, local, &local_paras, &styles);
-                        let item_para = &local_paras[local];
-                        let item_composed = crate::renderer::composer::compose_paragraph(item_para);
-                        let item_fmt = self.format_paragraph(
-                            item_para,
-                            Some(&item_composed),
-                            &styles,
-                            Some(en_col_w),
-                        );
-                        y += match item {
-                            PageItem::PartialParagraph {
-                                start_line,
-                                end_line,
-                                ..
-                            } => item_fmt.line_advances_sum(*start_line..*end_line),
-                            PageItem::FullParagraph { .. } => item_fmt.total_height,
-                            _ => 0.0,
-                        };
-                        let current_vpos_rewinds_from_prev = hc
-                            .prev_layout_para
-                            .and_then(|prev_local| {
-                                let prev_first = local_paras
-                                    .get(prev_local)
-                                    .and_then(|p| p.line_segs.first())
-                                    .map(|seg| seg.vertical_pos)?;
-                                let curr_first = local_paras
-                                    .get(local)
-                                    .and_then(|p| p.line_segs.first())
-                                    .map(|seg| seg.vertical_pos)?;
-                                Some(curr_first < prev_first)
-                            })
-                            .unwrap_or(false);
-                        if matches!(
-                            item,
-                            PageItem::PartialParagraph { start_line, .. }
-                                if *start_line > 0
-                        ) || current_vpos_rewinds_from_prev
-                        {
-                            hc.prev_layout_para = None;
-                            hc.vpos_page_base = None;
-                            hc.vpos_lazy_base = None;
-                        } else {
-                            hc.prev_layout_para = Some(local);
-                        }
-                        hc.prev_item_was_partial_table =
-                            matches!(item, PageItem::PartialTable { .. });
-                    }
-                    lookup_local(en_para_idx, &local_indices)
-                        .map(|local| hc.vpos_adjust(y, local, &local_paras, &styles))
-                });
+                let predicted_y = self.predict_endnote_render_y(
+                    st,
+                    paragraphs,
+                    styles,
+                    available,
+                    en_col_w,
+                    en_para_idx,
+                );
                 predicted_y
                     .map(|y| {
                         let title_h = fmt.line_advance(0);
@@ -6372,110 +6181,14 @@ impl TypesetEngine {
                 && fmt.line_heights.len() > 1
                 && para_has_visible_text_or_equation(en_para)
             {
-                let mut local_paras: Vec<Paragraph> = Vec::new();
-                let mut local_indices: Vec<(usize, usize)> = Vec::new();
-                for pi in st
-                    .current_items
-                    .iter()
-                    .filter_map(page_item_para_index)
-                    .chain(std::iter::once(en_para_idx))
-                {
-                    if local_indices.iter().any(|(global, _)| *global == pi) {
-                        continue;
-                    }
-                    if let Some(p) =
-                        paragraph_by_global_index(paragraphs, &st.endnote_paragraphs, pi)
-                    {
-                        let local = local_paras.len();
-                        local_paras.push(p.clone());
-                        local_indices.push((pi, local));
-                    }
-                }
-                let lookup_local = |pi: usize, indices: &[(usize, usize)]| {
-                    indices
-                        .iter()
-                        .find_map(|(global, local)| (*global == pi).then_some(*local))
-                };
-                let first_vpos = st
-                    .current_items
-                    .iter()
-                    .filter_map(page_item_para_index)
-                    .find_map(|pi| {
-                        paragraph_by_global_index(paragraphs, &st.endnote_paragraphs, pi)
-                            .and_then(|p| p.line_segs.first())
-                            .map(|seg| seg.vertical_pos)
-                    });
-                let predicted_y = first_vpos.and_then(|page_base| {
-                    let mut hc = HeightCursor::new(
-                        self.dpi,
-                        0.0,
-                        available,
-                        st.current_start_height,
-                        Some(page_base),
-                        st.skip_spacing_before_prededuct,
-                        false,
-                        st.current_endnote_flow && st.current_start_height < -0.5,
-                        st.current_endnote_flow,
-                    );
-                    hc.endnote_between_notes_hu = st.endnote_between_notes_hu;
-                    let mut y = st.current_start_height;
-                    for item in &st.current_items {
-                        let Some(pi) = page_item_para_index(item) else {
-                            continue;
-                        };
-                        let Some(local) = lookup_local(pi, &local_indices) else {
-                            continue;
-                        };
-                        y = hc.vpos_adjust(y, local, &local_paras, &styles);
-                        let item_para = &local_paras[local];
-                        let item_composed = crate::renderer::composer::compose_paragraph(item_para);
-                        let item_fmt = self.format_paragraph(
-                            item_para,
-                            Some(&item_composed),
-                            &styles,
-                            Some(en_col_w),
-                        );
-                        y += match item {
-                            PageItem::PartialParagraph {
-                                start_line,
-                                end_line,
-                                ..
-                            } => item_fmt.line_advances_sum(*start_line..*end_line),
-                            PageItem::FullParagraph { .. } => item_fmt.total_height,
-                            _ => 0.0,
-                        };
-                        let current_vpos_rewinds_from_prev = hc
-                            .prev_layout_para
-                            .and_then(|prev_local| {
-                                let prev_first = local_paras
-                                    .get(prev_local)
-                                    .and_then(|p| p.line_segs.first())
-                                    .map(|seg| seg.vertical_pos)?;
-                                let curr_first = local_paras
-                                    .get(local)
-                                    .and_then(|p| p.line_segs.first())
-                                    .map(|seg| seg.vertical_pos)?;
-                                Some(curr_first < prev_first)
-                            })
-                            .unwrap_or(false);
-                        if matches!(
-                            item,
-                            PageItem::PartialParagraph { start_line, .. }
-                                if *start_line > 0
-                        ) || current_vpos_rewinds_from_prev
-                        {
-                            hc.prev_layout_para = None;
-                            hc.vpos_page_base = None;
-                            hc.vpos_lazy_base = None;
-                        } else {
-                            hc.prev_layout_para = Some(local);
-                        }
-                        hc.prev_item_was_partial_table =
-                            matches!(item, PageItem::PartialTable { .. });
-                    }
-                    lookup_local(en_para_idx, &local_indices)
-                        .map(|local| hc.vpos_adjust(y, local, &local_paras, &styles))
-                });
+                let predicted_y = self.predict_endnote_render_y(
+                    st,
+                    paragraphs,
+                    styles,
+                    available,
+                    en_col_w,
+                    en_para_idx,
+                );
 
                 predicted_y.and_then(|y| {
                     if y >= available {
@@ -7272,110 +6985,14 @@ impl TypesetEngine {
                 && para_has_visible_text_or_equation(en_para)
                 && endnote_has_visible_payload
             {
-                let mut local_paras: Vec<Paragraph> = Vec::new();
-                let mut local_indices: Vec<(usize, usize)> = Vec::new();
-                for pi in st
-                    .current_items
-                    .iter()
-                    .filter_map(page_item_para_index)
-                    .chain(std::iter::once(en_para_idx))
-                {
-                    if local_indices.iter().any(|(global, _)| *global == pi) {
-                        continue;
-                    }
-                    if let Some(p) =
-                        paragraph_by_global_index(paragraphs, &st.endnote_paragraphs, pi)
-                    {
-                        let local = local_paras.len();
-                        local_paras.push(p.clone());
-                        local_indices.push((pi, local));
-                    }
-                }
-                let lookup_local = |pi: usize, indices: &[(usize, usize)]| {
-                    indices
-                        .iter()
-                        .find_map(|(global, local)| (*global == pi).then_some(*local))
-                };
-                let first_vpos = st
-                    .current_items
-                    .iter()
-                    .filter_map(page_item_para_index)
-                    .find_map(|pi| {
-                        paragraph_by_global_index(paragraphs, &st.endnote_paragraphs, pi)
-                            .and_then(|p| p.line_segs.first())
-                            .map(|seg| seg.vertical_pos)
-                    });
-                let predicted_y = first_vpos.and_then(|page_base| {
-                    let mut hc = HeightCursor::new(
-                        self.dpi,
-                        0.0,
-                        available,
-                        st.current_start_height,
-                        Some(page_base),
-                        st.skip_spacing_before_prededuct,
-                        false,
-                        st.current_endnote_flow && st.current_start_height < -0.5,
-                        st.current_endnote_flow,
-                    );
-                    hc.endnote_between_notes_hu = st.endnote_between_notes_hu;
-                    let mut y = st.current_start_height;
-                    for item in &st.current_items {
-                        let Some(pi) = page_item_para_index(item) else {
-                            continue;
-                        };
-                        let Some(local) = lookup_local(pi, &local_indices) else {
-                            continue;
-                        };
-                        y = hc.vpos_adjust(y, local, &local_paras, &styles);
-                        let item_para = &local_paras[local];
-                        let item_composed = crate::renderer::composer::compose_paragraph(item_para);
-                        let item_fmt = self.format_paragraph(
-                            item_para,
-                            Some(&item_composed),
-                            &styles,
-                            Some(en_col_w),
-                        );
-                        y += match item {
-                            PageItem::PartialParagraph {
-                                start_line,
-                                end_line,
-                                ..
-                            } => item_fmt.line_advances_sum(*start_line..*end_line),
-                            PageItem::FullParagraph { .. } => item_fmt.total_height,
-                            _ => 0.0,
-                        };
-                        let current_vpos_rewinds_from_prev = hc
-                            .prev_layout_para
-                            .and_then(|prev_local| {
-                                let prev_first = local_paras
-                                    .get(prev_local)
-                                    .and_then(|p| p.line_segs.first())
-                                    .map(|seg| seg.vertical_pos)?;
-                                let curr_first = local_paras
-                                    .get(local)
-                                    .and_then(|p| p.line_segs.first())
-                                    .map(|seg| seg.vertical_pos)?;
-                                Some(curr_first < prev_first)
-                            })
-                            .unwrap_or(false);
-                        if matches!(
-                            item,
-                            PageItem::PartialParagraph { start_line, .. }
-                                if *start_line > 0
-                        ) || current_vpos_rewinds_from_prev
-                        {
-                            hc.prev_layout_para = None;
-                            hc.vpos_page_base = None;
-                            hc.vpos_lazy_base = None;
-                        } else {
-                            hc.prev_layout_para = Some(local);
-                        }
-                        hc.prev_item_was_partial_table =
-                            matches!(item, PageItem::PartialTable { .. });
-                    }
-                    lookup_local(en_para_idx, &local_indices)
-                        .map(|local| hc.vpos_adjust(y, local, &local_paras, &styles))
-                });
+                let predicted_y = self.predict_endnote_render_y(
+                    st,
+                    paragraphs,
+                    styles,
+                    available,
+                    en_col_w,
+                    en_para_idx,
+                );
 
                 predicted_y
                     .map(|y| {
@@ -9595,6 +9212,117 @@ impl TypesetEngine {
             hc.prev_item_was_partial_table = matches!(item, PageItem::PartialTable { .. });
         }
         Some(y)
+    }
+
+    /// [Task #2079] 미주 fit 판정용 렌더-시뮬 예측 — 현재 단 items 를 저장 vpos 로
+    /// 재주행해 미주 문단(en_para_idx)의 예상 시작 y 를 구한다. P6 판정 4곳 공용
+    /// (종전 문자 그대로 중복 3곳 + `?` 문체 변형 1곳 dedup).
+    fn predict_endnote_render_y(
+        &self,
+        st: &TypesetState,
+        paragraphs: &[Paragraph],
+        styles: &ResolvedStyleSet,
+        available: f64,
+        en_col_w: f64,
+        en_para_idx: usize,
+    ) -> Option<f64> {
+        let mut local_paras: Vec<Paragraph> = Vec::new();
+        let mut local_indices: Vec<(usize, usize)> = Vec::new();
+        for pi in st
+            .current_items
+            .iter()
+            .filter_map(page_item_para_index)
+            .chain(std::iter::once(en_para_idx))
+        {
+            if local_indices.iter().any(|(global, _)| *global == pi) {
+                continue;
+            }
+            if let Some(p) = paragraph_by_global_index(paragraphs, &st.endnote_paragraphs, pi) {
+                let local = local_paras.len();
+                local_paras.push(p.clone());
+                local_indices.push((pi, local));
+            }
+        }
+        let lookup_local = |pi: usize, indices: &[(usize, usize)]| {
+            indices
+                .iter()
+                .find_map(|(global, local)| (*global == pi).then_some(*local))
+        };
+        let first_vpos = st
+            .current_items
+            .iter()
+            .filter_map(page_item_para_index)
+            .find_map(|pi| {
+                paragraph_by_global_index(paragraphs, &st.endnote_paragraphs, pi)
+                    .and_then(|p| p.line_segs.first())
+                    .map(|seg| seg.vertical_pos)
+            });
+        first_vpos.and_then(|page_base| {
+            let mut hc = HeightCursor::new(
+                self.dpi,
+                0.0,
+                available,
+                st.current_start_height,
+                Some(page_base),
+                st.skip_spacing_before_prededuct,
+                false,
+                st.current_endnote_flow && st.current_start_height < -0.5,
+                st.current_endnote_flow,
+            );
+            hc.endnote_between_notes_hu = st.endnote_between_notes_hu;
+            let mut y = st.current_start_height;
+            for item in &st.current_items {
+                let Some(pi) = page_item_para_index(item) else {
+                    continue;
+                };
+                let Some(local) = lookup_local(pi, &local_indices) else {
+                    continue;
+                };
+                y = hc.vpos_adjust(y, local, &local_paras, &styles);
+                let item_para = &local_paras[local];
+                let item_composed = crate::renderer::composer::compose_paragraph(item_para);
+                let item_fmt =
+                    self.format_paragraph(item_para, Some(&item_composed), &styles, Some(en_col_w));
+                y += match item {
+                    PageItem::PartialParagraph {
+                        start_line,
+                        end_line,
+                        ..
+                    } => item_fmt.line_advances_sum(*start_line..*end_line),
+                    PageItem::FullParagraph { .. } => item_fmt.total_height,
+                    _ => 0.0,
+                };
+                let current_vpos_rewinds_from_prev = hc
+                    .prev_layout_para
+                    .and_then(|prev_local| {
+                        let prev_first = local_paras
+                            .get(prev_local)
+                            .and_then(|p| p.line_segs.first())
+                            .map(|seg| seg.vertical_pos)?;
+                        let curr_first = local_paras
+                            .get(local)
+                            .and_then(|p| p.line_segs.first())
+                            .map(|seg| seg.vertical_pos)?;
+                        Some(curr_first < prev_first)
+                    })
+                    .unwrap_or(false);
+                if matches!(
+                    item,
+                    PageItem::PartialParagraph { start_line, .. }
+                        if *start_line > 0
+                ) || current_vpos_rewinds_from_prev
+                {
+                    hc.prev_layout_para = None;
+                    hc.vpos_page_base = None;
+                    hc.vpos_lazy_base = None;
+                } else {
+                    hc.prev_layout_para = Some(local);
+                }
+                hc.prev_item_was_partial_table = matches!(item, PageItem::PartialTable { .. });
+            }
+            lookup_local(en_para_idx, &local_indices)
+                .map(|local| hc.vpos_adjust(y, local, &local_paras, &styles))
+        })
     }
 
     /// [Task #1363 v3 Stage 1] scratch `LayoutEngine` 로 미주 para 를 실제 레이아웃하여 **정확한
