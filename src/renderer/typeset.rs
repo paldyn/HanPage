@@ -12115,10 +12115,27 @@ impl TypesetEngine {
         // 위해 host paragraph 의 first_vpos 만큼 cur_h 를 미리 jump 하고 표 advance 를
         // 본문 라인 만큼으로 축소.
         use crate::model::shape::{TextWrap, VertRelTo};
-        let is_paper_topbottom_block = !table.common.treat_as_char
-            && matches!(table.common.text_wrap, TextWrap::TopAndBottom)
+        // [#1994] Paper(용지)-앵커 부동 표는 절대 좌표로 그려지므로 flow 를 소비하지 않고 절대
+        // 배치해야 한다. 기존에는 자리차지(TopAndBottom)만 이 경로를 탔으나, 글뒤로/글앞으로
+        // (BehindText/InFrontOfText) Paper-앵커 표도 동일하게 절대 배치 대상이다. 특히
+        // RowBreak 속성이 붙은 글뒤로 Paper-앵커 표(20200830 교회주보 pi=34 예배 스케줄,
+        // vert=용지 134mm)가 이 경로를 놓치면 아래 RowBreak 분할로 빠져 흐름 상단에 컬럼분할
+        // 배치되어 앞선 글뒤로 표(pi=33 교역자 명단)와 겹친다(#1994).
+        let is_paper_floating_block = !table.common.treat_as_char
+            && matches!(
+                table.common.text_wrap,
+                TextWrap::TopAndBottom | TextWrap::BehindText | TextWrap::InFrontOfText
+            )
             && matches!(table.common.vert_rel_to, VertRelTo::Paper);
-        if is_paper_topbottom_block && st.current_column == 0 {
+        // 글뒤로/글앞으로는 본문 위/아래에 겹쳐 그려지며 본문 텍스트를 밀어내지 않는다
+        // (자리차지와 달리 current_height sync 로 후속 흐름을 끌어내리면 안 됨).
+        let is_paper_behind_infront = !table.common.treat_as_char
+            && matches!(
+                table.common.text_wrap,
+                TextWrap::BehindText | TextWrap::InFrontOfText
+            )
+            && matches!(table.common.vert_rel_to, VertRelTo::Paper);
+        if is_paper_floating_block && st.current_column == 0 {
             if let Some(first_seg) = para.line_segs.first() {
                 let target_y =
                     crate::renderer::hwpunit_to_px(first_seg.vertical_pos as i32, self.dpi);
@@ -12136,11 +12153,16 @@ impl TypesetEngine {
                 let has_preceding_paper_float = para.controls.iter().take(ctrl_idx).any(|c| {
                     matches!(c, Control::Table(t)
                         if !t.common.treat_as_char
-                            && matches!(t.common.text_wrap, TextWrap::TopAndBottom)
+                            && matches!(t.common.text_wrap,
+                                TextWrap::TopAndBottom
+                                    | TextWrap::BehindText
+                                    | TextWrap::InFrontOfText)
                             && matches!(t.common.vert_rel_to, VertRelTo::Paper))
                 });
-                if can_sync || has_preceding_paper_float {
-                    if can_sync {
+                // 글뒤로/글앞으로는 sync 없이도 절대배치(0 flow)한다 — RowBreak 분할·flow 배치를
+                // 막아 절대 좌표(vert=용지)에 통째로 그려지게 한다.
+                if can_sync || has_preceding_paper_float || is_paper_behind_infront {
+                    if can_sync && !is_paper_behind_infront {
                         st.current_height = target_y;
                     }
                     // table_total = 0: 표 자체는 cur_h advance 에 영향 없음 (Paper-absolute).
