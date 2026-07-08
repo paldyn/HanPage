@@ -36,9 +36,38 @@ use super::pagination::{
     FootnoteRef, FootnoteSource, HeaderFooterRef, PageContent, PageItem, PaginationResult,
 };
 
-/// [미주 배치] `en_ref` 의 미주 본문(en_ctrl)을 해석한다. 현재 구역 미주면 본문
-/// paragraphs 에서, END_OF_DOCUMENT 로 문서 끝에 모인 앞 구역 미주면 deferral
-/// 목록에서 찾는다. (참조 표시 위첨자는 원 위치에 남고 본문만 여기서 렌더.)
+/// [#2064] `compute_endnote_metrics` 의 호출-시점 입력 묶음 — 라운드 5 클로저의 캡처를
+/// 명시화한 것 (두 호출부 사이 값 변화를 보존하기 위해 호출부마다 신선하게 구성).
+#[derive(Clone, Copy)]
+struct EnMetricsVars {
+    available: f64,
+    cap_large_separator_stale_forward_vpos: bool,
+    col_count: u16,
+    compact_endnote_separator_profile: bool,
+    current_column_has_tac_picture_only: bool,
+    current_height_for_metrics: f64,
+    dpi: f64,
+    en_para_idx: usize,
+    h4f: f64,
+    has_treat_as_char_picture_shape: bool,
+    has_visible_endnote_separator: bool,
+    internal_vpos_rewind: bool,
+    large_separator_block: bool,
+    large_vpos_jump_at_column_top: bool,
+    line_advances_sum: f64,
+    local_vpos_rewind: bool,
+    local_vpos_rewind_crosses_prev_content: bool,
+    min_vpos_rewind_height: f64,
+    new_endnote_between_notes_px: Option<f64>,
+    no_separator_new_note_head_fits_current_column: bool,
+    ssot_debug: bool,
+    ssot_level: EnSsotLevel,
+    this_bottom_offset: Option<i32>,
+    this_first_offset: Option<i32>,
+    tot: f64,
+    trailing_ls_px: f64,
+}
+
 /// [#2026] 미주-간 흐름 캐리 상태 (#1904 라운드 1 이연 설계 — EndnoteFlowState).
 /// caller(참조 루프)가 값 왕복으로 유지하고, 꼬리에서 prev/current 스왑을 수행한다.
 #[derive(Clone, Copy)]
@@ -76,6 +105,9 @@ struct EndnotePrepCarry {
     current_endnote_had_inline_object_vpos_overestimate: bool,
 }
 
+/// [미주 배치] `en_ref` 의 미주 본문(en_ctrl)을 해석한다. 현재 구역 미주면 본문
+/// paragraphs 에서, END_OF_DOCUMENT 로 문서 끝에 모인 앞 구역 미주면 deferral
+/// 목록에서 찾는다. (참조 표시 위첨자는 원 위치에 남고 본문만 여기서 렌더.)
 fn resolve_endnote_content<'a>(
     en_ref: &EndnoteRef,
     section_index: usize,
@@ -4024,6 +4056,335 @@ impl TypesetEngine {
         }
     }
 
+    /// [#2064 추출] 미주 fit/advance 메트릭 계산 (#1363 SSOT) — 라운드 5 산물의
+    /// `compute_en_metrics` 클로저를 fn 으로 승격. 본문 무변경, 캡처는 `EnMetricsVars`.
+    /// 반환: (en_fit, advance).
+    #[allow(clippy::too_many_arguments)]
+    fn compute_endnote_metrics(
+        &self,
+        prev: Option<i32>,
+        emit: bool,
+        current_endnote_had_inline_object_vpos_overestimate: &mut bool,
+        v: EnMetricsVars,
+    ) -> (f64, f64) {
+        let EnMetricsVars {
+            available,
+            cap_large_separator_stale_forward_vpos,
+            col_count,
+            compact_endnote_separator_profile,
+            current_column_has_tac_picture_only,
+            current_height_for_metrics,
+            dpi,
+            en_para_idx,
+            h4f,
+            has_treat_as_char_picture_shape,
+            has_visible_endnote_separator,
+            internal_vpos_rewind,
+            large_separator_block,
+            large_vpos_jump_at_column_top,
+            line_advances_sum,
+            local_vpos_rewind,
+            local_vpos_rewind_crosses_prev_content,
+            min_vpos_rewind_height,
+            new_endnote_between_notes_px,
+            no_separator_new_note_head_fits_current_column,
+            ssot_debug,
+            ssot_level,
+            this_bottom_offset,
+            this_first_offset,
+            tot,
+            trailing_ls_px,
+        } = v;
+        if col_count > 1 {
+            if let (Some(tf), Some(tb)) = (this_first_offset, this_bottom_offset) {
+                let base = if local_vpos_rewind || large_vpos_jump_at_column_top {
+                    tf
+                } else {
+                    prev.unwrap_or(tf)
+                };
+                let advance_px = hwpunit_to_px((tb - base).max(0), dpi);
+                let compact_local_rewind = compact_endnote_separator_profile
+                    && local_vpos_rewind
+                    && !local_vpos_rewind_crosses_prev_content;
+                // 한컴 저장본의 미주 LineSeg는 TAC 도형을 포함한 문단의
+                // 다음 줄/문단 시작 vpos까지 이미 반영한다. formatter가
+                // inline object 높이를 다시 큰 floor로 잡으면 2023 12쪽처럼
+                // 다음 문제 시작이 한 단 늦게 밀린다.
+                let inline_object_formatter_overestimate = compact_endnote_separator_profile
+                    && has_treat_as_char_picture_shape
+                    && !internal_vpos_rewind
+                    && !compact_local_rewind
+                    && !large_vpos_jump_at_column_top
+                    && h4f > advance_px + 80.0
+                    && advance_px > min_vpos_rewind_height + 40.0;
+                if inline_object_formatter_overestimate {
+                    *current_endnote_had_inline_object_vpos_overestimate = true;
+                }
+                let min_h = if inline_object_formatter_overestimate {
+                    (advance_px - trailing_ls_px).max(min_vpos_rewind_height)
+                } else if internal_vpos_rewind || compact_local_rewind {
+                    min_vpos_rewind_height
+                } else {
+                    h4f
+                };
+                let stale_forward_vpos = compact_endnote_separator_profile
+                    && !local_vpos_rewind
+                    && !large_vpos_jump_at_column_top
+                    && (!large_separator_block
+                        || has_visible_endnote_separator
+                        || cap_large_separator_stale_forward_vpos)
+                    && advance_px > h4f + 100.0;
+                let compact_internal_rewind_full_advance = compact_endnote_separator_profile
+                    && internal_vpos_rewind
+                    && !local_vpos_rewind
+                    && !large_vpos_jump_at_column_top
+                    && !has_treat_as_char_picture_shape
+                    && current_height_for_metrics < available * 0.45
+                    && tot > advance_px + 40.0;
+                let cap_no_separator_stale_new_note = large_separator_block
+                    && !has_visible_endnote_separator
+                    && (current_height_for_metrics < available * 0.50
+                        || (current_column_has_tac_picture_only
+                            && current_height_for_metrics < available * 0.65)
+                        || no_separator_new_note_head_fits_current_column);
+                let capped_new_endnote_advance = if large_separator_block
+                    && !has_visible_endnote_separator
+                    && !cap_no_separator_stale_new_note
+                {
+                    None
+                } else {
+                    new_endnote_between_notes_px
+                        .map(|gap| h4f + gap)
+                        .filter(|cap| advance_px > *cap + 12.0)
+                };
+                let metric_advance_px = if compact_internal_rewind_full_advance {
+                    tot
+                } else if compact_local_rewind {
+                    min_vpos_rewind_height
+                } else if let Some(cap) = capped_new_endnote_advance {
+                    cap
+                } else if stale_forward_vpos {
+                    h4f
+                } else {
+                    advance_px
+                };
+                let fit = (metric_advance_px - trailing_ls_px).max(min_h);
+                let acc_legacy = metric_advance_px.max(min_h);
+                // [Task #1363] Divergence A: 내부 vpos rewind para 는
+                // layout 이 첫 줄만 vpos 로 배치한 뒤 나머지 줄을 순차
+                // format 으로 렌더하므로 실제 점유 높이 = 전체
+                // line_advances_sum. saved-vpos delta(metric_advance_px)
+                // 는 rewind 로 과소 추정(pi=894 −61.2)되어 단 하단
+                // 본문 초과를 유발 → SSOT 로 대체.
+                // [Task #1363 Stage 5] 잔여 Divergence B(trailing-ls)·
+                // 전면 SSOT 는 acc=line_advances_sum 로 닫을 수 없음(실증):
+                //  · 전면: capped/stale/overlap para 를 렌더가 line_adv_sum
+                //    보다 작게 겹쳐 그려 2022 overflow +166px 회귀.
+                //  · uncapped sequential 한정: trailing-ls 가산이 미주
+                //    질문 흐름(단 배치)을 흔들어 issue_1139/1261/1284 10건
+                //    회귀. → 잔여 divergence 는 overflow 무영향이고 안전
+                //    정합 불가하므로 보류. acc 는 A(rewind)/C(TAC)만 SSOT.
+                let acc = if ssot_level >= EnSsotLevel::A && internal_vpos_rewind {
+                    line_advances_sum.max(min_vpos_rewind_height)
+                } else {
+                    acc_legacy
+                };
+                if emit && ssot_debug {
+                    eprintln!(
+                            "EN_SSOT pi={} rewind={} acc_legacy={:.1} acc={:.1} line_adv_sum={:.1} fit={:.1} h4f={:.1}",
+                            en_para_idx,
+                            internal_vpos_rewind,
+                            acc_legacy,
+                            acc,
+                            line_advances_sum,
+                            fit,
+                            h4f,
+                        );
+                }
+                (fit, acc)
+            } else {
+                if emit && ssot_debug {
+                    eprintln!(
+                            "EN_SSOT pi={} rewind={} acc_legacy={:.1} acc={:.1} line_adv_sum={:.1} fit={:.1} h4f={:.1}",
+                            en_para_idx,
+                            internal_vpos_rewind,
+                            tot,
+                            tot,
+                            line_advances_sum,
+                            h4f,
+                            h4f,
+                        );
+                }
+                (h4f, tot)
+            }
+        } else {
+            (h4f, tot)
+        }
+    }
+
+    /// [#2064 추출] P8: split 후보가 확정된 미주 문단의 PartialParagraph 방출 —
+    /// 원본 무변경 이동. 반환: split 방출 수행 여부 (caller 의 split_endnote_emitted).
+    #[allow(clippy::too_many_arguments)]
+    fn emit_endnote_split(
+        &self,
+        st: &mut TypesetState,
+        fmt: &FormattedParagraph,
+        en_para: &Paragraph,
+        paragraphs: &[Paragraph],
+        styles: &ResolvedStyleSet,
+        split_candidate: Option<usize>,
+        en_para_idx: usize,
+        en_advance: f64,
+        en_col_w: f64,
+        available: f64,
+        col_count: u16,
+        compact_between_notes_gap: bool,
+        compact_endnote_separator_profile: bool,
+        endnote_has_text_or_equation: bool,
+        has_visible_endnote_separator: bool,
+        large_separator_block: bool,
+        line_advances_sum: f64,
+        non_tac_object_height: Option<f64>,
+        pre_emit_tail_before_non_tac_object_advance: bool,
+        ssot_debug: bool,
+        ssot_level: EnSsotLevel,
+        tac_picture_rewind_height: Option<f64>,
+    ) -> bool {
+        let mut emitted = false;
+        if let Some(split_line) = split_candidate {
+            let first_h = fmt.line_advances_sum(0..split_line);
+            st.current_items.push(PageItem::PartialParagraph {
+                para_index: en_para_idx,
+                start_line: 0,
+                end_line: split_line,
+            });
+            st.current_height += first_h;
+            st.current_endnote_flow = true;
+            st.advance_column_or_new_page();
+            let rest_h =
+                fmt.line_advances_sum(split_line..fmt.line_heights.len()) + fmt.spacing_after;
+            st.current_items.push(PageItem::PartialParagraph {
+                para_index: en_para_idx,
+                start_line: split_line,
+                end_line: fmt.line_heights.len(),
+            });
+            st.current_height += rest_h;
+            st.current_endnote_flow = true;
+            emitted = true;
+        } else {
+            let table_only_endnote_para = en_para.text.is_empty()
+                && en_para
+                    .controls
+                    .iter()
+                    .any(|ctrl| matches!(ctrl, Control::Table(_)))
+                && !en_para
+                    .controls
+                    .iter()
+                    .any(|ctrl| matches!(ctrl, Control::Equation(_)));
+            let pre_emitted_non_tac_object_only_para = pre_emit_tail_before_non_tac_object_advance
+                && non_tac_object_height.is_some()
+                && !endnote_has_text_or_equation;
+            if !table_only_endnote_para && !pre_emitted_non_tac_object_only_para {
+                st.current_items.push(PageItem::FullParagraph {
+                    para_index: en_para_idx,
+                });
+                st.current_endnote_flow = true;
+            }
+            for (ctrl_idx, ctrl) in en_para.controls.iter().enumerate() {
+                match ctrl {
+                    Control::Table(_) if table_only_endnote_para => {
+                        st.current_items.push(PageItem::Table {
+                            para_index: en_para_idx,
+                            control_index: ctrl_idx,
+                        });
+                        st.current_endnote_flow = true;
+                    }
+                    Control::Shape(_) | Control::Picture(_) => {
+                        st.current_items.push(PageItem::Shape {
+                            para_index: en_para_idx,
+                            control_index: ctrl_idx,
+                        });
+                        st.current_endnote_flow = true;
+                    }
+                    _ => {}
+                }
+            }
+            // [Task #1363 Divergence C] TAC 그림 미주 para 의 누적 경로.
+            // 종전(legacy/A): local_vpos_rewind TAC 그림은 저장 vpos 가
+            // 앞 제목 옆을 가리킨다고 보고 `max(rewind_start+adv)` 로 누적
+            // (겹침 가정). 그러나 TAC(treat_as_char) 그림은 렌더러가 문단
+            // 흐름에 inline 으로 **순차 적층**한다(옆 배치 아님). 겹침 가정은
+            // 그림 높이를 과소 계상해 단을 과충전(sep20/20 p22 col0 +58px →
+            // 본문 50px 초과). SSOT(B+): 렌더러처럼 순차 적층(`+= adv`).
+            let tac_stack_ssot =
+                matches!(tac_picture_rewind_height, Some(_)) && ssot_level >= EnSsotLevel::B;
+            if let Some(rewind_start) = tac_picture_rewind_height.filter(|_| !tac_stack_ssot) {
+                // 단 하단의 TAC 그림은 renderer가 직전 텍스트를 침범하는
+                // vpos 되감김을 버리고 순차 y를 유지한다. pagination도
+                // 같은 경우에는 그림 높이를 소비해야 뒤 문단이 frame 아래로
+                // 밀리지 않는다.
+                let rewind_end = rewind_start + en_advance;
+                let consume_rewind_picture_height = compact_endnote_separator_profile
+                    && st.current_column + 1 >= st.col_count
+                    && rewind_end <= st.current_height + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX
+                    && ((compact_between_notes_gap && has_visible_endnote_separator)
+                        || (large_separator_block && !has_visible_endnote_separator));
+                if ssot_debug {
+                    eprintln!(
+                        "EN_ACC pi={} path={} ch_before={:.1} rewind_start={:.1} adv={:.1} ch_after={:.1}",
+                        en_para_idx,
+                        if consume_rewind_picture_height { "TACbottom" } else { "TACmax" },
+                        st.current_height,
+                        rewind_start,
+                        en_advance,
+                        if consume_rewind_picture_height {
+                            st.current_height + en_advance
+                        } else {
+                            st.current_height.max(rewind_end)
+                        },
+                    );
+                }
+                if consume_rewind_picture_height {
+                    st.current_height += en_advance;
+                } else {
+                    st.current_height = st.current_height.max(rewind_end);
+                }
+            } else {
+                if ssot_debug {
+                    eprintln!(
+                        "EN_ACC pi={} path={} ch_before={:.1} adv={:.1} ch_after={:.1}",
+                        en_para_idx,
+                        if tac_stack_ssot { "TACstack" } else { "add" },
+                        st.current_height,
+                        en_advance,
+                        st.current_height + en_advance,
+                    );
+                }
+                st.current_height += en_advance;
+            }
+            // [Task #1363 v2 Stage 2] A2: 누적을 렌더 시뮬 bottom 으로 스냅.
+            // compute_en_metrics(saved-delta) 대신 HeightCursor 시뮬레이션이
+            // 단 실제 렌더 높이를 산출 → fit 결정(다음 para)이 렌더 정합.
+            // [Task #1370 Stage 2 실험] A3 한정: exact 스냅이 rewind/빈 para 를
+            // hancom 보다 ~80px/단 높게 누적해 경계 split 을 막고 13건 cascade 유발.
+            // 실험으로 A3 에서 스냅 OFF → break-결정 높이를 compact(acc)로 환원.
+            if ssot_level == EnSsotLevel::A2 {
+                if let Some(sim_bottom) = self.simulate_endnote_column_bottom_y(
+                    &st, paragraphs, styles, available, en_col_w, None,
+                ) {
+                    if ssot_debug {
+                        eprintln!(
+                            "EN_ACC pi={} path=A2sim {:.1} -> {:.1}",
+                            en_para_idx, st.current_height, sim_bottom,
+                        );
+                    }
+                    st.current_height = sim_bottom;
+                }
+            }
+        }
+        emitted
+    }
+
     /// [#2026 추출] 한 미주(en_ctrl)의 문단들을 조판·방출하는 en_para 루프 본체 —
     /// #1904 라운드 1 이연분. 미주-간 흐름 캐리는 `EndnoteFlowState` 값 왕복
     /// (컬렉션 pre_emitted 는 함수 로컬로 흡수). 원본 무변경 이동.
@@ -4684,133 +5045,6 @@ impl TypesetEngine {
             let line_advances_sum = fmt.line_advances_sum(0..fmt.line_heights.len());
             let ssot_level = en_ssot_level();
             let ssot_debug = en_ssot_debug();
-            let mut compute_en_metrics = |prev: Option<i32>, emit: bool| -> (f64, f64) {
-                if col_count > 1 {
-                    if let (Some(tf), Some(tb)) = (this_first_offset, this_bottom_offset) {
-                        let base = if local_vpos_rewind || large_vpos_jump_at_column_top {
-                            tf
-                        } else {
-                            prev.unwrap_or(tf)
-                        };
-                        let advance_px = hwpunit_to_px((tb - base).max(0), dpi);
-                        let compact_local_rewind = compact_endnote_separator_profile
-                            && local_vpos_rewind
-                            && !local_vpos_rewind_crosses_prev_content;
-                        // 한컴 저장본의 미주 LineSeg는 TAC 도형을 포함한 문단의
-                        // 다음 줄/문단 시작 vpos까지 이미 반영한다. formatter가
-                        // inline object 높이를 다시 큰 floor로 잡으면 2023 12쪽처럼
-                        // 다음 문제 시작이 한 단 늦게 밀린다.
-                        let inline_object_formatter_overestimate = compact_endnote_separator_profile
-                            && has_treat_as_char_picture_shape
-                            && !internal_vpos_rewind
-                            && !compact_local_rewind
-                            && !large_vpos_jump_at_column_top
-                            && h4f > advance_px + 80.0
-                            && advance_px > min_vpos_rewind_height + 40.0;
-                        if inline_object_formatter_overestimate {
-                            current_endnote_had_inline_object_vpos_overestimate = true;
-                        }
-                        let min_h = if inline_object_formatter_overestimate {
-                            (advance_px - trailing_ls_px).max(min_vpos_rewind_height)
-                        } else if internal_vpos_rewind || compact_local_rewind {
-                            min_vpos_rewind_height
-                        } else {
-                            h4f
-                        };
-                        let stale_forward_vpos = compact_endnote_separator_profile
-                            && !local_vpos_rewind
-                            && !large_vpos_jump_at_column_top
-                            && (!large_separator_block
-                                || has_visible_endnote_separator
-                                || cap_large_separator_stale_forward_vpos)
-                            && advance_px > h4f + 100.0;
-                        let compact_internal_rewind_full_advance = compact_endnote_separator_profile
-                            && internal_vpos_rewind
-                            && !local_vpos_rewind
-                            && !large_vpos_jump_at_column_top
-                            && !has_treat_as_char_picture_shape
-                            && current_height_for_metrics < available * 0.45
-                            && tot > advance_px + 40.0;
-                        let cap_no_separator_stale_new_note = large_separator_block
-                            && !has_visible_endnote_separator
-                            && (current_height_for_metrics < available * 0.50
-                                || (current_column_has_tac_picture_only
-                                    && current_height_for_metrics < available * 0.65)
-                                || no_separator_new_note_head_fits_current_column);
-                        let capped_new_endnote_advance = if large_separator_block
-                            && !has_visible_endnote_separator
-                            && !cap_no_separator_stale_new_note
-                        {
-                            None
-                        } else {
-                            new_endnote_between_notes_px
-                                .map(|gap| h4f + gap)
-                                .filter(|cap| advance_px > *cap + 12.0)
-                        };
-                        let metric_advance_px = if compact_internal_rewind_full_advance {
-                            tot
-                        } else if compact_local_rewind {
-                            min_vpos_rewind_height
-                        } else if let Some(cap) = capped_new_endnote_advance {
-                            cap
-                        } else if stale_forward_vpos {
-                            h4f
-                        } else {
-                            advance_px
-                        };
-                        let fit = (metric_advance_px - trailing_ls_px).max(min_h);
-                        let acc_legacy = metric_advance_px.max(min_h);
-                        // [Task #1363] Divergence A: 내부 vpos rewind para 는
-                        // layout 이 첫 줄만 vpos 로 배치한 뒤 나머지 줄을 순차
-                        // format 으로 렌더하므로 실제 점유 높이 = 전체
-                        // line_advances_sum. saved-vpos delta(metric_advance_px)
-                        // 는 rewind 로 과소 추정(pi=894 −61.2)되어 단 하단
-                        // 본문 초과를 유발 → SSOT 로 대체.
-                        // [Task #1363 Stage 5] 잔여 Divergence B(trailing-ls)·
-                        // 전면 SSOT 는 acc=line_advances_sum 로 닫을 수 없음(실증):
-                        //  · 전면: capped/stale/overlap para 를 렌더가 line_adv_sum
-                        //    보다 작게 겹쳐 그려 2022 overflow +166px 회귀.
-                        //  · uncapped sequential 한정: trailing-ls 가산이 미주
-                        //    질문 흐름(단 배치)을 흔들어 issue_1139/1261/1284 10건
-                        //    회귀. → 잔여 divergence 는 overflow 무영향이고 안전
-                        //    정합 불가하므로 보류. acc 는 A(rewind)/C(TAC)만 SSOT.
-                        let acc = if ssot_level >= EnSsotLevel::A && internal_vpos_rewind {
-                            line_advances_sum.max(min_vpos_rewind_height)
-                        } else {
-                            acc_legacy
-                        };
-                        if emit && ssot_debug {
-                            eprintln!(
-                                "EN_SSOT pi={} rewind={} acc_legacy={:.1} acc={:.1} line_adv_sum={:.1} fit={:.1} h4f={:.1}",
-                                en_para_idx,
-                                internal_vpos_rewind,
-                                acc_legacy,
-                                acc,
-                                line_advances_sum,
-                                fit,
-                                h4f,
-                            );
-                        }
-                        (fit, acc)
-                    } else {
-                        if emit && ssot_debug {
-                            eprintln!(
-                                "EN_SSOT pi={} rewind={} acc_legacy={:.1} acc={:.1} line_adv_sum={:.1} fit={:.1} h4f={:.1}",
-                                en_para_idx,
-                                internal_vpos_rewind,
-                                tot,
-                                tot,
-                                line_advances_sum,
-                                h4f,
-                                h4f,
-                            );
-                        }
-                        (h4f, tot)
-                    }
-                } else {
-                    (h4f, tot)
-                }
-            };
 
             let non_tac_object_height = if endnote_has_text_or_equation {
                 None
@@ -4836,7 +5070,39 @@ impl TypesetEngine {
                     hwpunit_to_px((between_notes - saved_spacing).max(0), self.dpi)
                 })
                 .unwrap_or(0.0);
-            let (raw_en_fit, _) = compute_en_metrics(prev_en_bottom_vpos, false);
+            let (raw_en_fit, _) = self.compute_endnote_metrics(
+                prev_en_bottom_vpos,
+                false,
+                &mut current_endnote_had_inline_object_vpos_overestimate,
+                EnMetricsVars {
+                    available,
+                    cap_large_separator_stale_forward_vpos,
+                    col_count,
+                    compact_endnote_separator_profile,
+                    current_column_has_tac_picture_only,
+                    current_height_for_metrics,
+                    dpi,
+                    en_para_idx,
+                    h4f,
+                    has_treat_as_char_picture_shape,
+                    has_visible_endnote_separator,
+                    internal_vpos_rewind,
+                    large_separator_block,
+                    large_vpos_jump_at_column_top,
+                    line_advances_sum,
+                    local_vpos_rewind,
+                    local_vpos_rewind_crosses_prev_content,
+                    min_vpos_rewind_height,
+                    new_endnote_between_notes_px,
+                    no_separator_new_note_head_fits_current_column,
+                    ssot_debug,
+                    ssot_level,
+                    this_bottom_offset,
+                    this_first_offset,
+                    tot,
+                    trailing_ls_px,
+                },
+            );
             let en_fit = non_tac_object_height
                 .map(|height| raw_en_fit.max(height))
                 .unwrap_or(raw_en_fit);
@@ -8150,7 +8416,39 @@ impl TypesetEngine {
                 page_def,
             );
             // advance 후 재평가 — 새 단 첫 미주는 prev=None → 자체 높이.
-            let (_, mut en_advance) = compute_en_metrics(prev_en_bottom_vpos, true);
+            let (_, mut en_advance) = self.compute_endnote_metrics(
+                prev_en_bottom_vpos,
+                true,
+                &mut current_endnote_had_inline_object_vpos_overestimate,
+                EnMetricsVars {
+                    available,
+                    cap_large_separator_stale_forward_vpos,
+                    col_count,
+                    compact_endnote_separator_profile,
+                    current_column_has_tac_picture_only,
+                    current_height_for_metrics,
+                    dpi,
+                    en_para_idx,
+                    h4f,
+                    has_treat_as_char_picture_shape,
+                    has_visible_endnote_separator,
+                    internal_vpos_rewind,
+                    large_separator_block,
+                    large_vpos_jump_at_column_top,
+                    line_advances_sum,
+                    local_vpos_rewind,
+                    local_vpos_rewind_crosses_prev_content,
+                    min_vpos_rewind_height,
+                    new_endnote_between_notes_px,
+                    no_separator_new_note_head_fits_current_column,
+                    ssot_debug,
+                    ssot_level,
+                    this_bottom_offset,
+                    this_first_offset,
+                    tot,
+                    trailing_ls_px,
+                },
+            );
             if large_between_last_column_question_title_tail_fits
                 || large_between_last_column_render_title_tail_fits
                 || large_between_last_column_rewind_title_tail_fits
@@ -8272,138 +8570,31 @@ impl TypesetEngine {
                     .or(large_between_last_column_flow_tail_split)
                     .or(split_endnote_to_fit)
             };
-            if let Some(split_line) = split_candidate {
-                let first_h = fmt.line_advances_sum(0..split_line);
-                st.current_items.push(PageItem::PartialParagraph {
-                    para_index: en_para_idx,
-                    start_line: 0,
-                    end_line: split_line,
-                });
-                st.current_height += first_h;
-                st.current_endnote_flow = true;
-                st.advance_column_or_new_page();
-                let rest_h =
-                    fmt.line_advances_sum(split_line..fmt.line_heights.len()) + fmt.spacing_after;
-                st.current_items.push(PageItem::PartialParagraph {
-                    para_index: en_para_idx,
-                    start_line: split_line,
-                    end_line: fmt.line_heights.len(),
-                });
-                st.current_height += rest_h;
-                st.current_endnote_flow = true;
+            if self.emit_endnote_split(
+                st,
+                &fmt,
+                en_para,
+                paragraphs,
+                styles,
+                split_candidate,
+                en_para_idx,
+                en_advance,
+                en_col_w,
+                available,
+                col_count,
+                compact_between_notes_gap,
+                compact_endnote_separator_profile,
+                endnote_has_text_or_equation,
+                has_visible_endnote_separator,
+                large_separator_block,
+                line_advances_sum,
+                non_tac_object_height,
+                pre_emit_tail_before_non_tac_object_advance,
+                ssot_debug,
+                ssot_level,
+                tac_picture_rewind_height,
+            ) {
                 split_endnote_emitted = true;
-            } else {
-                let table_only_endnote_para = en_para.text.is_empty()
-                    && en_para
-                        .controls
-                        .iter()
-                        .any(|ctrl| matches!(ctrl, Control::Table(_)))
-                    && !en_para
-                        .controls
-                        .iter()
-                        .any(|ctrl| matches!(ctrl, Control::Equation(_)));
-                let pre_emitted_non_tac_object_only_para =
-                    pre_emit_tail_before_non_tac_object_advance
-                        && non_tac_object_height.is_some()
-                        && !endnote_has_text_or_equation;
-                if !table_only_endnote_para && !pre_emitted_non_tac_object_only_para {
-                    st.current_items.push(PageItem::FullParagraph {
-                        para_index: en_para_idx,
-                    });
-                    st.current_endnote_flow = true;
-                }
-                for (ctrl_idx, ctrl) in en_para.controls.iter().enumerate() {
-                    match ctrl {
-                        Control::Table(_) if table_only_endnote_para => {
-                            st.current_items.push(PageItem::Table {
-                                para_index: en_para_idx,
-                                control_index: ctrl_idx,
-                            });
-                            st.current_endnote_flow = true;
-                        }
-                        Control::Shape(_) | Control::Picture(_) => {
-                            st.current_items.push(PageItem::Shape {
-                                para_index: en_para_idx,
-                                control_index: ctrl_idx,
-                            });
-                            st.current_endnote_flow = true;
-                        }
-                        _ => {}
-                    }
-                }
-                // [Task #1363 Divergence C] TAC 그림 미주 para 의 누적 경로.
-                // 종전(legacy/A): local_vpos_rewind TAC 그림은 저장 vpos 가
-                // 앞 제목 옆을 가리킨다고 보고 `max(rewind_start+adv)` 로 누적
-                // (겹침 가정). 그러나 TAC(treat_as_char) 그림은 렌더러가 문단
-                // 흐름에 inline 으로 **순차 적층**한다(옆 배치 아님). 겹침 가정은
-                // 그림 높이를 과소 계상해 단을 과충전(sep20/20 p22 col0 +58px →
-                // 본문 50px 초과). SSOT(B+): 렌더러처럼 순차 적층(`+= adv`).
-                let tac_stack_ssot =
-                    matches!(tac_picture_rewind_height, Some(_)) && ssot_level >= EnSsotLevel::B;
-                if let Some(rewind_start) = tac_picture_rewind_height.filter(|_| !tac_stack_ssot) {
-                    // 단 하단의 TAC 그림은 renderer가 직전 텍스트를 침범하는
-                    // vpos 되감김을 버리고 순차 y를 유지한다. pagination도
-                    // 같은 경우에는 그림 높이를 소비해야 뒤 문단이 frame 아래로
-                    // 밀리지 않는다.
-                    let rewind_end = rewind_start + en_advance;
-                    let consume_rewind_picture_height = compact_endnote_separator_profile
-                        && st.current_column + 1 >= st.col_count
-                        && rewind_end
-                            <= st.current_height + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX
-                        && ((compact_between_notes_gap && has_visible_endnote_separator)
-                            || (large_separator_block && !has_visible_endnote_separator));
-                    if ssot_debug {
-                        eprintln!(
-                            "EN_ACC pi={} path={} ch_before={:.1} rewind_start={:.1} adv={:.1} ch_after={:.1}",
-                            en_para_idx,
-                            if consume_rewind_picture_height { "TACbottom" } else { "TACmax" },
-                            st.current_height,
-                            rewind_start,
-                            en_advance,
-                            if consume_rewind_picture_height {
-                                st.current_height + en_advance
-                            } else {
-                                st.current_height.max(rewind_end)
-                            },
-                        );
-                    }
-                    if consume_rewind_picture_height {
-                        st.current_height += en_advance;
-                    } else {
-                        st.current_height = st.current_height.max(rewind_end);
-                    }
-                } else {
-                    if ssot_debug {
-                        eprintln!(
-                            "EN_ACC pi={} path={} ch_before={:.1} adv={:.1} ch_after={:.1}",
-                            en_para_idx,
-                            if tac_stack_ssot { "TACstack" } else { "add" },
-                            st.current_height,
-                            en_advance,
-                            st.current_height + en_advance,
-                        );
-                    }
-                    st.current_height += en_advance;
-                }
-                // [Task #1363 v2 Stage 2] A2: 누적을 렌더 시뮬 bottom 으로 스냅.
-                // compute_en_metrics(saved-delta) 대신 HeightCursor 시뮬레이션이
-                // 단 실제 렌더 높이를 산출 → fit 결정(다음 para)이 렌더 정합.
-                // [Task #1370 Stage 2 실험] A3 한정: exact 스냅이 rewind/빈 para 를
-                // hancom 보다 ~80px/단 높게 누적해 경계 split 을 막고 13건 cascade 유발.
-                // 실험으로 A3 에서 스냅 OFF → break-결정 높이를 compact(acc)로 환원.
-                if ssot_level == EnSsotLevel::A2 {
-                    if let Some(sim_bottom) = self.simulate_endnote_column_bottom_y(
-                        &st, paragraphs, styles, available, en_col_w, None,
-                    ) {
-                        if ssot_debug {
-                            eprintln!(
-                                "EN_ACC pi={} path=A2sim {:.1} -> {:.1}",
-                                en_para_idx, st.current_height, sim_bottom,
-                            );
-                        }
-                        st.current_height = sim_bottom;
-                    }
-                }
             }
             activate_square_picture_wrap_for_para(&mut *st, en_para_idx, en_para);
             // 다음 미주의 base 가 될 본 미주 bottom 기록.
