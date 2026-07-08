@@ -1084,11 +1084,56 @@ impl DocumentCore {
             })
         }
 
+        fn ole_object_caret_metrics(
+            para: &Paragraph,
+            styles: &crate::renderer::style_resolver::ResolvedStyleSet,
+            ole_top: f64,
+        ) -> (f64, f64) {
+            let line_height = para
+                .line_segs
+                .first()
+                .map(|line| {
+                    crate::renderer::hwpunit_to_px(line.line_height, crate::renderer::DEFAULT_DPI)
+                })
+                .filter(|height| *height > 0.0)
+                .unwrap_or(13.0);
+            let text_height = para
+                .line_segs
+                .first()
+                .map(|line| {
+                    crate::renderer::hwpunit_to_px(line.text_height, crate::renderer::DEFAULT_DPI)
+                })
+                .filter(|height| *height > 0.0)
+                .unwrap_or(line_height);
+            let baseline = para
+                .line_segs
+                .first()
+                .map(|line| {
+                    crate::renderer::hwpunit_to_px(
+                        line.baseline_distance,
+                        crate::renderer::DEFAULT_DPI,
+                    )
+                })
+                .filter(|baseline| *baseline > 0.0)
+                .unwrap_or(text_height * 0.85);
+            let font_size = para
+                .char_shape_id_at(0)
+                .and_then(|id| styles.char_styles.get(id as usize))
+                .map(|style| style.font_size)
+                .filter(|size| *size > 0.0)
+                .unwrap_or(text_height)
+                .max(10.0);
+            let caret_height = font_size.min(line_height.max(font_size));
+            let caret_y = ole_top + (baseline - caret_height * 0.85).max(0.0);
+            (caret_y, caret_height)
+        }
+
         fn find_ole_object_cursor_hit(
             node: &RenderNode,
             sec: usize,
             para_idx: usize,
             render_para: Option<&Paragraph>,
+            styles: &crate::renderer::style_resolver::ResolvedStyleSet,
             offset: usize,
             page_index: u32,
         ) -> Option<CursorHit> {
@@ -1110,11 +1155,14 @@ impl DocumentCore {
                         is_non_inline_ole_control(para, control_ref.control_index)
                     })
                 {
+                    let (y, height) = render_para
+                        .map(|para| ole_object_caret_metrics(para, styles, node.bbox.y))
+                        .unwrap_or((node.bbox.y, 10.0));
                     return Some(CursorHit {
                         page_index,
                         x: node.bbox.x + node.bbox.width,
-                        y: node.bbox.y,
-                        height: node.bbox.height.max(10.0),
+                        y,
+                        height,
                     });
                 }
             }
@@ -1125,6 +1173,7 @@ impl DocumentCore {
                     sec,
                     para_idx,
                     render_para,
+                    styles,
                     offset,
                     page_index,
                 ) {
@@ -1139,6 +1188,7 @@ impl DocumentCore {
             section_idx,
             para_idx,
             self.get_render_paragraph_ref(section_idx, para_idx).ok(),
+            &self.styles,
             char_offset,
             first_page,
         ) {

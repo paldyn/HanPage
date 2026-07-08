@@ -188,6 +188,56 @@ fn push_ole_raw_svg_render_node(
     parent.children.push(node);
 }
 
+fn push_ole_empty_para_end_anchor(
+    tree: &mut PageRenderTree,
+    parent: &mut RenderNode,
+    anchor_x: f64,
+    anchor_y: f64,
+    para: &Paragraph,
+    section_index: usize,
+    para_index: usize,
+    styles: &ResolvedStyleSet,
+) {
+    let char_shape_id = para.char_shape_id_at(0).unwrap_or(0);
+    let style = resolved_to_text_style(styles, char_shape_id, 0);
+    let line_height = para
+        .line_segs
+        .first()
+        .map(|line| hwpunit_to_px(line.line_height, crate::renderer::DEFAULT_DPI))
+        .filter(|height| *height > 0.0)
+        .unwrap_or_else(|| (style.font_size * 1.2).max(12.0));
+    let baseline = para
+        .line_segs
+        .first()
+        .map(|line| hwpunit_to_px(line.baseline_distance, crate::renderer::DEFAULT_DPI))
+        .filter(|baseline| *baseline > 0.0)
+        .unwrap_or(style.font_size * 0.85);
+
+    let node = RenderNode::new(
+        tree.next_id(),
+        RenderNodeType::TextRun(TextRunNode {
+            text: String::new(),
+            style,
+            char_shape_id: Some(char_shape_id),
+            para_shape_id: Some(para.para_shape_id),
+            section_index: Some(section_index),
+            para_index: Some(para_index),
+            char_start: Some(0),
+            cell_context: None,
+            is_para_end: true,
+            is_line_break_end: false,
+            rotation: 0.0,
+            is_vertical: false,
+            char_overlap: None,
+            border_fill_id: 0,
+            baseline,
+            field_marker: FieldMarkerType::None,
+        }),
+        BoundingBox::new(anchor_x, anchor_y, 0.0, line_height),
+    );
+    parent.children.push(node);
+}
+
 fn ole_chart_fallback_label(message: impl AsRef<str>, bin_data_id: u32) -> String {
     format!("{} (BinData #{bin_data_id})", message.as_ref())
 }
@@ -767,6 +817,19 @@ impl LayoutEngine {
             None, // [Task #1138] 본문 도형 — 셀 정보 없음
             false,
         );
+
+        if matches!(shape, ShapeObject::Ole(_)) && !common.treat_as_char && para.text.is_empty() {
+            push_ole_empty_para_end_anchor(
+                tree,
+                parent,
+                adjusted_shape_x + shape_w,
+                adjusted_shape_y,
+                para,
+                section_index,
+                para_index,
+                styles,
+            );
+        }
 
         // 캡션 렌더링
         if let Some(caption) = caption {

@@ -8,6 +8,7 @@ use std::fs;
 use std::path::Path;
 
 use rhwp::document_core::DocumentCore;
+use rhwp::renderer::render_tree::{RenderNode, RenderNodeType};
 use serde_json::Value;
 
 fn load_core(rel: &str) -> DocumentCore {
@@ -50,6 +51,8 @@ fn assert_ole_layout_and_caret(rel: &str) {
     let actual_x = cursor["x"].as_f64().unwrap();
     let expected_y = ole["y"].as_f64().unwrap();
     let actual_y = cursor["y"].as_f64().unwrap();
+    let cursor_h = cursor["height"].as_f64().unwrap();
+    let ole_h = ole["h"].as_f64().unwrap();
 
     assert_eq!(cursor["pageIndex"], 0, "cursor page index");
     assert!(
@@ -64,6 +67,47 @@ fn assert_ole_layout_and_caret(rel: &str) {
         "cursor y should follow OLE top for {}: cursor={}, ole={}",
         rel,
         cursor,
+        ole
+    );
+    assert!(
+        (10.0..ole_h / 2.0).contains(&cursor_h),
+        "cursor height should use text line metrics, not full OLE height for {}: cursor={}, ole={}",
+        rel,
+        cursor,
+        ole
+    );
+
+    fn find_para_end_anchor(node: &RenderNode) -> Option<&RenderNode> {
+        if let RenderNodeType::TextRun(run) = &node.node_type {
+            if run.text.is_empty()
+                && run.section_index == Some(0)
+                && run.para_index == Some(0)
+                && run.char_start == Some(0)
+                && run.is_para_end
+            {
+                return Some(node);
+            }
+        }
+        node.children.iter().find_map(find_para_end_anchor)
+    }
+
+    let tree = core
+        .build_page_render_tree(0)
+        .unwrap_or_else(|e| panic!("render tree {}: {:?}", rel, e));
+    let anchor = find_para_end_anchor(&tree.root)
+        .unwrap_or_else(|| panic!("OLE paragraph end anchor missing for {}", rel));
+    assert!(
+        (anchor.bbox.x - expected_x).abs() <= 0.6,
+        "paragraph mark anchor should follow OLE right edge for {}: anchor={:?}, ole={}",
+        rel,
+        anchor.bbox,
+        ole
+    );
+    assert!(
+        (anchor.bbox.y - expected_y).abs() <= 0.6,
+        "paragraph mark anchor should follow OLE top for {}: anchor={:?}, ole={}",
+        rel,
+        anchor.bbox,
         ole
     );
 }

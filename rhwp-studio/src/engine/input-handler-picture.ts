@@ -56,6 +56,42 @@ function matchesControlRef(ctrl: any, ref: PictureObjectRef, layoutType: string)
   return true;
 }
 
+function syncOleObjectCaret(this: any, ref: PictureObjectRef, zoom: number): void {
+  if (ref.type !== 'ole' || ref.cellPath || ref.noteRef || ref.headerFooter) return;
+  try {
+    const rect = this.wasm.getCursorRect(ref.sec, ref.ppi, 0);
+    if (rect) this.caret.show(rect, zoom);
+    scheduleOleSelectionLayerStabilize.call(this, ref);
+  } catch (err) {
+    console.warn('[InputHandler] OLE 캐럿 표시 실패:', err);
+  }
+}
+
+function scheduleOleSelectionLayerStabilize(this: any, ref: PictureObjectRef): void {
+  const key = `${ref.sec}:${ref.ppi}:${ref.ci}`;
+  if (this._oleSelectionLayerStabilizeKey === key) return;
+  this._oleSelectionLayerStabilizeKey = key;
+  const stabilize = (finalPass: boolean) => {
+    try {
+      const current = this.cursor.getSelectedPictureRef?.();
+      const stillSelected = current?.type === 'ole' &&
+        current.sec === ref.sec &&
+        current.ppi === ref.ppi &&
+        current.ci === ref.ci;
+      if (stillSelected && !this.pictureObjectRenderer?.layer?.parentElement) {
+        this.renderPictureObjectSelection();
+      }
+    } finally {
+      if (finalPass && this._oleSelectionLayerStabilizeKey === key) {
+        this._oleSelectionLayerStabilizeKey = undefined;
+      }
+    }
+  };
+  window.setTimeout(() => stabilize(false), 80);
+  window.setTimeout(() => stabilize(false), 240);
+  window.setTimeout(() => stabilize(true), 500);
+}
+
 /**
  * [Task #1280 v2] 렌더 정렬키 (plane, zOrder, stableIndex). Rust `paper_node_sort_key`
  * (layout.rs)와 단일 진실 원천. 사전식으로 클수록 위(최상단). layer 필드 부재 시
@@ -376,6 +412,7 @@ export function renderPictureObjectSelection(this: any): void {
             rotAngle,
             locked,
           );
+          syncOleObjectCaret.call(this, ref as PictureObjectRef, zoom);
           return;
         }
       }
