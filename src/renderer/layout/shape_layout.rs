@@ -695,6 +695,29 @@ impl LayoutEngine {
         } else {
             (0.0, 0.0)
         };
+        // [Issue #2075] restrictInPage(flow_with_text, HWP5 attr bit 13) 하단 클램프.
+        // layout_body_picture(PR #2033, 이슈 #2032)에는 이 클램프가 있으나 도형 경로엔
+        // 빠져 있었다("layout_body_picture와 동일 로직" 주석과 달리 미갱신). vert=Para +
+        // 큰 vertOffset + restrictInPage=on 인 floating 도형이 페이지 밖 좌표로 계산되면
+        // 어느 페이지에도 그려지지 않아 완전 소실됐다. 표/그림 동등 로직과 동일 시멘틱으로
+        // 캡션 포함 프레임 하단이 단 영역을 넘으면 안으로 끌어들인다(상단 bleed 는 유지).
+        // restrictInPage=off 는 현행 유지(한컴 정합: 쪽 영역 이탈 허용).
+        let shape_y = if !common.treat_as_char
+            && common.flow_with_text
+            && matches!(common.vert_rel_to, crate::model::shape::VertRelTo::Para)
+        {
+            let total_h = shape_h
+                + caption_height
+                + if caption_height > 0.0 {
+                    caption_spacing
+                } else {
+                    0.0
+                };
+            let body_bottom = col_area.y + col_area.height - total_h;
+            shape_y.min(body_bottom.max(col_area.y))
+        } else {
+            shape_y
+        };
         let adjusted_shape_x = shape_x + caption_left_offset;
         let adjusted_shape_y = shape_y + caption_top_offset;
 
