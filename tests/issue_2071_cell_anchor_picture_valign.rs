@@ -73,3 +73,32 @@ fn center_cell_anchored_picture_is_vertically_centered() {
         img.y
     );
 }
+
+/// 한컴은 셀 앵커 그림을 **셀 valign 으로만** 배치하고 그림 자체 pos vert_align 은
+/// 무시한다. CENTER 셀 + 그림 pos vertAlign=Bottom 이어도 셀 중앙(362.5)에 배치돼야
+/// 한다(그림 vert_align 을 따르면 ~571=하단). 한글 2024 편집기 오라클.
+#[test]
+fn pic_pos_valign_ignored_in_center_cell() {
+    let mut core = load("samples/ta-pic-cell-center-pos-bottom.hwpx");
+    let img = right_cell_small_image(&mut core);
+    assert!(
+        (img.y - 362.5).abs() < 6.0,
+        "그림 pos vertAlign=Bottom 이어도 셀(Center) 중앙(362.5)에 와야 함: y={:.1} \
+         (그림 vert_align 을 따르는 버그면 ~571)",
+        img.y
+    );
+}
+
+/// TOP 셀 + 그림 pos vertAlign=Center 이어도 셀 상단(153.8)에 배치돼야 한다
+/// (그림 vert_align 을 따르면 ~362=중앙). 셀 valign 이 항상 이긴다.
+#[test]
+fn pic_pos_valign_ignored_in_top_cell() {
+    let mut core = load("samples/ta-pic-cell-top-pos-center.hwpx");
+    let img = right_cell_small_image(&mut core);
+    assert!(
+        (img.y - 153.8).abs() < 6.0,
+        "그림 pos vertAlign=Center 이어도 셀(Top) 상단(153.8)에 와야 함: y={:.1} \
+         (그림 vert_align 을 따르는 버그면 ~362)",
+        img.y
+    );
+}

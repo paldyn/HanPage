@@ -3157,26 +3157,21 @@ impl LayoutEngine {
                                         para_alignment,
                                     );
                                     // [Issue #2071] 셀 앵커 floating 그림(restrict-ON,
-                                    // TopAndBottom+Para)은 한컴이 셀 vertical_align 을
-                                    // 존중해 콘텐츠 box 안에서
-                                    // 그림 높이 기준으로 세로 정렬한다. 위 compute_object_position
-                                    // 은 그림을 항상 셀 콘텐츠 상단(top)에 앵커하므로
-                                    // Center/Bottom 셀에서 그림이 위로 떴다(항상 Top 처럼 배치).
-                                    // 한글 2024 편집기 오라클(ta-pic valign 변형 실측)로 확정:
+                                    // TopAndBottom+Para)은 한컴이 **셀 vertical_align 으로만**
+                                    // 배치하고 그림 자체 pos vert_align 은 무시한다. 위
+                                    // compute_object_position 은 그림 pos vert_align 을 따르므로
+                                    // pic≠Top 이거나 셀 valign≠Top 이면 어긋난다.
+                                    // 한글 2024 편집기 오라클(ta-pic pos/cell vertAlign 변형 실측):
+                                    //   셀=Center × pic=Top/Center/Bottom → 모두 362.5(셀 중앙)
+                                    //   셀=Top × pic=Center → 153.8(셀 상단)  [pic 무시 확인]
+                                    // 콘텐츠 box·그림 높이 기준으로 셀 valign 위치를 강제:
+                                    //   TOP    = content_top + vOffset
                                     //   CENTER = content_top + (content_h − pic_h + vOffset)/2
                                     //   BOTTOM = content_bottom − pic_h − vOffset
-                                    // (정렬 기준은 텍스트 콘텐츠 높이가 아닌 그림 높이. TOP 은
-                                    //  기존 동작과 동일해 미변경. 그림 자체 vert_align 이 Top 인
-                                    //  일반 케이스만 대상 — Center/Bottom pos 는 오라클 미검증.)
                                     let pic_y = if top_and_bottom_para
                                         && pic.common.flow_with_text
                                         && !unrestricted_take_place_cell_float
                                         && !detached_from_inline_table_flow
-                                        && matches!(
-                                            pic.common.vert_align,
-                                            crate::model::shape::VertAlign::Top
-                                        )
-                                        && !matches!(effective_valign, VerticalAlign::Top)
                                     {
                                         let v_off = hwpunit_to_px(
                                             pic.common.vertical_offset as i32,
@@ -3184,13 +3179,13 @@ impl LayoutEngine {
                                         );
                                         let content_top = content_cell_y + pad_top;
                                         match effective_valign {
+                                            VerticalAlign::Top => content_top + v_off,
                                             VerticalAlign::Center => {
                                                 content_top + (inner_height - pic_h + v_off) / 2.0
                                             }
                                             VerticalAlign::Bottom => {
                                                 content_top + inner_height - pic_h - v_off
                                             }
-                                            VerticalAlign::Top => pic_y,
                                         }
                                     } else {
                                         pic_y
