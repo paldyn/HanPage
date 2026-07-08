@@ -67,6 +67,14 @@ struct TacReceiptSealLine {
     filler_count: usize,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct TacPostF081cLine {
+    count: usize,
+    baseline_px: f64,
+    char_style_id: u32,
+    lang_index: usize,
+}
+
 fn effective_tac_segment_width_hu(para: &Paragraph, fallback_width_hu: i32) -> i32 {
     let seg_width = para.line_segs.first().map(|s| s.segment_width).unwrap_or(0);
     if seg_width > 0 {
@@ -305,6 +313,112 @@ fn push_tac_receipt_seal_line(
     );
     line_node.children.push(run_node);
     col_node.children.push(line_node);
+}
+
+fn f081c_marker_count(chars: &[char]) -> Option<usize> {
+    let count = chars.len();
+    if (1..=2).contains(&count) && chars.iter().all(|ch| *ch == '\u{F081C}') {
+        Some(count)
+    } else {
+        None
+    }
+}
+
+fn tac_receipt_post_f081c_line(
+    para: &Paragraph,
+    composed: Option<&ComposedParagraph>,
+    table: &crate::model::table::Table,
+    control_index: usize,
+    dpi: f64,
+) -> Option<TacPostF081cLine> {
+    if control_index != 0
+        || !table.common.treat_as_char
+        || para.line_segs.len() < 2
+        || !table_contains_receipt_title(table)
+    {
+        return None;
+    }
+
+    let positions = crate::document_core::find_control_text_positions(para);
+    let table_pos = *positions.get(control_index)?;
+    let text_chars: Vec<char> = para.text.chars().collect();
+    if table_pos >= text_chars.len() {
+        return None;
+    }
+    let next_control_pos = positions
+        .iter()
+        .enumerate()
+        .filter_map(|(ci, pos)| {
+            (ci != control_index && *pos > table_pos).then_some((*pos).min(text_chars.len()))
+        })
+        .min()
+        .unwrap_or(text_chars.len());
+    let marker_chars = text_chars.get(table_pos..next_control_pos)?;
+    let count = f081c_marker_count(marker_chars)?;
+
+    let comp = composed?;
+    let line = comp.lines.iter().find(|line| {
+        line.char_start == table_pos
+            && line
+                .runs
+                .iter()
+                .flat_map(|run| run.text.chars())
+                .eq(marker_chars.iter().copied())
+    })?;
+    let run = line.runs.first()?;
+    Some(TacPostF081cLine {
+        count,
+        baseline_px: hwpunit_to_px(line.baseline_distance, dpi),
+        char_style_id: run.char_style_id,
+        lang_index: run.lang_index,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_tac_post_f081c_line(
+    tree: &mut PageRenderTree,
+    col_node: &mut RenderNode,
+    section_index: usize,
+    para_index: usize,
+    table: &crate::model::table::Table,
+    table_y_start: f64,
+    col_area: &LayoutRect,
+    styles: &ResolvedStyleSet,
+    marker: TacPostF081cLine,
+    dpi: f64,
+) {
+    let style = resolved_to_text_style(styles, marker.char_style_id, marker.lang_index);
+    let font_size = if style.font_size > 0.0 {
+        style.font_size
+    } else {
+        12.0
+    };
+    let table_width_hu: u32 = table.get_column_widths().iter().sum();
+    let marker_x = col_area.x + hwpunit_to_px(table_width_hu as i32, dpi);
+    let width = (font_size * 0.45 * marker.count as f64).max(4.0);
+    let stroke_width = (font_size * 0.055).clamp(0.5, 1.0);
+    let line_y = table_y_start + marker.baseline_px - font_size * 0.26;
+    let mut line = LineNode::new(
+        marker_x,
+        line_y,
+        marker_x + width,
+        line_y,
+        LineStyle {
+            color: style.color,
+            width: stroke_width,
+            dash: StrokeDash::Solid,
+            ..Default::default()
+        },
+    );
+    line.section_index = Some(section_index);
+    line.para_index = Some(para_index);
+
+    let id = tree.next_id();
+    col_node.children.push(RenderNode::new(
+        id,
+        RenderNodeType::Line(line),
+        BoundingBox::new(marker_x, line_y - stroke_width / 2.0, width, stroke_width),
+    ));
 }
 
 fn table_has_detached_para_flow_object(table: &crate::model::table::Table) -> bool {
@@ -6127,6 +6241,17 @@ impl LayoutEngine {
                 } else {
                     None
                 };
+                let tac_post_f081c_line = if is_tac && inline_pos.is_none() {
+                    tac_receipt_post_f081c_line(
+                        para,
+                        composed.get(para_index),
+                        t,
+                        control_index,
+                        self.dpi,
+                    )
+                } else {
+                    None
+                };
                 // [#2019 v3] 빈 앵커에 매달린 Paper/Page 기준 Square 표는 본문 flow 표가
                 // 아니라 페이지 절대좌표 부동 표다. 표 자체는 선언 y 에 그리되, 뒤따르는
                 // 문단을 표 아래로 밀지 않는다.
@@ -6416,6 +6541,20 @@ impl LayoutEngine {
                             None,
                             marker_x,
                             table_y_start,
+                        );
+                    }
+                    if let Some(marker_line) = tac_post_f081c_line {
+                        push_tac_post_f081c_line(
+                            tree,
+                            col_node,
+                            page_content.section_index,
+                            para_index,
+                            t,
+                            table_y_start,
+                            col_area,
+                            styles,
+                            marker_line,
+                            self.dpi,
                         );
                     }
                     if is_first_empty_para_float_control && !is_tac {

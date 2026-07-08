@@ -78,6 +78,26 @@ fn find_first_ellipse_bbox(root: &RenderNode) -> Option<BoundingBox> {
     None
 }
 
+fn find_line_bbox_near(
+    root: &RenderNode,
+    x_range: (f64, f64),
+    y_range: (f64, f64),
+) -> Option<BoundingBox> {
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        if matches!(node.node_type, RenderNodeType::Line(_))
+            && (x_range.0..=x_range.1).contains(&node.bbox.x)
+            && (y_range.0..=y_range.1).contains(&node.bbox.y)
+        {
+            return Some(node.bbox);
+        }
+        for child in &node.children {
+            stack.push(child);
+        }
+    }
+    None
+}
+
 fn parse_svg_attr(attrs: &str, key: &str) -> Option<f64> {
     let p = attrs.find(&format!("{key}=\""))?;
     let s = p + key.len() + 2;
@@ -239,7 +259,21 @@ fn issue_2020_bokhak_receipt_seal_line_and_stamp_align() {
     let circle_cx = stamp_circle.x + stamp_circle.width / 2.0;
     let circle_cy = stamp_circle.y + stamp_circle.height / 2.0;
     assert!(
-        (text_cx - circle_cx).abs() <= 8.0 && (text_cy - circle_cy).abs() <= 8.0,
-        "날짜 옆 `㊞`은 빨간 도장 원 중심과 맞아야 함: text=({text_cx:.1},{text_cy:.1}) circle=({circle_cx:.1},{circle_cy:.1})"
+        (609.0..=616.0).contains(&stamp_circle.x)
+            && (948.0..=954.0).contains(&stamp_circle.y)
+            && (87.0..=92.0).contains(&stamp_circle.width)
+            && (82.0..=88.0).contains(&stamp_circle.height),
+        "빨간 도장 원은 한컴 PDF 기준 위치/크기를 따라야 함: circle={stamp_circle:?}"
+    );
+    assert!(
+        (15.0..=28.0).contains(&(circle_cx - text_cx)) && (text_cy - circle_cy).abs() <= 8.0,
+        "날짜 옆 `㊞`은 빨간 도장 원 중심이 아니라 한컴처럼 원 내부 왼쪽에 놓여야 함: text=({text_cx:.1},{text_cy:.1}) circle=({circle_cx:.1},{circle_cy:.1})"
+    );
+
+    let marker = find_line_bbox_near(&tree.root, (695.0, 713.0), (1028.0, 1035.0))
+        .expect("표 뒤 U+F081C 선문자 marker");
+    assert!(
+        (8.0..=16.0).contains(&marker.width) && marker.height <= 1.2,
+        "도장 오른쪽 아래 U+F081C 선문자는 짧은 검은 가로선으로 렌더되어야 함: marker={marker:?}"
     );
 }
