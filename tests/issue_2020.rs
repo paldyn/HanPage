@@ -5,6 +5,7 @@
 
 use rhwp::renderer::render_tree::{RenderNode, RenderNodeType};
 use rhwp::wasm_api::HwpDocument;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -30,6 +31,52 @@ fn has_table(root: &RenderNode, para_index: usize, control_index: usize) -> bool
     false
 }
 
+fn parse_svg_attr(attrs: &str, key: &str) -> Option<f64> {
+    let p = attrs.find(&format!("{key}=\""))?;
+    let s = p + key.len() + 2;
+    let e = attrs[s..].find('"')? + s;
+    attrs[s..e].parse::<f64>().ok()
+}
+
+fn svg_line_with_text(svg: &str, needle: &str) -> Option<(String, Vec<(f64, String)>)> {
+    let mut by_y: BTreeMap<i32, Vec<(f64, String)>> = BTreeMap::new();
+    let mut i = 0;
+    while i < svg.len() {
+        let Some(rel) = svg[i..].find("<text ") else {
+            break;
+        };
+        let abs = i + rel;
+        let after = &svg[abs + 6..];
+        let Some(close) = after.find('>') else {
+            i = abs + 6;
+            continue;
+        };
+        let attrs = &after[..close];
+        let content_start = abs + 6 + close + 1;
+        let Some(end_rel) = svg[content_start..].find("</text>") else {
+            i = abs + 6;
+            continue;
+        };
+        let content = &svg[content_start..content_start + end_rel];
+        if let (Some(x), Some(y)) = (parse_svg_attr(attrs, "x"), parse_svg_attr(attrs, "y")) {
+            let y_key = (y * 10.0).round() as i32;
+            by_y.entry(y_key)
+                .or_default()
+                .push((x, content.to_string()));
+        }
+        i = content_start + end_rel + 7;
+    }
+
+    for (_y, mut chars) in by_y {
+        chars.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        let full: String = chars.iter().map(|(_, s)| s.as_str()).collect();
+        if full.contains(needle) {
+            return Some((full, chars));
+        }
+    }
+    None
+}
+
 #[test]
 fn issue_2020_reference_documents_keep_expected_page_counts() {
     assert_eq!(
@@ -37,11 +84,13 @@ fn issue_2020_reference_documents_keep_expected_page_counts() {
         2
     );
     assert_eq!(
-        load_doc("samples/issue2020/fsc_20250813.hwp").page_count(),
+        load_doc("samples/issue2020/(250813) (보도자료) 2025년 7월중 가계대출 동향.hwp")
+            .page_count(),
         5
     );
     assert_eq!(
-        load_doc("samples/issue2020/fsc_20250813.hwpx").page_count(),
+        load_doc("samples/issue2020/(250813) (보도자료) 2025년 7월중 가계대출 동향.hwpx")
+            .page_count(),
         5
     );
     assert_eq!(load_doc("samples/복학원서.hwp").page_count(), 1);
@@ -52,8 +101,49 @@ fn issue_2020_reference_documents_keep_expected_page_counts() {
 }
 
 #[test]
+fn issue_2020_passport_corner_quote_does_not_leave_extra_gap() {
+    let doc = load_doc("samples/issue2020/passport_application_lawgo.hwp");
+    let svg = doc
+        .render_page_svg_native(0)
+        .expect("render passport application page 1 SVG");
+    let (line_text, chars) = svg_line_with_text(&svg, "2.「여권법」제9조")
+        .expect("여권신청서 1쪽 동의 문구 줄을 찾아야 함");
+
+    assert!(
+        !line_text.contains("「 "),
+        "원문에 없는 낫표 뒤 공백이 SVG 텍스트에 생기면 안 됨: {line_text}"
+    );
+
+    let open_idx = chars
+        .iter()
+        .position(|(_, text)| text == "「")
+        .expect("opening corner quote");
+    let yeo_idx = chars[open_idx + 1..]
+        .iter()
+        .position(|(_, text)| text == "여")
+        .map(|idx| idx + open_idx + 1)
+        .expect("Hangul after opening corner quote");
+    let close_idx = chars
+        .iter()
+        .position(|(_, text)| text == "」")
+        .expect("closing corner quote");
+    let je_idx = chars[close_idx + 1..]
+        .iter()
+        .position(|(_, text)| text == "제")
+        .map(|idx| idx + close_idx + 1)
+        .expect("Hangul after closing corner quote");
+
+    let open_gap = chars[yeo_idx].0 - chars[open_idx].0;
+    let close_gap = chars[je_idx].0 - chars[close_idx].0;
+    assert!(
+        open_gap <= 8.5 && close_gap <= 8.5,
+        "낫표 advance 는 반각 수준이어야 함: open_gap={open_gap:.2}, close_gap={close_gap:.2}, line={line_text}"
+    );
+}
+
+#[test]
 fn issue_2020_fsc_hwp_keeps_tail_table_on_page_two() {
-    let doc = load_doc("samples/issue2020/fsc_20250813.hwp");
+    let doc = load_doc("samples/issue2020/(250813) (보도자료) 2025년 7월중 가계대출 동향.hwp");
     let tree = doc
         .build_page_render_tree(1)
         .expect("render FSC HWP page 2");
