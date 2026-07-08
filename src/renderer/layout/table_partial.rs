@@ -905,6 +905,36 @@ impl LayoutEngine {
                                         picture_anchor_y,
                                         para_alignment,
                                     );
+                                    // [Issue #2071] 셀 vertical_align 존중 (table_layout.rs 동일 수정).
+                                    // 한컴은 셀 앵커 자리차지 그림을 콘텐츠 box 안에서 그림 높이
+                                    // 기준으로 세로 정렬한다. compute_object_position 은 항상 top
+                                    // 앵커라 Center/Bottom 셀에서 그림이 위로 뜬다.
+                                    let pic_y = if top_and_bottom_para
+                                        && pic.common.flow_with_text
+                                        && !unrestricted_take_place_cell_float
+                                        && matches!(
+                                            pic.common.vert_align,
+                                            crate::model::shape::VertAlign::Top
+                                        )
+                                        && !matches!(effective_align, VerticalAlign::Top)
+                                    {
+                                        let v_off = hwpunit_to_px(
+                                            pic.common.vertical_offset as i32,
+                                            self.dpi,
+                                        );
+                                        let content_top = cell_y + pad_top;
+                                        match effective_align {
+                                            VerticalAlign::Center => {
+                                                content_top + (inner_height - pic_h + v_off) / 2.0
+                                            }
+                                            VerticalAlign::Bottom => {
+                                                content_top + inner_height - pic_h - v_off
+                                            }
+                                            VerticalAlign::Top => pic_y,
+                                        }
+                                    } else {
+                                        pic_y
+                                    };
                                     let pic_area = LayoutRect {
                                         x: pic_x,
                                         y: pic_y,
