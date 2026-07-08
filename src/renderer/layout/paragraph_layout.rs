@@ -1,7 +1,7 @@
 //! 문단 레이아웃 (인라인 표, 문단 전체/부분, composed/raw) + 번호 매기기
 
 use super::super::composer::{
-    compose_paragraph, effective_text_for_metrics, ComposedParagraph, ComposedTextRun,
+    compose_paragraph, effective_text_for_metrics, ComposedLine, ComposedParagraph, ComposedTextRun,
 };
 use super::super::height_measurer::MeasuredTable;
 use super::super::page_layout::LayoutRect;
@@ -767,6 +767,238 @@ pub(crate) fn right_tab_block_width(
         w += estimate_text_width(effective_text_for_metrics(r), &ts);
     }
     w
+}
+
+/// [Task #2067] 정렬(양쪽/배분/나눔)·오버플로우·셀 underflow 에 따른 여분 간격 계산.
+/// 반환 = (extra_word_sp, extra_char_sp, extra_dash_sp). Task #352 dash leader 분배 포함.
+#[allow(clippy::too_many_arguments)]
+fn compute_line_extra_spacing(
+    comp_line: &ComposedLine,
+    styles: &ResolvedStyleSet,
+    alignment: Alignment,
+    in_cell: bool,
+    needs_justify: bool,
+    needs_distribute: bool,
+    has_tabs: bool,
+    suppress_cell_overflow_spacing: bool,
+    total_char_count: usize,
+    total_text_width: f64,
+    available_width: f64,
+    tab_width: f64,
+) -> (f64, f64, f64) {
+    // Task #352: 라인 내 dash leader (3+ 연속 '-') 글자 수 카운트.
+    // visible_count 까지의 chars 에서만 카운트 (후행 공백 제외).
+    let count_dash_leaders = |chars: &[char]| -> usize {
+        let mut count = 0;
+        let n = chars.len();
+        let mut i = 0;
+        while i < n {
+            if chars[i] == '-' {
+                let mut j = i;
+                while j < n && chars[j] == '-' {
+                    j += 1;
+                }
+                let run_len = j - i;
+                if run_len >= 3 {
+                    count += run_len;
+                }
+                i = j;
+            } else {
+                i += 1;
+            }
+        }
+        count
+    };
+    if needs_justify {
+        // 양쪽 정렬: 후행 공백 제외한 내부 공백에 분배
+        let all_chars: Vec<char> = comp_line.runs.iter().flat_map(|r| r.text.chars()).collect();
+        let trailing_spaces = all_chars.iter().rev().take_while(|c| **c == ' ').count();
+        let visible_count = all_chars.len() - trailing_spaces;
+        let interior_spaces = all_chars[..visible_count]
+            .iter()
+            .filter(|c| **c == ' ')
+            .count();
+        let leader_dashes = count_dash_leaders(&all_chars[..visible_count]);
+        if interior_spaces > 0 {
+            // 후행 공백 폭 계산
+            let trailing_width = if trailing_spaces > 0 {
+                if let Some(last_run) = comp_line.runs.last() {
+                    let mut ts =
+                        resolved_to_text_style(styles, last_run.char_style_id, last_run.lang_index);
+                    ts.default_tab_width = tab_width;
+                    let trailing_str: String = " ".repeat(trailing_spaces);
+                    estimate_text_width(&trailing_str, &ts)
+                } else {
+                    0.0
+                }
+            } else {
+                0.0
+            };
+            let effective_used = total_text_width - trailing_width;
+            let slack = available_width - effective_used;
+            if leader_dashes > 0 && slack > 0.0 {
+                // Task #352: 라인에 dash leader 가 있고 슬랙이 양수면
+                // dash 가 흡수 (PDF elastic leader 동작 모방). 공백·일반
+                // 글자 자연 폭 유지.
+                (0.0, 0.0, slack / leader_dashes as f64)
+            } else if suppress_cell_overflow_spacing && slack < 0.0 {
+                // 셀 내부 폭이 글자 자연 폭보다 작아도 한컴처럼 글자를 압축하지 않는다.
+                // 줄바꿈은 LINE_SEG/리플로우가 결정하고, 그린 글자는 셀 경계에서만 클리핑한다.
+                (0.0, 0.0, 0.0)
+            } else {
+                // 양쪽 정렬: 단어 간격 분배 (또는 음수 슬랙 시 압축)
+                let raw_ews = slack / interior_spaces as f64;
+                let space_base_w = estimate_text_width(
+                    " ",
+                    &resolved_to_text_style(
+                        styles,
+                        comp_line.runs[0].char_style_id,
+                        comp_line.runs[0].lang_index,
+                    ),
+                );
+                let min_ews = -(space_base_w * 0.5);
+                (raw_ews.max(min_ews), 0.0, 0.0)
+            }
+        } else if total_char_count > 1 {
+            // 양쪽 정렬이지만 공백 없음 (일본어/숫자 등):
+            let slack = available_width - total_text_width;
+            if leader_dashes > 0 && slack > 0.0 {
+                (0.0, 0.0, slack / leader_dashes as f64)
+            } else if suppress_cell_overflow_spacing && slack < 0.0 {
+                // 셀의 좁은 내부 폭은 줄바꿈 기준일 뿐, 숫자/문자를 수평 압축하지 않는다.
+                (0.0, 0.0, 0.0)
+            } else {
+                let raw = slack / total_char_count as f64;
+                let avg_char_w = total_text_width / total_char_count as f64;
+                let min_sp = -avg_char_w * 0.5;
+                (0.0, raw.max(min_sp), 0.0)
+            }
+        } else {
+            (0.0, 0.0, 0.0)
+        }
+    } else if needs_distribute && total_char_count > 1 {
+        // 배분/나눔 정렬: 모든 글자에 균등 분배
+        let raw = (available_width - total_text_width) / total_char_count as f64;
+        if suppress_cell_overflow_spacing && raw < 0.0 {
+            (0.0, 0.0, 0.0)
+        } else {
+            let avg_char_w = total_text_width / total_char_count as f64;
+            let min_sp = -avg_char_w * 0.5;
+            (0.0, raw.max(min_sp), 0.0)
+        }
+    } else if total_text_width > available_width && total_char_count > 1 && !has_tabs {
+        // 비정렬(왼쪽/오른쪽/가운데) 텍스트가 오버플로우할 때 글자 간격 압축
+        if suppress_cell_overflow_spacing {
+            (0.0, 0.0, 0.0)
+        } else {
+            let raw = (available_width - total_text_width) / total_char_count as f64;
+            let avg_char_w = total_text_width / total_char_count as f64;
+            let min_sp = -avg_char_w * 0.5;
+            (0.0, raw.max(min_sp), 0.0)
+        }
+    } else if in_cell
+        && total_char_count > 1
+        && !has_tabs
+        && alignment != Alignment::Left
+        && total_text_width < available_width
+        && total_text_width > 0.0
+        && comp_line.runs.iter().any(|r| {
+            let ts = resolved_to_text_style(styles, r.char_style_id, r.lang_index);
+            ts.letter_spacing < -0.01
+        })
+        && {
+            // 자연 폭(letter_spacing=0)이 셀 inner 폭보다 커야만 "문서가
+            // 셀에 맞추기 위해 음수 자간으로 압축했던" 케이스로 간주. 그렇지
+            // 않으면 음수 자간은 장식적 의도이므로 기존 동작(natural width
+            // 그대로, 좌우 여백 유지)을 유지한다.
+            let natural_w: f64 = comp_line
+                .runs
+                .iter()
+                .map(|r| {
+                    let mut ts = resolved_to_text_style(styles, r.char_style_id, r.lang_index);
+                    ts.default_tab_width = tab_width;
+                    ts.letter_spacing = 0.0;
+                    estimate_text_width(&r.text, &ts)
+                })
+                .sum();
+            natural_w > available_width
+        }
+    {
+        // 표 셀 내부 underflow: HWP 편집기가 자연 폭이 셀을 넘는 텍스트를
+        // 음수 자간으로 셀 폭에 맞춰 저장했으므로, 재렌더 시 우리 폰트
+        // 메트릭으로 좁게 측정되더라도 셀 폭을 채우도록 자간을 양수로 보정.
+        //
+        // narrow glyph per-char 클램프가 개입하면 선형 분배와 실제 렌더 폭이
+        // 어긋나므로 수렴 반복으로 보정한다.
+        let mut extra = (available_width - total_text_width) / total_char_count as f64;
+        for _ in 0..3 {
+            let mut measured = 0.0f64;
+            for r in &comp_line.runs {
+                let mut ts = resolved_to_text_style(styles, r.char_style_id, r.lang_index);
+                ts.default_tab_width = tab_width;
+                ts.extra_char_spacing = extra;
+                measured += estimate_text_width(&r.text, &ts);
+            }
+            let delta = available_width - measured;
+            if delta.abs() < 0.5 {
+                break;
+            }
+            extra += delta / total_char_count as f64;
+        }
+        (0.0, extra, 0.0)
+    } else {
+        (0.0, 0.0, 0.0)
+    }
+}
+
+/// [Task #2067] 조판부호 모드의 인라인 컨트롤 마커 라벨 수집 — (논리 위치, 라벨).
+fn collect_shape_marker_labels(show_ctrl: bool, para: Option<&Paragraph>) -> Vec<(usize, String)> {
+    if show_ctrl {
+        if let Some(ref pa) = para {
+            let ctrl_positions = crate::document_core::helpers::find_logical_control_positions(pa);
+            pa.controls
+                .iter()
+                .enumerate()
+                .filter_map(|(ci, ctrl)| {
+                    let pos = ctrl_positions.get(ci).copied().unwrap_or(0);
+                    match ctrl {
+                        Control::Shape(s) => Some((pos, format!("[{}]", s.shape_name()))),
+                        Control::Picture(_) => Some((pos, "[그림]".to_string())),
+                        Control::Table(t) if t.common.treat_as_char => {
+                            Some((pos, "[표]".to_string()))
+                        }
+                        Control::PageHide(_) => Some((pos, "[감추기]".to_string())),
+                        Control::PageNumberPos(_) => Some((pos, "[쪽 번호 위치]".to_string())),
+                        Control::Header(h) => {
+                            let apply = match h.apply_to {
+                                crate::model::header_footer::HeaderFooterApply::Both => "양 쪽",
+                                crate::model::header_footer::HeaderFooterApply::Even => "짝수 쪽",
+                                crate::model::header_footer::HeaderFooterApply::Odd => "홀수 쪽",
+                            };
+                            Some((pos, format!("[머리말({})]", apply)))
+                        }
+                        Control::Footer(f) => {
+                            let apply = match f.apply_to {
+                                crate::model::header_footer::HeaderFooterApply::Both => "양 쪽",
+                                crate::model::header_footer::HeaderFooterApply::Even => "짝수 쪽",
+                                crate::model::header_footer::HeaderFooterApply::Odd => "홀수 쪽",
+                            };
+                            Some((pos, format!("[꼬리말({})]", apply)))
+                        }
+                        Control::Footnote(_) => Some((pos, "[각주]".to_string())),
+                        Control::Endnote(_) => Some((pos, "[미주]".to_string())),
+                        Control::NewNumber(_) => Some((pos, "[새 번호]".to_string())),
+                        Control::Bookmark(bm) => Some((pos, format!("[책갈피:{}]", bm.name))),
+                        _ => None,
+                    }
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    }
 }
 
 impl LayoutEngine {
@@ -2488,175 +2720,20 @@ impl LayoutEngine {
             let suppress_cell_overflow_spacing =
                 cell_ctx.is_some() && total_text_width > available_width * 1.15;
 
-            // Task #352: 라인 내 dash leader (3+ 연속 '-') 글자 수 카운트.
-            // visible_count 까지의 chars 에서만 카운트 (후행 공백 제외).
-            let count_dash_leaders = |chars: &[char]| -> usize {
-                let mut count = 0;
-                let n = chars.len();
-                let mut i = 0;
-                while i < n {
-                    if chars[i] == '-' {
-                        let mut j = i;
-                        while j < n && chars[j] == '-' {
-                            j += 1;
-                        }
-                        let run_len = j - i;
-                        if run_len >= 3 {
-                            count += run_len;
-                        }
-                        i = j;
-                    } else {
-                        i += 1;
-                    }
-                }
-                count
-            };
-
-            let (extra_word_sp, extra_char_sp, extra_dash_sp) = if needs_justify {
-                // 양쪽 정렬: 후행 공백 제외한 내부 공백에 분배
-                let all_chars: Vec<char> =
-                    comp_line.runs.iter().flat_map(|r| r.text.chars()).collect();
-                let trailing_spaces = all_chars.iter().rev().take_while(|c| **c == ' ').count();
-                let visible_count = all_chars.len() - trailing_spaces;
-                let interior_spaces = all_chars[..visible_count]
-                    .iter()
-                    .filter(|c| **c == ' ')
-                    .count();
-                let leader_dashes = count_dash_leaders(&all_chars[..visible_count]);
-                if interior_spaces > 0 {
-                    // 후행 공백 폭 계산
-                    let trailing_width = if trailing_spaces > 0 {
-                        if let Some(last_run) = comp_line.runs.last() {
-                            let mut ts = resolved_to_text_style(
-                                styles,
-                                last_run.char_style_id,
-                                last_run.lang_index,
-                            );
-                            ts.default_tab_width = tab_width;
-                            let trailing_str: String = " ".repeat(trailing_spaces);
-                            estimate_text_width(&trailing_str, &ts)
-                        } else {
-                            0.0
-                        }
-                    } else {
-                        0.0
-                    };
-                    let effective_used = total_text_width - trailing_width;
-                    let slack = available_width - effective_used;
-                    if leader_dashes > 0 && slack > 0.0 {
-                        // Task #352: 라인에 dash leader 가 있고 슬랙이 양수면
-                        // dash 가 흡수 (PDF elastic leader 동작 모방). 공백·일반
-                        // 글자 자연 폭 유지.
-                        (0.0, 0.0, slack / leader_dashes as f64)
-                    } else if suppress_cell_overflow_spacing && slack < 0.0 {
-                        // 셀 내부 폭이 글자 자연 폭보다 작아도 한컴처럼 글자를 압축하지 않는다.
-                        // 줄바꿈은 LINE_SEG/리플로우가 결정하고, 그린 글자는 셀 경계에서만 클리핑한다.
-                        (0.0, 0.0, 0.0)
-                    } else {
-                        // 양쪽 정렬: 단어 간격 분배 (또는 음수 슬랙 시 압축)
-                        let raw_ews = slack / interior_spaces as f64;
-                        let space_base_w = estimate_text_width(
-                            " ",
-                            &resolved_to_text_style(
-                                styles,
-                                comp_line.runs[0].char_style_id,
-                                comp_line.runs[0].lang_index,
-                            ),
-                        );
-                        let min_ews = -(space_base_w * 0.5);
-                        (raw_ews.max(min_ews), 0.0, 0.0)
-                    }
-                } else if total_char_count > 1 {
-                    // 양쪽 정렬이지만 공백 없음 (일본어/숫자 등):
-                    let slack = available_width - total_text_width;
-                    if leader_dashes > 0 && slack > 0.0 {
-                        (0.0, 0.0, slack / leader_dashes as f64)
-                    } else if suppress_cell_overflow_spacing && slack < 0.0 {
-                        // 셀의 좁은 내부 폭은 줄바꿈 기준일 뿐, 숫자/문자를 수평 압축하지 않는다.
-                        (0.0, 0.0, 0.0)
-                    } else {
-                        let raw = slack / total_char_count as f64;
-                        let avg_char_w = total_text_width / total_char_count as f64;
-                        let min_sp = -avg_char_w * 0.5;
-                        (0.0, raw.max(min_sp), 0.0)
-                    }
-                } else {
-                    (0.0, 0.0, 0.0)
-                }
-            } else if needs_distribute && total_char_count > 1 {
-                // 배분/나눔 정렬: 모든 글자에 균등 분배
-                let raw = (available_width - total_text_width) / total_char_count as f64;
-                if suppress_cell_overflow_spacing && raw < 0.0 {
-                    (0.0, 0.0, 0.0)
-                } else {
-                    let avg_char_w = total_text_width / total_char_count as f64;
-                    let min_sp = -avg_char_w * 0.5;
-                    (0.0, raw.max(min_sp), 0.0)
-                }
-            } else if total_text_width > available_width && total_char_count > 1 && !has_tabs {
-                // 비정렬(왼쪽/오른쪽/가운데) 텍스트가 오버플로우할 때 글자 간격 압축
-                if suppress_cell_overflow_spacing {
-                    (0.0, 0.0, 0.0)
-                } else {
-                    let raw = (available_width - total_text_width) / total_char_count as f64;
-                    let avg_char_w = total_text_width / total_char_count as f64;
-                    let min_sp = -avg_char_w * 0.5;
-                    (0.0, raw.max(min_sp), 0.0)
-                }
-            } else if cell_ctx.is_some()
-                && total_char_count > 1
-                && !has_tabs
-                && alignment != Alignment::Left
-                && total_text_width < available_width
-                && total_text_width > 0.0
-                && comp_line.runs.iter().any(|r| {
-                    let ts = resolved_to_text_style(styles, r.char_style_id, r.lang_index);
-                    ts.letter_spacing < -0.01
-                })
-                && {
-                    // 자연 폭(letter_spacing=0)이 셀 inner 폭보다 커야만 "문서가
-                    // 셀에 맞추기 위해 음수 자간으로 압축했던" 케이스로 간주. 그렇지
-                    // 않으면 음수 자간은 장식적 의도이므로 기존 동작(natural width
-                    // 그대로, 좌우 여백 유지)을 유지한다.
-                    let natural_w: f64 = comp_line
-                        .runs
-                        .iter()
-                        .map(|r| {
-                            let mut ts =
-                                resolved_to_text_style(styles, r.char_style_id, r.lang_index);
-                            ts.default_tab_width = tab_width;
-                            ts.letter_spacing = 0.0;
-                            estimate_text_width(&r.text, &ts)
-                        })
-                        .sum();
-                    natural_w > available_width
-                }
-            {
-                // 표 셀 내부 underflow: HWP 편집기가 자연 폭이 셀을 넘는 텍스트를
-                // 음수 자간으로 셀 폭에 맞춰 저장했으므로, 재렌더 시 우리 폰트
-                // 메트릭으로 좁게 측정되더라도 셀 폭을 채우도록 자간을 양수로 보정.
-                //
-                // narrow glyph per-char 클램프가 개입하면 선형 분배와 실제 렌더 폭이
-                // 어긋나므로 수렴 반복으로 보정한다.
-                let mut extra = (available_width - total_text_width) / total_char_count as f64;
-                for _ in 0..3 {
-                    let mut measured = 0.0f64;
-                    for r in &comp_line.runs {
-                        let mut ts = resolved_to_text_style(styles, r.char_style_id, r.lang_index);
-                        ts.default_tab_width = tab_width;
-                        ts.extra_char_spacing = extra;
-                        measured += estimate_text_width(&r.text, &ts);
-                    }
-                    let delta = available_width - measured;
-                    if delta.abs() < 0.5 {
-                        break;
-                    }
-                    extra += delta / total_char_count as f64;
-                }
-                (0.0, extra, 0.0)
-            } else {
-                (0.0, 0.0, 0.0)
-            };
+            let (extra_word_sp, extra_char_sp, extra_dash_sp) = compute_line_extra_spacing(
+                comp_line,
+                styles,
+                alignment,
+                cell_ctx.is_some(),
+                needs_justify,
+                needs_distribute,
+                has_tabs,
+                suppress_cell_overflow_spacing,
+                total_char_count,
+                total_text_width,
+                available_width,
+                tab_width,
+            );
 
             let line_plain_text: String = comp_line.runs.iter().map(|r| r.text.as_str()).collect();
             let is_answer_sheet_number_label =
@@ -2812,69 +2889,7 @@ impl LayoutEngine {
 
             // 조판부호 모드: 인라인 도형 마커 위치 수집
             let show_ctrl = self.show_control_codes.get();
-            let shape_markers: Vec<(usize, String)> = if show_ctrl {
-                if let Some(ref pa) = para {
-                    let ctrl_positions =
-                        crate::document_core::helpers::find_logical_control_positions(pa);
-                    pa.controls
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(ci, ctrl)| {
-                            let pos = ctrl_positions.get(ci).copied().unwrap_or(0);
-                            match ctrl {
-                                Control::Shape(s) => Some((pos, format!("[{}]", s.shape_name()))),
-                                Control::Picture(_) => Some((pos, "[그림]".to_string())),
-                                Control::Table(t) if t.common.treat_as_char => {
-                                    Some((pos, "[표]".to_string()))
-                                }
-                                Control::PageHide(_) => Some((pos, "[감추기]".to_string())),
-                                Control::PageNumberPos(_) => {
-                                    Some((pos, "[쪽 번호 위치]".to_string()))
-                                }
-                                Control::Header(h) => {
-                                    let apply = match h.apply_to {
-                                        crate::model::header_footer::HeaderFooterApply::Both => {
-                                            "양 쪽"
-                                        }
-                                        crate::model::header_footer::HeaderFooterApply::Even => {
-                                            "짝수 쪽"
-                                        }
-                                        crate::model::header_footer::HeaderFooterApply::Odd => {
-                                            "홀수 쪽"
-                                        }
-                                    };
-                                    Some((pos, format!("[머리말({})]", apply)))
-                                }
-                                Control::Footer(f) => {
-                                    let apply = match f.apply_to {
-                                        crate::model::header_footer::HeaderFooterApply::Both => {
-                                            "양 쪽"
-                                        }
-                                        crate::model::header_footer::HeaderFooterApply::Even => {
-                                            "짝수 쪽"
-                                        }
-                                        crate::model::header_footer::HeaderFooterApply::Odd => {
-                                            "홀수 쪽"
-                                        }
-                                    };
-                                    Some((pos, format!("[꼬리말({})]", apply)))
-                                }
-                                Control::Footnote(_) => Some((pos, "[각주]".to_string())),
-                                Control::Endnote(_) => Some((pos, "[미주]".to_string())),
-                                Control::NewNumber(_) => Some((pos, "[새 번호]".to_string())),
-                                Control::Bookmark(bm) => {
-                                    Some((pos, format!("[책갈피:{}]", bm.name)))
-                                }
-                                _ => None,
-                            }
-                        })
-                        .collect()
-                } else {
-                    Vec::new()
-                }
-            } else {
-                Vec::new()
-            };
+            let shape_markers: Vec<(usize, String)> = collect_shape_marker_labels(show_ctrl, para);
 
             // 각주 마커 위치 수집
             let fn_positions: &[(usize, u16, usize)] = &composed.footnote_positions;
