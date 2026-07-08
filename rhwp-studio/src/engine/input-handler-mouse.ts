@@ -77,6 +77,34 @@ function selectTableObject(this: any, tableRef: { sec: number; ppi: number; ci: 
   this.textarea.focus();
 }
 
+function selectOleObjectFromHit(this: any, oleHit: any): void {
+  hideProtectedCellHover(this);
+  this.cursor.clearSelection();
+  this.cursor.exitCellSelectionMode();
+  this.cellSelectionRenderer?.clear();
+  this.exitPictureObjectSelectionIfNeeded();
+  this.cursor.enterPictureObjectSelectionDirect(
+    oleHit.sec,
+    oleHit.ppi,
+    oleHit.ci,
+    'ole',
+    oleHit.cellIdx,
+    oleHit.cellParaIdx,
+    oleHit.headerFooter,
+    oleHit.outerTableControlIdx,
+    oleHit.cellPath,
+    oleHit.noteRef,
+  );
+  this.active = true;
+  this.caret.hide();
+  this.fieldMarker.hide();
+  this.selectionRenderer.clear();
+  this.renderPictureObjectSelection();
+  this.eventBus.emit('picture-object-selection-changed', true);
+  this.eventBus.emit('command-state-changed');
+  this.textarea.focus();
+}
+
 function selectProtectedCell(this: any, hit: any): void {
   hideProtectedCellHover(this);
   this.cursor.clearSelection();
@@ -890,6 +918,12 @@ export function onClick(this: any, e: MouseEvent): void {
         }
       }
     } catch { /* 무시 */ }
+  }
+
+  const earlyOleHit = this.findPictureAtClick(pageIdx, pageX, pageY);
+  if (earlyOleHit?.type === 'ole') {
+    selectOleObjectFromHit.call(this, earlyOleHit);
+    return;
   }
 
   try {
