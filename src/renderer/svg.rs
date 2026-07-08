@@ -40,7 +40,7 @@ fn expand_pua_old_hangul(text: &str) -> String {
     }
     out
 }
-use super::layout::{compute_char_positions, split_into_clusters};
+use super::layout::{compute_char_positions, is_halfwidth_cjk_quote, split_into_clusters};
 use crate::model::control::FormType;
 use crate::model::style::{ImageFillMode, UnderlineType};
 use base64::Engine;
@@ -2667,10 +2667,19 @@ impl Renderer for SvgRenderer {
         let text = &expand_pua_old_hangul(text);
 
         let color = color_to_svg(style.color);
-        let font_size = if style.font_size > 0.0 {
+        let base_font_size = if style.font_size > 0.0 {
             style.font_size
         } else {
             12.0
+        };
+        // 위첨자/아래첨자는 레이아웃 advance 는 원래 run 기준으로 유지하고,
+        // 실제 SVG glyph 크기와 baseline 만 Canvas/HTML 출력과 동일하게 조정한다.
+        let (font_size, y) = if style.superscript {
+            (base_font_size * 0.7, y - base_font_size * 0.3)
+        } else if style.subscript {
+            (base_font_size * 0.7, y + base_font_size * 0.15)
+        } else {
+            (base_font_size, y)
         };
         let font_family = if style.font_family.is_empty() {
             "sans-serif".to_string()
@@ -3213,7 +3222,10 @@ fn color_to_svg(color: u32) -> String {
 }
 
 fn svg_text_length_attrs(cluster_str: &str, cluster_advance: f64, scale_x: f64) -> String {
-    if !cluster_str.chars().any(|ch| ch.is_ascii_alphanumeric()) {
+    if !cluster_str
+        .chars()
+        .any(|ch| ch.is_ascii_alphanumeric() || is_halfwidth_cjk_quote(ch))
+    {
         return String::new();
     }
     if !cluster_advance.is_finite() || cluster_advance <= 0.0 {
