@@ -251,6 +251,10 @@ PR 작성자가 검증 PDF 를 첨부하지 않았지만 PR 안에 기준으로 
 HWP 2020 MCP 의 `convert_local_document` 도구를 사용해 PDF 를 먼저 산출한다. 이 절차는 PDF 업로드 요청보다
 우선한다.
 
+MCP 클라이언트 설치, VS Code `hwp2020Convert` 등록, `npx --package=file:...` help 확인, tool 인자 세부값은
+`mydocs/manual/mcp_hwp2020Convert_usage.md` 를 함께 참고한다. 이 절은 PR review 에서의 저장 위치, 검증
+증거 보존, review 문서 기록 기준을 정의한다.
+
 최종 저장 위치:
 
 ```text
@@ -290,9 +294,9 @@ MCP tool 인자 예:
 
 ```json
 {
-  "input_path": "/Users/tsjang/rhwp/samples/example.hwp",
+  "input_path": "/Users/me/rhwp/samples/example.hwp",
   "target": "pdf",
-  "output_dir": "/Users/tsjang/rhwp/pdf",
+  "output_dir": "/Users/me/rhwp/pdf",
   "output_filename": "example-2020.pdf",
   "timeout_seconds": 240
 }
