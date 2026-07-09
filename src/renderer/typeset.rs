@@ -5592,39 +5592,25 @@ impl TypesetEngine {
                 st.advance_column_or_new_page();
                 prev_en_bottom_vpos = None;
             }
-            let large_between_split_head_render_overflows = if !default_between_notes_gap
-                && compact_endnote_separator_profile
-                && has_visible_endnote_separator
-                && ep_idx > 0
-                && st.col_count > 1
-                && st.current_height > available * 0.90
-                && !st.current_items.is_empty()
-                && !local_vpos_rewind
-                && !internal_vpos_rewind
-                && fmt.line_heights.len() > 1
-                && para_has_visible_text_or_equation(en_para)
-                && endnote_has_visible_payload
-            {
-                split_endnote_to_fit
-                    .and_then(|split_line| {
-                        let predicted_y = self.predict_endnote_render_y(
-                            st,
-                            paragraphs,
-                            styles,
-                            available,
-                            en_col_w,
-                            en_para_idx,
-                        )?;
-                        let split_head_h = fmt.line_advances_sum(0..split_line);
-                        Some(
-                            predicted_y + split_head_h
-                                > available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 1.0,
-                        )
-                    })
-                    .unwrap_or(false)
-            } else {
-                false
-            };
+            let large_between_split_head_render_overflows = self
+                .judge_large_between_split_head_render_overflows(
+                    st,
+                    &fmt,
+                    en_para,
+                    paragraphs,
+                    styles,
+                    split_endnote_to_fit,
+                    available,
+                    en_col_w,
+                    en_para_idx,
+                    ep_idx,
+                    default_between_notes_gap,
+                    compact_endnote_separator_profile,
+                    has_visible_endnote_separator,
+                    local_vpos_rewind,
+                    internal_vpos_rewind,
+                    endnote_has_visible_payload,
+                );
             if large_between_split_head_render_overflows {
                 // pagination 기준으로는 split head가 들어가도, 저장 vpos를 적용한
                 // 실제 render 위치가 frame을 넘으면 한컴처럼 문단 전체를 다음 단에서
@@ -5791,70 +5777,24 @@ impl TypesetEngine {
                     (Some(prev), Some(_), Some(bottom))
                         if hwpunit_to_px((bottom - prev).max(0), self.dpi) > h4f + 100.0
                 );
-            let large_between_tail_render_overflows = if !default_between_notes_gap
-                && compact_endnote_separator_profile
-                && (has_visible_endnote_separator || !large_separator_block)
-                && ep_idx > 0
-                && st.col_count > 1
-                && st.current_column + 1 < st.col_count
-                && st.current_height > available * 0.85
-                && !st.current_items.is_empty()
-                && !local_vpos_rewind
-                && !internal_vpos_rewind
-                && split_endnote_to_fit.is_none()
-                && !visible_compact_sequential_tail_fits_current_column
-                && para_has_visible_text(en_para)
-            {
-                let prev_equation_only_tail = st
-                    .current_items
-                    .iter()
-                    .rev()
-                    .filter_map(page_item_para_index)
-                    .find_map(|pi| {
-                        paragraph_by_global_index(paragraphs, &st.endnote_paragraphs, pi)
-                    })
-                    .map(|prev_para| {
-                        !para_has_visible_text(prev_para)
-                            && prev_para.controls.iter().any(|ctrl| {
-                                matches!(ctrl, Control::Equation(eq) if eq.common.treat_as_char)
-                            })
-                    })
-                    .unwrap_or(false);
-                st.current_items
-                    .iter()
-                    .filter_map(page_item_para_index)
-                    .find_map(|pi| {
-                        paragraph_by_global_index(paragraphs, &st.endnote_paragraphs, pi)
-                            .and_then(|p| p.line_segs.first())
-                            .map(|s| s.vertical_pos)
-                    })
-                    .and_then(|base_vpos| {
-                        this_first_offset.map(|first_vpos| {
-                            let predicted_y =
-                                hwpunit_to_px((first_vpos - base_vpos).max(0), self.dpi)
-                                    + st.current_start_height;
-                            let rendered_h = fmt.line_advances_sum(0..fmt.line_heights.len());
-                            // TAC 그림/수식으로 lazy base가 깊게 보정된 단에서는
-                            // 저장 vpos 직접 예측이 실제 렌더 y보다 낮게 나올 수 있다.
-                            // 직전 수식-only 문단 뒤의 한 줄짜리 풀이 tail은 남은
-                            // 공간이 50px 이하이면 한컴처럼 다음 단에서 이어간다.
-                            let near_bottom_tail = prev_equation_only_tail
-                                && fmt.line_heights.len() == 1
-                                && para_has_visible_text(en_para)
-                                && !para_is_treat_as_char_picture_only(en_para)
-                                && !para_has_treat_as_char_picture_or_shape(en_para)
-                                && st.current_height > available * 0.90
-                                && st.current_height + rendered_h
-                                    > available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX;
-                            predicted_y + rendered_h
-                                > available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 1.0
-                                || near_bottom_tail
-                        })
-                    })
-                    .unwrap_or(false)
-            } else {
-                false
-            };
+            let large_between_tail_render_overflows = self
+                .judge_large_between_tail_render_overflows(
+                    st,
+                    paragraphs,
+                    &fmt,
+                    en_para,
+                    this_first_offset,
+                    split_endnote_to_fit,
+                    available,
+                    ep_idx,
+                    default_between_notes_gap,
+                    compact_endnote_separator_profile,
+                    has_visible_endnote_separator,
+                    local_vpos_rewind,
+                    internal_vpos_rewind,
+                    large_separator_block,
+                    visible_compact_sequential_tail_fits_current_column,
+                );
             let large_between_tail_before_rewind_picture = !default_between_notes_gap
                 && compact_endnote_separator_profile
                 && (has_visible_endnote_separator || !large_separator_block)
@@ -6162,75 +6102,27 @@ impl TypesetEngine {
                             .unwrap_or(false)
                     })
                     .unwrap_or(false);
-            let large_between_last_column_visual_split = if !default_between_notes_gap
-                && compact_endnote_separator_profile
-                && has_visible_endnote_separator
-                && visible_large_between_notes_gap
-                && !compact_between_notes_gap
-                && !zero_endnote_spacing_profile
-                && ep_idx > 0
-                && st.col_count > 1
-                && st.current_column + 1 >= st.col_count
-                && (st.current_height > available * 0.85
-                    || st.current_height + en_fit > available - 60.0)
-                && st.current_height < available
-                && (st.current_height + en_fit > available || fmt.line_heights.len() >= 3)
-                && !st.current_items.is_empty()
-                && !local_vpos_rewind
-                && !internal_vpos_rewind
-                && fmt.line_heights.len() > 1
-                && para_has_visible_text_or_equation(en_para)
-            {
-                let predicted_y = self.predict_endnote_render_y(
+            let large_between_last_column_visual_split = self
+                .judge_large_between_last_column_visual_split(
                     st,
+                    &fmt,
+                    en_para,
                     paragraphs,
                     styles,
                     available,
                     en_col_w,
+                    en_fit,
                     en_para_idx,
+                    ep_idx,
+                    default_between_notes_gap,
+                    compact_endnote_separator_profile,
+                    has_visible_endnote_separator,
+                    visible_large_between_notes_gap,
+                    compact_between_notes_gap,
+                    zero_endnote_spacing_profile,
+                    local_vpos_rewind,
+                    internal_vpos_rewind,
                 );
-
-                predicted_y.and_then(|y| {
-                    if y >= available {
-                        return None;
-                    }
-                    // 첫 줄 자체가 frame 안쪽에 들어오지 못하면 visual split으로
-                    // 단 하단에 남기지 않는다. 큰 미주 사이 문서에서는 이 줄들을
-                    // 남기면 다음 쪽의 문항 시작점이 연쇄적으로 위로 당겨진다.
-                    if y + fmt.line_advance(0)
-                        > available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 2.0
-                    {
-                        return None;
-                    }
-                    // 큰 미주 사이 문서의 마지막 단은 렌더 vpos가 직전
-                    // 문단들을 위로 당긴 뒤 남는 visual tail 공간을 사용한다.
-                    // pagination 누적 높이만 보면 부족하지만, 한컴/PDF는 다음
-                    // 문단의 마지막 1줄만 이월시키는 패턴이 있어 이 경로에만
-                    // 단 하단 visual 한도를 넓힌다.
-                    let flow_overflows = st.current_height + en_fit > available;
-                    let visual_tail_limit = if flow_overflows {
-                        available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 46.0
-                    } else {
-                        // flow 누적 높이는 들어가지만 저장 vpos 기반 render
-                        // 마지막 줄이 frame 하단에 걸리는 큰 미주 사이 tail은
-                        // 한컴처럼 마지막 줄부터 다음 쪽으로 넘긴다.
-                        available + 1.0
-                    };
-                    let mut consumed = 0.0;
-                    let mut split = 0usize;
-                    for line_idx in 0..fmt.line_heights.len() {
-                        let next = consumed + fmt.line_advance(line_idx);
-                        if y + next > visual_tail_limit {
-                            break;
-                        }
-                        consumed = next;
-                        split = line_idx + 1;
-                    }
-                    (split > 0 && split < fmt.line_heights.len()).then_some(split)
-                })
-            } else {
-                None
-            };
             let large_between_last_column_flow_tail_split = if !default_between_notes_gap
                 && compact_endnote_separator_profile
                 && has_visible_endnote_separator
@@ -6463,58 +6355,26 @@ impl TypesetEngine {
                 && st.current_height + en_fit
                     <= available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX
                 && endnote_has_visible_payload;
-            let large_between_last_column_question_title_tail_fits = !default_between_notes_gap
-                && compact_endnote_separator_profile
-                && has_visible_endnote_separator
-                && visible_large_between_notes_gap
-                && !compact_between_notes_gap
-                && ep_idx == 0
-                && emitted_endnote_count > 0
-                && en_ref.number > 0
-                && st.current_column + 1 >= st.col_count
-                && fmt.line_heights.len() == 1
-                && st.current_height > available * 0.90
-                && st.current_height < available
-                && large_between_question_title_head_inside_frame
-                && st.current_height + fmt.line_advance(0)
-                    <= available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 2.0
-                && new_endnote_between_notes_px
-                    .map(|gap| {
-                        // 마지막 단에서 새 미주 제목만 남길 때도
-                        // `미주 사이`는 제목 앞에 소비된다. gap 없이
-                        // 제목 한 줄만 fit으로 보면 20mm 문서에서 다음
-                        // 쪽으로 가야 할 제목이 현재 쪽 하단에 고아로 남는다.
-                        st.current_height + gap + fmt.line_advance(0)
-                            <= available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 2.0
-                    })
-                    .unwrap_or(true)
-                && (compact_between_notes_gap
-                    || new_endnote_between_notes_px
-                        .map(|gap| {
-                            let head_group_h: f64 = en_ctrl
-                                .paragraphs
-                                .iter()
-                                .take(3)
-                                .map(|head_para| {
-                                    let head_comp =
-                                        crate::renderer::composer::compose_paragraph(head_para);
-                                    self.format_paragraph(
-                                        head_para,
-                                        Some(&head_comp),
-                                        &styles,
-                                        Some(en_col_w),
-                                    )
-                                    .total_height
-                                })
-                                .sum();
-                            // 제목과 첫 풀이 일부만 단 하단에 고아로 남기지
-                            // 않도록, 20mm급 large gap에서는 제목+본문 head
-                            // group이 함께 들어갈 때만 마지막 단 tail을 허용한다.
-                            st.current_height + gap + head_group_h
-                                <= available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 2.0
-                        })
-                        .unwrap_or(true))
-                && endnote_has_visible_payload;
+            let large_between_last_column_question_title_tail_fits = self
+                .judge_large_between_last_column_question_title_tail_fits(
+                    st,
+                    &fmt,
+                    en_ctrl,
+                    en_ref,
+                    styles,
+                    available,
+                    en_col_w,
+                    ep_idx,
+                    emitted_endnote_count,
+                    new_endnote_between_notes_px,
+                    large_between_question_title_head_inside_frame,
+                    endnote_has_visible_payload,
+                    default_between_notes_gap,
+                    compact_endnote_separator_profile,
+                    has_visible_endnote_separator,
+                    visible_large_between_notes_gap,
+                    compact_between_notes_gap,
+                );
             let large_between_last_column_render_title_tail_fits = !default_between_notes_gap
                 && compact_endnote_separator_profile
                 && has_visible_endnote_separator
@@ -6643,46 +6503,26 @@ impl TypesetEngine {
                             <= available
                                 + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX)
                     && endnote_has_visible_payload;
-            let zero_question_intro_tail_before_rewind_fits = compact_endnote_separator_profile
-                && zero_endnote_spacing_profile
-                && has_visible_endnote_separator
-                && (st.current_column + 1 < st.col_count || ep_idx == 1)
-                && matches!(ep_idx, 1 | 2)
-                && en_ref.number > 0
-                && fmt.line_heights.len() == 1
-                && !local_vpos_rewind
-                && !internal_vpos_rewind
-                && !para_is_treat_as_char_picture_only(en_para)
-                && para_has_visible_text_or_equation(en_para)
-                && en_ctrl
-                    .paragraphs
-                    .first()
-                    .is_some_and(|title_para| title_para.line_segs.len() == 1)
-                && later_endnote_vpos_rewinds_after_current
-                && st.current_height > available * 0.95
-                && st.current_height + fmt.line_advance(0)
-                    <= available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 28.0
-                && if st.current_column + 1 >= st.col_count {
-                    ep_idx == 1
-                        && fmt.line_advance(0) <= 24.0
-                        && line_has_visible_text_or_tac_equation(en_para, &composed, 0)
-                } else if ep_idx == 1 {
-                    en_ctrl.paragraphs.get(ep_idx + 1).is_some_and(|next_para| {
-                        let next_comp = crate::renderer::composer::compose_paragraph(next_para);
-                        let next_fmt = self.format_paragraph(
-                            next_para,
-                            Some(&next_comp),
-                            &styles,
-                            Some(en_col_w),
-                        );
-                        next_fmt.line_heights.len() == 1
-                            && next_fmt.line_advance(0) <= 24.0
-                            && line_has_visible_text_or_tac_equation(next_para, &next_comp, 0)
-                    })
-                } else {
-                    fmt.line_advance(0) <= 24.0
-                        && line_has_visible_text_or_tac_equation(en_para, &composed, 0)
-                };
+            let zero_question_intro_tail_before_rewind_fits = self
+                .judge_zero_question_intro_tail_before_rewind_fits(
+                    st,
+                    paragraphs,
+                    &fmt,
+                    en_para,
+                    en_ctrl,
+                    en_ref,
+                    &composed,
+                    styles,
+                    available,
+                    en_col_w,
+                    ep_idx,
+                    later_endnote_vpos_rewinds_after_current,
+                    zero_endnote_spacing_profile,
+                    compact_endnote_separator_profile,
+                    has_visible_endnote_separator,
+                    local_vpos_rewind,
+                    internal_vpos_rewind,
+                );
             let zero_between_large_separator_tail_group_fits = compact_endnote_separator_profile
                 && has_visible_endnote_separator
                 && large_separator_block
@@ -6967,45 +6807,26 @@ impl TypesetEngine {
                 && fmt.line_heights.len() <= 2
                 && para_has_visible_text_or_equation(en_para)
                 && endnote_has_visible_payload;
-            let large_between_title_tail_body_advances_page = if !default_between_notes_gap
-                && compact_endnote_separator_profile
-                && has_visible_endnote_separator
-                && ep_idx == 1
-                && en_ref.number > 0
-                && st.current_column + 1 >= st.col_count
-                && st.current_height > available * 0.90
-                && !st.current_items.is_empty()
-                && !local_vpos_rewind
-                && !internal_vpos_rewind
-                && en_ctrl
-                    .paragraphs
-                    .first()
-                    .is_some_and(|title_para| title_para.line_segs.len() == 1)
-                && fmt.line_heights.len() <= 2
-                && para_has_visible_text_or_equation(en_para)
-                && endnote_has_visible_payload
-            {
-                let predicted_y = self.predict_endnote_render_y(
+            let large_between_title_tail_body_advances_page = self
+                .judge_large_between_title_tail_body_advances_page(
                     st,
+                    &fmt,
+                    en_para,
+                    en_ctrl,
+                    en_ref,
                     paragraphs,
                     styles,
                     available,
                     en_col_w,
                     en_para_idx,
+                    ep_idx,
+                    default_between_notes_gap,
+                    compact_endnote_separator_profile,
+                    has_visible_endnote_separator,
+                    local_vpos_rewind,
+                    internal_vpos_rewind,
+                    endnote_has_visible_payload,
                 );
-
-                predicted_y
-                    .map(|y| {
-                        // 큰 미주 사이 문서의 마지막 단에서는 새 문항 제목
-                        // 한 줄만 frame 안쪽 tail로 남기고, 첫 풀이 수식/본문이
-                        // render vpos 기준으로 frame을 넘으면 다음 쪽에서 시작한다.
-                        y + fmt.line_advance(0)
-                            > available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 1.0
-                    })
-                    .unwrap_or(false)
-            } else {
-                false
-            };
             let large_between_last_column_new_note_tail = !default_between_notes_gap
                 && compact_endnote_separator_profile
                 && has_visible_endnote_separator
@@ -7536,128 +7357,51 @@ impl TypesetEngine {
                             > available - ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX
                     })
                     .unwrap_or(false);
-            let visible_separator_vpos_head_group_outside = compact_endnote_separator_profile
-                && compact_between_notes_gap
-                && default_between_notes_gap
-                && has_visible_endnote_separator
-                && ep_idx == 0
-                && emitted_endnote_count > 0
-                && st.current_column + 1 < st.col_count
-                && st.current_height > available * 0.75
-                && !st.current_items.is_empty()
-                && st
-                    .current_items
-                    .iter()
-                    .filter_map(page_item_para_index)
-                    .find_map(|pi| {
-                        paragraph_by_global_index(paragraphs, &st.endnote_paragraphs, pi)
-                            .and_then(|p| p.line_segs.first())
-                            .map(|s| s.vertical_pos)
-                    })
-                    .and_then(|base_vpos| {
-                        let first_vpos = this_first_offset?;
-                        let first_para_vpos = en_ctrl.paragraphs.first()?.line_segs.first()?;
-                        let group_bottom = en_ctrl
-                            .paragraphs
-                            .iter()
-                            .take(3)
-                            .flat_map(|p| p.line_segs.iter())
-                            .map(|s| {
-                                s.vertical_pos + s.line_height + s.line_spacing + endnote_start
-                            })
-                            .max()?;
-                        let group_first = first_para_vpos.vertical_pos + endnote_start;
-                        let group_h = hwpunit_to_px((group_bottom - group_first).max(0), self.dpi);
-                        let predicted_y = hwpunit_to_px((first_vpos - base_vpos).max(0), self.dpi);
-                        Some(
-                            predicted_y > available * 0.85
-                                && predicted_y + group_h
-                                    > available - ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX,
-                        )
-                    })
-                    .unwrap_or(false);
-            let default_between_large_below_head_group_outside = compact_endnote_separator_profile
-                && default_between_notes_gap
-                && has_visible_endnote_separator
-                && ep_idx == 0
-                && emitted_endnote_count > 0
-                && st.current_column + 1 < st.col_count
-                && st.current_height > available * 0.90
-                && endnote_shape
-                    .map(|shape| {
-                        endnote_separator_below_margin(shape) as i32
-                            > ENDNOTE_BETWEEN_NOTES_BASE_FLOW_HU
-                    })
-                    .unwrap_or(false)
-                && en_ctrl
-                    .paragraphs
-                    .first()
-                    .is_some_and(|title_para| title_para.line_segs.len() == 1)
-                && en_ctrl.paragraphs.get(1).is_some_and(para_has_visible_text)
-                && en_ctrl.paragraphs.get(2).is_some_and(|tail_para| {
-                    !para_has_visible_text(tail_para)
-                        && para_has_visible_text_or_equation(tail_para)
-                })
-                && {
-                    let head_group_h: f64 = en_ctrl
-                        .paragraphs
-                        .iter()
-                        .take(3)
-                        .map(|head_para| {
-                            let head_comp = crate::renderer::composer::compose_paragraph(head_para);
-                            self.format_paragraph(
-                                head_para,
-                                Some(&head_comp),
-                                &styles,
-                                Some(en_col_w),
-                            )
-                            .total_height
-                        })
-                        .sum();
-                    st.current_height + head_group_h
-                        > available - ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX
-                };
-            let large_between_last_column_vpos_head_group_outside = !default_between_notes_gap
-                && compact_endnote_separator_profile
-                && has_visible_endnote_separator
-                && visible_large_between_notes_gap
-                && !compact_between_notes_gap
-                && ep_idx == 0
-                && emitted_endnote_count > 0
-                && st.current_column + 1 >= st.col_count
-                && st.current_height > available * 0.75
-                && st.current_height < available * 0.85
-                && !st.current_items.is_empty()
-                && large_between_question_title_render_y
-                    .map(|predicted_y| {
-                        let group_first = en_ctrl
-                            .paragraphs
-                            .first()
-                            .and_then(|p| p.line_segs.first())
-                            .map(|seg| seg.vertical_pos + endnote_start);
-                        let group_bottom = en_ctrl
-                            .paragraphs
-                            .iter()
-                            .take(3)
-                            .flat_map(|p| p.line_segs.iter())
-                            .map(|seg| {
-                                seg.vertical_pos
-                                    + seg.line_height
-                                    + seg.line_spacing
-                                    + endnote_start
-                            })
-                            .max();
-                        group_first
-                            .zip(group_bottom)
-                            .map(|(first, bottom)| {
-                                let group_h = hwpunit_to_px((bottom - first).max(0), self.dpi);
-                                predicted_y > available * 0.85
-                                    && predicted_y + group_h
-                                        > available - ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX
-                            })
-                            .unwrap_or(false)
-                    })
-                    .unwrap_or(false);
+            let visible_separator_vpos_head_group_outside = self
+                .judge_visible_separator_vpos_head_group_outside(
+                    st,
+                    paragraphs,
+                    en_ctrl,
+                    this_first_offset,
+                    endnote_start,
+                    available,
+                    ep_idx,
+                    emitted_endnote_count,
+                    default_between_notes_gap,
+                    compact_endnote_separator_profile,
+                    has_visible_endnote_separator,
+                    compact_between_notes_gap,
+                );
+            let default_between_large_below_head_group_outside = self
+                .judge_default_between_large_below_head_group_outside(
+                    st,
+                    en_ctrl,
+                    endnote_shape,
+                    styles,
+                    available,
+                    en_col_w,
+                    ep_idx,
+                    emitted_endnote_count,
+                    default_between_notes_gap,
+                    compact_endnote_separator_profile,
+                    has_visible_endnote_separator,
+                );
+            let large_between_last_column_vpos_head_group_outside = self
+                .judge_large_between_last_column_vpos_head_group_outside(
+                    st,
+                    paragraphs,
+                    en_ctrl,
+                    large_between_question_title_render_y,
+                    endnote_start,
+                    available,
+                    ep_idx,
+                    emitted_endnote_count,
+                    default_between_notes_gap,
+                    compact_endnote_separator_profile,
+                    has_visible_endnote_separator,
+                    visible_large_between_notes_gap,
+                    compact_between_notes_gap,
+                );
             let large_between_notes_vpos_head_outside = large_between_notes_head_near_bottom
                 || large_between_question_title_render_head_outside
                 || large_between_question_lead_group_render_outside
@@ -9323,6 +9067,606 @@ impl TypesetEngine {
             lookup_local(en_para_idx, &local_indices)
                 .map(|local| hc.vpos_adjust(y, local, &local_paras, &styles))
         })
+    }
+
+    /// [Task #2079] P6 판정: 큰 미주 사이 tail 이 저장 vpos render 기준 frame 을 넘는지.
+    #[allow(clippy::too_many_arguments)]
+    fn judge_large_between_tail_render_overflows(
+        &self,
+        st: &TypesetState,
+        paragraphs: &[Paragraph],
+        fmt: &FormattedParagraph,
+        en_para: &Paragraph,
+        this_first_offset: Option<i32>,
+        split_endnote_to_fit: Option<usize>,
+        available: f64,
+        ep_idx: usize,
+        default_between_notes_gap: bool,
+        compact_endnote_separator_profile: bool,
+        has_visible_endnote_separator: bool,
+        local_vpos_rewind: bool,
+        internal_vpos_rewind: bool,
+        large_separator_block: bool,
+        visible_compact_sequential_tail_fits_current_column: bool,
+    ) -> bool {
+        if !default_between_notes_gap
+            && compact_endnote_separator_profile
+            && (has_visible_endnote_separator || !large_separator_block)
+            && ep_idx > 0
+            && st.col_count > 1
+            && st.current_column + 1 < st.col_count
+            && st.current_height > available * 0.85
+            && !st.current_items.is_empty()
+            && !local_vpos_rewind
+            && !internal_vpos_rewind
+            && split_endnote_to_fit.is_none()
+            && !visible_compact_sequential_tail_fits_current_column
+            && para_has_visible_text(en_para)
+        {
+            let prev_equation_only_tail = st
+                .current_items
+                .iter()
+                .rev()
+                .filter_map(page_item_para_index)
+                .find_map(|pi| paragraph_by_global_index(paragraphs, &st.endnote_paragraphs, pi))
+                .map(|prev_para| {
+                    !para_has_visible_text(prev_para)
+                        && prev_para.controls.iter().any(
+                            |ctrl| matches!(ctrl, Control::Equation(eq) if eq.common.treat_as_char),
+                        )
+                })
+                .unwrap_or(false);
+            st.current_items
+                .iter()
+                .filter_map(page_item_para_index)
+                .find_map(|pi| {
+                    paragraph_by_global_index(paragraphs, &st.endnote_paragraphs, pi)
+                        .and_then(|p| p.line_segs.first())
+                        .map(|s| s.vertical_pos)
+                })
+                .and_then(|base_vpos| {
+                    this_first_offset.map(|first_vpos| {
+                        let predicted_y = hwpunit_to_px((first_vpos - base_vpos).max(0), self.dpi)
+                            + st.current_start_height;
+                        let rendered_h = fmt.line_advances_sum(0..fmt.line_heights.len());
+                        // TAC 그림/수식으로 lazy base가 깊게 보정된 단에서는
+                        // 저장 vpos 직접 예측이 실제 렌더 y보다 낮게 나올 수 있다.
+                        // 직전 수식-only 문단 뒤의 한 줄짜리 풀이 tail은 남은
+                        // 공간이 50px 이하이면 한컴처럼 다음 단에서 이어간다.
+                        let near_bottom_tail = prev_equation_only_tail
+                            && fmt.line_heights.len() == 1
+                            && para_has_visible_text(en_para)
+                            && !para_is_treat_as_char_picture_only(en_para)
+                            && !para_has_treat_as_char_picture_or_shape(en_para)
+                            && st.current_height > available * 0.90
+                            && st.current_height + rendered_h
+                                > available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX;
+                        predicted_y + rendered_h
+                            > available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 1.0
+                            || near_bottom_tail
+                    })
+                })
+                .unwrap_or(false)
+        } else {
+            false
+        }
+    }
+
+    /// [Task #2079] P6 판정: 큰 미주 사이 마지막 단에서 문항 제목 tail 이 들어가는지.
+    #[allow(clippy::too_many_arguments)]
+    fn judge_large_between_last_column_question_title_tail_fits(
+        &self,
+        st: &TypesetState,
+        fmt: &FormattedParagraph,
+        en_ctrl: &crate::model::footnote::Endnote,
+        en_ref: &EndnoteRef,
+        styles: &ResolvedStyleSet,
+        available: f64,
+        en_col_w: f64,
+        ep_idx: usize,
+        emitted_endnote_count: usize,
+        new_endnote_between_notes_px: Option<f64>,
+        large_between_question_title_head_inside_frame: bool,
+        endnote_has_visible_payload: bool,
+        default_between_notes_gap: bool,
+        compact_endnote_separator_profile: bool,
+        has_visible_endnote_separator: bool,
+        visible_large_between_notes_gap: bool,
+        compact_between_notes_gap: bool,
+    ) -> bool {
+        !default_between_notes_gap
+            && compact_endnote_separator_profile
+            && has_visible_endnote_separator
+            && visible_large_between_notes_gap
+            && !compact_between_notes_gap
+            && ep_idx == 0
+            && emitted_endnote_count > 0
+            && en_ref.number > 0
+            && st.current_column + 1 >= st.col_count
+            && fmt.line_heights.len() == 1
+            && st.current_height > available * 0.90
+            && st.current_height < available
+            && large_between_question_title_head_inside_frame
+            && st.current_height + fmt.line_advance(0)
+                <= available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 2.0
+            && new_endnote_between_notes_px
+                .map(|gap| {
+                    // 마지막 단에서 새 미주 제목만 남길 때도
+                    // `미주 사이`는 제목 앞에 소비된다. gap 없이
+                    // 제목 한 줄만 fit으로 보면 20mm 문서에서 다음
+                    // 쪽으로 가야 할 제목이 현재 쪽 하단에 고아로 남는다.
+                    st.current_height + gap + fmt.line_advance(0)
+                        <= available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 2.0
+                })
+                .unwrap_or(true)
+            && (compact_between_notes_gap
+                || new_endnote_between_notes_px
+                    .map(|gap| {
+                        let head_group_h: f64 = en_ctrl
+                            .paragraphs
+                            .iter()
+                            .take(3)
+                            .map(|head_para| {
+                                let head_comp =
+                                    crate::renderer::composer::compose_paragraph(head_para);
+                                self.format_paragraph(
+                                    head_para,
+                                    Some(&head_comp),
+                                    &styles,
+                                    Some(en_col_w),
+                                )
+                                .total_height
+                            })
+                            .sum();
+                        // 제목과 첫 풀이 일부만 단 하단에 고아로 남기지
+                        // 않도록, 20mm급 large gap에서는 제목+본문 head
+                        // group이 함께 들어갈 때만 마지막 단 tail을 허용한다.
+                        st.current_height + gap + head_group_h
+                            <= available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 2.0
+                    })
+                    .unwrap_or(true))
+            && endnote_has_visible_payload
+    }
+
+    /// [Task #2079] P6 판정: 0/0/0 프로파일 문항 intro tail 이 rewind 직전 현재 단에 들어가는지.
+    #[allow(clippy::too_many_arguments)]
+    fn judge_zero_question_intro_tail_before_rewind_fits(
+        &self,
+        st: &TypesetState,
+        paragraphs: &[Paragraph],
+        fmt: &FormattedParagraph,
+        en_para: &Paragraph,
+        en_ctrl: &crate::model::footnote::Endnote,
+        en_ref: &EndnoteRef,
+        composed: &ComposedParagraph,
+        styles: &ResolvedStyleSet,
+        available: f64,
+        en_col_w: f64,
+        ep_idx: usize,
+        later_endnote_vpos_rewinds_after_current: bool,
+        zero_endnote_spacing_profile: bool,
+        compact_endnote_separator_profile: bool,
+        has_visible_endnote_separator: bool,
+        local_vpos_rewind: bool,
+        internal_vpos_rewind: bool,
+    ) -> bool {
+        compact_endnote_separator_profile
+            && zero_endnote_spacing_profile
+            && has_visible_endnote_separator
+            && (st.current_column + 1 < st.col_count || ep_idx == 1)
+            && matches!(ep_idx, 1 | 2)
+            && en_ref.number > 0
+            && fmt.line_heights.len() == 1
+            && !local_vpos_rewind
+            && !internal_vpos_rewind
+            && !para_is_treat_as_char_picture_only(en_para)
+            && para_has_visible_text_or_equation(en_para)
+            && en_ctrl
+                .paragraphs
+                .first()
+                .is_some_and(|title_para| title_para.line_segs.len() == 1)
+            && later_endnote_vpos_rewinds_after_current
+            && st.current_height > available * 0.95
+            && st.current_height + fmt.line_advance(0)
+                <= available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 28.0
+            && if st.current_column + 1 >= st.col_count {
+                ep_idx == 1
+                    && fmt.line_advance(0) <= 24.0
+                    && line_has_visible_text_or_tac_equation(en_para, &composed, 0)
+            } else if ep_idx == 1 {
+                en_ctrl.paragraphs.get(ep_idx + 1).is_some_and(|next_para| {
+                    let next_comp = crate::renderer::composer::compose_paragraph(next_para);
+                    let next_fmt =
+                        self.format_paragraph(next_para, Some(&next_comp), &styles, Some(en_col_w));
+                    next_fmt.line_heights.len() == 1
+                        && next_fmt.line_advance(0) <= 24.0
+                        && line_has_visible_text_or_tac_equation(next_para, &next_comp, 0)
+                })
+            } else {
+                fmt.line_advance(0) <= 24.0
+                    && line_has_visible_text_or_tac_equation(en_para, &composed, 0)
+            }
+    }
+
+    /// [Task #2079] P6 판정: 보이는 구분자 프로파일에서 저장 vpos head 그룹이 frame 밖인지.
+    #[allow(clippy::too_many_arguments)]
+    fn judge_visible_separator_vpos_head_group_outside(
+        &self,
+        st: &TypesetState,
+        paragraphs: &[Paragraph],
+        en_ctrl: &crate::model::footnote::Endnote,
+        this_first_offset: Option<i32>,
+        endnote_start: i32,
+        available: f64,
+        ep_idx: usize,
+        emitted_endnote_count: usize,
+        default_between_notes_gap: bool,
+        compact_endnote_separator_profile: bool,
+        has_visible_endnote_separator: bool,
+        compact_between_notes_gap: bool,
+    ) -> bool {
+        compact_endnote_separator_profile
+            && compact_between_notes_gap
+            && default_between_notes_gap
+            && has_visible_endnote_separator
+            && ep_idx == 0
+            && emitted_endnote_count > 0
+            && st.current_column + 1 < st.col_count
+            && st.current_height > available * 0.75
+            && !st.current_items.is_empty()
+            && st
+                .current_items
+                .iter()
+                .filter_map(page_item_para_index)
+                .find_map(|pi| {
+                    paragraph_by_global_index(paragraphs, &st.endnote_paragraphs, pi)
+                        .and_then(|p| p.line_segs.first())
+                        .map(|s| s.vertical_pos)
+                })
+                .and_then(|base_vpos| {
+                    let first_vpos = this_first_offset?;
+                    let first_para_vpos = en_ctrl.paragraphs.first()?.line_segs.first()?;
+                    let group_bottom = en_ctrl
+                        .paragraphs
+                        .iter()
+                        .take(3)
+                        .flat_map(|p| p.line_segs.iter())
+                        .map(|s| s.vertical_pos + s.line_height + s.line_spacing + endnote_start)
+                        .max()?;
+                    let group_first = first_para_vpos.vertical_pos + endnote_start;
+                    let group_h = hwpunit_to_px((group_bottom - group_first).max(0), self.dpi);
+                    let predicted_y = hwpunit_to_px((first_vpos - base_vpos).max(0), self.dpi);
+                    Some(
+                        predicted_y > available * 0.85
+                            && predicted_y + group_h
+                                > available - ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX,
+                    )
+                })
+                .unwrap_or(false)
+    }
+
+    /// [Task #2079] P6 판정: 기본 간격 + 큰 below 마진 프로파일에서 head 그룹이 frame 밖인지.
+    #[allow(clippy::too_many_arguments)]
+    fn judge_default_between_large_below_head_group_outside(
+        &self,
+        st: &TypesetState,
+        en_ctrl: &crate::model::footnote::Endnote,
+        endnote_shape: Option<&FootnoteShape>,
+        styles: &ResolvedStyleSet,
+        available: f64,
+        en_col_w: f64,
+        ep_idx: usize,
+        emitted_endnote_count: usize,
+        default_between_notes_gap: bool,
+        compact_endnote_separator_profile: bool,
+        has_visible_endnote_separator: bool,
+    ) -> bool {
+        compact_endnote_separator_profile
+            && default_between_notes_gap
+            && has_visible_endnote_separator
+            && ep_idx == 0
+            && emitted_endnote_count > 0
+            && st.current_column + 1 < st.col_count
+            && st.current_height > available * 0.90
+            && endnote_shape
+                .map(|shape| {
+                    endnote_separator_below_margin(shape) as i32
+                        > ENDNOTE_BETWEEN_NOTES_BASE_FLOW_HU
+                })
+                .unwrap_or(false)
+            && en_ctrl
+                .paragraphs
+                .first()
+                .is_some_and(|title_para| title_para.line_segs.len() == 1)
+            && en_ctrl.paragraphs.get(1).is_some_and(para_has_visible_text)
+            && en_ctrl.paragraphs.get(2).is_some_and(|tail_para| {
+                !para_has_visible_text(tail_para) && para_has_visible_text_or_equation(tail_para)
+            })
+            && {
+                let head_group_h: f64 = en_ctrl
+                    .paragraphs
+                    .iter()
+                    .take(3)
+                    .map(|head_para| {
+                        let head_comp = crate::renderer::composer::compose_paragraph(head_para);
+                        self.format_paragraph(head_para, Some(&head_comp), &styles, Some(en_col_w))
+                            .total_height
+                    })
+                    .sum();
+                st.current_height + head_group_h
+                    > available - ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX
+            }
+    }
+
+    /// [Task #2079] P6 판정: 큰 미주 사이 마지막 단에서 저장 vpos head 그룹이 frame 밖인지.
+    #[allow(clippy::too_many_arguments)]
+    fn judge_large_between_last_column_vpos_head_group_outside(
+        &self,
+        st: &TypesetState,
+        paragraphs: &[Paragraph],
+        en_ctrl: &crate::model::footnote::Endnote,
+        large_between_question_title_render_y: Option<f64>,
+        endnote_start: i32,
+        available: f64,
+        ep_idx: usize,
+        emitted_endnote_count: usize,
+        default_between_notes_gap: bool,
+        compact_endnote_separator_profile: bool,
+        has_visible_endnote_separator: bool,
+        visible_large_between_notes_gap: bool,
+        compact_between_notes_gap: bool,
+    ) -> bool {
+        !default_between_notes_gap
+            && compact_endnote_separator_profile
+            && has_visible_endnote_separator
+            && visible_large_between_notes_gap
+            && !compact_between_notes_gap
+            && ep_idx == 0
+            && emitted_endnote_count > 0
+            && st.current_column + 1 >= st.col_count
+            && st.current_height > available * 0.75
+            && st.current_height < available * 0.85
+            && !st.current_items.is_empty()
+            && large_between_question_title_render_y
+                .map(|predicted_y| {
+                    let group_first = en_ctrl
+                        .paragraphs
+                        .first()
+                        .and_then(|p| p.line_segs.first())
+                        .map(|seg| seg.vertical_pos + endnote_start);
+                    let group_bottom = en_ctrl
+                        .paragraphs
+                        .iter()
+                        .take(3)
+                        .flat_map(|p| p.line_segs.iter())
+                        .map(|seg| {
+                            seg.vertical_pos + seg.line_height + seg.line_spacing + endnote_start
+                        })
+                        .max();
+                    group_first
+                        .zip(group_bottom)
+                        .map(|(first, bottom)| {
+                            let group_h = hwpunit_to_px((bottom - first).max(0), self.dpi);
+                            predicted_y > available * 0.85
+                                && predicted_y + group_h
+                                    > available - ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX
+                        })
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false)
+    }
+
+    /// [Task #2079] P6 판정: split head 가 저장 vpos 기준 render 로 frame 을 넘는지 (넘으면 split 취소).
+    #[allow(clippy::too_many_arguments)]
+    fn judge_large_between_split_head_render_overflows(
+        &self,
+        st: &TypesetState,
+        fmt: &FormattedParagraph,
+        en_para: &Paragraph,
+        paragraphs: &[Paragraph],
+        styles: &ResolvedStyleSet,
+        split_endnote_to_fit: Option<usize>,
+        available: f64,
+        en_col_w: f64,
+        en_para_idx: usize,
+        ep_idx: usize,
+        default_between_notes_gap: bool,
+        compact_endnote_separator_profile: bool,
+        has_visible_endnote_separator: bool,
+        local_vpos_rewind: bool,
+        internal_vpos_rewind: bool,
+        endnote_has_visible_payload: bool,
+    ) -> bool {
+        if !default_between_notes_gap
+            && compact_endnote_separator_profile
+            && has_visible_endnote_separator
+            && ep_idx > 0
+            && st.col_count > 1
+            && st.current_height > available * 0.90
+            && !st.current_items.is_empty()
+            && !local_vpos_rewind
+            && !internal_vpos_rewind
+            && fmt.line_heights.len() > 1
+            && para_has_visible_text_or_equation(en_para)
+            && endnote_has_visible_payload
+        {
+            split_endnote_to_fit
+                .and_then(|split_line| {
+                    let predicted_y = self.predict_endnote_render_y(
+                        st,
+                        paragraphs,
+                        styles,
+                        available,
+                        en_col_w,
+                        en_para_idx,
+                    )?;
+                    let split_head_h = fmt.line_advances_sum(0..split_line);
+                    Some(
+                        predicted_y + split_head_h
+                            > available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 1.0,
+                    )
+                })
+                .unwrap_or(false)
+        } else {
+            false
+        }
+    }
+
+    /// [Task #2079] P6 판정: 큰 미주 사이 마지막 단의 visual tail split 줄 수 (render vpos 시뮬 기반).
+    #[allow(clippy::too_many_arguments)]
+    fn judge_large_between_last_column_visual_split(
+        &self,
+        st: &TypesetState,
+        fmt: &FormattedParagraph,
+        en_para: &Paragraph,
+        paragraphs: &[Paragraph],
+        styles: &ResolvedStyleSet,
+        available: f64,
+        en_col_w: f64,
+        en_fit: f64,
+        en_para_idx: usize,
+        ep_idx: usize,
+        default_between_notes_gap: bool,
+        compact_endnote_separator_profile: bool,
+        has_visible_endnote_separator: bool,
+        visible_large_between_notes_gap: bool,
+        compact_between_notes_gap: bool,
+        zero_endnote_spacing_profile: bool,
+        local_vpos_rewind: bool,
+        internal_vpos_rewind: bool,
+    ) -> Option<usize> {
+        if !default_between_notes_gap
+            && compact_endnote_separator_profile
+            && has_visible_endnote_separator
+            && visible_large_between_notes_gap
+            && !compact_between_notes_gap
+            && !zero_endnote_spacing_profile
+            && ep_idx > 0
+            && st.col_count > 1
+            && st.current_column + 1 >= st.col_count
+            && (st.current_height > available * 0.85
+                || st.current_height + en_fit > available - 60.0)
+            && st.current_height < available
+            && (st.current_height + en_fit > available || fmt.line_heights.len() >= 3)
+            && !st.current_items.is_empty()
+            && !local_vpos_rewind
+            && !internal_vpos_rewind
+            && fmt.line_heights.len() > 1
+            && para_has_visible_text_or_equation(en_para)
+        {
+            let predicted_y = self.predict_endnote_render_y(
+                st,
+                paragraphs,
+                styles,
+                available,
+                en_col_w,
+                en_para_idx,
+            );
+
+            predicted_y.and_then(|y| {
+                if y >= available {
+                    return None;
+                }
+                // 첫 줄 자체가 frame 안쪽에 들어오지 못하면 visual split으로
+                // 단 하단에 남기지 않는다. 큰 미주 사이 문서에서는 이 줄들을
+                // 남기면 다음 쪽의 문항 시작점이 연쇄적으로 위로 당겨진다.
+                if y + fmt.line_advance(0)
+                    > available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 2.0
+                {
+                    return None;
+                }
+                // 큰 미주 사이 문서의 마지막 단은 렌더 vpos가 직전
+                // 문단들을 위로 당긴 뒤 남는 visual tail 공간을 사용한다.
+                // pagination 누적 높이만 보면 부족하지만, 한컴/PDF는 다음
+                // 문단의 마지막 1줄만 이월시키는 패턴이 있어 이 경로에만
+                // 단 하단 visual 한도를 넓힌다.
+                let flow_overflows = st.current_height + en_fit > available;
+                let visual_tail_limit = if flow_overflows {
+                    available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 46.0
+                } else {
+                    // flow 누적 높이는 들어가지만 저장 vpos 기반 render
+                    // 마지막 줄이 frame 하단에 걸리는 큰 미주 사이 tail은
+                    // 한컴처럼 마지막 줄부터 다음 쪽으로 넘긴다.
+                    available + 1.0
+                };
+                let mut consumed = 0.0;
+                let mut split = 0usize;
+                for line_idx in 0..fmt.line_heights.len() {
+                    let next = consumed + fmt.line_advance(line_idx);
+                    if y + next > visual_tail_limit {
+                        break;
+                    }
+                    consumed = next;
+                    split = line_idx + 1;
+                }
+                (split > 0 && split < fmt.line_heights.len()).then_some(split)
+            })
+        } else {
+            None
+        }
+    }
+
+    /// [Task #2079] P6 판정: 큰 미주 사이 마지막 단에서 제목 tail 뒤 본문이 render vpos 기준 쪽 전진하는지.
+    #[allow(clippy::too_many_arguments)]
+    fn judge_large_between_title_tail_body_advances_page(
+        &self,
+        st: &TypesetState,
+        fmt: &FormattedParagraph,
+        en_para: &Paragraph,
+        en_ctrl: &crate::model::footnote::Endnote,
+        en_ref: &EndnoteRef,
+        paragraphs: &[Paragraph],
+        styles: &ResolvedStyleSet,
+        available: f64,
+        en_col_w: f64,
+        en_para_idx: usize,
+        ep_idx: usize,
+        default_between_notes_gap: bool,
+        compact_endnote_separator_profile: bool,
+        has_visible_endnote_separator: bool,
+        local_vpos_rewind: bool,
+        internal_vpos_rewind: bool,
+        endnote_has_visible_payload: bool,
+    ) -> bool {
+        if !default_between_notes_gap
+            && compact_endnote_separator_profile
+            && has_visible_endnote_separator
+            && ep_idx == 1
+            && en_ref.number > 0
+            && st.current_column + 1 >= st.col_count
+            && st.current_height > available * 0.90
+            && !st.current_items.is_empty()
+            && !local_vpos_rewind
+            && !internal_vpos_rewind
+            && en_ctrl
+                .paragraphs
+                .first()
+                .is_some_and(|title_para| title_para.line_segs.len() == 1)
+            && fmt.line_heights.len() <= 2
+            && para_has_visible_text_or_equation(en_para)
+            && endnote_has_visible_payload
+        {
+            let predicted_y = self.predict_endnote_render_y(
+                st,
+                paragraphs,
+                styles,
+                available,
+                en_col_w,
+                en_para_idx,
+            );
+
+            predicted_y
+                .map(|y| {
+                    // 큰 미주 사이 문서의 마지막 단에서는 새 문항 제목
+                    // 한 줄만 frame 안쪽 tail로 남기고, 첫 풀이 수식/본문이
+                    // render vpos 기준으로 frame을 넘으면 다음 쪽에서 시작한다.
+                    y + fmt.line_advance(0)
+                        > available + ENDNOTE_COLUMN_BOTTOM_BLEED_TOLERANCE_PX + 1.0
+                })
+                .unwrap_or(false)
+        } else {
+            false
+        }
     }
 
     /// [Task #1363 v3 Stage 1] scratch `LayoutEngine` 로 미주 para 를 실제 레이아웃하여 **정확한
