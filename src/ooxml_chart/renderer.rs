@@ -573,7 +573,12 @@ fn category_positive_sum(chart: &OoxmlChart, ci: usize) -> f64 {
 // ---------------- Line (단일 축) ----------------
 
 fn render_line(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f64, ph: f64) {
-    let (vmin, vmax, vstep) = value_range(chart, VERTICAL_AXIS_TICKS);
+    let stacked = matches!(
+        chart.line_grouping,
+        BarGrouping::Stacked | BarGrouping::PercentStacked
+    );
+    let percent = chart.line_grouping == BarGrouping::PercentStacked;
+
     let max_len = chart
         .series
         .iter()
@@ -583,6 +588,19 @@ fn render_line(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f64, 
     if max_len < 2 {
         return;
     }
+
+    // 값축: 비누적=개별값, 누적=카테고리 합의 최대, 백프로=0~100% step 20
+    // (render_bars 누적 정책 미러 — 정답지 실측 누적 0~15 step 5. C1d #2129)
+    let (vmin, vmax, vstep) = if percent {
+        (0.0, 100.0, 20.0)
+    } else if stacked {
+        let max_sum = (0..max_len)
+            .map(|ci| category_positive_sum(chart, ci))
+            .fold(0.0_f64, f64::max);
+        nice_axis(0.0, max_sum.max(1.0), VERTICAL_AXIS_TICKS)
+    } else {
+        value_range(chart, VERTICAL_AXIS_TICKS)
+    };
 
     svg.push_str(&format!(
         "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"#ffffff\" stroke=\"#cccccc\" stroke-width=\"0.5\"/>\n",
@@ -600,32 +618,41 @@ fn render_line(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f64, 
         chart.series.first().and_then(|s| s.format_code.as_deref()),
         false,
         false,
-        false,
+        percent,
         false,
     );
 
     let step = pw / (max_len - 1).max(1) as f64;
+    let mut cum = vec![0.0_f64; max_len]; // 카테고리별 누적값 (값공간)
     for (si, ser) in chart.series.iter().enumerate() {
         let color = series_color(ser, si);
-        let mut d = String::new();
+        let mut points: Vec<(f64, f64)> = Vec::with_capacity(ser.values.len());
         for (i, &v) in ser.values.iter().enumerate() {
+            let val = if stacked {
+                cum[i] += v.max(0.0); // 음수 clamp — render_bars 누적과 동일 정책
+                if percent {
+                    let sum = category_positive_sum(chart, i);
+                    if sum > 0.0 {
+                        cum[i] / sum * 100.0
+                    } else {
+                        0.0 // 합 0 카테고리 → 0% (막대 denom=1.0 가드와 동등)
+                    }
+                } else {
+                    cum[i]
+                }
+            } else {
+                v
+            };
             let t = if vmax > vmin {
-                (v - vmin) / (vmax - vmin)
+                (val - vmin) / (vmax - vmin)
             } else {
                 0.0
             };
-            let xp = px + step * i as f64;
-            let yp = py + ph - ph * t;
-            d.push_str(&format!(
-                "{}{:.2},{:.2} ",
-                if i == 0 { "M" } else { "L" },
-                xp,
-                yp
-            ));
+            points.push((px + step * i as f64, py + ph - ph * t));
         }
         svg.push_str(&format!(
             "<path d=\"{}\" fill=\"none\" stroke=\"{}\" stroke-width=\"2\"/>\n",
-            d.trim(),
+            polyline_path(&points),
             color
         ));
     }
@@ -1355,6 +1382,151 @@ mod tests {
             2,
             "percent도 카테고리당 단일 x"
         );
+    }
+
+    // --- C1d (#2129): 라인 누적/백프로 기하 ---
+
+    /// 데이터 라인 path(fill="none" stroke-width="2")의 d 문자열 목록 (시리즈 순서).
+    /// 마커 path(fill=색)·격자선(line)·배경(rect)은 제외됨.
+    fn data_line_paths(svg: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        for chunk in svg.split("<path ").skip(1) {
+            let end = chunk.find("/>").unwrap_or(chunk.len());
+            let tag = &chunk[..end];
+            if !tag.contains("fill=\"none\"") || !tag.contains("stroke-width=\"2\"") {
+                continue;
+            }
+            if let Some(p) = tag.find("d=\"") {
+                let s = p + 3;
+                if let Some(e) = tag[s..].find('"') {
+                    out.push(tag[s..s + e].to_string());
+                }
+            }
+        }
+        out
+    }
+
+    /// path d의 (x,y) 점 목록 (`M`/`L` 접두 제거).
+    fn path_points(d: &str) -> Vec<(f64, f64)> {
+        d.split_whitespace()
+            .filter_map(|tok| {
+                let t = tok.trim_start_matches(['M', 'L']);
+                let (x, y) = t.split_once(',')?;
+                Some((x.parse().ok()?, y.parse().ok()?))
+            })
+            .collect()
+    }
+
+    /// 3계열×4카테고리, 카테고리 합 최대 12.3 (합: 8.7/8.9/8.3/12.3 — 코퍼스 라인
+    /// 샘플과 동일 스케일). 개별값 최대 5.0 → 비누적 축 0~6, 누적 축 0~15로 구분됨.
+    fn line_chart(line_grouping: BarGrouping) -> OoxmlChart {
+        OoxmlChart {
+            chart_type: OoxmlChartType::Line,
+            line_grouping,
+            // name 비움 → 범례 미렌더
+            series: vec![
+                OoxmlSeries {
+                    values: vec![4.3, 2.5, 3.5, 4.5],
+                    ..Default::default()
+                },
+                OoxmlSeries {
+                    values: vec![2.4, 4.4, 1.8, 2.8],
+                    ..Default::default()
+                },
+                OoxmlSeries {
+                    values: vec![2.0, 2.0, 3.0, 5.0],
+                    ..Default::default()
+                },
+            ],
+            categories: vec!["a".into(), "b".into(), "c".into(), "d".into()],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_line_stacked_axis_from_category_sum() {
+        // 누적 축 = 카테고리 합 최대(12.3) 기반 0~15 step 5 — 정답지 실측.
+        // 개별값 최대(5.0) 기반 0~6이 아님.
+        let svg = render_chart_svg(&line_chart(BarGrouping::Stacked), 0.0, 0.0, 400.0, 300.0);
+        assert!(svg.contains(">15<"), "누적 축 max 15");
+        assert!(!svg.contains(">6<"), "개별값 축(0~6) 미사용");
+        assert!(!svg.contains(">14<"), "step 5 유지 (경계 headroom 미발동)");
+    }
+
+    #[test]
+    fn test_line_stacked_series_order() {
+        // 누적: 시리즈2 첫 점(누적 6.7)이 시리즈1 첫 점(4.3) 위 (화면 y 작음)
+        let svg = render_chart_svg(&line_chart(BarGrouping::Stacked), 0.0, 0.0, 400.0, 300.0);
+        let paths = data_line_paths(&svg);
+        assert_eq!(paths.len(), 3, "데이터 라인 3개");
+        let y0 = path_points(&paths[0])[0].1;
+        let y1 = path_points(&paths[1])[0].1;
+        assert!(y1 < y0, "누적이면 시리즈2(y={y1})가 시리즈1(y={y0})보다 위");
+    }
+
+    #[test]
+    fn test_line_percent_axis_labels() {
+        // 백프로: 축 0%~100% step 20% — 정답지 실측 (막대 percent와 동일 정책)
+        let svg = render_chart_svg(
+            &line_chart(BarGrouping::PercentStacked),
+            0.0,
+            0.0,
+            400.0,
+            300.0,
+        );
+        assert!(svg.contains("100%"), "percent 축 100% 라벨");
+        assert!(svg.contains("20%"), "step 20%");
+    }
+
+    #[test]
+    fn test_line_percent_top_series_flat() {
+        // 최상위 시리즈 누적 = 카테고리 합 = 100% → 수평선 (정답지: 계열3이 100% 평행선)
+        let svg = render_chart_svg(
+            &line_chart(BarGrouping::PercentStacked),
+            0.0,
+            0.0,
+            400.0,
+            300.0,
+        );
+        let paths = data_line_paths(&svg);
+        let pts = path_points(&paths[2]);
+        assert_eq!(pts.len(), 4);
+        assert!(
+            pts.windows(2).all(|w| (w[0].1 - w[1].1).abs() < 1e-6),
+            "최상위 시리즈 y 전부 동일해야: {pts:?}"
+        );
+    }
+
+    #[test]
+    fn test_line_percent_zero_sum_category_no_nan() {
+        // 합 0 카테고리 → cum/0 NaN 방지 가드 (0%로 렌더)
+        let mut chart = line_chart(BarGrouping::PercentStacked);
+        chart.series = vec![
+            OoxmlSeries {
+                values: vec![1.0, 0.0],
+                ..Default::default()
+            },
+            OoxmlSeries {
+                values: vec![1.0, 0.0],
+                ..Default::default()
+            },
+        ];
+        chart.categories = vec!["a".into(), "b".into()];
+        let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
+        assert!(!svg.contains("NaN"), "합 0 카테고리 NaN 가드");
+    }
+
+    #[test]
+    fn test_line_clustered_unchanged() {
+        // 비누적(기본, 꺽은선형 무회귀 핀): 개별값 축 0~6 + 시리즈1(4.3)이 시리즈2(2.4) 위
+        let svg = render_chart_svg(&line_chart(BarGrouping::Clustered), 0.0, 0.0, 400.0, 300.0);
+        assert!(svg.contains(">6<"), "개별값 축 max 6");
+        assert!(!svg.contains(">15<"), "누적 축 미사용");
+        let paths = data_line_paths(&svg);
+        assert_eq!(paths.len(), 3);
+        let y0 = path_points(&paths[0])[0].1;
+        let y1 = path_points(&paths[1])[0].1;
+        assert!(y0 < y1, "비누적: 개별값 기준 시리즈1이 위");
     }
 
     // --- C1b (#1660): 분산형(scatter) 렌더 ---
