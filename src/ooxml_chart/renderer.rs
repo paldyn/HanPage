@@ -622,7 +622,10 @@ fn render_line(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f64, 
         false,
     );
 
-    let step = pw / (max_len - 1).max(1) as f64;
+    // x 배치: 카테고리 슬롯 중앙 (한컴 정합, XML crossBetween=between —
+    // 첫/끝 점이 플롯 가장자리가 아닌 반 슬롯 안쪽. 카테고리 라벨과 동일 공식.
+    // 작업지시자 시각판정 반영, C1d #2129)
+    let cat_span = pw / max_len as f64;
     let mut cum = vec![0.0_f64; max_len]; // 카테고리별 누적값 (값공간)
     for (si, ser) in chart.series.iter().enumerate() {
         let color = series_color(ser, si);
@@ -648,7 +651,7 @@ fn render_line(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f64, 
             } else {
                 0.0
             };
-            points.push((px + step * i as f64, py + ph - ph * t));
+            points.push((px + cat_span * (i as f64 + 0.5), py + ph - ph * t));
         }
         svg.push_str(&format!(
             "<path d=\"{}\" fill=\"none\" stroke=\"{}\" stroke-width=\"2\"/>\n",
@@ -1578,6 +1581,39 @@ mod tests {
         chart.categories = vec!["a".into(), "b".into()];
         let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
         assert!(!svg.contains("NaN"), "합 0 카테고리 NaN 가드");
+    }
+
+    /// `>{label}<` 텍스트 요소의 x 좌표.
+    fn text_label_x(svg: &str, label: &str) -> f64 {
+        let i = svg
+            .find(&format!(">{label}<"))
+            .unwrap_or_else(|| panic!("라벨 {label} 없음"));
+        let start = svg[..i].rfind("<text ").expect("text 태그");
+        let tag = &svg[start..i];
+        let p = tag.find("x=\"").expect("x 속성") + 3;
+        let e = p + tag[p..].find('"').expect("닫는 따옴표");
+        tag[p..e].parse().expect("x 파싱")
+    }
+
+    #[test]
+    fn test_line_points_at_category_slot_centers() {
+        // 한컴 정합(작업지시자 시각판정 2026-07-10): 라인 점은 카테고리 슬롯 중앙 —
+        // 첫/끝 점이 플롯 가장자리에 붙지 않고 반 슬롯 안쪽 (XML crossBetween=between).
+        // 카테고리 라벨(슬롯 중앙, text-anchor=middle)과 x가 일치해야 한다.
+        let svg = render_chart_svg(&line_chart(BarGrouping::Clustered), 0.0, 0.0, 400.0, 300.0);
+        let pts = path_points(&data_line_paths(&svg)[0]);
+        assert!(
+            (pts[0].0 - text_label_x(&svg, "a")).abs() < 0.5,
+            "첫 점 x={} ≠ 첫 카테고리 라벨 x={} (슬롯 중앙 아님)",
+            pts[0].0,
+            text_label_x(&svg, "a")
+        );
+        assert!(
+            (pts[3].0 - text_label_x(&svg, "d")).abs() < 0.5,
+            "끝 점 x={} ≠ 끝 카테고리 라벨 x={} (슬롯 중앙 아님)",
+            pts[3].0,
+            text_label_x(&svg, "d")
+        );
     }
 
     /// `hwp-chart-marker` path의 d 문자열 목록 (시리즈×점 순서).
