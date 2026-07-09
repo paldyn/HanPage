@@ -1422,12 +1422,28 @@ fn is_synthetic_line_seg(ls: &LineSeg) -> bool {
     ls.tag & 0x80000000 != 0
 }
 
+/// [#2098] 쪽-하단 고정 틀(vert=쪽, valign=Bottom) 표의 빈 앵커 문단 — 저장 vpos=0 은
+/// 쪽 기준 절대배치 산물이라 흐름 리셋(새 쪽) 신호가 아니다 (opengov 결재문서 계열
+/// 36358528 pi8: 한글은 p1 하단 배치인데 리셋 오독으로 p2 단독 +1쪽). 앵커 배치는
+/// page-bottom footer 경로가 배타영역 fit 으로 자체 판정하므로(침범 시 스스로 다음 쪽
+/// 이동) 리셋 신호 제외가 과충전을 만들지 않는다.
+fn para_is_page_bottom_fixed_table_anchor(para: &Paragraph) -> bool {
+    !para_has_visible_text(para)
+        && para.controls.iter().any(
+            |c| matches!(c, Control::Table(t) if is_page_bottom_fixed_float(&t.common)),
+        )
+}
+
 fn paragraph_saved_vpos_reset_starts_new_page_after(
     current_para: &Paragraph,
     next_para: &Paragraph,
     col_count: u16,
     is_hwp3_variant: bool,
 ) -> bool {
+    if para_is_page_bottom_fixed_table_anchor(next_para) {
+        return false;
+    }
+
     let next_first_vpos = next_para.line_segs.first().map(|s| s.vertical_pos);
     let curr_last_vpos = current_para.line_segs.last().map(|s| s.vertical_pos);
     let multi_col = col_count > 1;
@@ -2867,7 +2883,10 @@ impl TypesetEngine {
                             cv < pv && pv > 5000
                         }
                     } else {
-                        (cv == 0 && pv > 5000 && !hwp3_content_vpos_zero_reset)
+                        (cv == 0
+                            && pv > 5000
+                            && !hwp3_content_vpos_zero_reset
+                            && !para_is_page_bottom_fixed_table_anchor(para))
                             || near_page_top_reset
                             || native_near_top_reset
                     };
@@ -3449,7 +3468,9 @@ impl TypesetEngine {
                             let trigger = if st.col_count > 1 {
                                 cv < pv && pv > 5000
                             } else {
-                                cv == 0 && pv > 5000
+                                cv == 0
+                                    && pv > 5000
+                                    && !para_is_page_bottom_fixed_table_anchor(para)
                             };
                             if trigger {
                                 st.advance_column_or_new_page();
@@ -13338,9 +13359,19 @@ impl TypesetEngine {
                 // (관악 36389312: 틀 2개 합 604px 가 flow 소비되면 한글 1쪽이 2쪽으로
                 // over-pagination). 저장 vpos 는 하단 틀도 문서순 누적하므로, 같은
                 // 페이지에 이미 예약된 틀의 소비분을 차감해 본문 텍스트 끝을 복원한다.
-                let target_y =
-                    crate::renderer::hwpunit_to_px(first_seg.vertical_pos as i32, self.dpi)
-                        - st.bottom_fixed_consumed_flow;
+                // [#2098] 앵커 저장 vpos=0(쪽 기준 절대배치 산물, opengov 결재문서 계열)
+                // 이면 직전 본문 문단의 저장 흐름 하단(prev_body_bottom_vpos)으로 본문
+                // 끝을 복원해 fit 을 판정한다. flowed cur_h 는 누적 드리프트로 과소될
+                // 수 있다 — 36387725: cur_h 578px vs 저장 640.7px → 한글은 분할(2쪽),
+                // 36358528: 저장 586.1px ≤ 배타 638.8px → 한글은 흡수(1쪽).
+                let anchor_vpos = first_seg.vertical_pos;
+                let flow_end_vpos = if anchor_vpos <= 0 {
+                    st.prev_body_bottom_vpos.unwrap_or(anchor_vpos)
+                } else {
+                    anchor_vpos
+                };
+                let target_y = crate::renderer::hwpunit_to_px(flow_end_vpos, self.dpi)
+                    - st.bottom_fixed_consumed_flow;
                 // [Task #1624] footer stored vpos 가 흐름 cur_h 보다 footer 한 개 높이 이상 위에
                 // 있으면(본문이 짧은데 vpos 가 page-bottom 앵커/누적 노이즈), vpos 동기화는
                 // 본문 직후에 들어갈 footer 를 spurious 하게 다음 쪽으로 민다(+1쪽 over-push).
