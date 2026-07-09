@@ -655,6 +655,11 @@ fn render_line(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f64, 
             polyline_path(&points),
             color
         ));
+        if chart.line_markers {
+            for &(mx, my) in &points {
+                push_line_marker(svg, si, mx, my, &color);
+            }
+        }
     }
 
     render_category_labels(svg, chart, px, py, pw, ph, max_len, false);
@@ -733,6 +738,65 @@ fn render_scatter(svg: &mut String, chart: &OoxmlChart, px: f64, py: f64, pw: f6
             }
         }
     }
+}
+
+/// 라인 차트 표식(마커). 계열 인덱스별 한컴 기본 사이클 ◆■▲(+원 폴백) —
+/// 정답지 PDF 실측(표식이있는누적꺽은선형: 계열1 ◆/계열2 ■/계열3 ▲).
+/// 크기 상수는 근사값으로 시각판정에서 조정 여지. (C1d #2129)
+fn push_line_marker(svg: &mut String, si: usize, cx: f64, cy: f64, color: &str) {
+    let d = match si % 4 {
+        0 => {
+            // ◆ 다이아몬드
+            let r = 3.5;
+            format!(
+                "M{:.2},{:.2} L{:.2},{:.2} L{:.2},{:.2} L{:.2},{:.2} Z",
+                cx,
+                cy - r,
+                cx + r,
+                cy,
+                cx,
+                cy + r,
+                cx - r,
+                cy
+            )
+        }
+        1 => {
+            // ■ 정사각형
+            let h = 3.0;
+            format!(
+                "M{:.2},{:.2} L{:.2},{:.2} L{:.2},{:.2} L{:.2},{:.2} Z",
+                cx - h,
+                cy - h,
+                cx + h,
+                cy - h,
+                cx + h,
+                cy + h,
+                cx - h,
+                cy + h
+            )
+        }
+        2 => {
+            // ▲ 삼각형
+            let r = 3.5;
+            format!(
+                "M{:.2},{:.2} L{:.2},{:.2} L{:.2},{:.2} Z",
+                cx,
+                cy - r,
+                cx + r,
+                cy + r * 0.8,
+                cx - r,
+                cy + r * 0.8
+            )
+        }
+        _ => {
+            // 원 폴백 (계열 4+ — 코퍼스 밖, scatter 마커와 동일 반경 3)
+            format!("M{:.2},{:.2} a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0", cx - 3.0, cy)
+        }
+    };
+    svg.push_str(&format!(
+        "<path class=\"hwp-chart-marker\" d=\"{}\" fill=\"{}\" stroke=\"#ffffff\" stroke-width=\"1\"/>\n",
+        d, color
+    ));
 }
 
 /// 직선 폴리라인 path (`M…L…`).
@@ -1514,6 +1578,77 @@ mod tests {
         chart.categories = vec!["a".into(), "b".into()];
         let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
         assert!(!svg.contains("NaN"), "합 0 카테고리 NaN 가드");
+    }
+
+    /// `hwp-chart-marker` path의 d 문자열 목록 (시리즈×점 순서).
+    fn marker_ds(svg: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        for chunk in svg.split("<path ").skip(1) {
+            let end = chunk.find("/>").unwrap_or(chunk.len());
+            let tag = &chunk[..end];
+            if !tag.contains("hwp-chart-marker") {
+                continue;
+            }
+            if let Some(p) = tag.find("d=\"") {
+                let s = p + 3;
+                if let Some(e) = tag[s..].find('"') {
+                    out.push(tag[s..s + e].to_string());
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn test_line_markers_rendered() {
+        // line_markers=true → 마커 수 = 계열(3) × 점(4) = 12 (누적에서도 동일)
+        let mut chart = line_chart(BarGrouping::Stacked);
+        chart.line_markers = true;
+        let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
+        assert_eq!(marker_ds(&svg).len(), 12, "3계열×4점 마커");
+    }
+
+    #[test]
+    fn test_line_marker_shape_cycle() {
+        // 계열별 기본 표식 사이클 ◆■▲ (정답지 실측 — 표식이있는누적꺽은선형)
+        let mut chart = line_chart(BarGrouping::Clustered);
+        chart.line_markers = true;
+        let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
+        let ds = marker_ds(&svg);
+        assert_eq!(ds.len(), 12);
+        let skel =
+            |d: &str| d.chars().filter(|c| c.is_ascii_alphabetic()).collect::<String>();
+        // 시리즈별 첫 마커: [0]=◆, [4]=■, [8]=▲
+        assert_eq!(skel(&ds[0]), "MLLLZ", "◆ 4각형");
+        assert_eq!(skel(&ds[4]), "MLLLZ", "■ 4각형");
+        assert_eq!(skel(&ds[8]), "MLLZ", "▲ 3각형");
+        // ◆ vs ■ 구분: 첫 세그먼트가 ◆는 대각(y 변화), ■는 수평(y 동일)
+        let dia = path_points(&ds[0]);
+        assert!((dia[0].1 - dia[1].1).abs() > 1e-6, "◆ 첫 세그먼트 대각");
+        let sq = path_points(&ds[4]);
+        assert!((sq[0].1 - sq[1].1).abs() < 1e-6, "■ 첫 세그먼트 수평");
+    }
+
+    #[test]
+    fn test_line_marker_circle_fallback_series4() {
+        // 계열 4+ 는 원 폴백 (코퍼스 밖 — 사이클 재시작 대신 원)
+        let mut chart = line_chart(BarGrouping::Clustered);
+        chart.line_markers = true;
+        chart.series.push(OoxmlSeries {
+            values: vec![1.0, 1.0, 1.0, 1.0],
+            ..Default::default()
+        });
+        let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
+        let ds = marker_ds(&svg);
+        assert_eq!(ds.len(), 16);
+        assert!(ds[12].contains('a'), "계열4는 원(arc) 폴백: {}", ds[12]);
+    }
+
+    #[test]
+    fn test_line_no_markers_by_default() {
+        // 기본값(line_markers=false) → 마커 없음 (꺽은선형/누적꺽은선형 무회귀)
+        let svg = render_chart_svg(&line_chart(BarGrouping::Stacked), 0.0, 0.0, 400.0, 300.0);
+        assert!(!svg.contains("hwp-chart-marker"), "기본은 무마커");
     }
 
     #[test]
