@@ -2603,6 +2603,219 @@ impl TypesetEngine {
         }
     }
 
+    /// [Task #2094] wrap-around(어울림) zone 문단 처리 — 원본 무변경 통이동.
+    /// 반환 true = 원본의 `continue`(이 문단은 흡수/기록 완료, 배치 생략) 신호.
+    #[allow(clippy::too_many_arguments)]
+    fn typeset_wrap_around_paragraph(
+        &self,
+        st: &mut TypesetState,
+        para: &Paragraph,
+        paragraphs: &[Paragraph],
+        para_idx: usize,
+        has_table: bool,
+        page_def: &PageDef,
+    ) -> bool {
+        if st.wrap_around_cs >= 0 && !has_table {
+            let para_cs = para.line_segs.first().map(|s| s.column_start).unwrap_or(0);
+            let para_sw = para
+                .line_segs
+                .first()
+                .map(|s| s.segment_width as i32)
+                .unwrap_or(0);
+            let is_empty_para = para
+                .text
+                .chars()
+                .all(|ch| ch.is_whitespace() || ch == '\r' || ch == '\n')
+                && para.controls.is_empty();
+            let any_seg_matches = para.line_segs.iter().any(|s| {
+                s.column_start == st.wrap_around_cs && s.segment_width as i32 == st.wrap_around_sw
+            });
+            let body_w = (page_def.width as i32)
+                - (page_def.margin_left as i32)
+                - (page_def.margin_right as i32);
+            let sw0_match =
+                st.wrap_around_sw == 0 && is_empty_para && para_sw > 0 && para_sw < body_w / 2;
+            // [Task #724] HWP5 변환본 case: anchor host 의 wrap=Square image 위치/폭/margin
+            // 으로 expected_cs 정확 계산 후 para_cs 일치 확인. anchor cs=0 (caption-style)
+            // 한정 가드. expected_cs = (image_x_offset + width + 2*margin) - body_left.
+            let anchor_image_match = if st.wrap_around_cs == 0 {
+                let body_left = page_def.margin_left as i32;
+                let expected_cs_hu = paragraphs
+                    .get(st.wrap_around_table_para)
+                    .and_then(|p| {
+                        p.controls.iter().find_map(|c| {
+                            let cm = match c {
+                                Control::Picture(pic) => Some(&pic.common),
+                                Control::Shape(s) => {
+                                    if let crate::model::shape::ShapeObject::Picture(pic) =
+                                        s.as_ref()
+                                    {
+                                        Some(&pic.common)
+                                    } else {
+                                        None
+                                    }
+                                }
+                                _ => None,
+                            };
+                            cm.filter(|cm| {
+                                !cm.treat_as_char
+                                    && matches!(cm.text_wrap, crate::model::shape::TextWrap::Square)
+                            })
+                            .map(|cm| {
+                                cm.horizontal_offset as i32
+                                    + cm.width as i32
+                                    + 2 * cm.margin.right as i32
+                                    - body_left
+                            })
+                        })
+                    })
+                    .unwrap_or(0);
+                expected_cs_hu > 0
+                    && (para_cs - expected_cs_hu).abs() < 200
+                    && para_sw > 0
+                    && para_cs + para_sw <= body_w + 200
+            } else {
+                false
+            };
+            // [Task #901] cs 일치 + 합리적 sw 매칭 (anchor 의 wrap zone region 다양성).
+            // pic2.hwp paragraph 1 (cs=24470 sw=18050) vs anchor (wrap_around_cs=24470 sw=2570)
+            // — cs 같지만 sw 다름 (다른 wrap region). 기존 매칭 실패 → wrap_anchors 미등록
+            // → paragraph 좌측 그려짐. anchor_any_seg 가 활성이면 cs 정확 일치 만으로
+            // wrap zone 내부 paragraph 로 인정.
+            let cs_only_match =
+                st.wrap_around_any_seg && para_cs == st.wrap_around_cs && para_sw > 0;
+            if (para_cs == st.wrap_around_cs && para_sw == st.wrap_around_sw)
+                || (any_seg_matches && (is_empty_para || st.wrap_around_any_seg))
+                || sw0_match
+                || anchor_image_match
+                || cs_only_match
+            {
+                // [Task #604 R3] wrap_around 매칭 분기를 anchor 종류 기반으로 본질화.
+                //
+                // - Picture (그림 Square wrap) anchor: wrap text 가 LineSeg cs/sw 로
+                //   사전 인코딩됨 → wrap_anchors 등록 + FullParagraph 통과
+                //   (layout 이 LineSeg cs/sw 정합 렌더)
+                // - Table (표 Square wrap) anchor: wrap text 는 표 옆 빈 ↵ 표시용
+                //   → 흡수 (current_column_wrap_around_paras)
+                //
+                // Stage 2b: Paragraph.wrap_precomputed (HWP3 휴리스틱 IR 누설) 제거.
+                // anchor paragraph 의 controls 검사로 본질 정합 대체.
+                let anchor_is_picture = paragraphs
+                    .get(st.wrap_around_table_para)
+                    .map(|p| {
+                        p.controls.iter().any(|c| match c {
+                            Control::Picture(pic) => !pic.common.treat_as_char,
+                            Control::Shape(s) => {
+                                if let crate::model::shape::ShapeObject::Picture(pic) = s.as_ref() {
+                                    !pic.common.treat_as_char
+                                } else {
+                                    false
+                                }
+                            }
+                            _ => false,
+                        })
+                    })
+                    .unwrap_or(false);
+                if anchor_is_picture {
+                    // Picture anchor: wrap_anchors 등록 + FullParagraph 통과
+                    // [Task #722] anchor image 의 outer margin_right (HU) 추출
+                    let anchor_margin_right = paragraphs
+                        .get(st.wrap_around_table_para)
+                        .and_then(|p| {
+                            p.controls.iter().find_map(|c| {
+                                let cm = match c {
+                                    Control::Picture(pic) => Some(&pic.common),
+                                    Control::Shape(s) => {
+                                        if let crate::model::shape::ShapeObject::Picture(pic) =
+                                            s.as_ref()
+                                        {
+                                            Some(&pic.common)
+                                        } else {
+                                            None
+                                        }
+                                    }
+                                    _ => None,
+                                };
+                                cm.filter(|cm| {
+                                    !cm.treat_as_char
+                                        && matches!(
+                                            cm.text_wrap,
+                                            crate::model::shape::TextWrap::Square
+                                        )
+                                })
+                                .map(|cm| cm.margin.right as i32)
+                            })
+                        })
+                        .unwrap_or(0);
+                    st.current_column_wrap_anchors.insert(
+                        para_idx,
+                        crate::renderer::pagination::WrapAnchorRef {
+                            anchor_para_index: st.wrap_around_table_para,
+                            anchor_cs: st.wrap_around_cs,
+                            anchor_sw: st.wrap_around_sw,
+                            anchor_image_margin_right: anchor_margin_right,
+                        },
+                    );
+                } else {
+                    // Table anchor: 어울림 문단을 표 옆에 기록 + height 소비 없음.
+                    // [Task #855] 단, 첫 줄만 표 옆이고 나머지 줄이 본문 전체 폭으로
+                    // 흐르는 문단(= 마지막 LINE_SEG 가 wrap zone cs/sw 와 불일치)은
+                    // 0-높이 흡수 대상이 아니다. 첫 LINE_SEG 만 보고 흡수하면 그런 문단이
+                    // 통째로 페이지 흐름에서 누락된다. 이 경우 wrap zone 을 종료하고
+                    // 일반 텍스트 배치로 폴백한다 (LINE_SEG cs/sw 가 이미 wrap 형상을
+                    // 인코딩하므로 layout 이 첫 줄을 표 옆에, 나머지를 표 아래에 렌더).
+                    let last_seg_match = para
+                        .line_segs
+                        .last()
+                        .map(|s| {
+                            s.column_start == st.wrap_around_cs
+                                && s.segment_width as i32 == st.wrap_around_sw
+                        })
+                        .unwrap_or(false);
+                    if last_seg_match || is_empty_para {
+                        // [Task #1745] 다쪽 분할 표는 첫 fragment column 에 소급 기록.
+                        st.record_wrap_around_para(crate::renderer::pagination::WrapAroundPara {
+                            para_index: para_idx,
+                            table_para_index: st.wrap_around_table_para,
+                            has_text: !is_empty_para,
+                        });
+                        return true;
+                    }
+                    st.wrap_around_cs = -1;
+                    st.wrap_around_sw = -1;
+                    st.wrap_around_any_seg = false;
+                    // fall through → 일반 paragraph 배치
+                }
+            } else {
+                // 매칭 실패 → wrap zone 종료, 정상 처리 진행
+                st.wrap_around_cs = -1;
+                st.wrap_around_sw = -1;
+                st.wrap_around_any_seg = false;
+                // [Task #741 Stage 4] 매칭 실패 paragraph 의 vpos=0 hint (page break 의도)
+                // 발견 시 advance_column_or_new_page. wrap_around active 종료 후 추가 가드.
+                // hwp3-sample10-hwp5.hwp paragraph 26 ("● 제목차례 ●") case —
+                // paragraph 22 anchor (cs=11084) active 유지로 line 419 vpos-reset 가드
+                // 미발현 → 매칭 실패 후 추가 vpos-reset 가드로 페이지 break 정합.
+                if para_idx > 0 && !st.current_items.is_empty() {
+                    let prev_para = &paragraphs[para_idx - 1];
+                    let curr_first_vpos = para.line_segs.first().map(|s| s.vertical_pos);
+                    let prev_last_vpos = prev_para.line_segs.last().map(|s| s.vertical_pos);
+                    if let (Some(cv), Some(pv)) = (curr_first_vpos, prev_last_vpos) {
+                        let trigger = if st.col_count > 1 {
+                            cv < pv && pv > 5000
+                        } else {
+                            cv == 0 && pv > 5000
+                        };
+                        if trigger {
+                            st.advance_column_or_new_page();
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
     /// [Task #1007] HWP3 → HWP5 변환본 인지 typeset.
     /// 변환본 시 cross-paragraph vpos reset (이전 last vpos > body/2 + 현재 first vpos < body/4)
     /// 감지하여 page break 트리거 (한컴 인코딩 page break 시그널).
@@ -3389,211 +3602,10 @@ impl TypesetEngine {
             // Paginator engine.rs:288-320 동일 시멘틱.
             // 직전에 처리한 Square wrap 표의 (cs, sw) 와 동일한 LINE_SEG 를 가진
             // 후속 paragraph 는 표 옆에 배치되므로 height 소비 없이 wrap_around_paras 에 기록.
-            if st.wrap_around_cs >= 0 && !has_table {
-                let para_cs = para.line_segs.first().map(|s| s.column_start).unwrap_or(0);
-                let para_sw = para
-                    .line_segs
-                    .first()
-                    .map(|s| s.segment_width as i32)
-                    .unwrap_or(0);
-                let is_empty_para = para
-                    .text
-                    .chars()
-                    .all(|ch| ch.is_whitespace() || ch == '\r' || ch == '\n')
-                    && para.controls.is_empty();
-                let any_seg_matches = para.line_segs.iter().any(|s| {
-                    s.column_start == st.wrap_around_cs
-                        && s.segment_width as i32 == st.wrap_around_sw
-                });
-                let body_w = (page_def.width as i32)
-                    - (page_def.margin_left as i32)
-                    - (page_def.margin_right as i32);
-                let sw0_match =
-                    st.wrap_around_sw == 0 && is_empty_para && para_sw > 0 && para_sw < body_w / 2;
-                // [Task #724] HWP5 변환본 case: anchor host 의 wrap=Square image 위치/폭/margin
-                // 으로 expected_cs 정확 계산 후 para_cs 일치 확인. anchor cs=0 (caption-style)
-                // 한정 가드. expected_cs = (image_x_offset + width + 2*margin) - body_left.
-                let anchor_image_match = if st.wrap_around_cs == 0 {
-                    let body_left = page_def.margin_left as i32;
-                    let expected_cs_hu = paragraphs
-                        .get(st.wrap_around_table_para)
-                        .and_then(|p| {
-                            p.controls.iter().find_map(|c| {
-                                let cm = match c {
-                                    Control::Picture(pic) => Some(&pic.common),
-                                    Control::Shape(s) => {
-                                        if let crate::model::shape::ShapeObject::Picture(pic) =
-                                            s.as_ref()
-                                        {
-                                            Some(&pic.common)
-                                        } else {
-                                            None
-                                        }
-                                    }
-                                    _ => None,
-                                };
-                                cm.filter(|cm| {
-                                    !cm.treat_as_char
-                                        && matches!(
-                                            cm.text_wrap,
-                                            crate::model::shape::TextWrap::Square
-                                        )
-                                })
-                                .map(|cm| {
-                                    cm.horizontal_offset as i32
-                                        + cm.width as i32
-                                        + 2 * cm.margin.right as i32
-                                        - body_left
-                                })
-                            })
-                        })
-                        .unwrap_or(0);
-                    expected_cs_hu > 0
-                        && (para_cs - expected_cs_hu).abs() < 200
-                        && para_sw > 0
-                        && para_cs + para_sw <= body_w + 200
-                } else {
-                    false
-                };
-                // [Task #901] cs 일치 + 합리적 sw 매칭 (anchor 의 wrap zone region 다양성).
-                // pic2.hwp paragraph 1 (cs=24470 sw=18050) vs anchor (wrap_around_cs=24470 sw=2570)
-                // — cs 같지만 sw 다름 (다른 wrap region). 기존 매칭 실패 → wrap_anchors 미등록
-                // → paragraph 좌측 그려짐. anchor_any_seg 가 활성이면 cs 정확 일치 만으로
-                // wrap zone 내부 paragraph 로 인정.
-                let cs_only_match =
-                    st.wrap_around_any_seg && para_cs == st.wrap_around_cs && para_sw > 0;
-                if (para_cs == st.wrap_around_cs && para_sw == st.wrap_around_sw)
-                    || (any_seg_matches && (is_empty_para || st.wrap_around_any_seg))
-                    || sw0_match
-                    || anchor_image_match
-                    || cs_only_match
-                {
-                    // [Task #604 R3] wrap_around 매칭 분기를 anchor 종류 기반으로 본질화.
-                    //
-                    // - Picture (그림 Square wrap) anchor: wrap text 가 LineSeg cs/sw 로
-                    //   사전 인코딩됨 → wrap_anchors 등록 + FullParagraph 통과
-                    //   (layout 이 LineSeg cs/sw 정합 렌더)
-                    // - Table (표 Square wrap) anchor: wrap text 는 표 옆 빈 ↵ 표시용
-                    //   → 흡수 (current_column_wrap_around_paras)
-                    //
-                    // Stage 2b: Paragraph.wrap_precomputed (HWP3 휴리스틱 IR 누설) 제거.
-                    // anchor paragraph 의 controls 검사로 본질 정합 대체.
-                    let anchor_is_picture = paragraphs
-                        .get(st.wrap_around_table_para)
-                        .map(|p| {
-                            p.controls.iter().any(|c| match c {
-                                Control::Picture(pic) => !pic.common.treat_as_char,
-                                Control::Shape(s) => {
-                                    if let crate::model::shape::ShapeObject::Picture(pic) =
-                                        s.as_ref()
-                                    {
-                                        !pic.common.treat_as_char
-                                    } else {
-                                        false
-                                    }
-                                }
-                                _ => false,
-                            })
-                        })
-                        .unwrap_or(false);
-                    if anchor_is_picture {
-                        // Picture anchor: wrap_anchors 등록 + FullParagraph 통과
-                        // [Task #722] anchor image 의 outer margin_right (HU) 추출
-                        let anchor_margin_right = paragraphs
-                            .get(st.wrap_around_table_para)
-                            .and_then(|p| {
-                                p.controls.iter().find_map(|c| {
-                                    let cm = match c {
-                                        Control::Picture(pic) => Some(&pic.common),
-                                        Control::Shape(s) => {
-                                            if let crate::model::shape::ShapeObject::Picture(pic) =
-                                                s.as_ref()
-                                            {
-                                                Some(&pic.common)
-                                            } else {
-                                                None
-                                            }
-                                        }
-                                        _ => None,
-                                    };
-                                    cm.filter(|cm| {
-                                        !cm.treat_as_char
-                                            && matches!(
-                                                cm.text_wrap,
-                                                crate::model::shape::TextWrap::Square
-                                            )
-                                    })
-                                    .map(|cm| cm.margin.right as i32)
-                                })
-                            })
-                            .unwrap_or(0);
-                        st.current_column_wrap_anchors.insert(
-                            para_idx,
-                            crate::renderer::pagination::WrapAnchorRef {
-                                anchor_para_index: st.wrap_around_table_para,
-                                anchor_cs: st.wrap_around_cs,
-                                anchor_sw: st.wrap_around_sw,
-                                anchor_image_margin_right: anchor_margin_right,
-                            },
-                        );
-                    } else {
-                        // Table anchor: 어울림 문단을 표 옆에 기록 + height 소비 없음.
-                        // [Task #855] 단, 첫 줄만 표 옆이고 나머지 줄이 본문 전체 폭으로
-                        // 흐르는 문단(= 마지막 LINE_SEG 가 wrap zone cs/sw 와 불일치)은
-                        // 0-높이 흡수 대상이 아니다. 첫 LINE_SEG 만 보고 흡수하면 그런 문단이
-                        // 통째로 페이지 흐름에서 누락된다. 이 경우 wrap zone 을 종료하고
-                        // 일반 텍스트 배치로 폴백한다 (LINE_SEG cs/sw 가 이미 wrap 형상을
-                        // 인코딩하므로 layout 이 첫 줄을 표 옆에, 나머지를 표 아래에 렌더).
-                        let last_seg_match = para
-                            .line_segs
-                            .last()
-                            .map(|s| {
-                                s.column_start == st.wrap_around_cs
-                                    && s.segment_width as i32 == st.wrap_around_sw
-                            })
-                            .unwrap_or(false);
-                        if last_seg_match || is_empty_para {
-                            // [Task #1745] 다쪽 분할 표는 첫 fragment column 에 소급 기록.
-                            st.record_wrap_around_para(
-                                crate::renderer::pagination::WrapAroundPara {
-                                    para_index: para_idx,
-                                    table_para_index: st.wrap_around_table_para,
-                                    has_text: !is_empty_para,
-                                },
-                            );
-                            continue;
-                        }
-                        st.wrap_around_cs = -1;
-                        st.wrap_around_sw = -1;
-                        st.wrap_around_any_seg = false;
-                        // fall through → 일반 paragraph 배치
-                    }
-                } else {
-                    // 매칭 실패 → wrap zone 종료, 정상 처리 진행
-                    st.wrap_around_cs = -1;
-                    st.wrap_around_sw = -1;
-                    st.wrap_around_any_seg = false;
-                    // [Task #741 Stage 4] 매칭 실패 paragraph 의 vpos=0 hint (page break 의도)
-                    // 발견 시 advance_column_or_new_page. wrap_around active 종료 후 추가 가드.
-                    // hwp3-sample10-hwp5.hwp paragraph 26 ("● 제목차례 ●") case —
-                    // paragraph 22 anchor (cs=11084) active 유지로 line 419 vpos-reset 가드
-                    // 미발현 → 매칭 실패 후 추가 vpos-reset 가드로 페이지 break 정합.
-                    if para_idx > 0 && !st.current_items.is_empty() {
-                        let prev_para = &paragraphs[para_idx - 1];
-                        let curr_first_vpos = para.line_segs.first().map(|s| s.vertical_pos);
-                        let prev_last_vpos = prev_para.line_segs.last().map(|s| s.vertical_pos);
-                        if let (Some(cv), Some(pv)) = (curr_first_vpos, prev_last_vpos) {
-                            let trigger = if st.col_count > 1 {
-                                cv < pv && pv > 5000
-                            } else {
-                                cv == 0 && pv > 5000
-                            };
-                            if trigger {
-                                st.advance_column_or_new_page();
-                            }
-                        }
-                    }
-                }
+            if self.typeset_wrap_around_paragraph(
+                &mut st, para, paragraphs, para_idx, has_table, page_def,
+            ) {
+                continue;
             }
 
             st.ensure_page();
