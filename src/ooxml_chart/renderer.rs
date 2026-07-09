@@ -1616,8 +1616,11 @@ mod tests {
         let svg = render_chart_svg(&chart, 0.0, 0.0, 400.0, 300.0);
         let ds = marker_ds(&svg);
         assert_eq!(ds.len(), 12);
-        let skel =
-            |d: &str| d.chars().filter(|c| c.is_ascii_alphabetic()).collect::<String>();
+        let skel = |d: &str| {
+            d.chars()
+                .filter(|c| c.is_ascii_alphabetic())
+                .collect::<String>()
+        };
         // 시리즈별 첫 마커: [0]=◆, [4]=■, [8]=▲
         assert_eq!(skel(&ds[0]), "MLLLZ", "◆ 4각형");
         assert_eq!(skel(&ds[4]), "MLLLZ", "■ 4각형");
