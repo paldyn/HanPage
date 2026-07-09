@@ -400,7 +400,14 @@ impl Paragraph {
 
     /// 빈 문단을 생성한다 (문단 끝 마커만 포함).
     ///
-    /// 표 셀 생성 등에서 최소한의 유효한 문단이 필요할 때 사용한다.
+    /// `para_shape_id`/`style_id` 는 0, `char_shapes` 는 빈 채로 남는다. 이 0 은
+    /// "기본 서식" 이 아니라 그 문서 `header.xml` 의 **0번 항목**이며, 저장기는 빈
+    /// `char_shapes` 를 `charPrIDRef="0"` 으로 쓴다. 따라서 이미 존재하는 문서에
+    /// 문단을 끼워 넣을 때 이 함수를 쓰면 그 문서의 0번 문단모양·글자모양이 적용된다.
+    ///
+    /// 상속할 이웃 문단이 있는 경우 [`Paragraph::new_empty_like`] 를 쓴다. 이 함수는
+    /// 상속원이 아예 없는 경우 — 새 빈 문서 생성, HTML 임포트, 문단이 하나도 없던
+    /// 셀을 파싱할 때 — 에만 쓴다.
     pub fn new_empty() -> Self {
         Paragraph {
             char_count: 1, // 끝 마커(0x000D) 포함
@@ -414,6 +421,27 @@ impl Paragraph {
                 ..Default::default()
             }],
             ..Default::default()
+        }
+    }
+
+    /// `template` 의 서식을 상속한 빈 문단을 생성한다.
+    ///
+    /// 문단모양(`para_shape_id`), 스타일(`style_id`), 첫 글자모양(`char_shapes[0]`)
+    /// 만 가져온다. 텍스트·컨트롤·필드는 상속하지 않는다.
+    pub fn new_empty_like(template: &Paragraph) -> Self {
+        Paragraph {
+            para_shape_id: template.para_shape_id,
+            style_id: template.style_id,
+            char_shapes: template
+                .char_shapes
+                .first()
+                .map(|cs| CharShapeRef {
+                    start_pos: 0,
+                    char_shape_id: cs.char_shape_id,
+                })
+                .into_iter()
+                .collect(),
+            ..Paragraph::new_empty()
         }
     }
 
