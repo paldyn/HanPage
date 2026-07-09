@@ -1429,9 +1429,10 @@ fn is_synthetic_line_seg(ls: &LineSeg) -> bool {
 /// 이동) 리셋 신호 제외가 과충전을 만들지 않는다.
 fn para_is_page_bottom_fixed_table_anchor(para: &Paragraph) -> bool {
     !para_has_visible_text(para)
-        && para.controls.iter().any(
-            |c| matches!(c, Control::Table(t) if is_page_bottom_fixed_float(&t.common)),
-        )
+        && para
+            .controls
+            .iter()
+            .any(|c| matches!(c, Control::Table(t) if is_page_bottom_fixed_float(&t.common)))
 }
 
 fn paragraph_saved_vpos_reset_starts_new_page_after(
