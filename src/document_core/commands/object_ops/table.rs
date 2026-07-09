@@ -453,6 +453,13 @@ impl DocumentCore {
                 for cp in &mut cell.paragraphs {
                     cp.char_count_msb = true;
                     cp.para_shape_id = default_para_shape_id;
+                    // Cell::new_empty() 의 문단은 char_shapes 가 비어 있고, 저장기는 그것을
+                    // charPrIDRef="0" 으로 쓴다. 아래 raw_header_extra 가 n_char_shapes=1 을
+                    // 주장하는 것과도 어긋난다. 표를 삽입한 문단의 글자모양을 상속한다.
+                    cp.char_shapes = vec![CharShapeRef {
+                        start_pos: 0,
+                        char_shape_id: default_char_shape_id,
+                    }];
                     if cp.raw_header_extra.len() < 10 {
                         let mut rhe = vec![0u8; 10];
                         rhe[0..2].copy_from_slice(&1u16.to_le_bytes()); // n_char_shapes=1
@@ -863,6 +870,12 @@ impl DocumentCore {
                 for cp in &mut cell.paragraphs {
                     cp.char_count_msb = true;
                     cp.para_shape_id = default_para_shape_id;
+                    // create_table_native 와 동일 — 빈 char_shapes 는 charPrIDRef="0" 이 된다.
+                    // default_char_shape_id 는 여기서 쓰라고 계산된 값이었으나 누락돼 있었다.
+                    cp.char_shapes = vec![CharShapeRef {
+                        start_pos: 0,
+                        char_shape_id: default_char_shape_id,
+                    }];
                     if cp.raw_header_extra.len() < 10 {
                         let mut rhe = vec![0u8; 10];
                         rhe[0..2].copy_from_slice(&1u16.to_le_bytes());
@@ -1489,5 +1502,76 @@ impl DocumentCore {
             ctrl: outer_table_ctrl,
         });
         Ok("{\"ok\":true}".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::document_core::DocumentCore;
+    use crate::model::control::Control;
+    use crate::model::paragraph::CharShapeRef;
+    use crate::model::table::Table;
+
+    /// 표를 삽입한 문단에 서식을 심고, 그 문서에서 표를 만든다.
+    fn core_with_shaped_paragraph() -> DocumentCore {
+        let mut core = DocumentCore::new_empty();
+        core.create_blank_document_native().unwrap();
+        let para = &mut core.document.sections[0].paragraphs[0];
+        para.para_shape_id = 12;
+        para.char_shapes = vec![CharShapeRef {
+            start_pos: 0,
+            char_shape_id: 7,
+        }];
+        core
+    }
+
+    fn table_of(core: &DocumentCore) -> &Table {
+        core.document.sections[0]
+            .paragraphs
+            .iter()
+            .find_map(|p| {
+                p.controls.iter().find_map(|c| match c {
+                    Control::Table(t) => Some(t.as_ref()),
+                    _ => None,
+                })
+            })
+            .expect("표 컨트롤")
+    }
+
+    /// Cell::new_empty() 의 문단은 char_shapes 가 비어 있고, 저장기는 그것을
+    /// charPrIDRef="0" 으로 쓴다 — 새 표의 셀에 글자를 입력하면 문서의 0번
+    /// 글자모양이 나온다. 표를 삽입한 문단의 글자모양을 상속해야 한다.
+    fn assert_cells_inherit_shape(table: &Table) {
+        assert!(!table.cells.is_empty(), "셀이 있어야 한다");
+        for cell in &table.cells {
+            let para = &cell.paragraphs[0];
+            assert_eq!(
+                para.para_shape_id, 12,
+                "셀 ({},{}) para_shape_id",
+                cell.row, cell.col
+            );
+            assert_eq!(
+                para.char_shapes.first().map(|cs| cs.char_shape_id),
+                Some(7),
+                "셀 ({},{}) char_shapes — 비면 charPrIDRef=0",
+                cell.row,
+                cell.col
+            );
+        }
+    }
+
+    #[test]
+    fn create_table_native_cells_inherit_char_shape() {
+        let mut core = core_with_shaped_paragraph();
+        core.create_table_native(0, 0, 0, 2, 3).unwrap();
+        assert_cells_inherit_shape(table_of(&core));
+    }
+
+    #[test]
+    fn create_table_ex_native_cells_inherit_char_shape() {
+        let mut core = core_with_shaped_paragraph();
+        core.create_table_ex_native(0, 0, 0, 2, 3, false, None, None)
+            .unwrap();
+        assert_cells_inherit_shape(table_of(&core));
     }
 }
