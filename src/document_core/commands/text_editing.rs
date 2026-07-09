@@ -215,15 +215,7 @@ fn empty_paragraph_after_normal_flow(anchor: &Paragraph) -> Paragraph {
 }
 
 fn empty_paragraph_after_table_anchor(anchor: &Paragraph) -> Paragraph {
-    let mut para = Paragraph::new_empty();
-    para.para_shape_id = anchor.para_shape_id;
-    para.style_id = anchor.style_id;
-    para.char_shapes = anchor
-        .char_shapes
-        .first()
-        .cloned()
-        .map(|shape| vec![shape])
-        .unwrap_or_default();
+    let mut para = Paragraph::new_empty_like(anchor);
     if let Some(seg) = para.line_segs.first_mut() {
         if let Some(anchor_seg) = anchor.line_segs.first() {
             seg.segment_width = anchor_seg.segment_width;
@@ -1865,10 +1857,15 @@ impl DocumentCore {
 
         self.document.sections[section_idx].raw_stream = None;
 
-        let new_para = Paragraph::new_empty();
-        self.document.sections[section_idx]
-            .paragraphs
-            .insert(para_idx, new_para);
+        // 새 문단은 앞 문단의 서식을 상속한다 (한글에서 문단 끝에 Enter 를 친 것과 같은 결과).
+        // para_idx == 0 이면 앞 문단이 없으므로 뒤로 밀려날 현재 0번 문단을 상속원으로 쓴다.
+        // 두 경우 모두 없을 때(빈 구역)만 상속원이 존재하지 않는다.
+        let template_idx = para_idx.saturating_sub(1);
+        let paragraphs = &mut self.document.sections[section_idx].paragraphs;
+        let new_para = paragraphs
+            .get(template_idx)
+            .map_or_else(Paragraph::new_empty, Paragraph::new_empty_like);
+        paragraphs.insert(para_idx, new_para);
 
         let reflow_target = if para_idx > 0 { para_idx - 1 } else { para_idx };
         let old_col = self
@@ -3122,6 +3119,135 @@ impl DocumentCore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::paragraph::CharShapeRef;
+
+    /// insert_paragraph_native 는 새 문단의 서식을 이웃에서 상속해야 한다.
+    ///
+    /// `Paragraph::new_empty()` 를 그대로 삽입하면 para_shape_id/style_id 는 0 이 되고
+    /// char_shapes 는 비어 저장기가 charPrIDRef="0" 을 쓴다. 0 은 기본 서식이 아니라
+    /// 문서 header 의 0번 항목이므로, 삽입된 문단만 다른 서식으로 보인다.
+    ///
+    /// 경계별로 검증한다: para_idx == 0 / 중간 / 끝(== len) / 상속원 없음.
+    fn set_shape(
+        core: &mut DocumentCore,
+        idx: usize,
+        para_shape_id: u16,
+        style_id: u8,
+        char_shape_id: u32,
+    ) {
+        let para = &mut core.document.sections[0].paragraphs[idx];
+        para.para_shape_id = para_shape_id;
+        para.style_id = style_id;
+        para.char_shapes = vec![CharShapeRef {
+            start_pos: 0,
+            char_shape_id,
+        }];
+    }
+
+    fn shape_of(core: &DocumentCore, idx: usize) -> (u16, u8, Option<u32>) {
+        let p = &core.document.sections[0].paragraphs[idx];
+        (
+            p.para_shape_id,
+            p.style_id,
+            p.char_shapes.first().map(|cs| cs.char_shape_id),
+        )
+    }
+
+    /// 서로 다른 서식을 가진 두 문단을 공개 API 로만 구성한다
+    /// (composed / para_column_map 을 엔진이 동기화하도록 둔다).
+    fn core_with_two_shaped_paragraphs() -> DocumentCore {
+        let mut core = DocumentCore::new_empty();
+        core.create_blank_document_native().unwrap();
+        core.insert_text_native(0, 0, 0, "첫째").unwrap();
+        core.split_paragraph_native(0, 0, 2).unwrap();
+        core.insert_text_native(0, 1, 0, "둘째").unwrap();
+        set_shape(&mut core, 0, 12, 3, 7);
+        set_shape(&mut core, 1, 14, 5, 9);
+        core
+    }
+
+    #[test]
+    fn insert_paragraph_inherits_shape_from_previous_paragraph() {
+        let mut core = core_with_two_shaped_paragraphs();
+
+        // 중간 삽입: 앞 문단(idx 0)에서 상속
+        core.insert_paragraph_native(0, 1).unwrap();
+        assert_eq!(
+            shape_of(&core, 1),
+            (12, 3, Some(7)),
+            "중간 삽입은 앞 문단 상속"
+        );
+        assert_eq!(shape_of(&core, 2), (14, 5, Some(9)), "밀려난 문단은 불변");
+    }
+
+    #[test]
+    fn insert_paragraph_at_zero_inherits_from_following_paragraph() {
+        let mut core = core_with_two_shaped_paragraphs();
+
+        // para_idx == 0: 앞 문단이 없으므로 뒤로 밀려날 현재 0번을 상속원으로 쓴다
+        core.insert_paragraph_native(0, 0).unwrap();
+        assert_eq!(
+            shape_of(&core, 0),
+            (12, 3, Some(7)),
+            "0번 삽입은 뒤 문단 상속"
+        );
+    }
+
+    #[test]
+    fn insert_paragraph_at_end_inherits_from_last_paragraph() {
+        let mut core = core_with_two_shaped_paragraphs();
+        let para_count = core.document.sections[0].paragraphs.len();
+
+        // para_idx == len: 맨 끝에 덧붙이기, 마지막 문단에서 상속
+        core.insert_paragraph_native(0, para_count).unwrap();
+        assert_eq!(
+            shape_of(&core, para_count),
+            (14, 5, Some(9)),
+            "끝 삽입은 마지막 문단 상속"
+        );
+    }
+
+    /// 상속원이 존재하지 않는 유일한 경우 — new_empty() 로 후퇴한다.
+    #[test]
+    fn new_empty_like_without_char_shapes_leaves_char_shapes_empty() {
+        let mut template = Paragraph::new_empty();
+        template.para_shape_id = 12;
+        template.style_id = 3;
+        assert!(template.char_shapes.is_empty());
+
+        let para = Paragraph::new_empty_like(&template);
+        assert_eq!(para.para_shape_id, 12);
+        assert_eq!(para.style_id, 3);
+        assert!(
+            para.char_shapes.is_empty(),
+            "템플릿에 글자모양이 없으면 빈 채로 둔다"
+        );
+    }
+
+    /// new_empty_like 는 템플릿 문단 *끝* 글자모양만, start_pos 를 0 으로
+    /// 정규화해 가져온다 — 새 문단은 템플릿 뒤에 이어지므로(문단 끝 Enter)
+    /// 혼합 글자모양 문단에서 첫 엔트리(7)가 아니라 끝 엔트리(9)가 기준이다.
+    #[test]
+    fn new_empty_like_takes_last_char_shape_at_pos_zero() {
+        let mut template = Paragraph::new_empty();
+        template.text = "가나다".to_string();
+        template.char_shapes = vec![
+            CharShapeRef {
+                start_pos: 0,
+                char_shape_id: 7,
+            },
+            CharShapeRef {
+                start_pos: 2,
+                char_shape_id: 9,
+            },
+        ];
+
+        let para = Paragraph::new_empty_like(&template);
+        assert_eq!(para.char_shapes.len(), 1, "끝 글자모양만 상속");
+        assert_eq!(para.char_shapes[0].start_pos, 0);
+        assert_eq!(para.char_shapes[0].char_shape_id, 9);
+        assert!(para.text.is_empty(), "텍스트는 상속하지 않는다");
+    }
 
     #[test]
     fn test_page_overflow_with_enter() {
