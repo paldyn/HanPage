@@ -56,3 +56,24 @@ fn issue_2099_pua_test_svg_matches_visible_f53a_baseline() {
         "pua-test의 U+F53A 기준 글리프도 `ᄒᆞᆫ`으로 확장되어야 함",
     );
 }
+
+#[test]
+fn issue_2099_revision13_page1_prioritizes_old_hangul_font() {
+    let svg = render_sample_page("samples/한글문서파일형식_5.0_revision1.3.hwp", 0);
+    assert!(
+        !svg.contains('\u{F53A}'),
+        "사용자 재현 68쪽 배포본 SVG에도 raw U+F53A가 남으면 안 됨",
+    );
+    let needle = "\u{1112}\u{119E}\u{11AB}</text>";
+    let text_end = svg
+        .find(needle)
+        .expect("사용자 재현 68쪽 배포본 1쪽 제목에 `ᄒᆞᆫ` 클러스터가 있어야 함");
+    let text_start = svg[..text_end]
+        .rfind("<text ")
+        .expect("`ᄒᆞᆫ` 클러스터는 독립 SVG text node로 출력되어야 함");
+    let text_node = &svg[text_start..text_end];
+    assert!(
+        text_node.contains("font-family=\"&apos;Source Han Serif K Old Hangul&apos;,"),
+        "`ᄒᆞᆫ` 클러스터는 일반 고딕 폰트보다 옛한글 전용 폰트를 우선해야 함: {text_node}",
+    );
+}
