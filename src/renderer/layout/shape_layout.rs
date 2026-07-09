@@ -18,7 +18,7 @@ use super::{CellContext, CellPathEntry};
 use crate::model::bin_data::BinDataContent;
 use crate::model::control::Control;
 use crate::model::paragraph::Paragraph;
-use crate::model::shape::{CommonObjAttr, DrawingObjAttr, TextBox};
+use crate::model::shape::{Caption, CommonObjAttr, DrawingObjAttr, ShapeObject, TextBox};
 use crate::model::shape::{HorzAlign, HorzRelTo, VertAlign, VertRelTo};
 use crate::model::style::{Alignment, FillType};
 
@@ -36,6 +36,21 @@ fn textbox_contains_non_tac_picture(text_box: &TextBox) -> bool {
             .iter()
             .any(|control| matches!(control, Control::Picture(pic) if !pic.common.treat_as_char))
     })
+}
+
+fn shape_caption_for_layout(shape: &ShapeObject) -> Option<Caption> {
+    match shape {
+        ShapeObject::Line(s) => s.drawing.caption.clone(),
+        ShapeObject::Rectangle(s) => s.drawing.caption.clone(),
+        ShapeObject::Ellipse(s) => s.drawing.caption.clone(),
+        ShapeObject::Arc(s) => s.drawing.caption.clone(),
+        ShapeObject::Polygon(s) => s.drawing.caption.clone(),
+        ShapeObject::Curve(s) => s.drawing.caption.clone(),
+        ShapeObject::Group(s) => s.caption.clone(),
+        ShapeObject::Picture(s) => s.caption.clone(),
+        ShapeObject::Chart(s) => s.caption.clone().or_else(|| s.drawing.caption.clone()),
+        ShapeObject::Ole(s) => s.caption.clone().or_else(|| s.drawing.caption.clone()),
+    }
 }
 
 fn textbox_vpos_origin_hu(common: &CommonObjAttr, matrix_positioned: bool) -> Option<i32> {
@@ -595,8 +610,6 @@ impl LayoutEngine {
         overflow_map: &std::collections::HashMap<(usize, usize), Vec<Paragraph>>,
         clamp_negative_para_offset: bool,
     ) {
-        use crate::model::shape::ShapeObject;
-
         let para = match paragraphs.get(para_index) {
             Some(p) => p,
             None => return,
@@ -766,14 +779,7 @@ impl LayoutEngine {
         };
 
         // 캡션 높이 및 간격 계산
-        let drawing = shape.drawing();
-        let caption_opt = drawing.and_then(|d| d.caption.clone()).or_else(|| {
-            if let ShapeObject::Group(g) = shape {
-                g.caption.clone()
-            } else {
-                None
-            }
-        });
+        let caption_opt = shape_caption_for_layout(shape);
         let caption = caption_opt.as_ref();
         let caption_height = self.calculate_caption_height(&caption_opt, styles);
         let caption_spacing = caption

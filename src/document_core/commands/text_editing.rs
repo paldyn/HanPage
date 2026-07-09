@@ -166,9 +166,7 @@ fn square_ole_wrap_chain_for_enter(
     paragraphs: &[Paragraph],
     para_idx: usize,
 ) -> Option<SquareOleWrapChainForEnter> {
-    let Some(anchor) = paragraphs.get(para_idx) else {
-        return None;
-    };
+    let anchor = paragraphs.get(para_idx)?;
     if let Some(chain) = square_ole_anchor_wrap_chain_for_enter(anchor) {
         return Some(chain);
     }
@@ -179,9 +177,7 @@ fn square_ole_wrap_chain_for_enter(
     let mut idx = para_idx;
     while idx > 0 {
         idx -= 1;
-        let Some(prev) = paragraphs.get(idx) else {
-            return None;
-        };
+        let prev = paragraphs.get(idx)?;
         if let Some(chain) = square_ole_anchor_wrap_chain_for_enter(prev) {
             return (chain.column_start == anchor.line_segs[0].column_start
                 && chain.segment_width == anchor.line_segs[0].segment_width)
@@ -2793,23 +2789,60 @@ impl DocumentCore {
             .ok_or_else(|| HwpError::RenderError(format!("문단 {} 범위 초과", parent_para_idx)))?;
 
         for (i, &(ctrl_idx, cell_idx, cell_para_idx)) in path.iter().enumerate() {
-            let table = match para.controls.get_mut(ctrl_idx) {
-                Some(Control::Table(t)) => t.as_mut(),
+            let is_last = i == path.len() - 1;
+            let paragraphs = match para.controls.get_mut(ctrl_idx) {
+                Some(Control::Table(t)) => {
+                    let cell = t.cells.get_mut(cell_idx).ok_or_else(|| {
+                        HwpError::RenderError(format!("경로[{}]: 셀 {} 범위 초과", i, cell_idx))
+                    })?;
+                    &mut cell.paragraphs
+                }
+                Some(Control::Shape(shape)) => {
+                    if cell_idx != 0 {
+                        return Err(HwpError::RenderError(format!(
+                            "경로[{}]: 글상자의 cell_index는 0이어야 합니다 ({})",
+                            i, cell_idx
+                        )));
+                    }
+                    let text_box = super::super::helpers::get_textbox_from_shape_mut(shape)
+                        .ok_or_else(|| {
+                            HwpError::RenderError(format!(
+                                "경로[{}]: controls[{}]가 텍스트 글상자가 아닙니다",
+                                i, ctrl_idx
+                            ))
+                        })?;
+                    &mut text_box.paragraphs
+                }
+                Some(Control::Picture(pic)) => {
+                    if cell_idx != 0 {
+                        return Err(HwpError::RenderError(format!(
+                            "경로[{}]: 그림 캡션의 cell_index는 0이어야 합니다 ({})",
+                            i, cell_idx
+                        )));
+                    }
+                    let caption = pic.caption.as_mut().ok_or_else(|| {
+                        HwpError::RenderError(format!(
+                            "경로[{}]: controls[{}] 그림에 캡션이 없습니다",
+                            i, ctrl_idx
+                        ))
+                    })?;
+                    &mut caption.paragraphs
+                }
                 _ => {
                     return Err(HwpError::RenderError(format!(
-                        "경로[{}]: controls[{}]가 표가 아닙니다",
+                        "경로[{}]: controls[{}]가 표/글상자/그림 캡션이 아닙니다",
                         i, ctrl_idx
                     )))
                 }
             };
-            let cell = table.cells.get_mut(cell_idx).ok_or_else(|| {
-                HwpError::RenderError(format!("경로[{}]: 셀 {} 범위 초과", i, cell_idx))
-            })?;
-            if i == path.len() - 1 {
-                return Ok(&mut cell.paragraphs);
+            if is_last {
+                return Ok(paragraphs);
             }
-            para = cell.paragraphs.get_mut(cell_para_idx).ok_or_else(|| {
-                HwpError::RenderError(format!("경로[{}]: 셀문단 {} 범위 초과", i, cell_para_idx))
+            para = paragraphs.get_mut(cell_para_idx).ok_or_else(|| {
+                HwpError::RenderError(format!(
+                    "경로[{}]: 컨테이너 문단 {} 범위 초과",
+                    i, cell_para_idx
+                ))
             })?;
         }
         unreachable!()

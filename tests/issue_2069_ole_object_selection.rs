@@ -136,6 +136,15 @@ fn collect_para_end_anchors<'a>(node: &'a RenderNode, out: &mut Vec<&'a RenderNo
     }
 }
 
+fn collect_text_run_nodes<'a>(node: &'a RenderNode, out: &mut Vec<&'a RenderNode>) {
+    if matches!(node.node_type, RenderNodeType::TextRun(_)) {
+        out.push(node);
+    }
+    for child in &node.children {
+        collect_text_run_nodes(child, out);
+    }
+}
+
 fn assert_enter_after_square_ole_keeps_wrap_zone(rel: &str) {
     let mut core = load_core(rel);
     let original_line_seg = core.document().sections[0].paragraphs[0].line_segs[0].clone();
@@ -773,15 +782,145 @@ fn assert_ole_caption_properties_roundtrip(rel: &str) {
         .caption
         .as_ref()
         .unwrap_or_else(|| panic!("OLE caption model missing for {}", rel));
+    let cap_para = caption
+        .paragraphs
+        .first()
+        .unwrap_or_else(|| panic!("OLE caption paragraph missing for {}", rel));
+    assert_eq!(cap_para.text, "그림  ", "OLE caption text prefix");
+    assert_eq!(
+        cap_para.char_offsets,
+        vec![0, 1, 2, 11],
+        "OLE caption AutoNumber placeholder offsets"
+    );
+    let auto_number = cap_para
+        .controls
+        .iter()
+        .find_map(|ctrl| match ctrl {
+            Control::AutoNumber(auto)
+                if matches!(
+                    auto.number_type,
+                    rhwp::model::control::AutoNumberType::Picture
+                ) =>
+            {
+                Some(auto)
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("OLE caption AutoNumber missing for {}", rel));
+    assert_eq!(
+        auto_number.assigned_number, 1,
+        "new OLE caption should be assigned as figure 1 for {}",
+        rel
+    );
+    assert_eq!(
+        auto_number.suffix_char, '.',
+        "new OLE caption should keep the HWP figure-number suffix for {}",
+        rel
+    );
+
+    let layout_json = core
+        .get_page_control_layout_native(0)
+        .unwrap_or_else(|e| panic!("layout after OLE caption {}: {:?}", rel, e));
+    let layout: Value = serde_json::from_str(&layout_json).unwrap_or_else(|e| {
+        panic!(
+            "parse layout after OLE caption {} `{}`: {}",
+            rel, layout_json, e
+        )
+    });
+    let ole_layout = layout["controls"]
+        .as_array()
+        .and_then(|controls| controls.iter().find(|control| control["type"] == "ole"))
+        .unwrap_or_else(|| panic!("OLE layout missing after caption set for {}", rel));
+    let ole_right = ole_layout["x"].as_f64().unwrap() + ole_layout["w"].as_f64().unwrap();
+
+    let tree = core
+        .build_page_render_tree(0)
+        .unwrap_or_else(|e| panic!("render tree after OLE caption {}: {:?}", rel, e));
+    let mut text_runs = Vec::new();
+    collect_text_run_nodes(&tree.root, &mut text_runs);
+    let rendered_text = text_runs
+        .iter()
+        .filter_map(|node| match &node.node_type {
+            RenderNodeType::TextRun(run) => Some(run.text.as_str()),
+            _ => None,
+        })
+        .collect::<String>();
+    let caption_run = text_runs
+        .iter()
+        .find(|node| {
+            matches!(
+                &node.node_type,
+                RenderNodeType::TextRun(run)
+                    if run.text.contains("그림") && run.text.contains("1.")
+            )
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "OLE caption should render as visible figure text for {}: rendered={:?}",
+                rel, rendered_text
+            )
+        });
     assert!(
-        caption
-            .paragraphs
-            .first()
-            .is_some_and(|para| para.controls.iter().any(|ctrl| {
-                matches!(ctrl, Control::AutoNumber(auto) if matches!(auto.number_type, rhwp::model::control::AutoNumberType::Picture))
-            })),
+        caption_run.bbox.x > ole_right,
+        "OLE right caption should render to the right of the OLE preview for {}: caption={:?}, ole={}",
+        rel,
+        caption_run.bbox,
+        ole_layout
+    );
+    assert!(
+        caption_run.bbox.width > 0.0 && caption_run.bbox.height > 0.0,
         "new OLE caption should contain a picture AutoNumber control for {}",
         rel
+    );
+
+    core.set_shape_properties_native(0, 0, 2, r#"{"hasCaption":false}"#)
+        .unwrap_or_else(|e| panic!("remove OLE caption props {}: {:?}", rel, e));
+    let removed_json = core
+        .get_shape_properties_native(0, 0, 2)
+        .unwrap_or_else(|e| panic!("get OLE props after caption removal {}: {:?}", rel, e));
+    let removed: Value = serde_json::from_str(&removed_json).unwrap_or_else(|e| {
+        panic!(
+            "parse OLE props after caption removal {} `{}`: {}",
+            rel, removed_json, e
+        )
+    });
+    assert_eq!(
+        removed["hasCaption"], false,
+        "center caption grid should remove the OLE caption for {}",
+        rel
+    );
+    let section = &core.document().sections[0];
+    let Some(Control::Shape(shape)) = section.paragraphs[0].controls.get(2) else {
+        panic!("OLE shape missing after caption removal for {}", rel);
+    };
+    let ShapeObject::Ole(ole) = shape.as_ref() else {
+        panic!(
+            "control 2 should remain OLE after caption removal for {}",
+            rel
+        );
+    };
+    assert!(
+        ole.caption.is_none() && ole.drawing.caption.is_none(),
+        "OLE caption slots should be cleared for {}",
+        rel
+    );
+    let tree = core
+        .build_page_render_tree(0)
+        .unwrap_or_else(|e| panic!("render tree after OLE caption removal {}: {:?}", rel, e));
+    let mut text_runs = Vec::new();
+    collect_text_run_nodes(&tree.root, &mut text_runs);
+    let rendered_text = text_runs
+        .iter()
+        .filter_map(|node| match &node.node_type {
+            RenderNodeType::TextRun(run) => Some(run.text.as_str()),
+            _ => None,
+        })
+        .collect::<String>();
+    assert!(
+        !rendered_text.contains("그림"),
+        "removed OLE caption should not remain visible for {}: rendered={:?}",
+        rel,
+        rendered_text
     );
 }
 
