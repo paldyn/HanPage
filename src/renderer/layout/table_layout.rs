@@ -499,6 +499,28 @@ struct HorizontalCellVars {
     inline_table_flow_y_shift: f64,
 }
 
+/// [Task #993] 분할 표 행 컷을 전진시킨다 — 분할 표 페이지네이션의 단일 권위 함수.
+///
+/// `start_cut`(이전 페이지까지 셀별 소비 유닛 수)에서 시작해, 각 셀을 공통
+/// 높이 예산 `avail_height` 안에서 동시 전진시킨다. 어느 유닛도 `avail_height`
+/// 안에 안 들어가면 진행 보장을 위해 셀당 유닛 1개는 강제 소비한다. vpos
+/// 리셋(hard break)을 만나면 그 셀은 거기서 정지한다.
+///
+/// 페이지네이터(분할 판정)와 렌더러(가시 범위)가 모두 이 함수를 호출하므로
+/// 두 경로의 컷이 정의상 일치한다.
+/// [#2173] 행-컷 워크 정책 — advance_row_cut / advance_row_block_cut 의
+/// 정책 drift 를 명시 플래그로 보존한 통합 (동작 불변).
+struct RowCutPolicy {
+    /// C(단일 행): row_has_prior_rowspan_cover / A(블록): false
+    hard_break_orphan: bool,
+    /// [Task #1658] 미세 fragment 흡수 — 단일 행 경로 전용
+    tiny_fragment_enabled: bool,
+    /// RHWP_CUT_DBG 덤프 라벨 (단일 행 경로 전용)
+    debug_row: Option<usize>,
+    /// orphan rewind 호출: A=Some(false)(항상, no-force) / C=orphan.then_some(true)
+    orphan_force: Option<bool>,
+}
+
 impl LayoutEngine {
     /// 셀 안 비-TAC 자리차지 개체가 표 흐름에 요구하는 세로 범위.
     ///
@@ -5842,30 +5864,15 @@ impl LayoutEngine {
             && (avail_height - consumed_height) > avail_height * 0.5
     }
 
-    /// [Task #993] 분할 표 행 컷을 전진시킨다 — 분할 표 페이지네이션의 단일 권위 함수.
-    ///
-    /// `start_cut`(이전 페이지까지 셀별 소비 유닛 수)에서 시작해, 각 셀을 공통
-    /// 높이 예산 `avail_height` 안에서 동시 전진시킨다. 어느 유닛도 `avail_height`
-    /// 안에 안 들어가면 진행 보장을 위해 셀당 유닛 1개는 강제 소비한다. vpos
-    /// 리셋(hard break)을 만나면 그 셀은 거기서 정지한다.
-    ///
-    /// 페이지네이터(분할 판정)와 렌더러(가시 범위)가 모두 이 함수를 호출하므로
-    /// 두 경로의 컷이 정의상 일치한다.
-    pub(crate) fn advance_row_cut(
+    fn advance_cells_cut(
         &self,
         table: &crate::model::table::Table,
-        row: usize,
+        row_cells: &[&crate::model::table::Cell],
         start_cut: &[usize],
         avail_height: f64,
         styles: &ResolvedStyleSet,
+        policy: RowCutPolicy,
     ) -> RowCutResult {
-        let mut row_cells: Vec<&crate::model::table::Cell> = table
-            .cells
-            .iter()
-            .filter(|c| c.row as usize == row && c.row_span == 1)
-            .collect();
-        row_cells.sort_by_key(|c| c.col);
-
         let mut end_cut: RowCut = Vec::with_capacity(row_cells.len());
         let mut hit_hard_break = false;
         let mut fully_consumed = true;
@@ -5881,10 +5888,10 @@ impl LayoutEngine {
         ) && (table.col_count <= 2 || table.row_count > 5)
             && !row_has_top_and_bottom_flow;
         let allow_midpage_reset_absorb = self.is_hwpx_source.get() || row_has_top_and_bottom_flow;
-        let rewind_internal_hard_break_orphan = Self::row_has_prior_rowspan_cover(table, row);
+        let rewind_internal_hard_break_orphan = policy.hard_break_orphan;
         for (i, cell) in row_cells.iter().enumerate() {
             let units = self.cell_units(cell, table, styles);
-            if std::env::var("RHWP_CUT_DBG").is_ok() {
+            if policy.debug_row.is_some() && std::env::var("RHWP_CUT_DBG").is_ok() {
                 let desc: Vec<String> = units
                     .iter()
                     .map(|u| {
@@ -5900,7 +5907,8 @@ impl LayoutEngine {
                     })
                     .collect();
                 eprintln!(
-                    "CUT_DBG row={row} cell={i} avail={avail_height:.1} units=[{}]",
+                    "CUT_DBG row={} cell={i} avail={avail_height:.1} units=[{}]",
+                    policy.debug_row.unwrap_or(0),
                     desc.join(" | ")
                 );
             }
@@ -5937,7 +5945,8 @@ impl LayoutEngine {
                 // 1~3줄 orphan 을 만든다(한글 COM 대조: 한글 break @line 5/40/75 vs rhwp 3·6/74·76).
                 // fresh 의 ≤2 는 #1488(가시 문단 사이 reset 3유닛 후 보존)을 깨지 않도록 유지한다.
                 let waste_thresh = if start > 0 { 3 } else { 2 };
-                let tiny_fragment_waste = j <= start + waste_thresh
+                let tiny_fragment_waste = policy.tiny_fragment_enabled
+                    && j <= start + waste_thresh
                     && !u.empty_spacer
                     && h + u.height <= avail_height
                     && avail_height - h > HARD_BREAK_REMAINING_TOLERANCE_PX;
@@ -5962,13 +5971,13 @@ impl LayoutEngine {
                         j += 1;
                         continue;
                     }
-                    if rewind_internal_hard_break_orphan {
+                    if let Some(force) = policy.orphan_force {
                         Self::rewind_rowbreak_orphan_before_hard_break(
                             table,
                             &units,
                             start,
                             avail_height,
-                            rewind_internal_hard_break_orphan,
+                            force,
                             &mut j,
                             &mut h,
                         );
@@ -6045,6 +6054,35 @@ impl LayoutEngine {
             consumed_height,
         }
     }
+    pub(crate) fn advance_row_cut(
+        &self,
+        table: &crate::model::table::Table,
+        row: usize,
+        start_cut: &[usize],
+        avail_height: f64,
+        styles: &ResolvedStyleSet,
+    ) -> RowCutResult {
+        let mut row_cells: Vec<&crate::model::table::Cell> = table
+            .cells
+            .iter()
+            .filter(|c| c.row as usize == row && c.row_span == 1)
+            .collect();
+        row_cells.sort_by_key(|c| c.col);
+        let orphan = Self::row_has_prior_rowspan_cover(table, row);
+        self.advance_cells_cut(
+            table,
+            &row_cells,
+            start_cut,
+            avail_height,
+            styles,
+            RowCutPolicy {
+                hard_break_orphan: orphan,
+                tiny_fragment_enabled: true,
+                debug_row: Some(row),
+                orphan_force: orphan.then_some(true),
+            },
+        )
+    }
 
     /// [Task #1025] 행블록 컷 — rowspan(rs>1) 셀로 묶인 연속 행 블록 `[b_start, b_end)`
     /// 의 셀을 `(row, col)` 안정 순서로 순회하며 CellUnit(줄/중첩 atom) 단위로 진행한다.
@@ -6068,145 +6106,19 @@ impl LayoutEngine {
         let mut cells = Self::row_block_cells(table, b_start, b_end);
         // 안정 순서: (row, col) 오름차순.
         cells.sort_by_key(|c| (c.row, c.col));
-
-        let mut end_cut: RowCut = Vec::with_capacity(cells.len());
-        let mut hit_hard_break = false;
-        let mut fully_consumed = true;
-        let mut consumed_height = 0.0f64;
-        const HARD_BREAK_REMAINING_TOLERANCE_PX: f64 = 32.0;
-        const ROWBREAK_VISIBLE_TAIL_OVERFLOW_TOLERANCE_PX: f64 = 120.0;
-        let block_has_top_and_bottom_flow = cells
-            .iter()
-            .any(|cell| self.cell_has_top_and_bottom_non_inline_flow(cell));
-        let relaxed_hard_break = matches!(
-            table.page_break,
-            crate::model::table::TablePageBreak::RowBreak
-        ) && (table.col_count <= 2 || table.row_count > 5)
-            && !block_has_top_and_bottom_flow;
-        let allow_midpage_reset_absorb = self.is_hwpx_source.get() || block_has_top_and_bottom_flow;
-        for (i, cell) in cells.iter().enumerate() {
-            let units = self.cell_units(cell, table, styles);
-            let start = start_cut.get(i).copied().unwrap_or(0).min(units.len());
-            let mut j = start;
-            let mut h = 0.0f64;
-            while j < units.len() {
-                let u = &units[j];
-                // 시작 유닛(j==start)은 항상 소비 — 진행 보장.
-                if start > 0
-                    && u.empty_spacer
-                    && !u.hard_break_before
-                    && units[start..=j].iter().all(|unit| unit.empty_spacer)
-                {
-                    j += 1;
-                    continue;
-                }
-                if start > 0
-                    && u.empty_spacer
-                    && !u.hard_break_before
-                    && units[j..]
-                        .iter()
-                        .all(|unit| unit.empty_spacer && !unit.hard_break_before)
-                {
-                    j = units.len();
-                    break;
-                }
-                if j > start
-                    && u.hard_break_before
-                    && (!relaxed_hard_break
-                        || (!u.empty_spacer
-                            && (h + u.height > avail_height
-                                || avail_height - h <= HARD_BREAK_REMAINING_TOLERANCE_PX)))
-                    && !units[start..j].iter().all(|unit| unit.empty_spacer)
-                {
-                    if self.should_absorb_midpage_saved_vpos_reset(
-                        table,
-                        u,
-                        h,
-                        avail_height,
-                        allow_midpage_reset_absorb,
-                    ) {
-                        h += u.height;
-                        j += 1;
-                        continue;
-                    }
-                    Self::rewind_rowbreak_orphan_before_hard_break(
-                        table,
-                        &units,
-                        start,
-                        avail_height,
-                        false,
-                        &mut j,
-                        &mut h,
-                    );
-                    hit_hard_break = true;
-                    break;
-                }
-                if j > start && h + u.height > avail_height {
-                    let visible_tail_before_spacer = relaxed_hard_break
-                        && !u.empty_spacer
-                        && u.vis_start < u.vis_end
-                        && h + u.height
-                            <= avail_height + ROWBREAK_VISIBLE_TAIL_OVERFLOW_TOLERANCE_PX
-                        && Self::grace_visible_tail_before_spacer(&units, j);
-                    if visible_tail_before_spacer {
-                        h += u.height;
-                        j += 1;
-                        continue;
-                    }
-                    // [#1921] sliver 흡수는 with_row_offsets 경로에만 적용한다. 이 walk 는
-                    // relaxed_hard_break(hard-break 조건부 무시) 의미론이라 다음 break 로의
-                    // 흡수가 비정상 경계를 강제한다(86712 공식PDF 65→66 회귀 실증).
-                    break;
-                }
-                if j > start
-                    && Self::would_orphan_non_inline_flow_before_spacer(&units, j, h, avail_height)
-                {
-                    // `advance_row_cut` 과 같은 CellUnit 구조 판정이다. 행블록 컷에서도
-                    // TopAndBottom 개체 유닛이 뒤 spacer 와 분리되어 고립되지 않게 한다.
-                    break;
-                }
-                h += u.height;
-                j += 1;
-            }
-            if j < units.len()
-                && Self::rewind_rowbreak_fragment_tail_before_topandbottom_flow(
-                    table,
-                    &units,
-                    start,
-                    avail_height,
-                    &mut j,
-                    &mut h,
-                )
-            {
-                // `advance_row_cut` 과 같은 후처리다.
-            }
-            if j < units.len()
-                && units[j..].iter().any(|unit| unit.hard_break_before)
-                && Self::rewind_rowbreak_tail_before_pending_hard_break(
-                    table,
-                    &units,
-                    start,
-                    avail_height,
-                    &mut j,
-                    &mut h,
-                )
-            {
-                hit_hard_break = true;
-            }
-            if j < units.len() {
-                fully_consumed = false;
-            }
-            if h > consumed_height {
-                consumed_height = h;
-            }
-            end_cut.push(j);
-        }
-        RowCutResult {
-            end_cut,
-            hit_hard_break,
-            fully_consumed,
-            consumed_height,
-        }
+        self.advance_cells_cut(
+            table,
+            &cells,
+            start_cut,
+            avail_height,
+            styles,
+            RowCutPolicy {
+                hard_break_orphan: false,
+                tiny_fragment_enabled: false,
+                debug_row: None,
+                orphan_force: Some(false),
+            },
+        )
     }
 
     /// RowBreak rowspan 블록에서 셀의 행 시작 y를 반영해 컷을 전진시킨다.
