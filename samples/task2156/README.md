@@ -11,7 +11,7 @@ middot 정밀 k=800/1600 판). 문자 클래스 × 반복수 사다리 문단을
 
 ## 확정 결과 (#2156)
 
-한글은 함초롬(HCR) 계열 문서의 **비한글 문자(라틴·숫자·구두점·U+00B7)를
+한글은 함초롬바탕(HCR Batang) 문서의 **비한글 문자(라틴·숫자·구두점·U+00B7)를
 Haansoft Batang(한컴바탕, HBATANG.TTF) 메트릭으로 렌더**한다 (음절만 HCR
 Batang hmtx, 공백은 useFontSpace=0 고정 0.5em):
 
@@ -26,5 +26,5 @@ Batang hmtx, 공백은 useFontSpace=0 고정 0.5em):
 
 수정: `text_measurement::haansoft_latin_override` (+ `HAANSOFT_BATANG_ASCII`
 테이블, 추출 도구 `tools/extract_haansoft_table.py`). 회귀 테스트:
-`issue_2156_hcr_latin_uses_haansoft_metrics` (text_measurement.rs 유닛).
+`issue_2156_hcr_batang_latin_uses_haansoft_metrics` (text_measurement.rs 유닛).
 자가검증: `rhwp measure-width --size 10 --repeat 100 "(" → 6.667px`.
