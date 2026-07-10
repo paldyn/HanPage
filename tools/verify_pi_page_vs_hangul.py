@@ -83,6 +83,11 @@ def rhwp_pi_pages(path: Path):
             cur_sec = int(m.group(2))
             pages.add(cur_page)
             continue
+        # [#2152] 미주 문단 PageItem 은 para_index 가 본문 인덱스 뒤에 이어 붙는다
+        # (typeset.rs en_para_idx = body_len + 미주 로컬). dump-pages 가 [미주] 라벨을
+        # 달아 주므로 본문 pi 카운트/매핑에서 제외 — 한글 SetPos 문단 공간(본문)과 정렬.
+        if "[미주]" in ln:
+            continue
         q = PI.search(ln)
         if q and cur_page:
             pi = int(q.group(1))
