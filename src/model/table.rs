@@ -901,10 +901,14 @@ impl Table {
                         self.cells
                             .iter()
                             .find(|cell| cell.col == c && cell.col_span == 1)
-                    });
+                    })
+                    // 열 c 가 전부 병합 셀이면 위 탐색이 모두 실패한다. 서식 0 짜리 셀을
+                    // 만드느니 표의 아무 셀이나 템플릿으로 쓴다 (주석의 "아무 셀").
+                    .or_else(|| self.cells.first());
                 let new_cell = if let Some(tpl) = template {
                     Cell::new_from_template(c, target_row, width, new_cell_height, tpl)
                 } else {
+                    // 셀이 하나도 없는 표 — 상속원이 존재하지 않는 유일한 경우
                     Cell::new_empty(c, target_row, width, new_cell_height, self.border_fill_id)
                 };
                 self.cells.push(new_cell);
@@ -990,10 +994,14 @@ impl Table {
                         self.cells
                             .iter()
                             .find(|cell| cell.row == r && cell.row_span == 1)
-                    });
+                    })
+                    // 행 r 이 전부 병합 셀이면 위 탐색이 모두 실패한다. 서식 0 짜리 셀을
+                    // 만드느니 표의 아무 셀이나 템플릿으로 쓴다 (주석의 "아무 셀").
+                    .or_else(|| self.cells.first());
                 let new_cell = if let Some(tpl) = template {
                     Cell::new_from_template(target_col, r, new_col_width, height, tpl)
                 } else {
+                    // 셀이 하나도 없는 표 — 상속원이 존재하지 않는 유일한 경우
                     Cell::new_empty(target_col, r, new_col_width, height, self.border_fill_id)
                 };
                 self.cells.push(new_cell);

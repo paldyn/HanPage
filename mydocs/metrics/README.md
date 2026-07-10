@@ -1,6 +1,8 @@
 # 코드 품질 대시보드 스냅샷 보관소
 
-`scripts/metrics.sh` 산출물(`output/metrics.json` + `dashboard.html`)은 `output/` 이
+`scripts/metrics.sh` 의 **최신 대시보드는 이 폴더에 발행**된다 — `dashboard.html` 을
+브라우저로 열면 현재 수치·델타·시계열(총량 추이 포함)을 바로 볼 수 있다 (tracked 라
+클론만 받아도 열람 가능). raw 실행 이력(`output/metrics_history/`)은 `output/` 이
 gitignore 라 보존되지 않는다. **의미 있는 시점의 측정을 날짜 폴더로 커밋해 공유·추적**한다.
 
 ## 규약

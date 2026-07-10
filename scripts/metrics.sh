@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # rhwp 코드 품질 메트릭 수집 스크립트
-# 사용법: ./scripts/metrics.sh [--snapshot [라벨]] [--no-coverage]
-# 결과: output/metrics.json + output/dashboard.html (자동 복사)
+# 사용법: ./scripts/metrics.sh [--snapshot [라벨]] [--no-coverage] [--diff <직전 스냅샷 dir>]
+# 결과: mydocs/metrics/{dashboard.html,metrics.json,metrics_history.json} (tracked 발행)
+#       + output/ 로컬 사본. 스냅샷은 mydocs/metrics/<날짜-라벨>/ 보관.
 # --snapshot [라벨]: 수집 후 mydocs/metrics/{오늘날짜}[-라벨]/ 로 보관 (커밋해 공유 —
 #             리팩토링 Phase 경계/릴리즈/코드 리뷰 등 의미 있는 시점만).
 #             라벨을 주면 같은 날짜에 여러 스냅샷을 덮어쓰기 없이 보관할 수 있다
@@ -27,6 +28,10 @@ while [ $# -gt 0 ]; do
             fi
             ;;
         --no-coverage) RUN_COVERAGE=false ;;
+        --diff)
+            DIFF_BASE="$2"
+            shift
+            ;;
         *) echo "알 수 없는 옵션: $1" >&2; exit 2 ;;
     esac
     shift
@@ -136,6 +141,7 @@ TIMESTAMP=$(date -Iseconds)
 cat > "$OUTPUT_DIR/metrics.json" << ENDJSON
 {
   "timestamp": "$TIMESTAMP",
+  "label": "$SNAPSHOT_LABEL",
   "file_lines": $FILE_LINES_JSON,
   "clippy": {
     "warnings": $CLIPPY_WARNINGS,
@@ -180,17 +186,31 @@ for hfile in $(ls -t "$HISTORY_DIR"/metrics_*.json 2>/dev/null | head -20 | tac)
     #  → dashboard.html 의 추세/델타 카드가 조용히 비어 보이는 버그)
     cv=$(python3 -c "import json; d=json.load(open('$hfile')); print(json.dumps(d.get('coverage')))" 2>/dev/null || echo "null")
     fl=$(python3 -c "import json; d=json.load(open('$hfile')); print(len(d.get('file_lines',[])))" 2>/dev/null || echo "0")
+    # [#2132 후속] 총량 지표 4종 (§5.1 v2.1) — cc_count(전체 함수 수, 기존 호환)와 별개.
+    ccx=$(python3 -c "
+import json
+d=json.load(open('$hfile'))
+v=[x['complexity'] for x in d.get('cognitive_complexity',[])]
+print(sum(v), sum(sorted(v,reverse=True)[:20]), sum(x for x in v if x>25), len([x for x in v if x>25]))" 2>/dev/null || echo "0 0 0 0")
+    read -r ccsum cctop20 ccosum ccocnt <<< "$ccx"
+    lb=$(python3 -c "import json; d=json.load(open('$hfile')); print(d.get('label',''))" 2>/dev/null || echo "")
     if [ "$sfirst" = true ]; then sfirst=false; else SUMMARY+=","; fi
-    SUMMARY+="{\"timestamp\":\"$ts\",\"tests_passed\":$tp,\"tests_failed\":$tf,\"clippy_warnings\":$cw,\"cc_count\":$cc,\"coverage\":$cv,\"file_count\":$fl}"
+    SUMMARY+="{\"timestamp\":\"$ts\",\"label\":\"$lb\",\"tests_passed\":$tp,\"tests_failed\":$tf,\"clippy_warnings\":$cw,\"cc_count\":$cc,\"cc_sum\":$ccsum,\"cc_top20\":$cctop20,\"cc_over25_sum\":$ccosum,\"cc_over25\":$ccocnt,\"coverage\":$cv,\"file_count\":$fl}"
 done
 SUMMARY+="]"
 echo "$SUMMARY" > "$OUTPUT_DIR/metrics_history.json"
 
-# ── 대시보드 HTML 복사 ──
+# ── 대시보드 발행 (mydocs/metrics/ = tracked — 컨트리뷰터/클론 열람용) ──
+PUBLISH_DIR="$PROJECT_DIR/mydocs/metrics"
+mkdir -p "$PUBLISH_DIR"
+cp "$OUTPUT_DIR/metrics.json" "$PUBLISH_DIR/metrics.json"
+cp "$OUTPUT_DIR/metrics_history.json" "$PUBLISH_DIR/metrics_history.json"
 if [ -f "$SCRIPT_DIR/dashboard.html" ]; then
+    cp "$SCRIPT_DIR/dashboard.html" "$PUBLISH_DIR/dashboard.html"
+    # 로컬 편의용 사본 (output/ 은 gitignore)
     cp "$SCRIPT_DIR/dashboard.html" "$OUTPUT_DIR/dashboard.html"
     echo ""
-    echo "대시보드: $OUTPUT_DIR/dashboard.html"
+    echo "대시보드: $PUBLISH_DIR/dashboard.html (tracked — 커밋 대상)"
 fi
 
 # ── 스냅샷 보관 (--snapshot) ──
