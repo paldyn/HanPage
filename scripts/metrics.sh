@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # rhwp 코드 품질 메트릭 수집 스크립트
 # 사용법: ./scripts/metrics.sh [--snapshot [라벨]] [--no-coverage] [--diff <직전 스냅샷 dir>]
-# 결과: output/metrics.json + output/dashboard.html (자동 복사)
+# 결과: mydocs/metrics/{dashboard.html,metrics.json,metrics_history.json} (tracked 발행)
+#       + output/ 로컬 사본. 스냅샷은 mydocs/metrics/<날짜-라벨>/ 보관.
 # --snapshot [라벨]: 수집 후 mydocs/metrics/{오늘날짜}[-라벨]/ 로 보관 (커밋해 공유 —
 #             리팩토링 Phase 경계/릴리즈/코드 리뷰 등 의미 있는 시점만).
 #             라벨을 주면 같은 날짜에 여러 스냅샷을 덮어쓰기 없이 보관할 수 있다
@@ -199,11 +200,17 @@ done
 SUMMARY+="]"
 echo "$SUMMARY" > "$OUTPUT_DIR/metrics_history.json"
 
-# ── 대시보드 HTML 복사 ──
+# ── 대시보드 발행 (mydocs/metrics/ = tracked — 컨트리뷰터/클론 열람용) ──
+PUBLISH_DIR="$PROJECT_DIR/mydocs/metrics"
+mkdir -p "$PUBLISH_DIR"
+cp "$OUTPUT_DIR/metrics.json" "$PUBLISH_DIR/metrics.json"
+cp "$OUTPUT_DIR/metrics_history.json" "$PUBLISH_DIR/metrics_history.json"
 if [ -f "$SCRIPT_DIR/dashboard.html" ]; then
+    cp "$SCRIPT_DIR/dashboard.html" "$PUBLISH_DIR/dashboard.html"
+    # 로컬 편의용 사본 (output/ 은 gitignore)
     cp "$SCRIPT_DIR/dashboard.html" "$OUTPUT_DIR/dashboard.html"
     echo ""
-    echo "대시보드: $OUTPUT_DIR/dashboard.html"
+    echo "대시보드: $PUBLISH_DIR/dashboard.html (tracked — 커밋 대상)"
 fi
 
 # ── 스냅샷 보관 (--snapshot) ──
