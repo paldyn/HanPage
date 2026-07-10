@@ -14,5 +14,6 @@
 - 기존 method/return type과 legacy client message shape을 유지한다.
 - browser E2E는 protocol을 재구현하지 않고 실제 `@rhwp/editor` entry로 load/export/destroy를 호출하며 caller buffer, forged sibling, legacy 경로를 함께 검증한다.
 - 50 MiB `Uint8Array`도 v1 `loadFile`에서 number array 변환 없이 전달하며 caller의 원본 backing buffer를 분리하지 않음을 Node `MessageChannel` 계약 테스트로 검증한다.
+- session ID는 `crypto.randomUUID()` 또는 `crypto.getRandomValues()`로만 만들고 안전하지 않은 `Math.random()` fallback은 제거했다.
 
 별도 package와 caller buffer 직접 transfer는 각각 API 중복과 기존 소유권 변경 때문에 채택하지 않았다.

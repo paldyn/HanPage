@@ -8,8 +8,13 @@ export function requestTimeoutFor(method, configuredTimeout) {
 }
 
 function sessionId() {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return `rhwp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const secureRandom = globalThis.crypto;
+  if (typeof secureRandom?.randomUUID === 'function') return secureRandom.randomUUID();
+  if (typeof secureRandom?.getRandomValues !== 'function') {
+    throw new Error('Secure random generation is unavailable');
+  }
+  const bytes = secureRandom.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function copiedBinary(value) {

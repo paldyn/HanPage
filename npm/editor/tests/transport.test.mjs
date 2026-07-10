@@ -160,6 +160,35 @@ test('EditorTransport는 일반 요청 10초와 load/export 60초 기본 timeout
   assert.equal(requestTimeoutFor('exportHwpx'), 60_000);
 });
 
+test('EditorTransport session은 randomUUID가 없을 때도 안전한 난수만 사용한다', () => {
+  const originalCrypto = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  const originalRandom = Math.random;
+  Object.defineProperty(globalThis, 'crypto', {
+    configurable: true,
+    value: {
+      getRandomValues(bytes) {
+        bytes.fill(0xab);
+        return bytes;
+      },
+    },
+  });
+  Math.random = () => { throw new Error('Math.random must not be used'); };
+
+  try {
+    const transport = new EditorTransport(
+      { contentWindow: { postMessage() {} } },
+      'https://studio.example/app',
+      { window: { addEventListener() {}, removeEventListener() {} } },
+    );
+    assert.equal(transport._sessionId, 'abababababababababababababababab');
+    transport.destroy();
+  } finally {
+    Math.random = originalRandom;
+    if (originalCrypto) Object.defineProperty(globalThis, 'crypto', originalCrypto);
+    else delete globalThis.crypto;
+  }
+});
+
 test('EditorTransport는 구조화된 version 협상 오류를 legacy fallback 없이 전달한다', async () => {
   let listenerCount = 0;
   const fakeWindow = {
