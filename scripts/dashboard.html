@@ -76,8 +76,15 @@ function renderCards(data) {
   const clippy = data.clippy.warnings;
   const testTotal = data.tests.passed + data.tests.failed;
 
+  // [#2132 후속] §5.1 v2.1 총량 지표 — 라운드 성공 판정 축
+  const ccVals = data.cognitive_complexity.map(f => f.complexity);
+  const ccSum = ccVals.reduce((a, b) => a + b, 0);
+  const ccTop20 = [...ccVals].sort((a, b) => b - a).slice(0, 20).reduce((a, b) => a + b, 0);
+  const ccOverSum = ccVals.filter(v => v > t.warn_cognitive_complexity).reduce((a, b) => a + b, 0);
+
   const cards = [
     { label: '1,200줄 초과 파일', value: overLimit, sub: `전체 ${data.file_lines.length}개 파일`, cls: overLimit === 0 ? 'good' : 'bad' },
+    { label: 'CC 총합 (v2.1 총량)', value: ccSum.toLocaleString(), sub: `상위 20 합: ${ccTop20.toLocaleString()} | >25 합: ${ccOverSum.toLocaleString()}`, cls: 'warn' },
     { label: 'Clippy 경고', value: clippy, sub: `목표: 0개`, cls: clippy === 0 ? 'good' : clippy < 50 ? 'warn' : 'bad' },
     { label: 'CC > 25 함수', value: ccOver25, sub: `최대: ${ccMax} | 수집: ${ccAll}개`, cls: ccOver25 === 0 ? 'good' : 'bad' },
     { label: '테스트', value: `${data.tests.passed}/${testTotal}`, sub: `실패: ${data.tests.failed}, 무시: ${data.tests.ignored}`, cls: data.tests.failed === 0 ? 'good' : 'bad' }
@@ -296,9 +303,16 @@ function renderDeltaCards(data, history) {
   const deltas = [
     delta(curr.tests_passed, prev.tests_passed, '테스트'),
     delta(curr.clippy_warnings, prev.clippy_warnings, 'Clippy 경고', true),
-    delta(curr.cc_count, prev.cc_count, 'CC>25 함수', true),
+    // cc_count = 측정 함수 전체 수 (종전 'CC>25' 오표기 정정), cc_over25 = >25 개수
+    delta(curr.cc_count, prev.cc_count, '측정 함수 수'),
     delta(curr.file_count, prev.file_count, '파일 수'),
   ];
+  // [#2132 후속] 총량 지표 델타 (기록에 필드가 있을 때만 — 과거 스냅샷 호환)
+  if (curr.cc_sum !== undefined && prev.cc_sum !== undefined) {
+    deltas.push(delta(curr.cc_sum, prev.cc_sum, 'CC 총합', true));
+    deltas.push(delta(curr.cc_top20, prev.cc_top20, '상위 20 합', true));
+    deltas.push(delta(curr.cc_over25, prev.cc_over25, 'CC>25 함수', true));
+  }
 
   document.getElementById('delta-cards').innerHTML = deltas.map(d =>
     `<div class="delta-card"><div class="dlabel">${d.label}</div><div class="dvalue ${d.cls}">${d.value}</div></div>`

@@ -184,8 +184,15 @@ for hfile in $(ls -t "$HISTORY_DIR"/metrics_*.json 2>/dev/null | head -20 | tac)
     #  → dashboard.html 의 추세/델타 카드가 조용히 비어 보이는 버그)
     cv=$(python3 -c "import json; d=json.load(open('$hfile')); print(json.dumps(d.get('coverage')))" 2>/dev/null || echo "null")
     fl=$(python3 -c "import json; d=json.load(open('$hfile')); print(len(d.get('file_lines',[])))" 2>/dev/null || echo "0")
+    # [#2132 후속] 총량 지표 4종 (§5.1 v2.1) — cc_count(전체 함수 수, 기존 호환)와 별개.
+    ccx=$(python3 -c "
+import json
+d=json.load(open('$hfile'))
+v=[x['complexity'] for x in d.get('cognitive_complexity',[])]
+print(sum(v), sum(sorted(v,reverse=True)[:20]), sum(x for x in v if x>25), len([x for x in v if x>25]))" 2>/dev/null || echo "0 0 0 0")
+    read -r ccsum cctop20 ccosum ccocnt <<< "$ccx"
     if [ "$sfirst" = true ]; then sfirst=false; else SUMMARY+=","; fi
-    SUMMARY+="{\"timestamp\":\"$ts\",\"tests_passed\":$tp,\"tests_failed\":$tf,\"clippy_warnings\":$cw,\"cc_count\":$cc,\"coverage\":$cv,\"file_count\":$fl}"
+    SUMMARY+="{\"timestamp\":\"$ts\",\"tests_passed\":$tp,\"tests_failed\":$tf,\"clippy_warnings\":$cw,\"cc_count\":$cc,\"cc_sum\":$ccsum,\"cc_top20\":$cctop20,\"cc_over25_sum\":$ccosum,\"cc_over25\":$ccocnt,\"coverage\":$cv,\"file_count\":$fl}"
 done
 SUMMARY+="]"
 echo "$SUMMARY" > "$OUTPUT_DIR/metrics_history.json"
