@@ -16,6 +16,7 @@ use crate::renderer::style_resolver::{resolve_styles, ResolvedStyleSet};
 fn recalculate_cell_paragraph_vpos(
     paragraphs: &mut [Paragraph],
     start_para: usize,
+    ignore_reset_at: Option<usize>,
     styles: &ResolvedStyleSet,
     dpi: f64,
     is_hwp3_variant: bool,
@@ -34,7 +35,9 @@ fn recalculate_cell_paragraph_vpos(
         .find_map(|(idx, pair)| {
             let previous = pair[0].line_segs.first()?.vertical_pos;
             let current = pair[1].line_segs.first()?.vertical_pos;
-            (current < previous).then_some(idx + 1)
+            let reset_para = idx + 1;
+            let is_inserted_paragraph = ignore_reset_at == Some(reset_para);
+            (current < previous && !is_inserted_paragraph).then_some(reset_para)
         })
         .unwrap_or(paragraphs.len());
 
@@ -800,6 +803,7 @@ impl DocumentCore {
             control_idx,
             cell_idx,
             cell_para_idx,
+            None,
         );
 
         // raw 스트림 무효화, 재페이지네이션 (셀 편집 → composed 불변, section dirty만 설정)
@@ -861,6 +865,7 @@ impl DocumentCore {
             control_idx,
             cell_idx,
             cell_para_idx,
+            None,
         );
 
         // raw 스트림 무효화, 재페이지네이션 (셀 편집 → composed 불변)
@@ -1120,6 +1125,7 @@ impl DocumentCore {
         control_idx: usize,
         cell_idx: usize,
         start_para: usize,
+        ignore_reset_at: Option<usize>,
     ) {
         let styles = &self.styles;
         let dpi = self.dpi;
@@ -1157,7 +1163,14 @@ impl DocumentCore {
             }
             _ => return,
         };
-        recalculate_cell_paragraph_vpos(paragraphs, start_para, styles, dpi, is_hwp3_variant);
+        recalculate_cell_paragraph_vpos(
+            paragraphs,
+            start_para,
+            ignore_reset_at,
+            styles,
+            dpi,
+            is_hwp3_variant,
+        );
     }
 
     // ─── Phase 3 네이티브 구현: 커서 이동 API ─────────────────
@@ -2138,6 +2151,7 @@ impl DocumentCore {
             control_idx,
             cell_idx,
             cell_para_idx,
+            Some(new_cell_para_idx),
         );
 
         // raw 스트림 무효화, section dirty, 재페이지네이션
@@ -2258,6 +2272,7 @@ impl DocumentCore {
             control_idx,
             cell_idx,
             prev_idx,
+            None,
         );
 
         // raw 스트림 무효화, section dirty, 재페이지네이션
@@ -3202,6 +3217,7 @@ impl DocumentCore {
                 recalculate_cell_paragraph_vpos(
                     &mut cell.paragraphs,
                     cell_para_idx,
+                    Some(cell_para_idx + 1),
                     styles,
                     dpi,
                     is_hwp3_variant,
@@ -3290,6 +3306,7 @@ impl DocumentCore {
                 recalculate_cell_paragraph_vpos(
                     &mut cell.paragraphs,
                     prev_idx,
+                    None,
                     styles,
                     dpi,
                     is_hwp3_variant,

@@ -168,3 +168,45 @@ fn backspace_merge_then_enter_reuses_the_same_cell_paragraph_flow() {
         "Backspace 뒤 다시 Enter해도 같은 문단 흐름이어야 함: {y:?}"
     );
 }
+
+#[test]
+fn repeated_enter_in_table_cell_advances_to_the_new_third_paragraph() {
+    let mut core = load_sample();
+    let (parent, control, cell) = find_target_cell(&core);
+    let first_text = "1111";
+    let second_text = "2222";
+
+    core.insert_text_in_cell_native(0, parent, control, cell, 0, 0, first_text)
+        .expect("첫 셀 텍스트 입력");
+    core.split_paragraph_in_cell_native(0, parent, control, cell, 0, first_text.chars().count())
+        .expect("첫 Enter");
+    core.insert_text_in_cell_native(0, parent, control, cell, 1, 0, second_text)
+        .expect("두 번째 셀 텍스트 입력");
+    core.split_paragraph_in_cell_native(0, parent, control, cell, 1, second_text.chars().count())
+        .expect("두 번째 Enter");
+
+    let paragraphs = cell_paragraphs(&core, parent, control, cell);
+    assert_eq!(
+        paragraphs.len(),
+        4,
+        "연속 Enter로 셀 문단이 두 개 늘어야 함"
+    );
+    let vpos: Vec<_> = (0..paragraphs.len())
+        .map(|index| first_vpos(paragraphs, index))
+        .collect();
+    assert!(
+        vpos.windows(2).all(|pair| pair[0] < pair[1]),
+        "두 번째 Enter 뒤에도 셀 문단 vpos가 순서대로 증가해야 함: {vpos:?}"
+    );
+
+    let y = [
+        cursor_y(&core, parent, control, cell, 0, first_text.chars().count()),
+        cursor_y(&core, parent, control, cell, 1, second_text.chars().count()),
+        cursor_y(&core, parent, control, cell, 2, 0),
+        cursor_y(&core, parent, control, cell, 3, 0),
+    ];
+    assert!(
+        y.windows(2).all(|pair| pair[0] < pair[1]),
+        "두 번째 Enter 뒤 캐럿 y가 새 세 번째 문단까지 증가해야 함: {y:?}"
+    );
+}
