@@ -36,13 +36,35 @@ DOM caret top: 455.3px
 
 작업지시자가 실제 화면에서도 수정 동작을 검증했다.
 
-## 검증 기록
+## 전체 사전 검증
 
-- Stage 2 완료 시 `cargo test --profile release-test --lib`: 2190 passed, 0 failed,
-  7 ignored
-- Stage 2 완료 시 focused Rust tests, studio/Chrome extension build, WASM build: 통과
-- Stage 3: `wasm-pack build --target web --out-dir pkg`: 통과
-- Stage 3: 기존 `localhost:7700`에서 실제 원본·실제 `cellPath` 연속 Enter: 통과
+- `cargo build --release`: 통과
+- `cargo test --release --lib`: 2190 passed, 0 failed, 7 ignored
+- `cargo test --profile release-test --tests`: 통과
+  - `tests/issue_2164_cell_enter_overlap.rs`: 3 passed
+  - `tests/svg_snapshot.rs`: 8 passed
+- `cargo fmt --check`, `git diff --check`: 통과
+- `cargo clippy --all-targets -- -D warnings`: 통과
+- `cargo test --doc`: 0 passed, 1 ignored
+- `rhwp-studio`: `npx tsc --noEmit`, 183개 `npm test`, production build 통과
+- `rhwp-chrome`: production build 통과
+- `wasm-pack build --target web --out-dir pkg`: 통과
 
-작업지시자 지시에 따라 Stage 3 변경 후 전체 Cargo test, Clippy, 전체 프론트 빌드는
-PR 준비 전에 다시 실행하지 않았다. PR의 최신 head CI에서 전체 회귀 상태를 확인한다.
+## 기준 PDF와 Visual Sweep
+
+원본 HWP를 HWP 2020 CLI 인쇄 방식으로 PDF 변환해
+`pdf/issue2164/의견제출서(양식)-2020.pdf`에 보존했다.
+
+- PDF: 1쪽 A4, SHA-256
+  `52c530901ced05ce19d70525930ba0bbb07735e92d019d9e90be9ebf2cfdbdea`
+- visual sweep: [summary](assets/task_m100_2164_visual_sweep/summary.json),
+  [대표 review 이미지](assets/task_m100_2164_visual_sweep/issue2164/review/review_001.png)
+- SVG/PDF 페이지 수: 1 / 1
+- 자동 overflow, overlap, question flow, line order 후보: 0쪽
+- pixel match: 94.26049%, ink match 및 visual accuracy proxy: 7.79583%
+
+직접 overlay 확인에서 셀 경계와 문서 흐름에는 자동 후보가 없었다. 다만 한컴 기준 PDF와
+로컬 rhwp 렌더의 글꼴 metrics가 달라 ink 정합률은 낮다. 이는 이번 편집 중 Enter/캐럿
+동작 정정의 성공 근거나 실패 판정으로 사용하지 않으며, 한컴과의 정적 폰트 fidelity는
+별도 품질 축으로 남긴다. 동적 편집 결과는 PDF export가 아니라 실제 브라우저와
+작업지시자 화면에서 검증했다.
