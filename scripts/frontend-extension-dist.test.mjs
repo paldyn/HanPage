@@ -27,9 +27,9 @@ for (const browser of ['chrome', 'firefox']) {
     assert.match(viteConfig, /publicDir:\s*false/);
 
     const viewerHtml = readFileSync(path.join(distDir, 'viewer.html'), 'utf8');
-    const inlineScripts = [...viewerHtml.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
-      .filter((match) => !/\bsrc\s*=/.test(match[1]) && match[2].trim().length > 0);
+    const inlineScripts = findInlineScriptTags(viewerHtml);
     assert.equal(inlineScripts.length, 0, 'viewer.html must not contain inline scripts');
+    assertInlineScriptDetectorRejectsMalformedEndTags();
 
     assert.deepEqual(
       readdirSync(path.join(distDir, 'fonts')).filter((file) => file.endsWith('.woff2')).sort(),
@@ -52,4 +52,20 @@ test('safari manifest keeps the stricter WAR surface', () => {
 
 function readJson(file) {
   return JSON.parse(readFileSync(file, 'utf8'));
+}
+
+function findInlineScriptTags(html) {
+  return [...html.matchAll(/<script\b([^>]*)>/gi)]
+    .filter((match) => !/(?:^|[\t\n\f\r ])src[\t\n\f\r ]*=/i.test(match[1]));
+}
+
+function assertInlineScriptDetectorRejectsMalformedEndTags() {
+  for (const html of [
+    '<script>alert(1)</script >',
+    '<script>alert(1)</script foo="bar">',
+    '<script data-src="/ignored.js">alert(1)</script>',
+  ]) {
+    assert.equal(findInlineScriptTags(html).length, 1, `inline script must be detected: ${html}`);
+  }
+  assert.equal(findInlineScriptTags('<script src="/app.js"></script>').length, 0);
 }
