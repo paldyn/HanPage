@@ -48,6 +48,24 @@ This document records the major changes of the rhwp project.
 - 21 complexity-refactoring rounds: max CC 288→117 (−59%), zero behavioral regressions
   across all rounds (#1904/#2131), metric formula v2.1 + reduction-potential scanner
   (#2130), quality dashboard published under mydocs/metrics/.
+### Contributors
+
+268 contributor PRs merged this cycle (since v0.7.17), GitHub handles in alphabetical order:
+
+- @humdrum00001010 — HWPX package-graph serialization (#1675), endnote parity (#1875), +3
+- @jangster77 (Taesup Jang) — 130 PRs: table/editing parity, external PR integration & reviews, OLE object parity (#2103), long-input caret/IME (#2172)
+- @johndoekim — bangjeom rendering (#1738), OOXML chart C1c/C1d (#1890/#1954/#2140), +3
+- @kkyu8925 — empty-host co-anchored float table orphan control (#1767), +3 *(first contribution — welcome!)*
+- @lpaiu-cs — undo snapshot routing trilogy (#2028/#2039/#2078), restrictInPage clamps (#2033/#2076), BinData id allocation (#2040), cell-anchored picture valign (#2074) *(first contribution — welcome!)*
+- @oleg-sung — centered cell paragraph vpos after TAC shape (#1674) *(first contribution — welcome!)*
+- @physwkim — cell_units Rc→Arc Send restoration (#2087), new-paragraph format inheritance (#2095)
+- @planet6897 (Jaeook Ryu) — 74 PRs: rendering-fidelity series (RowBreak tables, floating/front object pagination, huge-table performance #2063, 10k-document surveys)
+- @postmelee (Taegyu Lee) — 28 PRs: CI release-test migration (#1739), frontend refactoring plan v2 (#2080) & Phase 0 baseline (#2174, in progress)
+- @seo-rii — CanvasKit object-gap diagnostics (#1806), +2
+- @snvtac — endnote reset-rewind column placement (#1495) *(first contribution — welcome!)*
+
+Dependencies: 6 dependabot PRs (including the quick-xml 0.41 security release).
+
 
 ## [0.7.17] — 2026-06-23
 
