@@ -109,6 +109,10 @@ const sbZoomVal = () => document.getElementById('sb-zoom-val')!;
 async function initialize(): Promise<void> {
   const msg = sbMessage();
   try {
+    // [Task #38] 웹 헤더 데스크톱 앱 다운로드 버튼(데스크톱 앱 내부에선 미표시).
+    // WASM 등 무거운 로딩과 무관하므로 최상단에서 즉시 표시한다 (#38 지연 표시 수정).
+    installAppDownloadButton(document.getElementById('menu-bar')!);
+
     msg.textContent = '웹폰트 로딩 중...';
     await loadWebFonts([]);  // CSS @font-face 등록 + CRITICAL 폰트만 로드
     msg.textContent = 'WASM 로딩 중...';
@@ -188,9 +192,6 @@ async function initialize(): Promise<void> {
     );
 
     new MenuBar(document.getElementById('menu-bar')!, eventBus, dispatcher);
-
-    // [Task #29] 웹 헤더에 데스크톱 앱 다운로드 버튼(데스크톱 앱 내부에선 미표시).
-    installAppDownloadButton(document.getElementById('menu-bar')!);
 
     // 툴바 내 data-cmd 버튼 클릭 → 커맨드 디스패치
     document.querySelectorAll('.tb-btn[data-cmd]').forEach(btn => {
