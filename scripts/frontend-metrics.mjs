@@ -193,6 +193,19 @@ function gitValue(args) {
   return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim();
 }
 
+function optionalGitValue(args) {
+  try {
+    return gitValue(args);
+  } catch {
+    return undefined;
+  }
+}
+
+function canonicalDevelCommit() {
+  return optionalGitValue(['rev-parse', '--verify', 'refs/remotes/upstream/devel'])
+    ?? optionalGitValue(['rev-parse', '--verify', 'refs/remotes/origin/devel']);
+}
+
 function dirtyPaths() {
   return execFileSync(
     'git',
@@ -880,6 +893,7 @@ async function main() {
   const complexitySummary = cognitiveComplexitySummary(cognitiveEntries);
   const statusPaths = dirtyPaths();
   const sourceDirtyPaths = measuredSourceDirtyPaths(statusPaths);
+  const develCommit = canonicalDevelCommit();
   const packageVersions = {
     eslint: studioRequire('eslint/package.json').version,
     eslintPluginSonarjs: studioRequire('eslint-plugin-sonarjs/package.json').version,
@@ -894,7 +908,7 @@ async function main() {
     snapshotPath: normalizePath(args.out),
     git: {
       headCommit: gitValue(['rev-parse', 'HEAD']),
-      upstreamDevelCommit: gitValue(['rev-parse', 'upstream/devel']),
+      ...(develCommit ? { upstreamDevelCommit: develCommit } : {}),
       clean: statusPaths.length === 0,
       dirtyPaths: statusPaths,
       measuredSourceClean: sourceDirtyPaths.length === 0,

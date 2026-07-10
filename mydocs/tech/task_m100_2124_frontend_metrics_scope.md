@@ -92,8 +92,12 @@ sonarjs, parser를 사용한다. 입력은 tracked 파일과 non-ignored untrack
 | browser duplicate 후보 | 상대 경로 후보에 content SHA-256, byte, symlink target, exact-identical 여부 추가 |
 | font reference map | `web/fonts`, `fonts/`, `.woff2`, `FONTS.md`, `THIRD_PARTY_LICENSES` 참조 라인 |
 | font asset manifest | 36개 WOFF2와 license 문서의 byte/SHA-256, Studio symlink target |
-| 재현성 | HEAD/upstream commit, dirty path, measured-source clean, script/lockfile SHA-256 |
+| 재현성 | HEAD/canonical devel commit, dirty path, measured-source clean, script/lockfile SHA-256 |
 | ESLint diagnostics | cognitive complexity 외 fatal/error 진단. inline config는 무시 |
+
+canonical devel commit은 `upstream/devel`, `origin/devel` 순서로 조회한다. 두 remote-tracking ref가
+모두 없으면 측정 자체를 중단하지 않고 `upstreamDevelCommit` 속성을 생략한다. fork와 본가 clone에서
+같은 도구를 실행하기 위한 provenance fallback이며, `HEAD`와 나머지 재현성 정보는 항상 기록한다.
 
 ## 6. 출력 형식
 
