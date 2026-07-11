@@ -646,12 +646,6 @@ fn text_run_transition_detail(run: &TextRunNode) -> Option<&'static str> {
     if run.style.engrave {
         return Some("engraveTextEffect");
     }
-    if run.style.superscript {
-        return Some("superscriptTextEffect");
-    }
-    if run.style.subscript {
-        return Some("subscriptTextEffect");
-    }
     if run.style.shade_color != 0x00FF_FFFF {
         return Some("shadeTextEffect");
     }
@@ -790,6 +784,7 @@ mod tests {
     use crate::model::control::FormType;
     use crate::model::style::ImageFillMode;
     use crate::paint::{GroupKind, LayerNode, ResolvedImageKind, ResolvedImagePayload};
+    use crate::renderer::composer::CharOverlapInfo;
     use crate::renderer::equation::layout::{LayoutBox, LayoutKind};
     use crate::renderer::render_tree::{
         BoundingBox, EquationNode, FootnoteMarkerNode, FormObjectNode, ImageNode,
@@ -1177,34 +1172,40 @@ mod tests {
         ]);
 
         let default_plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Default);
-        assert_eq!(default_plan.summary.direct_items, 2);
-        assert_eq!(default_plan.summary.direct_required_items, 3);
+        assert_eq!(default_plan.summary.direct_items, 4);
+        assert_eq!(default_plan.summary.direct_required_items, 1);
         assert_eq!(
             default_plan.items[2].detail.as_deref(),
             Some("verticalText")
         );
-        assert_eq!(
-            default_plan.items[3].detail.as_deref(),
-            Some("superscriptTextEffect")
-        );
-        assert_eq!(
-            default_plan.items[4].detail.as_deref(),
-            Some("subscriptTextEffect")
-        );
+        assert_eq!(default_plan.items[3].status, CanvasKitReplayStatus::Direct);
+        assert_eq!(default_plan.items[4].status, CanvasKitReplayStatus::Direct);
 
         let compat_plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Compat);
-        assert_eq!(compat_plan.summary.direct_items, 2);
-        assert_eq!(compat_plan.summary.direct_required_items, 3);
+        assert_eq!(compat_plan.summary.direct_items, 4);
+        assert_eq!(compat_plan.summary.direct_required_items, 1);
         assert_eq!(compat_plan.summary.compat_overlay_items, 0);
         assert_eq!(compat_plan.items[2].detail.as_deref(), Some("verticalText"));
-        assert_eq!(
-            compat_plan.items[3].detail.as_deref(),
-            Some("superscriptTextEffect")
-        );
-        assert_eq!(
-            compat_plan.items[4].detail.as_deref(),
-            Some("subscriptTextEffect")
-        );
+        assert_eq!(compat_plan.items[3].status, CanvasKitReplayStatus::Direct);
+        assert_eq!(compat_plan.items[4].status, CanvasKitReplayStatus::Direct);
+    }
+
+    #[test]
+    fn superscript_with_char_overlap_stays_policy_visible() {
+        let mut superscript = text_run("AB");
+        superscript.style.superscript = true;
+        superscript.char_overlap = Some(CharOverlapInfo {
+            border_type: 0,
+            inner_char_size: 100,
+        });
+        let tree = tree_with_ops(vec![PaintOp::text_run(bbox(), superscript)]);
+
+        for mode in [CanvasKitReplayMode::Default, CanvasKitReplayMode::Compat] {
+            let plan = analyze_canvaskit_replay_plan(&tree, mode);
+            assert_eq!(plan.summary.direct_required_items, 1);
+            assert_eq!(plan.items[0].status, CanvasKitReplayStatus::DirectRequired);
+            assert_eq!(plan.items[0].detail.as_deref(), Some("charOverlap"));
+        }
     }
 
     #[test]
