@@ -730,6 +730,51 @@ fn test_reflow_korean_eojeol_wrap() {
     assert_eq!(para.line_segs[1].text_start, 6);
 }
 
+/// 한글 줄 나눔 단위 계약: 0=어절, 1=글자
+#[test]
+fn test_reflow_korean_break_unit_contract() {
+    let mut word_styles = make_styles_with_font_size(16.0);
+    word_styles.para_styles[0].korean_break_unit = 0;
+
+    let mut char_styles = make_styles_with_font_size(16.0);
+    char_styles.para_styles[0].korean_break_unit = 1;
+
+    let make_para = || Paragraph {
+        text: "가나 다라".to_string(),
+        char_offsets: vec![0, 1, 2, 3, 4],
+        char_count: 6,
+        char_shapes: vec![CharShapeRef {
+            start_pos: 0,
+            char_shape_id: 0,
+        }],
+        line_segs: vec![LineSeg {
+            text_start: 0,
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+
+    let mut word_para = make_para();
+    reflow_line_segs(&mut word_para, 60.0, &word_styles, 96.0);
+
+    let mut char_para = make_para();
+    reflow_line_segs(&mut char_para, 60.0, &char_styles, 96.0);
+
+    let word_starts: Vec<u32> = word_para
+        .line_segs
+        .iter()
+        .map(|seg| seg.text_start)
+        .collect();
+    let char_starts: Vec<u32> = char_para
+        .line_segs
+        .iter()
+        .map(|seg| seg.text_start)
+        .collect();
+
+    assert_eq!(word_starts, vec![0, 3], "어절 모드는 공백 뒤에서 줄바꿈");
+    assert_eq!(char_starts, vec![0, 4], "글자 모드는 다음 어절 일부를 채움");
+}
+
 /// 영어 단어 줄 바꿈: 공백에서 줄 바꿈
 #[test]
 fn test_reflow_english_word_wrap() {
@@ -842,7 +887,7 @@ fn test_tokenize_korean_eojeol() {
         char_shape_id: 0,
     }];
 
-    let tokens = tokenize_paragraph(&text, &offsets, &shapes, &styles, 0, 1);
+    let tokens = tokenize_paragraph(&text, &offsets, &shapes, &styles, 0, 0);
     // "가나" (Text) + " " (Space) + "다라" (Text) = 3 tokens
     assert_eq!(tokens.len(), 3);
     assert!(matches!(
@@ -866,7 +911,7 @@ fn test_tokenize_korean_eojeol() {
 
 /// 토크나이저: 한국어 글자 단위 토큰화
 #[test]
-fn test_tokenize_korean_break_word_chars() {
+fn test_tokenize_korean_character_unit() {
     let styles = make_styles_with_font_size(16.0);
     let text: Vec<char> = "가나".chars().collect();
     let offsets: Vec<u32> = (0..text.len() as u32).collect();
@@ -875,7 +920,7 @@ fn test_tokenize_korean_break_word_chars() {
         char_shape_id: 0,
     }];
 
-    let tokens = tokenize_paragraph(&text, &offsets, &shapes, &styles, 0, 0);
+    let tokens = tokenize_paragraph(&text, &offsets, &shapes, &styles, 0, 1);
     assert_eq!(tokens.len(), 2);
     assert!(matches!(
         tokens[0],

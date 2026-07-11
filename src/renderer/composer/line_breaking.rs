@@ -223,10 +223,9 @@ pub(crate) fn tokenize_paragraph(
         }
 
         // 한글 어절 또는 글자.
-        // HWPX breakNonLatinWord="KEEP_WORD" is preserved as attr1 bit 7,
-        // which resolves to korean_break_unit == 1.
+        // HWP/HWPX attr1 bit 7의 모델 의미는 0=어절, 1=글자이다.
         if is_hangul(ch) {
-            if korean_break_unit == 1 {
+            if korean_break_unit == 0 {
                 // 어절 모드: 연속 한글 + 후행 금칙 문자를 하나의 토큰으로
                 let start = i;
                 let mut max_fs = 0.0f64;
@@ -766,7 +765,7 @@ fn fill_lines(
                 if *end_idx - *start_idx == 1 && *start_idx > line_start_idx {
                     let c = text_chars[*start_idx];
                     let allow_break = if is_hangul(c) {
-                        korean_break_unit == 0
+                        korean_break_unit == 1
                     } else {
                         is_cjk_ideograph(c)
                     };

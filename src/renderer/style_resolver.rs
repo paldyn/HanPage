@@ -186,7 +186,7 @@ pub struct ResolvedParaStyle {
     pub condense_min_space: u8,
     /// 줄 나눔 기준 영어 단위 (0=단어, 1=하이픈, 2=글자) — attr1 bit 5-6
     pub english_break_unit: u8,
-    /// 줄 나눔 기준 한글 단위 (0=글자, 1=어절/KEEP_WORD) — attr1 bit 7
+    /// 줄 나눔 기준 한글 단위 (0=어절, 1=글자) — attr1 bit 7
     pub korean_break_unit: u8,
     /// 외톨이줄 보호 — attr1 bit 16
     pub widow_orphan: bool,
