@@ -32,6 +32,9 @@ freeze 진입. 신규 렌더링 PR 은 1차 진행 중 hold 라벨 운용(계획
 > 갱신 이력: `rowbreak-problem-pages`는 2026-07-07 재생성 (기준 `a05e6f1b`) — #1936 머지로
 > 발생한 p13/p14 재배분 3건(obj4/5/6)이 **작업지시자 시각 판정 통과**(한컴 정답지 기준)로
 > 정합 상태로 확정되어 baseline을 현행화. 판정 전까지는 "추가 변동 0" 기준으로 운용했음.
+> 갱신 이력 2: `rowbreak-problem-pages`는 2026-07-12 재생성 (기준 `6b2d23cc`) — #2211
+> (중첩/TAC 표 행 성장 pad 제외)로 p7 tac 노트박스 h 162.8→159.0px (한컴 154px 방향의
+> 의도된 정합 개선)이 **작업지시자 시각 판정 통과**로 확정되어 현행화.
 | 대시보드 영점 | `mydocs/metrics/2026-07-04/` | `./scripts/metrics.sh --snapshot` | (개선 측정 영점) |
 | 전체 테스트 | — | `cargo test --profile release-test --tests` | FAILED 0 (영점 2,820) |
 
