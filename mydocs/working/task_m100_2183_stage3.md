@@ -1,4 +1,4 @@
-# Task M100 #2183 Stage 3 완료 보고 — draft PR GitHub Actions 실측
+# Task M100 #2183 Stage 3 완료 보고 — PR GitHub Actions 실측 및 리뷰 준비
 
 - 이슈: #2183
 - 상위 추적: #2022
@@ -8,16 +8,17 @@
 - base: `edwardkim:devel`
 - 검증 HEAD: `c81a4af4b2279c2641cb34a80daaecbb1ec41dde`
 - 작성일: 2026-07-11
-- 단계: draft PR 실측
+- 단계: GitHub Actions 실측 완료 / Ready for review
 
 ## 1. 등록 결과
 
-승인된 PR 본문으로 draft PR #2216을 생성하고 `@edwardkim`에게 직접 리뷰를 요청했다.
+승인된 PR 본문으로 draft PR #2216을 생성하고 `@edwardkim`에게 직접 리뷰를 요청했다. 전체 검증과
+체크리스트 갱신을 마친 뒤 2026-07-12 작업지시자가 Ready for review로 전환했다.
 
 - 제목: `[CI] 프론트 패키지 변경 시 build/test gate 추가 (#2183)`
 - issue 연결: `Refs #2183`
 - 리뷰 요청 코멘트: `https://github.com/edwardkim/rhwp/pull/2216#issuecomment-4946198647`
-- 상태: Draft / Open
+- 현재 상태: Ready for review / Open
 
 issue 자동 close는 작업지시자 승인 전 수행하지 않기 위해 `Closes`가 아니라 `Refs`를 사용했다.
 
@@ -122,8 +123,9 @@ PR의 restore hit를 확인할 수 있다.
 - trusted `devel` push의 frontend cargo cache save는 merge 뒤에만 실측 가능하다.
 - Rust-only PR의 frontend skip은 fixture로 검증했으며 실제 별도 PR을 만들지 않는다.
 - Stage 3 보고서의 trailing docs commit에서 review-only fast-pass 실패를 실측했고 아래 보정 작업으로 전환했다.
-- PR 본문 체크리스트 갱신과 CI 결과 코멘트는 초안을 작업지시자에게 먼저 제시한 뒤 게시한다.
-- maintainer 리뷰 승인 전 draft 해제, merge, #2183 close를 수행하지 않는다.
+- PR 본문 체크리스트와 CI 결과 코멘트는 작업지시자 승인 후 게시를 완료했다.
+- 작업지시자 승인으로 Ready for review 전환을 완료했으며, maintainer 리뷰 승인 전 merge와 #2183 close는
+  수행하지 않는다.
 
 ## 9. trailing docs fast-pass 실패와 보정
 
