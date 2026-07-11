@@ -74,6 +74,7 @@ changes:
 - `src/renderer/canvaskit_policy.rs`
 - `rhwp-studio/src/core/types.ts`
 - `rhwp-studio/src/view/canvaskit-renderer.ts`
+- `rhwp-studio/src/view/canvaskit/diagnostics.ts`
 - `rhwp-studio/src/view/canvaskit/`
 - `rhwp-studio/src/view/glyph-outline-payload-status.ts`
 - `rhwp-studio/e2e/renderer-contract.test.mjs`
@@ -133,6 +134,44 @@ Use render-diff CI to compare Canvas2D and CanvasKit output on focused
 fixtures before broadening default behavior. Full-corpus or PDF artifact
 comparison can be added as report-only first, then promoted only after the
 noise floor is understood.
+
+## Readiness Gate Contract
+
+Canvas2D remains the public default. CanvasKit can be selected only by an
+explicit URL request such as `?renderer=canvaskit`; a stored backend value must
+not enable it on a later visit. Mode requests may come from URL or storage, but
+their source and any rejected value remain visible in renderer diagnostics.
+
+`CanvasKitRenderDiagnostics.passesRuntimeReadinessGate` means only that the
+selected page completed a CanvasKit surface flush without a render error or
+unexpected unsupported operation. Surface fallback remains explicit
+telemetry because headless and constrained devices may legitimately use the
+software surface. `surfaceBackend` records whether the default or software
+factory actually succeeded. Runtime readiness is not a claim of
+complete visual parity. Known capability gaps remain in
+`lastExpectedUnsupportedOps`; new diagnostic strings are unexpected unless
+they are added to the exact allowlist with a fixture and review.
+
+Diagnostics are snapshotted by page so viewport prefetch cannot replace the
+result for the page under test. Studio exposes the request, effective backend,
+fallback reason, and page snapshot through `getRendererDiagnostics` on the
+existing `rhwp-request` API.
+
+The manifest flag `canvaskitReadinessGate` selects a bounded paragraph, table,
+and image corpus. `scripts/renderer_baseline.py --readiness-only --profiles
+screen` runs only Canvas2D and CanvasKit default on the automatic surface. Each
+selected case must satisfy all of these conditions:
+
+1. the effective backend is CanvasKit after explicit URL requests for the
+   CanvasKit backend and `default` mode, with `auto` surface preference;
+2. page-scoped CanvasKit diagnostics are available and pass the runtime gate;
+3. unexpected unsupported operations and render errors are empty;
+4. the Canvas2D-vs-CanvasKit comparison passes that sample's tolerant or
+   raster-aware ink/non-ink visual threshold.
+
+Ordinary baseline and surface sweeps remain report-only. Only the explicit
+readiness command fails CI, and its JSON/Markdown reports are written before
+the process reports failure.
 
 ## Non-Goals
 
