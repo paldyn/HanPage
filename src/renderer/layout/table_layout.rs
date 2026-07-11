@@ -1929,12 +1929,14 @@ impl LayoutEngine {
                     } else {
                         // [정식화 보류] 셀 마지막 줄 em(#2150 공식)은 상쇄 얽힘으로
                         // 실험 브랜치 보존 — hwp3 synthetic 만 유지.
+                        // [#2070] NO_LS 단일 문단·단일 줄 셀 = em — 한글은 1줄 셀에서
+                        // 줄간격(Percent/Fixed)을 완전 무시 (fixed_ladder 실측).
                         crate::renderer::corrected_line_height_for_variant_synthetic(
                             raw_lh,
                             max_fs,
                             cell_ls_type,
                             cell_ls_val,
-                            hwp3_variant_synthetic,
+                            hwp3_variant_synthetic || is_cell_last_line,
                         )
                     };
                     if !is_cell_last_line {
@@ -4994,7 +4996,13 @@ impl LayoutEngine {
             // corrected_line_height 를 적용한다 — raw line_height 가 폰트보다
             // 작은 폴백 케이스에서 렌더러가 키운 높이를 컷 측정이 따라가지
             // 못하면 분할 표가 페이지를 넘는다(측정 공간 불일치).
-            let corrected_h = |line: &ComposedLine, _li: usize| -> f64 {
+            // [#2070 실험] 셀 마지막 줄 인덱스 - em 공식 게이트.
+            let cell_last_line_idx = if is_last_para && !comp.lines.is_empty() {
+                Some(comp.lines.len() - 1)
+            } else {
+                None
+            };
+            let corrected_h = |line: &ComposedLine, li: usize| -> f64 {
                 let raw_lh = hwpunit_to_px(line.line_height, self.dpi);
                 // [Task #1811] HWPX RowBreak 셀의 synthetic lineSeg 는 저장 근거가 아니라
                 // reflow 산물이다. row cut 측정에서 다시 corrected_line_height 를 적용하면
@@ -5052,9 +5060,11 @@ impl LayoutEngine {
                             max_fs,
                             ps.line_spacing_type,
                             ps.line_spacing,
-                            p.line_segs.is_empty()
+                            crate::renderer::para_has_no_stored_line_segs(p)
                                 && (!p.text.is_empty() || p.controls.is_empty())
-                                && matches!(table.page_break, TablePageBreak::CellBreak),
+                                && (matches!(table.page_break, TablePageBreak::CellBreak)
+                                    // [#2070 실험] 셀 마지막 줄 = em (5축 전면).
+                                    || cell_last_line_idx == Some(li)),
                         )
                     }
                     None => raw_lh,

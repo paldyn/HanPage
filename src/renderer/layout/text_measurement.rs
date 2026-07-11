@@ -457,7 +457,12 @@ impl TextMeasurer for EmbeddedTextMeasurer {
             if c == '\u{F081C}' {
                 return 0.0;
             }
-            let base_w_raw = if let Some(w) = measure_char_width_embedded(
+            let base_w_raw = if let Some(w) = (c == '\u{318D}')
+                .then(|| area_dot_fallback_width(&style.font_family, font_size))
+                .flatten()
+            {
+                w
+            } else if let Some(w) = measure_char_width_embedded(
                 &style.font_family,
                 style.bold,
                 style.italic,
@@ -651,7 +656,12 @@ impl TextMeasurer for EmbeddedTextMeasurer {
         // [#2132] 폭 산출원 훅 — embedded 메트릭 lookup + 폴백 사다리 (Task #257 포함).
         let char_px_raw = |_i: usize, c: char, _chars: &[char], cluster_len: &[u8]| -> f64 {
             let i = _i;
-            if let Some(w) = measure_char_width_embedded(
+            if let Some(w) = (c == '\u{318D}')
+                .then(|| area_dot_fallback_width(&style.font_family, font_size))
+                .flatten()
+            {
+                w
+            } else if let Some(w) = measure_char_width_embedded(
                 &style.font_family,
                 style.bold,
                 style.italic,
@@ -1537,6 +1547,23 @@ fn haansoft_latin_override(primary_name: &str, c: char) -> Option<f64> {
     None
 }
 
+/// [#2070] ㆍ(U+318D) 폭은 SYMBOL 폰트별: 한양신명조 = 전각(사다리 v3 실측),
+/// 명조(HY견명조 치환) 등 여타 = 반각 (80168 개정안{{7}} p9/p13 '시ㆍ도조례'
+/// 1줄 오라클, 개정안{{1}} P21 마크와 반각 양립 검증). embedded 메트릭
+/// (HY견명조 수록분)이 전각이라 룩업보다 앞서 판정하되, 함초롬(HCR) 계열은
+/// embedded 메트릭을 신뢰한다 (None 반환).
+pub(crate) fn area_dot_fallback_width(font_family: &str, font_size: f64) -> Option<f64> {
+    let fam = font_family.split(',').next().unwrap_or("").trim();
+    if fam.contains("함초롬") || fam.contains("HCR") {
+        return None;
+    }
+    Some(if fam.contains("한양신명조") {
+        font_size
+    } else {
+        font_size * 0.5
+    })
+}
+
 fn measure_char_width_embedded(
     font_family: &str,
     bold: bool,
@@ -1644,7 +1671,12 @@ pub(crate) fn estimate_text_width_unrounded(text: &str, style: &TextStyle) -> f6
         if c == '\u{F081C}' {
             return 0.0;
         }
-        let base_w_raw = if let Some(w) =
+        let base_w_raw = if let Some(w) = (c == '\u{318D}')
+            .then(|| area_dot_fallback_width(&style.font_family, font_size))
+            .flatten()
+        {
+            w
+        } else if let Some(w) =
             measure_char_width_embedded(&style.font_family, style.bold, style.italic, c, font_size)
         {
             w

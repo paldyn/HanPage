@@ -292,6 +292,9 @@ pub struct ResolvedStyleSet {
     pub numberings: Vec<Numbering>,
     /// 글머리표 정의 목록 (bullets[id]에 대응)
     pub bullets: Vec<Bullet>,
+    /// [#2070] HWP3 → HWP5 변환본 여부 (Document::is_hwp3_variant 전파).
+    /// 변환본 한정 레거시 폭 규칙(전체 폭) 게이트에 사용.
+    pub hwp3_variant: bool,
 }
 
 /// DocInfo 참조 테이블을 해소된 스타일 목록으로 변환한다.
@@ -319,6 +322,7 @@ pub fn resolve_styles_with_variant(
         border_styles,
         numberings,
         bullets,
+        hwp3_variant: is_hwp3_variant,
     }
 }
 
@@ -398,6 +402,12 @@ fn resolve_single_char_style(cs: &CharShape, doc_info: &DocInfo, dpi: f64) -> Re
 pub fn detect_lang_category(ch: char) -> usize {
     let cp = ch as u32;
     match cp {
+        // [#2070] ㆍ(아래아, U+318D)는 한컴이 USER 스크립트 폰트로 렌더한다.
+        // 80168 실문서(user=9='명조', 반각 오라클)와 사다리 v3(user=한양신명조,
+        // 전각 실측)를 동시에 만족하는 유일 분류. 호환 자모 블록이지만
+        // 한글(0)이 아니라 사용자(6)로 분류해 user 폰트를 태운다.
+        0x318D => 6,
+
         // 한국어: Hangul Jamo, Compatibility Jamo, Syllables
         0x1100..=0x11FF | 0x3130..=0x318F | 0xAC00..=0xD7AF |
         // Hangul Jamo Extended-A/B

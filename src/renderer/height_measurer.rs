@@ -1021,6 +1021,11 @@ impl HeightMeasurer {
                                     && !p.text.is_empty()
                                     && matches!(table.page_break, TablePageBreak::CellBreak);
                                 let line_count = comp.lines.len();
+                                // [#2070 stage10] 저장 LINE_SEG vpos 리셋 줄(원저작
+                                // 분할 흔적)도 전량 계상 — 한글 원본 오라클(개정안{{0}}
+                                // 마크 워크 28줄 = stored 재현, row 918.5px = 콘텐츠 +
+                                // 조각별 패딩)이 재현을 확증. stage4의 리셋 줄 제외는
+                                // 픽스처(intent 절반 버그로 재계산) 산물에 맞춘 오판.
                                 let lines_total: f64 = comp
                                     .lines
                                     .iter()
@@ -1038,7 +1043,8 @@ impl HeightMeasurer {
                                                     .unwrap_or(0.0)
                                             })
                                             .fold(0.0f64, f64::max);
-                                        let is_cell_last_line = is_last_para && i + 1 == line_count;
+                                        let is_cell_last_line =
+                                            is_last_para && i + 1 == line_count;
                                         // [#2169] NO_LS 순수 빈 문단 — 문단 char shape fs
                                         // 폴백 (한글은 완전한 em 줄박스로 취급).
                                         let max_fs = if max_fs <= 0.0
@@ -1074,7 +1080,11 @@ impl HeightMeasurer {
                                                 max_fs,
                                                 cell_ls_type,
                                                 cell_ls_val,
-                                                synthetic_line,
+                                                // [#2070] NO_LS 단일 문단·단일 줄 셀
+                                                // = em (fixed_ladder: 1줄 셀 줄간격 무시).
+                                                synthetic_line
+                                                    || (crate::renderer::para_has_no_stored_line_segs(p)
+                                                        && is_cell_last_line),
                                             )
                                         };
                                         // [Task #874 #4 / #1086] CellBreak/TAC 표는 기존
@@ -1414,6 +1424,11 @@ impl HeightMeasurer {
                                     && !p.text.is_empty()
                                     && matches!(table.page_break, TablePageBreak::CellBreak);
                                 let line_count = comp.lines.len();
+                                // [#2070 stage10] 저장 LINE_SEG vpos 리셋 줄(원저작
+                                // 분할 흔적)도 전량 계상 — 한글 원본 오라클(개정안{{0}}
+                                // 마크 워크 28줄 = stored 재현, row 918.5px = 콘텐츠 +
+                                // 조각별 패딩)이 재현을 확증. stage4의 리셋 줄 제외는
+                                // 픽스처(intent 절반 버그로 재계산) 산물에 맞춘 오판.
                                 let lines_total: f64 = comp
                                     .lines
                                     .iter()
@@ -1431,7 +1446,8 @@ impl HeightMeasurer {
                                                     .unwrap_or(0.0)
                                             })
                                             .fold(0.0f64, f64::max);
-                                        let is_cell_last_line = is_last_para && i + 1 == line_count;
+                                        let is_cell_last_line =
+                                            is_last_para && i + 1 == line_count;
                                         // [#2169] NO_LS 순수 빈 문단 — 문단 char shape fs
                                         // 폴백 (한글은 완전한 em 줄박스로 취급).
                                         let max_fs = if max_fs <= 0.0
@@ -1467,7 +1483,11 @@ impl HeightMeasurer {
                                                 max_fs,
                                                 cell_ls_type,
                                                 cell_ls_val,
-                                                synthetic_line,
+                                                // [#2070] NO_LS 단일 문단·단일 줄 셀
+                                                // = em (fixed_ladder: 1줄 셀 줄간격 무시).
+                                                synthetic_line
+                                                    || (crate::renderer::para_has_no_stored_line_segs(p)
+                                                        && is_cell_last_line),
                                             )
                                         };
                                         // [Task #874 #4 / #1086] CellBreak/TAC 표는 기존
@@ -1549,6 +1569,41 @@ impl HeightMeasurer {
             && raw_table_height > common_h + shrink_threshold
             && raw_table_height <= common_h * TAC_SHRINK_MAX_OVERFLOW_RATIO
         {
+            let scale = common_h / raw_table_height;
+            for h in &mut row_heights {
+                *h *= scale;
+            }
+            common_h
+        } else if !table.common.treat_as_char
+            && common_h > 0.0
+            && raw_table_height > 0.0
+            && common_h > raw_table_height + 0.5
+            && {
+                // stale-min 셀 판별: 셀 선언높이(cellSz) 합이 표 선언높이의 절반
+                // 미만인 생성계 문서에서만 발동 (정상 저장 문서는 Σ셀선언 ≈ 표선언
+                // 이라 무해 — 전역 발동 시 콘텐츠<선언 표가 광역 팽창, 163쪽 회귀).
+                let mut per_row = vec![0.0f64; row_count];
+                for cell in &table.cells {
+                    if cell.row_span == 1
+                        && (cell.row as usize) < row_count
+                        && cell.height < 0x80000000
+                    {
+                        let h = hwpunit_to_px(cell.height as i32, self.dpi);
+                        if h > per_row[cell.row as usize] {
+                            per_row[cell.row as usize] = h;
+                        }
+                    }
+                }
+                let declared_rows_sum: f64 = per_row.iter().sum::<f64>()
+                    + cell_spacing * (row_count.saturating_sub(1) as f64);
+                declared_rows_sum < common_h * 0.5
+            }
+        {
+            // [#2070] 비-TAC 표는 선언 표높이(size.height)가 최소 높이다 — 한글은
+            // max(선언, 콘텐츠)로 배치한다 (80168 pi=354/357/362 조문 표 오라클:
+            // 콘텐츠 154.2px 인 세 표를 각각 선언 211.8/192.6, 콘텐츠 212.4 로 렌더).
+            // 셀 선언높이(cellSz=284HU)가 stale-min 인 생성계 문서에서 표 선언높이가
+            // 권위. 부족분은 행 높이에 비례 배분한다 (1행 표는 정확).
             let scale = common_h / raw_table_height;
             for h in &mut row_heights {
                 *h *= scale;
@@ -1687,7 +1742,10 @@ impl HeightMeasurer {
                                         max_fs,
                                         cell_ls_type,
                                         cell_ls_val,
-                                        synthetic_line,
+                                        // [#2070] NO_LS 단일 문단·단일 줄 셀 = em.
+                                        synthetic_line
+                                            || (crate::renderer::para_has_no_stored_line_segs(p)
+                                                && is_cell_last_line),
                                     )
                                 };
                                 let ls = hwpunit_to_px(line.line_spacing, self.dpi);
