@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createServer } from 'vite';
 
 const studioRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(studioRoot, '..');
@@ -320,9 +321,148 @@ const renderLineBody = extractMethodBody(canvaskitSource, 'renderLine');
 const renderFormObjectBody = extractMethodBody(canvaskitSource, 'renderFormObject');
 const renderPlaceholderBody = extractMethodBody(canvaskitSource, 'renderPlaceholder');
 const renderTextRunBody = extractMethodBody(canvaskitSource, 'renderTextRun');
+const renderShapedScriptTextBody = extractMethodBody(canvaskitSource, 'renderShapedScriptText');
 const renderGlyphOutlineBody = extractMethodBody(canvaskitSource, 'renderGlyphOutline');
 const renderColorPaintGraphNodeBody = extractMethodBody(canvaskitSource, 'renderColorPaintGraphNode');
 const recordTextRunCoverageGapsBody = extractMethodBody(canvaskitSource, 'recordTextRunCoverageGaps');
+
+const vite = await createServer({
+  root: studioRoot,
+  server: { middlewareMode: true },
+  appType: 'custom',
+  logLevel: 'silent',
+});
+let CanvasKitLayerRendererRuntime;
+try {
+  ({ CanvasKitLayerRenderer: CanvasKitLayerRendererRuntime } = await vite.ssrLoadModule(
+    '/src/view/canvaskit-renderer.ts',
+  ));
+} finally {
+  await vite.close();
+}
+
+function runExecutableTextReplay(op, {
+  glyphIds,
+  drawGlyphsError,
+  drawParagraphError,
+  shapedTextAvailable = true,
+} = {}) {
+  const events = [];
+  const unsupportedOps = new Set();
+  const replayText = op.displayText ?? op.text;
+  const resolvedGlyphIds = glyphIds
+    ?? Array.from({ length: Array.from(replayText).length }, (_, index) => index + 1);
+
+  class FakeFont {
+    constructor(_typeface, size) {
+      events.push({ type: 'font.create', size });
+    }
+
+    getGlyphIDs(text, count) {
+      events.push({ type: 'font.getGlyphIDs', text, count });
+      return Uint16Array.from(resolvedGlyphIds);
+    }
+
+    delete() {
+      events.push({ type: 'font.delete' });
+    }
+  }
+
+  class FakeParagraphStyle {
+    constructor(style) {
+      this.style = style;
+      events.push({ type: 'paragraphStyle.create', style });
+    }
+  }
+
+  const paragraph = {
+    layout(width) {
+      events.push({ type: 'paragraph.layout', width });
+    },
+    delete() {
+      events.push({ type: 'paragraph.delete' });
+    },
+  };
+  const paragraphBuilder = {
+    addText(text) {
+      events.push({ type: 'paragraphBuilder.addText', text });
+    },
+    build() {
+      events.push({ type: 'paragraphBuilder.build' });
+      return paragraph;
+    },
+    delete() {
+      events.push({ type: 'paragraphBuilder.delete' });
+    },
+  };
+
+  const paint = {
+    setAntiAlias(value) {
+      events.push({ type: 'paint.antiAlias', value });
+    },
+    delete() {
+      events.push({ type: 'paint.delete' });
+    },
+  };
+  const canvas = {
+    save() {
+      events.push({ type: 'canvas.save' });
+    },
+    concat(matrix) {
+      events.push({ type: 'canvas.concat', matrix: Array.from(matrix) });
+    },
+    rotate(rotation, x, y) {
+      events.push({ type: 'canvas.rotate', rotation, x, y });
+    },
+    drawGlyphs(ids, positions, x, y) {
+      events.push({
+        type: 'canvas.drawGlyphs',
+        glyphIds: Array.from(ids),
+        positions: Array.from(positions),
+        x,
+        y,
+      });
+      if (drawGlyphsError) throw drawGlyphsError;
+    },
+    drawText(text, x, y) {
+      events.push({ type: 'canvas.drawText', text, x, y });
+    },
+    drawParagraph(_paragraph, x, y) {
+      events.push({ type: 'canvas.drawParagraph', x, y });
+      if (drawParagraphError) throw drawParagraphError;
+    },
+    restore() {
+      events.push({ type: 'canvas.restore' });
+    },
+  };
+  const renderer = new CanvasKitLayerRendererRuntime({
+    Font: FakeFont,
+    ParagraphStyle: FakeParagraphStyle,
+    ParagraphBuilder: {
+      Make(style, fontManager) {
+        events.push({ type: 'paragraphBuilder.make', style, fontManager });
+        return paragraphBuilder;
+      },
+    },
+  }, 'default', {}, {}, shapedTextAvailable ? {} : null, 'Noto Sans KR');
+  renderer.unsupportedOps = unsupportedOps;
+  renderer.recordTextRunCoverageGaps = () => {
+    events.push({ type: 'coverage.record' });
+  };
+  renderer.makeFillPaint = () => {
+    events.push({ type: 'paint.create' });
+    return paint;
+  };
+  renderer.color = (color) => color;
+
+  let error = null;
+  try {
+    renderer.renderTextRun(canvas, op);
+  } catch (caught) {
+    error = caught;
+  }
+  return { error, events, unsupportedOps };
+}
 
 requireSnippet(
   renderRectangleBody,
@@ -378,14 +518,185 @@ requireSnippet(
 );
 requireSnippet(
   renderTextRunBody,
-  /const codePoints = Array\.from\(op\.text\);[\s\S]*?const needsPreservedAdvances = style\.superscript \|\| style\.subscript;[\s\S]*?op\.positions\?\.length === codePoints\.length \+ 1[\s\S]*?needsPreservedAdvances && hasLayoutPositions[\s\S]*?font\.getGlyphIDs\(op\.text, codePoints\.length\)[\s\S]*?glyphPositions\[index \* 2\] = op\.positions!\[index\];[\s\S]*?canvas\.drawGlyphs\(glyphIds, glyphPositions, originX, originY, font, paint\)/,
+  /const replayText = op\.displayText \?\? op\.text;[\s\S]*?const replayPositions = op\.displayText !== undefined \? op\.displayPositions : op\.positions;[\s\S]*?const codePoints = Array\.from\(replayText\);[\s\S]*?const hasSimpleScriptText[\s\S]*?code >= 0x20 && code <= 0x7e[\s\S]*?needsPreservedAdvances && !hasSimpleScriptText[\s\S]*?this\.renderShapedScriptText\([\s\S]*?needsPreservedAdvances && hasLayoutPositions[\s\S]*?font\.getGlyphIDs\(replayText, codePoints\.length\)[\s\S]*?glyphIds\.every\(\(glyphId\) => glyphId !== 0\)[\s\S]*?glyphPositions\[index \* 2\] = replayPositions!\[index\];[\s\S]*?canvas\.drawGlyphs\(glyphIds, glyphPositions, originX, originY, font, paint\)/,
   'textRun replay should preserve serialized layout advances when glyph size changes',
 );
 requireSnippet(
-  renderTextRunBody,
-  /textRun:glyphMapping[\s\S]*?textRun:layoutPositions/,
-  'textRun replay should expose malformed positioned-text fallbacks',
+  renderShapedScriptTextBody,
+  /new this\.canvasKit\.ParagraphStyle[\s\S]*?this\.canvasKit\.ParagraphBuilder\.Make[\s\S]*?builder\.addText\(text\)[\s\S]*?paragraph\.layout\(CanvasKitLayerRenderer\.MAX_SHAPED_TEXT_WIDTH\)[\s\S]*?canvas\.drawParagraph\(paragraph, originX, originY - fontSize \+ baselineShift\)[\s\S]*?paragraph\.delete\?\.\(\)[\s\S]*?builder\.delete\?\.\(\)/,
+  'non-ASCII script replay should use CanvasKit paragraph shaping and release native objects',
 );
+requireSnippet(
+  renderTextRunBody,
+  /textRun:scriptTextRequiresShaping[\s\S]*?textRun:glyphMapping[\s\S]*?textRun:layoutPositions/,
+  'textRun replay should expose unavailable shaping and malformed positioned-text fallbacks',
+);
+requireSnippet(
+  renderTextRunBody,
+  /try \{[\s\S]*?canvas\.save\(\);[\s\S]*?\} finally \{[\s\S]*?if \(canvasSaved\) canvas\.restore\(\);[\s\S]*?font\?\.delete\?\.\(\);[\s\S]*?paint\.delete\?\.\(\);/,
+  'textRun replay should restore CanvasKit state and delete native objects after failures',
+);
+
+const placedSuperscriptReplay = runExecutableTextReplay({
+  type: 'textRun',
+  bbox: { x: 10, y: 100, width: 30, height: 20 },
+  text: 'AB',
+  baseline: 15,
+  rotation: 90,
+  placement: {
+    runToPage: { a: 0, b: 1, c: -1, d: 0, e: 50, f: 60 },
+    baselineY: 0,
+  },
+  positions: [0, 12, 24],
+  style: { fontSize: 20, superscript: true },
+});
+assert.equal(placedSuperscriptReplay.error, null);
+assert.deepEqual(
+  placedSuperscriptReplay.events.find((event) => event.type === 'canvas.concat')?.matrix,
+  [0, -1, 50, 1, 0, 60, 0, 0, 1],
+  'placement transform should use the serialized affine coefficient order',
+);
+assert.equal(
+  placedSuperscriptReplay.events.some((event) => event.type === 'canvas.rotate'),
+  false,
+  'placement transform should suppress the legacy rotation fallback',
+);
+assert.deepEqual(
+  placedSuperscriptReplay.events.find((event) => event.type === 'canvas.drawGlyphs'),
+  {
+    type: 'canvas.drawGlyphs',
+    glyphIds: [1, 2],
+    positions: [0, -6, 12, -6],
+    x: 0,
+    y: 0,
+  },
+  'superscript replay should keep producer advances and apply a run-local baseline shift',
+);
+
+const rotatedSubscriptReplay = runExecutableTextReplay({
+  type: 'textRun',
+  bbox: { x: 7, y: 100, width: 30, height: 20 },
+  text: 'AB',
+  baseline: 15,
+  rotation: 90,
+  positions: [0, 9, 18],
+  style: { fontSize: 20, subscript: true },
+});
+assert.deepEqual(
+  rotatedSubscriptReplay.events.find((event) => event.type === 'canvas.rotate'),
+  { type: 'canvas.rotate', rotation: 90, x: 7, y: 115 },
+  'legacy placement fallback should add the run-local baseline exactly once',
+);
+assert.deepEqual(
+  rotatedSubscriptReplay.events.find((event) => event.type === 'canvas.drawGlyphs')?.positions,
+  [0, 3, 9, 3],
+  'subscript replay should apply its baseline shift in rotated run-local space',
+);
+
+const projectedTextReplay = runExecutableTextReplay({
+  type: 'textRun',
+  bbox: { x: 0, y: 20, width: 30, height: 20 },
+  text: '\u{F012B}',
+  displayText: '(인)',
+  baseline: 15,
+  positions: [0, 5],
+  displayPositions: [0, 11, 22, 33],
+  style: { fontSize: 20, superscript: true },
+});
+assert.deepEqual(
+  projectedTextReplay.events.find((event) => event.type === 'paragraphBuilder.addText'),
+  { type: 'paragraphBuilder.addText', text: '(인)' },
+  'CanvasKit replay should shape the actual PUA display projection',
+);
+assert.equal(
+  projectedTextReplay.events.some((event) => event.type === 'canvas.drawGlyphs'),
+  false,
+  'a non-ASCII PUA display projection should not enter direct glyph replay',
+);
+
+const shapedTextReplay = runExecutableTextReplay({
+  type: 'textRun',
+  bbox: { x: 0, y: 20, width: 30, height: 20 },
+  text: 'e\u0301',
+  baseline: 15,
+  positions: [0, 8, 8],
+  style: { fontSize: 20, superscript: true },
+});
+assert.equal(
+  shapedTextReplay.events.some((event) => event.type === 'font.getGlyphIDs'),
+  false,
+  'text requiring shaping should not enter nominal glyph replay',
+);
+assert.equal(
+  shapedTextReplay.events.some((event) => event.type === 'canvas.drawParagraph'),
+  true,
+  'text requiring shaping should use CanvasKit paragraph replay',
+);
+assert.equal(shapedTextReplay.unsupportedOps.has('textRun:scriptTextRequiresShaping'), false);
+
+const unavailableShapingReplay = runExecutableTextReplay({
+  type: 'textRun',
+  bbox: { x: 0, y: 20, width: 30, height: 20 },
+  text: 'e\u0301',
+  baseline: 15,
+  positions: [0, 8, 8],
+  style: { fontSize: 20, superscript: true },
+}, { shapedTextAvailable: false });
+assert.equal(unavailableShapingReplay.unsupportedOps.has('textRun:scriptTextRequiresShaping'), true);
+assert.equal(
+  unavailableShapingReplay.events.some((event) => event.type === 'canvas.drawText'),
+  false,
+  'text requiring shaping must not silently fall back to CanvasKit drawText',
+);
+
+const missingGlyphReplay = runExecutableTextReplay({
+  type: 'textRun',
+  bbox: { x: 0, y: 20, width: 30, height: 20 },
+  text: 'AB',
+  baseline: 15,
+  positions: [0, 8, 16],
+  style: { fontSize: 20, superscript: true },
+}, { glyphIds: [1, 0] });
+assert.equal(missingGlyphReplay.unsupportedOps.has('textRun:glyphMapping'), true);
+assert.equal(
+  missingGlyphReplay.events.some((event) => event.type === 'canvas.drawGlyphs'),
+  false,
+  'glyph ID zero should reject positioned glyph replay',
+);
+
+const cleanupReplay = runExecutableTextReplay({
+  type: 'textRun',
+  bbox: { x: 0, y: 20, width: 30, height: 20 },
+  text: 'AB',
+  baseline: 15,
+  positions: [0, 8, 16],
+  style: { fontSize: 20, superscript: true },
+}, { drawGlyphsError: new Error('draw failed') });
+assert.equal(cleanupReplay.error?.message, 'draw failed');
+for (const cleanupEvent of ['canvas.restore', 'font.delete', 'paint.delete']) {
+  assert.equal(
+    cleanupReplay.events.some((event) => event.type === cleanupEvent),
+    true,
+    `${cleanupEvent} should run after drawGlyphs throws`,
+  );
+}
+
+const shapedCleanupReplay = runExecutableTextReplay({
+  type: 'textRun',
+  bbox: { x: 0, y: 20, width: 30, height: 20 },
+  text: 'e\u0301',
+  baseline: 15,
+  positions: [0, 8, 8],
+  style: { fontSize: 20, superscript: true },
+}, { drawParagraphError: new Error('paragraph draw failed') });
+assert.equal(shapedCleanupReplay.error?.message, 'paragraph draw failed');
+for (const cleanupEvent of ['canvas.restore', 'paragraph.delete', 'paragraphBuilder.delete', 'paint.delete']) {
+  assert.equal(
+    shapedCleanupReplay.events.some((event) => event.type === cleanupEvent),
+    true,
+    `${cleanupEvent} should run after drawParagraph throws`,
+  );
+}
 for (const expectedTextRunGap of [
   'textRun:verticalText',
   'textRun:textDecoration',
