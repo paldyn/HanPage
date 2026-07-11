@@ -6,7 +6,7 @@
 - PR URL: `https://github.com/edwardkim/rhwp/pull/2216`
 - 브랜치: `postmelee:task2183-frontend-ci-gate`
 - base: `edwardkim:devel`
-- 검증 HEAD: `5183b8157d62b7c05041db5e4a054c1e8965df1d`
+- 검증 HEAD: `c81a4af4b2279c2641cb34a80daaecbb1ec41dde`
 - 작성일: 2026-07-11
 - 단계: draft PR 실측
 
@@ -157,3 +157,21 @@ API를 직접 비교한 결과는 다음과 같다.
 실제 inline script를 추출한 fixture 8건에서 check-run 성공, Actions job fallback 성공, 진행 중, job 실패,
 job 누락, wrong SHA, API 오류, trailing docs 부재를 검증했다. 최종 GitHub 실측은 최신
 `upstream/devel@413d8a67` rebase와 보정 commit push 후 수행한다.
+
+## 10. 최신 upstream 재검증
+
+최신 `upstream/devel@413d8a67`로 rebase하고 fork PR fallback 보정 commit `c81a4af4`를 push한 뒤 전체
+workflow를 다시 실행했다.
+
+- CI run: `https://github.com/edwardkim/rhwp/actions/runs/29158715334`
+- 전체 결과: PASS
+- `Build & Test`: PASS, 4초
+- `Build default-feature tests`: PASS, 9분 40초
+- `Native Skia tests`: PASS, 5분 36초
+- `Frontend package gates`: PASS, 2분 10초
+- `Canvas visual diff`: PASS, 3분 39초
+- CodeQL Rust analyze: PASS, 8분 44초
+
+최신 upstream에서도 frontend consumer gate와 기존 required surface가 모두 통과했다. 이 보고서 갱신만 담은
+후속 commit을 review-only 후보로 사용해, candidate run의 `Build & Test=completed/success`를 Actions Jobs
+fallback이 식별하고 `fast_pass=true`로 전환하는지 최종 실측한다.
