@@ -24,3 +24,12 @@
 
 **approve + merge.** 시각 판정: CanvasKit 은 비-기본 renderer 이고 공개 기본 경로
 무변경 + 계약 e2e/정책 테스트가 게이트 — 선택 적용 거버넌스상 표적 테스트로 갈음.
+
+## 시각 판정 결과 (2026-07-11, 작업지시자 판정 — 통과)
+
+renderer-baseline 하네스 3벌 대조(canvas2d/CK이전/CK이후, hwpx_sample2 p0):
+커버리지 확대 실재(이전 전면 fallback → 이후 direct 방출). ■ 글머리 tofu 는 **본 PR
+비회귀** — web/fonts NotoSansKR 서브셋의 U+25A0/25AA 누락 + P16 단일 typeface 한계가
+가시화된 것. 기호 포함 폰트 스왑 실험으로 정상 렌더 실증(output/poc/pr2188-fontswap).
+네이티브 SVG/PNG 는 --font-path 로 무관 확인. 후속: 서브셋 기호 보강 이슈 #2190 등록.
+merge 완료.
