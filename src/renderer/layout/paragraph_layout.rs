@@ -897,7 +897,56 @@ fn compute_line_extra_spacing(
                     ),
                 );
                 let min_ews = -(space_base_w * 0.5);
-                (raw_ews.max(min_ews), 0.0, 0.0)
+                let ews = raw_ews.max(min_ews);
+                // [Task #2189] 저장 줄바꿈(LINE_SEG) 셀에서 대체 폰트 advance 가 한컴
+                // 실폰트보다 넓으면 공백 -50% 클램프만으로는 잔여 초과가 남아 우측
+                // 테두리에서 클리핑된다. 공백-없는 분기와 동일하게 잔여 음수 슬랙을
+                // 자간으로 흡수한다 (narrow glyph 역진은 #229 per-char 클램프가 방어).
+                let leftover = slack - ews * interior_spaces as f64;
+                let ecs = if in_cell && leftover < 0.0 && total_char_count > 1 && !has_tabs {
+                    let avg_char_w = total_text_width / total_char_count as f64;
+                    let min_ecs = -avg_char_w * 0.5;
+                    let mut ecs = (leftover / total_char_count as f64).max(min_ecs);
+                    // narrow glyph per-char 클램프가 음수 자간 기여 일부를 되돌리므로
+                    // 선형 1회 분배로는 부족하다 — underflow 확장과 동일하게 실효 폭
+                    // 재측정으로 수렴 반복한다.
+                    let measure_with = |ecs: f64| -> f64 {
+                        let mut measured = 0.0f64;
+                        for r in &comp_line.runs {
+                            let mut ts =
+                                resolved_to_text_style(styles, r.char_style_id, r.lang_index);
+                            ts.default_tab_width = tab_width;
+                            ts.extra_word_spacing = ews;
+                            ts.extra_char_spacing = ecs;
+                            measured += estimate_text_width(&r.text, &ts);
+                        }
+                        if trailing_spaces > 0 {
+                            if let Some(last_run) = comp_line.runs.last() {
+                                let mut ts = resolved_to_text_style(
+                                    styles,
+                                    last_run.char_style_id,
+                                    last_run.lang_index,
+                                );
+                                ts.default_tab_width = tab_width;
+                                ts.extra_word_spacing = ews;
+                                ts.extra_char_spacing = ecs;
+                                measured -= estimate_text_width(&" ".repeat(trailing_spaces), &ts);
+                            }
+                        }
+                        measured
+                    };
+                    for _ in 0..3 {
+                        let delta = available_width - measure_with(ecs);
+                        if delta.abs() < 0.5 {
+                            break;
+                        }
+                        ecs = (ecs + delta / total_char_count as f64).max(min_ecs);
+                    }
+                    ecs.min(0.0)
+                } else {
+                    0.0
+                };
+                (ews, ecs, 0.0)
             }
         } else if total_char_count > 1 {
             // 양쪽 정렬이지만 공백 없음 (일본어/숫자 등):
