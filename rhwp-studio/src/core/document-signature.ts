@@ -40,10 +40,29 @@ function decodeXmlPrefix(bytes: Uint8Array): string {
   return new TextDecoder('utf-8').decode(bytes.subarray(0, prefixLength));
 }
 
+function skipXmlWhitespace(prefix: string, offset: number): number {
+  while (offset < prefix.length && /\s/.test(prefix[offset])) offset += 1;
+  return offset;
+}
+
 function matchRootElement(prefix: string): RegExpMatchArray | null {
-  return prefix.match(
-    /^\s*(?:<\?xml[\s\S]*?\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<(?:[A-Za-z_][\w.-]*:)?([A-Za-z_][\w.-]*)\b([^>]*)>/i,
-  );
+  let offset = skipXmlWhitespace(prefix, 0);
+
+  if (prefix.slice(offset, offset + 5).toLowerCase() === '<?xml') {
+    const declarationEnd = prefix.indexOf('?>', offset + 5);
+    if (declarationEnd === -1) return null;
+    offset = skipXmlWhitespace(prefix, declarationEnd + 2);
+  }
+
+  while (prefix.startsWith('<!--', offset)) {
+    const commentEnd = prefix.indexOf('-->', offset + 4);
+    if (commentEnd === -1) return null;
+    offset = skipXmlWhitespace(prefix, commentEnd + 3);
+  }
+
+  const rootPattern = /<(?:[A-Za-z_][\w.-]*:)?([A-Za-z_][\w.-]*)\b([^>]*)>/iy;
+  rootPattern.lastIndex = offset;
+  return rootPattern.exec(prefix);
 }
 
 function isHmlRoot(root: RegExpMatchArray | null, prefix: string): boolean {

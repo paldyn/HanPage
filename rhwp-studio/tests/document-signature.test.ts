@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { performance } from 'node:perf_hooks';
 
 import {
   detectDocumentByteKind,
@@ -143,4 +144,27 @@ test('매직 없는 알 수 없는 바이트는 거부한다', () => {
 test('HWP3 매직보다 짧은 바이트는 오인식하지 않는다', () => {
   // "HWP " 까지만 — 전체 매직 미달이면 hwp 가 아니다.
   assert.notEqual(detectDocumentByteKind(ascii('HWP '), null), 'hwp');
+});
+
+test('악성 XML 주석 prefix를 제한 시간 안에 거부한다', () => {
+  assert.equal(detectDocumentByteKind(ascii(
+    '<?xml version="1.0"?>\n<!-- first --> <!-- second -->'
+      + '<HWPML xmlns="http://www.hancom.co.kr/hwpml/2011/core"><HEAD/></HWPML>',
+  )), 'hml');
+  assert.equal(detectDocumentByteKind(ascii(
+    '<!-- marker --><HWPML xmlns="http://www.hancom.co.kr/hwpml/2011/core"></HWPML>',
+  )), 'xml');
+  assert.equal(detectDocumentByteKind(ascii(
+    '<!-- marker --><HWPML xmlns="http://www.hancom.co.kr/hwpml/2011/core"><HEAD/></HWPML>',
+  )), 'hml');
+  assert.equal(detectDocumentByteKind(ascii('<!-- marker --><html><body/></html>')), 'html');
+
+  const maliciousPrefix = ascii(`<!--${'--><!--'.repeat(24)}`);
+  const startedAt = performance.now();
+
+  assert.equal(detectDocumentByteKind(maliciousPrefix), 'unknown');
+  assert.ok(
+    performance.now() - startedAt < 100,
+    '172-byte malicious comment prefix should be classified within 100ms',
+  );
 });
