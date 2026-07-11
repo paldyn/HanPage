@@ -14,6 +14,7 @@
 | mergeable | 문서 작성 시점 참고값: `MERGEABLE` |
 | maintainer modify | `true` |
 | merge 결과 | `94befd4f969ef5d214343f154120bdf5c42aa71f`로 merge 완료 |
+| 이슈 결과 | #2204는 GitHub Actions closing keyword 처리로 자동 close 완료 |
 
 문서 작성 중 PR head가 `7c26d290cbad8592fd4a1cb398e2b978b371de04`로 갱신됐으며, 해당 트리는 최신
 `upstream/devel` 위에 원 코드 커밋 2개를 체리픽한 로컬 검증 브랜치와 동일했다. 최신 head의 GitHub
@@ -104,5 +105,6 @@ PR 목적은 달성했고 blocking finding은 없었다. 최신 PR head의 GitHu
 
 ## 후속 처리
 
-이 문서는 옵션 2 후속 문서 PR로 보존한다. 원 PR 본문의 `closes #2204`는 `devel` merge만으로 이슈를 자동
-close하지 않았으므로, 후속 문서 PR이 `devel`에 반영된 뒤 이슈 상태를 확인하고 별도 close 처리한다.
+이 문서는 옵션 2 후속 문서 PR #2208로 보존했다. 원 PR 본문의 `closes #2204`는 merge 직후 GitHub
+Actions가 처리해 #2204를 자동 close했다. 원 PR 후속 코멘트에는 archive 리뷰 문서와 옵션 2 기록 PR 링크를
+남긴다.
