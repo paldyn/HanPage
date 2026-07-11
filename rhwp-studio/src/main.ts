@@ -20,9 +20,12 @@ import { tableCommands } from '@/command/commands/table';
 import { pageCommands } from '@/command/commands/page';
 import { toolCommands } from '@/command/commands/tool';
 import { installPwaFileHandling, type FileHandlingWindowLike } from '@/command/pwa-file-handling';
+import { isSupportedDocumentFileName } from '@/command/file-system-access';
+import { forgetConvertedHmlSaveHandle } from '@/command/save-target';
 import { ContextMenu } from '@/ui/context-menu';
 import { CommandPalette } from '@/ui/command-palette';
 import { showValidationModalIfNeeded } from '@/ui/validation-modal';
+import { showHmlImportWarning } from '@/ui/hml-import-warning';
 import { showLocalFontsModalIfNeeded } from '@/ui/local-fonts-modal';
 import { showToast } from '@/ui/toast';
 import { showDropConfirmDialog } from '@/ui/drop-confirm-dialog';
@@ -110,7 +113,7 @@ function getContext(): EditorContext {
     showControlCodes: wasm.getShowControlCodes(),
     showParagraphMarks: wasm.getShowParagraphMarks(),
     isDirty: documentState.isDirty(),
-    sourceFormat: hasDoc ? (wasm.getSourceFormat() as 'hwp' | 'hwpx') : undefined,
+    sourceFormat: hasDoc ? (wasm.getSourceFormat() as 'hwp' | 'hwpx' | 'hml') : undefined,
   };
 }
 
@@ -373,7 +376,7 @@ async function initialize(): Promise<void> {
         eventBus.emit('open-document-bytes', payload);
       },
       notifyUnsupportedFile(fileName) {
-        showLoadError(new Error(`지원하지 않는 파일 형식입니다: ${fileName}. HWP/HWPX 파일만 지원합니다.`));
+        showLoadError(new Error(`지원하지 않는 파일 형식입니다: ${fileName}. HWP/HWPX/HML 파일만 지원합니다.`));
       },
       notifyError(error) {
         showLoadError(error);
@@ -440,9 +443,8 @@ function setupFileInput(): void {
     delete input.dataset.skipUnsavedGuard;
     const file = input.files?.[0];
     if (!file) return;
-    const name = file.name.toLowerCase();
-    if (!name.endsWith('.hwp') && !name.endsWith('.hwpx')) {
-      alert('HWP/HWPX 파일만 지원합니다.');
+    if (!isSupportedDocumentFileName(file.name)) {
+      alert('HWP/HWPX/HML 파일만 지원합니다.');
       fileInput.value = '';
       return;
     }
@@ -471,9 +473,9 @@ function setupFileInput(): void {
     const dropName = file.name.toLowerCase();
     const imageExts = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
     const isImage = imageExts.some(ext => dropName.endsWith(ext));
-    const isDoc = dropName.endsWith('.hwp') || dropName.endsWith('.hwpx');
+    const isDoc = isSupportedDocumentFileName(dropName);
     if (!isImage && !isDoc) {
-      alert('HWP/HWPX 파일 또는 이미지 파일만 지원합니다.');
+      alert('HWP/HWPX/HML 파일 또는 이미지 파일만 지원합니다.');
       return;
     }
 
@@ -518,7 +520,7 @@ function setupFileInput(): void {
       return;
     }
 
-    // HWP/HWPX — loadFile 내부 unsaved 가드는 드롭 확인 이후에 동작한다.
+    // HWP/HWPX/HML — loadFile 내부 unsaved 가드는 드롭 확인 이후에 동작한다.
     await loadFile(file);
   });
 }
@@ -770,6 +772,9 @@ async function initializeDocument(docInfo: DocumentInfo, displayName: string): P
             }
           }
         }
+      } else if (wasm.getSourceFormat() === 'hml') {
+        const metadata = wasm.getHmlOpenMetadata();
+        if (metadata) showHmlImportWarning(metadata);
       }
     } catch (e) {
       console.warn('[validation] 감지/보정 실패 (치명적이지 않음):', e);
@@ -858,6 +863,7 @@ async function loadBytes(
   await updateLoadProgress(25, '문서 파싱 및 쪽 계산 중...');
   const docInfo = wasm.loadDocument(data, fileName);
   await updateLoadProgress(45, '자동 저장 준비 중...');
+  forgetConvertedHmlSaveHandle(fileHandle);
   wasm.currentFileHandle = fileHandle;
   await autosaveManager.beginDocument(
     { fileName: wasm.fileName, sourceFormat: wasm.getSourceFormat() },

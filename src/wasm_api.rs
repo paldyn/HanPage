@@ -246,6 +246,61 @@ impl HwpDocument {
     }
 }
 
+fn hml_warning_code(code: crate::parser::hml::HmlWarningCode) -> &'static str {
+    use crate::parser::hml::HmlWarningCode;
+
+    match code {
+        HmlWarningCode::UnsupportedElement => "UnsupportedElement",
+        HmlWarningCode::UnsupportedAttribute => "UnsupportedAttribute",
+        HmlWarningCode::MissingResource => "MissingResource",
+        HmlWarningCode::ExternalResourceBlocked => "ExternalResourceBlocked",
+        HmlWarningCode::InvalidReference => "InvalidReference",
+        HmlWarningCode::LossyConversion => "LossyConversion",
+    }
+}
+
+fn hml_warning_json(warning: &crate::parser::hml::HmlWarning) -> serde_json::Value {
+    serde_json::json!({
+        "code": hml_warning_code(warning.code),
+        "xmlPath": warning.xml_path,
+        "message": warning.message,
+    })
+}
+
+fn hml_save_state(core: &DocumentCore) -> (bool, Vec<serde_json::Value>) {
+    match core.hml_export_preflight() {
+        Ok(()) => (true, Vec::new()),
+        Err(error) => {
+            let blockers = error
+                .blockers()
+                .iter()
+                .map(|blocker| {
+                    serde_json::json!({
+                        "code": blocker.code,
+                        "xmlPath": blocker.xml_path,
+                        "message": blocker.message,
+                    })
+                })
+                .collect();
+            (false, blockers)
+        }
+    }
+}
+
+fn format_hml_export_error(error: &crate::serializer::hml::HmlExportError) -> String {
+    use std::fmt::Write;
+
+    let mut message = error.to_string();
+    for blocker in error.blockers() {
+        let _ = write!(
+            message,
+            "\n[{}] {}: {}",
+            blocker.code, blocker.xml_path, blocker.message
+        );
+    }
+    message
+}
+
 #[wasm_bindgen]
 impl HwpDocument {
     /// HWP 파일 바이트를 로드하여 문서 객체를 생성한다.
@@ -5077,6 +5132,13 @@ impl HwpDocument {
         self.export_hwpx_native().map_err(|e| e.into())
     }
 
+    /// HML 원본의 공통 IR을 HWPML 2.91 XML로 직렬화하여 반환한다.
+    #[wasm_bindgen(js_name = exportHml)]
+    pub fn export_hml(&self) -> Result<Vec<u8>, JsValue> {
+        self.export_hml_native()
+            .map_err(|error| JsValue::from_str(&format_hml_export_error(&error)))
+    }
+
     /// 어댑터 적용 + HWP 직렬화 + 자기 재로드 검증을 수행하고 결과를 JSON 으로 반환한다 (#178).
     ///
     /// 반환 JSON:
@@ -5100,13 +5162,44 @@ impl HwpDocument {
         ))
     }
 
-    /// 원본 파일 형식을 반환한다 ("hwp" 또는 "hwpx").
+    /// 원본 파일 형식을 반환한다 ("hwp", "hwpx", 또는 "hml").
     #[wasm_bindgen(js_name = getSourceFormat)]
     pub fn get_source_format(&self) -> String {
         match self.core.source_format {
             crate::parser::FileFormat::Hwpx => "hwpx".to_string(),
+            crate::parser::FileFormat::Hml => "hml".to_string(),
             _ => "hwp".to_string(),
         }
+    }
+
+    /// HML 열기 메타데이터와 손실 진단을 JSON으로 반환한다.
+    /// 다른 입력 포맷에서는 `null`을 반환한다.
+    #[wasm_bindgen(js_name = getHmlOpenMetadata)]
+    pub fn get_hml_open_metadata(&self) -> String {
+        let Some(metadata) = self.core.hml_metadata() else {
+            return "null".to_string();
+        };
+        let encoding = match metadata.encoding {
+            crate::parser::hml::HmlEncoding::Utf8 => "utf-8",
+            crate::parser::hml::HmlEncoding::Utf16Le => "utf-16le",
+            crate::parser::hml::HmlEncoding::Utf16Be => "utf-16be",
+        };
+        let warnings = metadata
+            .warnings
+            .iter()
+            .map(hml_warning_json)
+            .collect::<Vec<_>>();
+        let (hml_savable, save_blockers) = hml_save_state(&self.core);
+        serde_json::json!({
+            "format": "hml",
+            "hwpmlVersion": metadata.hwpml_version,
+            "encoding": encoding,
+            "resourceCount": metadata.resource_count,
+            "warnings": warnings,
+            "hmlSavable": hml_savable,
+            "saveBlockers": save_blockers,
+        })
+        .to_string()
     }
 
     /// HWPX 비표준 감지 경고를 JSON 문자열로 반환한다 (#177).

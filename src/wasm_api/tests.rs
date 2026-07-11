@@ -23614,6 +23614,178 @@ fn test_create_blank_document_clears_previous_hwpx_validation_warnings() {
 }
 
 #[test]
+fn test_hml_source_format_is_reported_without_reusing_hwp_save_path() {
+    let bytes = br#"<?xml version="1.0" encoding="UTF-8"?>
+<HWPML Style="embed" SubVersion="9.0.1.0" Version="2.9">
+  <HEAD SecCnt="1" />
+  <BODY><SECTION Id="0"><P ParaShape="0" Style="0"><TEXT CharShape="0"><CHAR>HML</CHAR></TEXT></P></SECTION></BODY>
+  <TAIL />
+</HWPML>"#;
+    let doc = HwpDocument::new(bytes).expect("HML 문서를 열어야 한다");
+
+    assert_eq!(doc.get_source_format(), "hml");
+}
+
+#[test]
+fn test_hml_open_metadata_exposes_import_warnings() {
+    let bytes = include_bytes!("../../samples/hml/formatting_table.hml");
+    let doc = HwpDocument::new(bytes).expect("real HML fixture should open");
+    let metadata: Value =
+        serde_json::from_str(&doc.get_hml_open_metadata()).expect("HML metadata JSON");
+
+    assert_eq!(metadata["format"], "hml");
+    assert_eq!(metadata["hwpmlVersion"], "2.91");
+    assert_eq!(metadata["encoding"], "utf-8");
+    assert_eq!(metadata["resourceCount"], 0);
+    assert_eq!(metadata["hmlSavable"], true);
+    assert_eq!(metadata["saveBlockers"], serde_json::json!([]));
+    assert!(metadata["warnings"].as_array().is_some_and(|items| {
+        items
+            .iter()
+            .any(|warning| warning["xmlPath"] == "/HWPML/TAIL/SCRIPTCODE")
+    }));
+}
+
+#[test]
+fn test_hml_open_metadata_escapes_special_characters_as_valid_json() {
+    let bytes = include_bytes!("../../samples/hml/formatting_table.hml");
+    let mut doc = HwpDocument::new(bytes).expect("real HML fixture should open");
+    let special = "2.91\"\\\n한글\t";
+    let metadata = doc
+        .core
+        .hml_metadata
+        .as_mut()
+        .expect("HML metadata should exist");
+    metadata.hwpml_version = Some(special.to_string());
+    metadata.warnings[0].message = special.to_string();
+
+    let json: Value = serde_json::from_str(&doc.get_hml_open_metadata())
+        .expect("metadata must remain valid JSON");
+
+    assert_eq!(json["hwpmlVersion"], special);
+    assert_eq!(json["warnings"][0]["message"], special);
+}
+
+#[test]
+fn test_export_hml_binding_preserves_edit_and_fragment() {
+    let bytes = include_bytes!("../../samples/hml/formatting_table.hml");
+    let mut doc = HwpDocument::new(bytes).expect("real HML fixture should open");
+    let (section_index, paragraph_index) = doc
+        .document()
+        .sections
+        .iter()
+        .enumerate()
+        .find_map(|(section_index, section)| {
+            section
+                .paragraphs
+                .iter()
+                .position(|paragraph| !paragraph.text.is_empty())
+                .map(|paragraph_index| (section_index, paragraph_index))
+        })
+        .expect("fixture should contain text");
+    doc.insert_text_native(section_index, paragraph_index, 0, "WASM_EDIT_")
+        .expect("apply public edit");
+
+    let exported = doc.export_hml().expect("exportHml should succeed");
+
+    assert_eq!(
+        crate::parser::detect_format(&exported),
+        crate::parser::FileFormat::Hml
+    );
+    assert!(String::from_utf8_lossy(&exported).contains("<SCRIPTCODE"));
+    let reparsed = DocumentCore::from_bytes(&exported).expect("exportHml output should reparse");
+    assert!(
+        reparsed.document().sections[section_index].paragraphs[paragraph_index]
+            .text
+            .starts_with("WASM_EDIT_")
+    );
+}
+
+#[test]
+fn test_export_hml_error_message_exposes_blocker_codes() {
+    let fixture = std::str::from_utf8(include_bytes!("../../samples/hml/formatting_table.hml"))
+        .expect("fixture is UTF-8");
+    let lossy = fixture.replacen("Type=\"None\"", "Type=\"Dash\"", 1);
+    let doc = HwpDocument::new(lossy.as_bytes()).expect("lossy HML should import");
+    let error = doc
+        .core
+        .export_hml_native()
+        .expect_err("lossy import must block exportHml");
+    let blocker = &error.blockers()[0];
+
+    let message = super::format_hml_export_error(&error);
+
+    assert!(message.contains(blocker.code), "{message}");
+    assert!(message.contains(&blocker.xml_path), "{message}");
+    assert!(message.contains(&blocker.message), "{message}");
+}
+
+#[test]
+fn test_hml_open_metadata_uses_shared_preflight_for_import_and_ir_loss() {
+    let fixture = std::str::from_utf8(include_bytes!("../../samples/hml/formatting_table.hml"))
+        .expect("fixture is UTF-8");
+    let lossy = fixture.replacen("Type=\"None\"", "Type=\"Dash\"", 1);
+    let import_loss = HwpDocument::new(lossy.as_bytes()).expect("lossy HML should import");
+    let import_json: Value =
+        serde_json::from_str(&import_loss.get_hml_open_metadata()).expect("metadata JSON");
+    assert_eq!(import_json["hmlSavable"], false);
+    assert!(import_json["saveBlockers"]
+        .as_array()
+        .is_some_and(|blockers| {
+            blockers.iter().any(|blocker| {
+                blocker["code"] == "UNSUPPORTED_ATTRIBUTE"
+                    && blocker["xmlPath"]
+                        == "/HWPML/HEAD/MAPPINGTABLE/BORDERFILLLIST/BORDERFILL/LEFTBORDER"
+                    && blocker["message"]
+                        .as_str()
+                        .is_some_and(|message| !message.is_empty())
+            })
+        }));
+
+    let mut edited_ir = HwpDocument::new(fixture.as_bytes()).expect("lawful HML should import");
+    edited_ir.document_mut().sections[0].paragraphs[0].column_type =
+        crate::model::paragraph::ColumnBreakType::Section;
+    let ir_json: Value =
+        serde_json::from_str(&edited_ir.get_hml_open_metadata()).expect("metadata JSON");
+    assert_eq!(ir_json["hmlSavable"], false);
+    assert!(ir_json["saveBlockers"].as_array().is_some_and(|blockers| {
+        blockers.iter().any(|blocker| {
+            blocker["code"] == "HML_UNSUPPORTED_IR"
+                && blocker["xmlPath"]
+                    .as_str()
+                    .is_some_and(|path| !path.is_empty())
+                && blocker["message"]
+                    .as_str()
+                    .is_some_and(|message| !message.is_empty())
+        })
+    }));
+}
+
+#[test]
+fn test_hml_open_metadata_reports_mixed_import_and_ir_loss() {
+    let fixture = std::str::from_utf8(include_bytes!("../../samples/hml/formatting_table.hml"))
+        .expect("fixture is UTF-8");
+    let lossy = fixture.replacen("Type=\"None\"", "Type=\"Dash\"", 1);
+    let mut doc = HwpDocument::new(lossy.as_bytes()).expect("lossy HML should import");
+    doc.document_mut().sections[0].paragraphs[0].column_type =
+        crate::model::paragraph::ColumnBreakType::Section;
+
+    let metadata: Value =
+        serde_json::from_str(&doc.get_hml_open_metadata()).expect("metadata JSON");
+    let blockers = metadata["saveBlockers"]
+        .as_array()
+        .expect("save blockers array");
+
+    assert_eq!(metadata["hmlSavable"], false);
+    assert!(blockers
+        .iter()
+        .any(|blocker| blocker["code"] == "UNSUPPORTED_ATTRIBUTE"));
+    assert!(blockers
+        .iter()
+        .any(|blocker| blocker["code"] == "HML_UNSUPPORTED_IR"));
+}
+
+#[test]
 fn test_reflow_linesegs_keeps_hwpx_sample2_page_count_for_textrun_warnings() {
     let bytes = std::fs::read("samples/hwpx_sample2.hwpx").expect("HWPX 샘플 읽기");
     let mut doc = HwpDocument::new(&bytes).expect("HWPX 샘플 로드");
