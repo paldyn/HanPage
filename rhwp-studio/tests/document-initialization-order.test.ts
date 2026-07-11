@@ -27,6 +27,11 @@ test('문서 초기화는 로컬 글꼴 확인 후에만 입력 핸들러를 활
   assert.ok(promptIndex >= 0, '로컬 글꼴 확인 단계가 있어야 한다');
   assert.ok(activateIndex > promptIndex, '로컬 글꼴 확인 뒤에 캐럿을 활성화해야 한다');
   assert.ok(completeIndex > activateIndex, '편집 준비 뒤에 문서 초기화를 완료해야 한다');
+  assert.doesNotMatch(
+    initializeDocument,
+    /updateLoadProgress\(100, '완료'\)/,
+    '최종 파일명 전환 전에 불필요한 100% paint 대기를 두지 않는다',
+  );
 });
 
 test('CanvasKit local face 등록은 문서 초기화 대신 현재 뷰 재그리기를 요청한다', () => {

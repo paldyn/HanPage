@@ -826,7 +826,7 @@ async function initializeDocument(docInfo: DocumentInfo, displayName: string): P
     console.log('[initDoc] 8. inputHandler activateWithCaretPosition');
     await updateLoadProgress(96, '편집 상태 초기화 중...');
     inputHandler?.activateWithCaretPosition();
-    await updateLoadProgress(100, '완료');
+    // 최종 단계 뒤에는 비동기 작업이 없으므로 100% progress paint를 기다리지 않는다.
     msg.textContent = displayName;
     console.log('[initDoc] 9. 완료');
 
