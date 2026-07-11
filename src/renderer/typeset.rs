@@ -181,6 +181,7 @@ fn empty_paragraph_fallback_line_metrics(
     para: &Paragraph,
     styles: &ResolvedStyleSet,
     para_style: Option<&crate::renderer::style_resolver::ResolvedParaStyle>,
+    hwp3_legacy_caps: bool,
 ) -> Option<(f64, f64)> {
     if !para.text.is_empty()
         || !para.controls.is_empty()
@@ -197,13 +198,19 @@ fn empty_paragraph_fallback_line_metrics(
     if font_size <= 0.0 {
         return None;
     }
-    let small_empty_para_max_font = hwpunit_to_px(1000, DEFAULT_DPI);
-    if font_size > small_empty_para_max_font + 0.1 {
-        return None;
-    }
-    let meaningful_empty_para_min_font = hwpunit_to_px(800, DEFAULT_DPI);
-    if !char_style.bold && font_size < meaningful_empty_para_min_font - 0.1 {
-        return None;
+    // [#2070 stage12] 폰트 크기 캡(10pt 이하, 비볼드 8pt 미만 제외)은 HWP3 변환본
+    // 한정으로 유지한다 — 한글은 NO_LS 빈 문단을 크기와 무관하게 완전한 em 줄박스로
+    // 재계산하지만(D-사다리 + 80168 실측), HWP3→HWP5 변환본은 종전 캡이 페이지 수
+    // 게이트(sample16-hwp5 = 64)와 정합(캡 전면 제거 시 65 over-split).
+    if hwp3_legacy_caps {
+        let small_empty_para_max_font = hwpunit_to_px(1000, DEFAULT_DPI);
+        if font_size > small_empty_para_max_font + 0.1 {
+            return None;
+        }
+        let meaningful_empty_para_min_font = hwpunit_to_px(800, DEFAULT_DPI);
+        if !char_style.bold && font_size < meaningful_empty_para_min_font - 0.1 {
+            return None;
+        }
     }
     let ls_val = para_style.map(|s| s.line_spacing).unwrap_or(160.0);
     let ls_type = para_style
@@ -10955,9 +10962,12 @@ impl TypesetEngine {
                 prev_line_reserved_tac_picture_height = tac_picture_height;
             }
             if pairs.is_empty() {
-                if let Some(metric) =
-                    empty_paragraph_fallback_line_metrics(para, styles, para_style)
-                {
+                if let Some(metric) = empty_paragraph_fallback_line_metrics(
+                    para,
+                    styles,
+                    para_style,
+                    self.is_hwp3_variant.get(),
+                ) {
                     pairs.push(metric);
                 }
             }
@@ -10972,9 +10982,12 @@ impl TypesetEngine {
                     )
                 })
                 .unzip()
-        } else if let Some((lh, ls)) =
-            empty_paragraph_fallback_line_metrics(para, styles, para_style)
-        {
+        } else if let Some((lh, ls)) = empty_paragraph_fallback_line_metrics(
+            para,
+            styles,
+            para_style,
+            self.is_hwp3_variant.get(),
+        ) {
             (vec![lh], vec![ls])
         } else {
             (vec![hwpunit_to_px(400, self.dpi)], vec![0.0])
@@ -10994,8 +11007,13 @@ impl TypesetEngine {
         // extent 를 page-local pagination 에 반영해야 하며, #2019 v3 에서 이 부분을 다시
         // 풀어야 한다. 자리차지·tac=true 는 helper 에서 제외되어 예약 유지.
         if crate::renderer::layout::para_is_floating_overlay_anchor(para) {
-            let (lh, ls) = empty_paragraph_fallback_line_metrics(para, styles, para_style)
-                .unwrap_or((hwpunit_to_px(400, self.dpi), 0.0));
+            let (lh, ls) = empty_paragraph_fallback_line_metrics(
+                para,
+                styles,
+                para_style,
+                self.is_hwp3_variant.get(),
+            )
+            .unwrap_or((hwpunit_to_px(400, self.dpi), 0.0));
             line_heights = vec![lh];
             line_spacings = vec![ls];
         }
@@ -13629,9 +13647,41 @@ impl TypesetEngine {
                     && split_candidate_rows_height > avail_for_rows + split_row_overflow_tolerance
                 {
                     // 보이는 조각은 orphan 기준을 통과해도 row-area 예산은 넘을 수 있다.
-                    // 마지막으로 온전히 들어간 행까지만 유지하고 이 행은 다음 쪽에서
-                    // 계속한다. avail_for_rows 는 이미 반복 제목행 높이를 제외한 값이다.
-                    end_row = r;
+                    // [#2070] 종전에는 즉시 통이월했으나, advance_row_cut 이 예산을
+                    // 수 px 초과하는 컷을 고른 경우(80168 pi=936: budget 903.1 에
+                    // consumed 921.7, cand 957.9 > avail 941.3 → 행 통짜 이월로 3쪽)
+                    // 한글은 같은 자리에서 조각 분할을 시작한다(PDF p108). 초과분만큼
+                    // 예산을 줄여 한 번 재시도하고, 그래도 초과면 종전대로 이월한다.
+                    let over = split_candidate_rows_height - avail_for_rows;
+                    let retry_budget = (budget - over - 0.5).max(0.0);
+                    let res2 = layout_engine.advance_row_cut(
+                        table,
+                        r,
+                        row_start_cut,
+                        retry_budget,
+                        styles,
+                    );
+                    let mut retried = false;
+                    if !res2.fully_consumed && res2.consumed_height >= MIN_TOP_KEEP_PX {
+                        let split_total2 = layout_engine.row_cut_content_height(
+                            table,
+                            r,
+                            row_start_cut,
+                            &res2.end_cut,
+                            styles,
+                        );
+                        let cand2 = consumed + cs_before + split_total2;
+                        if cand2 <= avail_for_rows + split_row_overflow_tolerance {
+                            end_row = r + 1;
+                            split_end_cut = res2.end_cut.clone();
+                            split_end_limit = res2.consumed_height;
+                            consumed += cs_before + split_total2;
+                            retried = true;
+                        }
+                    }
+                    if !retried {
+                        end_row = r;
+                    }
                 } else {
                     end_row = r + 1;
                     split_end_cut = res.end_cut.clone();
