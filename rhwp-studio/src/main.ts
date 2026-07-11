@@ -672,12 +672,6 @@ function setupEventListeners(): void {
     eventBus.emit('command-state-changed');
   });
 
-  eventBus.on('local-fonts-changed', () => {
-    if (wasm.pageCount > 0) {
-      canvasView?.loadDocument();
-    }
-  });
-
   eventBus.on('autosave-settings-changed', () => {
     autosaveManager.updateSchedule(autosaveScheduleFromUserSettings());
   });
