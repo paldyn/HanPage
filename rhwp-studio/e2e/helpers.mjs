@@ -375,12 +375,21 @@ export function cropPngBuffer(buffer, { x = 0, y = 0, width, height }) {
   return PNG.sync.write(cropped);
 }
 
-/** 두 PNG 버퍼를 exact/tolerant 기준으로 비교한다 */
+/** 두 PNG 버퍼를 exact/tolerant/raster-mask 기준으로 비교한다 */
 export async function comparePngBuffers(expectedBuffer, actualBuffer, {
   threshold = 0,
   ignoreChannelDelta = 0,
   maxDiffPixels = null,
   maxDiffRatio = null,
+  inkMaskWhiteDelta = 25,
+  inkMaskAlphaThreshold = 8,
+  inkMaskNeighborhoodRadius = 1,
+  inkMaskMaxDiffPixels = null,
+  inkMaskMaxDiffRatio = null,
+  nonInkMaxDiffPixels = null,
+  nonInkMaxDiffRatio = null,
+  solidInkMaxDiffPixels = null,
+  solidInkMaxDiffRatio = null,
 } = {}) {
   const expected = PNG.sync.read(expectedBuffer);
   const actual = PNG.sync.read(actualBuffer);
@@ -398,10 +407,56 @@ export async function comparePngBuffers(expectedBuffer, actualBuffer, {
     { threshold, includeAA: true },
   );
 
-  let rawTolerantDiffPixels = 0;
+  let tolerantDiffPixels = 0;
+  let inkMaskDiffPixels = 0;
+  let nonInkDiffPixels = 0;
+  let solidInkDiffPixels = 0;
   let totalChannelDelta = 0;
   let maxChannelDelta = 0;
   const totalPixels = expected.width * expected.height;
+  const width = expected.width;
+  const height = expected.height;
+  const expectedInkMask = new Uint8Array(totalPixels);
+  const actualInkMask = new Uint8Array(totalPixels);
+
+  const isInkPixel = (data, base) => data[base + 3] > inkMaskAlphaThreshold
+    && Math.max(
+      255 - data[base],
+      255 - data[base + 1],
+      255 - data[base + 2],
+    ) > inkMaskWhiteDelta;
+
+  const hasInkNearby = (mask, x, y) => {
+    const minY = Math.max(0, y - inkMaskNeighborhoodRadius);
+    const maxY = Math.min(height - 1, y + inkMaskNeighborhoodRadius);
+    const minX = Math.max(0, x - inkMaskNeighborhoodRadius);
+    const maxX = Math.min(width - 1, x + inkMaskNeighborhoodRadius);
+    for (let ny = minY; ny <= maxY; ny++) {
+      for (let nx = minX; nx <= maxX; nx++) {
+        if (mask[ny * width + nx]) return true;
+      }
+    }
+    return false;
+  };
+
+  const isSolidInk = (mask, x, y) => {
+    const minY = Math.max(0, y - inkMaskNeighborhoodRadius);
+    const maxY = Math.min(height - 1, y + inkMaskNeighborhoodRadius);
+    const minX = Math.max(0, x - inkMaskNeighborhoodRadius);
+    const maxX = Math.min(width - 1, x + inkMaskNeighborhoodRadius);
+    for (let ny = minY; ny <= maxY; ny++) {
+      for (let nx = minX; nx <= maxX; nx++) {
+        if (!mask[ny * width + nx]) return false;
+      }
+    }
+    return true;
+  };
+
+  for (let pixelIndex = 0; pixelIndex < totalPixels; pixelIndex++) {
+    const base = pixelIndex * 4;
+    expectedInkMask[pixelIndex] = isInkPixel(expected.data, base) ? 1 : 0;
+    actualInkMask[pixelIndex] = isInkPixel(actual.data, base) ? 1 : 0;
+  }
 
   for (let i = 0; i < expected.data.length; i += 4) {
     let pixelMaxDelta = 0;
@@ -412,29 +467,156 @@ export async function comparePngBuffers(expectedBuffer, actualBuffer, {
       if (delta > maxChannelDelta) maxChannelDelta = delta;
     }
     if (pixelMaxDelta > ignoreChannelDelta) {
-      rawTolerantDiffPixels++;
+      tolerantDiffPixels++;
+      const pixelIndex = i / 4;
+      const x = pixelIndex % width;
+      const y = (pixelIndex - x) / width;
+      if (!hasInkNearby(expectedInkMask, x, y) && !hasInkNearby(actualInkMask, x, y)) {
+        nonInkDiffPixels++;
+      }
+      if (
+        expectedInkMask[pixelIndex]
+        && actualInkMask[pixelIndex]
+        && isSolidInk(expectedInkMask, x, y)
+        && isSolidInk(actualInkMask, x, y)
+      ) {
+        solidInkDiffPixels++;
+      }
     }
   }
 
+  const expectedOnlyInk = [];
+  const actualOnlyInk = [];
+  for (let pixelIndex = 0; pixelIndex < totalPixels; pixelIndex++) {
+    if (expectedInkMask[pixelIndex] && !actualInkMask[pixelIndex]) {
+      expectedOnlyInk.push(pixelIndex);
+    } else if (actualInkMask[pixelIndex] && !expectedInkMask[pixelIndex]) {
+      actualOnlyInk.push(pixelIndex);
+    }
+  }
+  const actualOnlyInkMask = new Uint8Array(totalPixels);
+  const matchedActualInkMask = new Uint8Array(totalPixels);
+  for (const pixelIndex of actualOnlyInk) actualOnlyInkMask[pixelIndex] = 1;
+
+  for (const expectedIndex of expectedOnlyInk) {
+    const expectedX = expectedIndex % width;
+    const expectedY = (expectedIndex - expectedX) / width;
+    const minY = Math.max(0, expectedY - inkMaskNeighborhoodRadius);
+    const maxY = Math.min(height - 1, expectedY + inkMaskNeighborhoodRadius);
+    const minX = Math.max(0, expectedX - inkMaskNeighborhoodRadius);
+    const maxX = Math.min(width - 1, expectedX + inkMaskNeighborhoodRadius);
+    let bestActualIndex = -1;
+    let bestDistanceSquared = Number.POSITIVE_INFINITY;
+    for (let actualY = minY; actualY <= maxY; actualY++) {
+      for (let actualX = minX; actualX <= maxX; actualX++) {
+        const actualIndex = actualY * width + actualX;
+        if (!actualOnlyInkMask[actualIndex] || matchedActualInkMask[actualIndex]) continue;
+        const distanceSquared = (actualX - expectedX) ** 2 + (actualY - expectedY) ** 2;
+        if (distanceSquared < bestDistanceSquared) {
+          bestActualIndex = actualIndex;
+          bestDistanceSquared = distanceSquared;
+        }
+      }
+    }
+    if (bestActualIndex >= 0) {
+      matchedActualInkMask[bestActualIndex] = 1;
+    } else {
+      inkMaskDiffPixels++;
+    }
+  }
+  for (const actualIndex of actualOnlyInk) {
+    if (!matchedActualInkMask[actualIndex]) inkMaskDiffPixels++;
+  }
+
   const exactDiffRatio = totalPixels > 0 ? exactDiffPixels / totalPixels : 0;
-  const rawTolerantDiffRatio = totalPixels > 0 ? rawTolerantDiffPixels / totalPixels : 0;
+  const rawTolerantDiffRatio = totalPixels > 0 ? tolerantDiffPixels / totalPixels : 0;
+  const rawInkMaskDiffRatio = totalPixels > 0 ? inkMaskDiffPixels / totalPixels : 0;
+  const rawNonInkDiffRatio = totalPixels > 0 ? nonInkDiffPixels / totalPixels : 0;
+  const rawSolidInkDiffRatio = totalPixels > 0 ? solidInkDiffPixels / totalPixels : 0;
   const meanAbsChannelDelta = totalPixels > 0 ? totalChannelDelta / (totalPixels * 4) : 0;
   const hasPixelBudget = maxDiffPixels != null;
   const hasRatioBudget = maxDiffRatio != null;
-  const passed = (!hasPixelBudget || rawTolerantDiffPixels <= maxDiffPixels)
-    && (!hasRatioBudget || rawTolerantDiffRatio <= maxDiffRatio);
+  const hasInkMaskPixelBudget = inkMaskMaxDiffPixels != null;
+  const hasInkMaskRatioBudget = inkMaskMaxDiffRatio != null;
+  const hasNonInkPixelBudget = nonInkMaxDiffPixels != null;
+  const hasNonInkRatioBudget = nonInkMaxDiffRatio != null;
+  const hasSolidInkPixelBudget = solidInkMaxDiffPixels != null;
+  const hasSolidInkRatioBudget = solidInkMaxDiffRatio != null;
+  const usesTolerantBudget = hasPixelBudget || hasRatioBudget;
+  const usesInkMaskBudget = hasInkMaskPixelBudget || hasInkMaskRatioBudget;
+  const usesNonInkBudget = hasNonInkPixelBudget || hasNonInkRatioBudget;
+  const usesSolidInkBudget = hasSolidInkPixelBudget || hasSolidInkRatioBudget;
+  const usesRasterOnlyBudget = usesInkMaskBudget || usesNonInkBudget || usesSolidInkBudget;
+  const tolerantBudgetPassed = usesTolerantBudget
+    ? (!hasPixelBudget || tolerantDiffPixels <= maxDiffPixels)
+      && (!hasRatioBudget || rawTolerantDiffRatio <= maxDiffRatio)
+    : tolerantDiffPixels === 0;
+  const inkMaskBudgetPassed = usesInkMaskBudget
+    ? (!hasInkMaskPixelBudget || inkMaskDiffPixels <= inkMaskMaxDiffPixels)
+      && (!hasInkMaskRatioBudget || rawInkMaskDiffRatio <= inkMaskMaxDiffRatio)
+    : inkMaskDiffPixels === 0;
+  const nonInkBudgetPassed = usesNonInkBudget
+    ? (!hasNonInkPixelBudget || nonInkDiffPixels <= nonInkMaxDiffPixels)
+      && (!hasNonInkRatioBudget || rawNonInkDiffRatio <= nonInkMaxDiffRatio)
+    : nonInkDiffPixels === 0;
+  const solidInkBudgetPassed = usesSolidInkBudget
+    ? (!hasSolidInkPixelBudget || solidInkDiffPixels <= solidInkMaxDiffPixels)
+      && (!hasSolidInkRatioBudget || rawSolidInkDiffRatio <= solidInkMaxDiffRatio)
+    : solidInkDiffPixels === 0;
+  const rasterOnlyBudgetPassed = (!usesInkMaskBudget || inkMaskBudgetPassed)
+    && (!usesNonInkBudget || nonInkBudgetPassed)
+    && (!usesSolidInkBudget || solidInkBudgetPassed);
+  const passed = usesTolerantBudget
+    ? tolerantBudgetPassed && (!usesRasterOnlyBudget || rasterOnlyBudgetPassed)
+    : usesRasterOnlyBudget
+      ? rasterOnlyBudgetPassed
+      : tolerantDiffPixels === 0;
+  const selectedDiffPixels = usesTolerantBudget
+    ? Math.max(tolerantDiffPixels, inkMaskDiffPixels, nonInkDiffPixels, solidInkDiffPixels)
+    : usesRasterOnlyBudget
+      ? Math.max(inkMaskDiffPixels, nonInkDiffPixels, solidInkDiffPixels)
+      : tolerantDiffPixels;
+  const selectedDiffRatio = usesTolerantBudget
+    ? Math.max(rawTolerantDiffRatio, rawInkMaskDiffRatio, rawNonInkDiffRatio, rawSolidInkDiffRatio)
+    : usesRasterOnlyBudget
+      ? Math.max(rawInkMaskDiffRatio, rawNonInkDiffRatio, rawSolidInkDiffRatio)
+      : rawTolerantDiffRatio;
 
   return {
     passed,
-    passMetric: hasPixelBudget || hasRatioBudget ? 'tolerant' : 'reportOnly',
+    hasVisualBudget: usesTolerantBudget || usesRasterOnlyBudget,
+    passMetric: usesTolerantBudget && usesRasterOnlyBudget
+      ? 'combined'
+      : usesRasterOnlyBudget
+        ? 'rasterOnly'
+        : 'tolerant',
     width: expected.width,
     height: expected.height,
     exactDiffPixels,
     exactDiffRatio,
-    rawTolerantDiffPixels,
+    tolerantDiffPixels,
+    tolerantDiffRatio: rawTolerantDiffRatio,
+    rawTolerantDiffPixels: tolerantDiffPixels,
     rawTolerantDiffRatio,
-    diffPixels: rawTolerantDiffPixels,
-    diffRatio: rawTolerantDiffRatio,
+    inkMaskDiffPixels,
+    inkMaskDiffRatio: rawInkMaskDiffRatio,
+    rawInkMaskDiffPixels: inkMaskDiffPixels,
+    rawInkMaskDiffRatio,
+    nonInkDiffPixels,
+    nonInkDiffRatio: rawNonInkDiffRatio,
+    rawNonInkDiffPixels: nonInkDiffPixels,
+    rawNonInkDiffRatio,
+    solidInkDiffPixels,
+    solidInkDiffRatio: rawSolidInkDiffRatio,
+    rawSolidInkDiffPixels: solidInkDiffPixels,
+    rawSolidInkDiffRatio,
+    tolerantBudgetPassed,
+    inkMaskBudgetPassed,
+    nonInkBudgetPassed,
+    solidInkBudgetPassed,
+    rasterOnlyBudgetPassed,
+    diffPixels: selectedDiffPixels,
+    diffRatio: selectedDiffRatio,
     maxChannelDelta,
     meanAbsChannelDelta,
     ignoreChannelDelta,

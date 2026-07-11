@@ -78,6 +78,7 @@ function parseArgs() {
     filter: '',
     profiles: 'screen,fast-preview',
     canvaskitSurface: process.env.RHWP_CANVASKIT_SURFACE ?? 'auto',
+    readinessOnly: false,
   };
 
   for (const arg of args) {
@@ -99,6 +100,10 @@ function parseArgs() {
     }
     if (arg.startsWith('--canvaskit-surface=')) {
       options.canvaskitSurface = arg.slice('--canvaskit-surface='.length);
+      continue;
+    }
+    if (arg === '--readiness-only') {
+      options.readinessOnly = true;
       continue;
     }
   }
@@ -136,7 +141,7 @@ function parseProfiles(rawProfiles) {
   return deduped;
 }
 
-function normalizeSamples(manifest, filterText) {
+function normalizeSamples(manifest, filterText, readinessOnly) {
   const filter = filterText.trim().toLowerCase();
   return (manifest.samples ?? []).map((sample) => {
     const file = String(sample.file || '').trim();
@@ -172,6 +177,9 @@ function normalizeSamples(manifest, filterText) {
       page: sample.page ?? 0,
     };
   }).filter((sample) => {
+    if (readinessOnly && sample.canvaskitReadinessGate !== true) {
+      return false;
+    }
     if (!filter) {
       return true;
     }
@@ -189,20 +197,28 @@ async function resetRendererDiagnostics(page) {
   });
 }
 
-async function readRendererDiagnostics(page) {
-  return await page.evaluate(() => {
+async function readRendererDiagnostics(page, pageIndex) {
+  return await page.evaluate((targetPageIndex) => {
     const pageRenderer = window.__canvasView?.pageRenderer;
     const canvas2d = pageRenderer?.canvas2dRenderer?.getImageEffectDiagnostics?.() ?? null;
     const canvaskit = pageRenderer?.canvaskitRenderer?.getImageEffectDiagnostics?.() ?? null;
     const surfaceDiagnostics = pageRenderer?.canvaskitRenderer?.getSurfaceDiagnostics?.() ?? null;
+    const canvaskitRender = window.__canvasView
+      ?.getCanvasKitRenderDiagnostics?.(targetPageIndex) ?? null;
     return {
+      runtime: {
+        activeBackend: window.__renderBackend ?? null,
+        request: window.__rendererRuntimeRequest ?? null,
+        backendFallbackReason: window.__renderBackendFallbackReason ?? null,
+      },
       imageEffects: {
         canvas2d,
         canvaskit,
       },
       surfaceDiagnostics,
+      canvaskitRender,
     };
-  });
+  }, pageIndex);
 }
 
 const options = parseArgs();
@@ -220,8 +236,17 @@ if (requestedCanvasKitSurface === 'sw' || requestedCanvasKitSurface === 'cpu') {
   );
 }
 const manifest = JSON.parse(fs.readFileSync(options.manifest, 'utf8'));
-const samples = normalizeSamples(manifest, options.filter);
+const samples = normalizeSamples(manifest, options.filter, options.readinessOnly);
 const profiles = parseProfiles(options.profiles);
+if (options.readinessOnly && (profiles.length !== 1 || profiles[0] !== 'screen')) {
+  throw new Error('--readiness-only requires --profiles=screen');
+}
+if (options.readinessOnly && options.canvaskitSurface !== 'auto') {
+  throw new Error('--readiness-only requires --canvaskit-surface=auto');
+}
+const activeBackends = options.readinessOnly
+  ? BACKENDS.filter((backend) => backend.key !== 'canvaskit-compat')
+  : BACKENDS;
 
 if (samples.length === 0) {
   throw new Error('manifest filter removed every sample');
@@ -244,7 +269,7 @@ try {
     console.log(`\n[baseline] ${sample.id} (${sample.category})`);
 
     for (const profile of profiles) {
-      for (const backend of BACKENDS) {
+      for (const backend of activeBackends) {
         const totalStartedAt = performance.now();
         const appLoadStartedAt = performance.now();
         await loadApp(page, backend.queryForProfile(profile));
@@ -260,7 +285,7 @@ try {
         const screenshotStartedAt = performance.now();
         await captureCanvasScreenshot(page, outputPath, `Baseline ${backend.key} (${profile})`);
         const screenshotMs = performance.now() - screenshotStartedAt;
-        const diagnostics = await readRendererDiagnostics(page);
+        const diagnostics = await readRendererDiagnostics(page, sample.page);
         results.push({
           sampleId: sample.id,
           file: sample.file,
@@ -268,6 +293,11 @@ try {
           backend: backend.key,
           profile,
           canvaskitSurface: backend.key.startsWith('canvaskit') ? options.canvaskitSurface : null,
+          readinessGateRequired: options.readinessOnly
+            && sample.canvaskitReadinessGate === true
+            && backend.key === 'canvaskit-default'
+            && profile === 'screen'
+            && options.canvaskitSurface === 'auto',
           path: outputPath,
           timings: {
             appLoadMs,
@@ -294,7 +324,9 @@ for (const sample of samples) {
         && entry.backend === 'canvas2d'
         && entry.profile === profile
     ));
-    for (const targetBackend of ['canvaskit-compat', 'canvaskit-default']) {
+    for (const targetBackend of activeBackends
+      .map((backend) => backend.key)
+      .filter((backend) => backend.startsWith('canvaskit'))) {
       const target = results.find((entry) => (
         entry.sampleId === sample.id
           && entry.backend === targetBackend
@@ -334,6 +366,7 @@ for (const sample of samples) {
           thresholds,
           diff: {
             passed: diff.passed,
+            hasVisualBudget: diff.hasVisualBudget,
             passMetric: diff.passMetric,
             width: diff.width,
             height: diff.height,
@@ -341,6 +374,16 @@ for (const sample of samples) {
             exactDiffRatio: diff.exactDiffRatio,
             tolerantDiffPixels: diff.rawTolerantDiffPixels,
             tolerantDiffRatio: diff.rawTolerantDiffRatio,
+            inkMaskDiffPixels: diff.rawInkMaskDiffPixels,
+            inkMaskDiffRatio: diff.rawInkMaskDiffRatio,
+            nonInkDiffPixels: diff.rawNonInkDiffPixels,
+            nonInkDiffRatio: diff.rawNonInkDiffRatio,
+            solidInkDiffPixels: diff.rawSolidInkDiffPixels,
+            solidInkDiffRatio: diff.rawSolidInkDiffRatio,
+            tolerantBudgetPassed: diff.tolerantBudgetPassed,
+            inkMaskBudgetPassed: diff.inkMaskBudgetPassed,
+            nonInkBudgetPassed: diff.nonInkBudgetPassed,
+            solidInkBudgetPassed: diff.solidInkBudgetPassed,
             selectedDiffPixels: diff.diffPixels,
             selectedDiffRatio: diff.diffRatio,
             maxChannelDelta: diff.maxChannelDelta,
@@ -430,8 +473,10 @@ for (const item of browserBackendComparisons) {
 const browserBackendParity = {
   mode: 'reportOnly',
   backendPairs: [
-    ['canvas2d', 'canvaskit-compat'],
-    ['canvas2d', 'canvaskit-default'],
+    ...activeBackends
+      .map((backend) => backend.key)
+      .filter((backend) => backend.startsWith('canvaskit'))
+      .map((backend) => ['canvas2d', backend]),
   ],
   thresholds: DEFAULT_BROWSER_PARITY_THRESHOLDS,
   summary: {
@@ -474,6 +519,106 @@ const browserBackendParity = {
   comparisons: browserBackendComparisons,
 };
 
+const canvaskitReadinessChecks = [];
+for (const result of results.filter((entry) => entry.readinessGateRequired)) {
+  const runtime = result.diagnostics?.runtime ?? {};
+  const renderDiagnostics = result.diagnostics?.canvaskitRender ?? null;
+  const comparison = browserBackendComparisons.find((entry) => (
+    entry.sampleId === result.sampleId
+      && entry.profile === result.profile
+      && entry.targetBackend === result.backend
+  ));
+  const blockers = [];
+  if (runtime.activeBackend !== 'canvaskit') {
+    blockers.push('backendNotActive');
+  }
+  if (runtime.request?.backend?.backend !== 'canvaskit'
+    || runtime.request?.backend?.source !== 'url') {
+    blockers.push('explicitCanvasKitRequestMissing');
+  }
+  if (runtime.request?.canvaskitMode?.mode !== 'default'
+    || runtime.request?.canvaskitMode?.source !== 'url') {
+    blockers.push('canvaskitModeRequestMismatch');
+  }
+  if (runtime.request?.canvaskitSurface?.preference !== 'auto'
+    || runtime.request?.canvaskitSurface?.requested !== 'auto') {
+    blockers.push('canvaskitSurfaceRequestMismatch');
+  }
+  if (runtime.backendFallbackReason !== null && runtime.backendFallbackReason !== undefined) {
+    blockers.push(`backendFallback:${runtime.backendFallbackReason}`);
+  }
+  if (renderDiagnostics === null) {
+    blockers.push('diagnosticsUnavailable');
+  } else {
+    if (renderDiagnostics.mode !== 'default') {
+      blockers.push('canvaskitModeMismatch');
+    }
+    if (renderDiagnostics.surfacePreference !== 'auto') {
+      blockers.push('canvaskitSurfacePreferenceMismatch');
+    }
+    for (const blocker of renderDiagnostics.readinessBlockers ?? []) {
+      blockers.push(`runtime:${blocker}`);
+    }
+    if (renderDiagnostics.passesRuntimeReadinessGate !== true) {
+      blockers.push('runtime:readinessGateFailed');
+    }
+  }
+  if (!comparison || comparison.status === 'missing') {
+    blockers.push('visualComparisonMissing');
+  } else if (comparison.status === 'error') {
+    blockers.push('visualComparisonError');
+  } else if (comparison.diff?.hasVisualBudget !== true) {
+    blockers.push('visualThresholdMissing');
+  } else if (comparison.diff?.passed !== true) {
+    blockers.push('visualParityFailed');
+  }
+
+  canvaskitReadinessChecks.push({
+    sampleId: result.sampleId,
+    category: result.category,
+    profile: result.profile,
+    targetBackend: result.backend,
+    canvaskitSurface: result.canvaskitSurface,
+    passed: blockers.length === 0,
+    blockers: [...new Set(blockers)].sort(),
+    activeBackend: runtime.activeBackend ?? null,
+    request: runtime.request ?? null,
+    backendFallbackReason: runtime.backendFallbackReason ?? null,
+    expectedUnsupportedOps: renderDiagnostics?.lastExpectedUnsupportedOps ?? [],
+    unexpectedUnsupportedOps: renderDiagnostics?.lastUnexpectedUnsupportedOps ?? [],
+    renderError: renderDiagnostics?.lastRenderError ?? null,
+    surfaceBackend: renderDiagnostics?.surfaceBackend ?? null,
+    surfaceFallbackReason: renderDiagnostics?.surfaceFallbackReason ?? null,
+    visualComparisonStatus: comparison?.status ?? 'missing',
+    visualComparisonPassed: comparison?.diff?.passed ?? false,
+    selectedDiffRatio: comparison?.diff?.selectedDiffRatio ?? null,
+  });
+}
+const missingReadinessChecks = options.readinessOnly
+  ? Math.max(0, samples.length - canvaskitReadinessChecks.length)
+  : 0;
+const canvaskitReadinessGate = {
+  mode: 'selectedCorpus',
+  criteria: {
+    sampleFlag: 'canvaskitReadinessGate',
+    profile: 'screen',
+    targetBackend: 'canvaskit-default',
+    canvaskitSurface: 'auto',
+    requireActiveBackend: true,
+    requireRuntimeReadiness: true,
+    requireVisualParity: true,
+  },
+  summary: {
+    total: options.readinessOnly ? samples.length : 0,
+    evaluated: canvaskitReadinessChecks.length,
+    passed: canvaskitReadinessChecks.filter((entry) => entry.passed).length,
+    failed: canvaskitReadinessChecks.filter((entry) => !entry.passed).length
+      + missingReadinessChecks,
+    missing: missingReadinessChecks,
+  },
+  checks: canvaskitReadinessChecks,
+};
+
 fs.writeFileSync(
   reportPath,
   JSON.stringify(
@@ -484,9 +629,18 @@ fs.writeFileSync(
       canvaskitSurface: options.canvaskitSurface,
       results,
       browserBackendParity,
+      canvaskitReadinessGate,
     },
     null,
     2,
   ),
 );
 console.log(`\n[baseline] browser report: ${reportPath}`);
+if (canvaskitReadinessGate.summary.failed > 0) {
+  for (const check of canvaskitReadinessChecks.filter((entry) => !entry.passed)) {
+    console.error(
+      `[baseline] CanvasKit readiness failed: ${check.sampleId} (${check.blockers.join(', ')})`,
+    );
+  }
+  process.exitCode = 1;
+}

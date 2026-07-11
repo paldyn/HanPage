@@ -6,7 +6,7 @@ import { CanvasPool } from './canvas-pool';
 import { PageRenderer, type PageRenderContext } from './page-renderer';
 import { ViewportManager } from './viewport-manager';
 import { CoordinateSystem } from './coordinate-system';
-import type { CanvasKitLayerRenderer } from './canvaskit-renderer';
+import type { CanvasKitLayerRenderer, CanvasKitRenderDiagnostics } from './canvaskit-renderer';
 import { clampRenderScale, type RenderBackend } from './render-backend';
 import type { LayerRenderProfile } from '@/core/types';
 import { applyGridOverlayBox, createGridClipCornerOverlay, createGridOverlay } from './grid-overlay';
@@ -495,6 +495,10 @@ export class CanvasView {
 
   getRenderBackend(): RenderBackend {
     return this.pageRenderer.getBackend();
+  }
+
+  getCanvasKitRenderDiagnostics(pageIndex: number): CanvasKitRenderDiagnostics | null {
+    return this.pageRenderer.getCanvasKitRenderDiagnostics(pageIndex);
   }
 
   getCoordinateSystem(): CoordinateSystem {

@@ -1,6 +1,6 @@
 import { WasmBridge } from '@/core/wasm-bridge';
 import type { LayerRenderProfile } from '@/core/types';
-import type { CanvasKitLayerRenderer } from './canvaskit-renderer';
+import type { CanvasKitLayerRenderer, CanvasKitRenderDiagnostics } from './canvaskit-renderer';
 import type { RenderBackend } from './render-backend';
 
 interface LayerPlaneSummary {
@@ -41,6 +41,7 @@ export class PageRenderer {
   private reRenderTimers = new Map<number, ReturnType<typeof setTimeout>[]>();
   private imageRetryCounts = new Map<number, string>();
   private layerSummaryCache = new Map<number, LayerSummaryCacheEntry>();
+  private canvaskitDiagnosticsByPage = new Map<number, CanvasKitRenderDiagnostics>();
   private flowSplitSupported: boolean | null = null;
 
   constructor(
@@ -105,6 +106,18 @@ export class PageRenderer {
     return this.backend;
   }
 
+  getCanvasKitRenderDiagnostics(pageIdx: number): CanvasKitRenderDiagnostics | null {
+    const diagnostics = this.canvaskitDiagnosticsByPage.get(pageIdx);
+    if (!diagnostics) return null;
+    return {
+      ...diagnostics,
+      lastUnsupportedOps: [...diagnostics.lastUnsupportedOps],
+      lastExpectedUnsupportedOps: [...diagnostics.lastExpectedUnsupportedOps],
+      lastUnexpectedUnsupportedOps: [...diagnostics.lastUnexpectedUnsupportedOps],
+      readinessBlockers: [...diagnostics.readinessBlockers],
+    };
+  }
+
   private renderPageCanvasKit(
     pageIdx: number,
     canvas: HTMLCanvasElement,
@@ -128,11 +141,13 @@ export class PageRenderer {
       this.canvaskitRenderer.renderPage(tree, canvas, renderScale, pageInfo);
     } catch (error) {
       this.canvaskitRenderer.recordRenderFailure(error);
+      this.canvaskitDiagnosticsByPage.set(pageIdx, this.canvaskitRenderer.diagnostics());
       console.error(`[PageRenderer] CanvasKit 페이지 렌더링 실패 (page=${pageIdx}):`, error);
       this.cancelReRender(pageIdx);
       this.imageRetryCounts.delete(pageIdx);
       return;
     }
+    this.canvaskitDiagnosticsByPage.set(pageIdx, this.canvaskitRenderer.diagnostics());
     this.cancelReRender(pageIdx);
     this.imageRetryCounts.delete(pageIdx);
   }
@@ -748,11 +763,13 @@ export class PageRenderer {
   resetImageRetryState(): void {
     this.imageRetryCounts.clear();
     this.layerSummaryCache.clear();
+    this.canvaskitDiagnosticsByPage.clear();
   }
 
   dispose(): void {
     this.cancelAll();
     this.layerSummaryCache.clear();
+    this.canvaskitDiagnosticsByPage.clear();
     this.canvaskitRenderer?.dispose();
     this.canvaskitRenderer = null;
   }

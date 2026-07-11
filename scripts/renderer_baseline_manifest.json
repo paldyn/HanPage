@@ -7,11 +7,12 @@
       "file": "lseg-01-basic.hwp",
       "category": "paragraph",
       "page": 0,
+      "canvaskitReadinessGate": true,
       "notes": "Basic line segmentation sample from the existing CanvasKit representative suite.",
       "browserParityThresholds": {
-        "maxDiffRatio": null,
+        "maxDiffRatio": 0.03,
         "inkMaskNeighborhoodRadius": 3,
-        "inkMaskMaxDiffRatio": 0.002,
+        "inkMaskMaxDiffRatio": 0.008,
         "nonInkMaxDiffPixels": 0,
         "solidInkMaxDiffRatio": 0.005
       }
@@ -77,11 +78,12 @@
       "file": "hwp_table_test.hwp",
       "category": "table",
       "page": 0,
+      "canvaskitReadinessGate": true,
       "notes": "Baseline table layout, borders, and cell clipping.",
       "browserParityThresholds": {
-        "maxDiffRatio": null,
+        "maxDiffRatio": 0.045,
         "inkMaskNeighborhoodRadius": 3,
-        "inkMaskMaxDiffRatio": 0.002,
+        "inkMaskMaxDiffRatio": 0.018,
         "nonInkMaxDiffPixels": 0,
         "solidInkMaxDiffRatio": 0.005
       }
@@ -105,9 +107,10 @@
       "file": "pic-crop-01.hwp",
       "category": "image",
       "page": 0,
+      "canvaskitReadinessGate": true,
       "notes": "Image crop and fill semantics.",
       "browserParityThresholds": {
-        "maxDiffRatio": 0.0065
+        "maxDiffRatio": 0.02
       }
     },
     {

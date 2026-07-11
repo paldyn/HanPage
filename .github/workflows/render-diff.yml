@@ -12,6 +12,8 @@ on:
       - 'src/wasm_api.rs'
       - 'src/main.rs'
       - 'web/fonts/**'
+      - 'scripts/renderer_baseline.py'
+      - 'scripts/renderer_baseline_manifest.json'
       - 'docs/canvaskit-parity-implementation.md'
       - 'docs/text-ir-v2.md'
       - 'rhwp-studio/**'
@@ -301,7 +303,9 @@ jobs:
           node --check e2e/canvaskit-font-coverage.test.mjs
           node --check e2e/canvas-render-diff.test.mjs
           node --check e2e/pdf-render-diff-report.mjs
+          node --check e2e/renderer-baseline.mjs
           node --check e2e/run-render-diff.mjs
+          python3 -m py_compile ../scripts/renderer_baseline.py
           npm run e2e:renderer-contract
           npm run e2e:canvaskit-font-coverage
 
@@ -318,13 +322,22 @@ jobs:
           RHWP_RENDER_DIFF_RHWP_BIN: ../target/debug/rhwp
         run: npm run e2e:render-diff:ci
 
+      - name: Run selected CanvasKit readiness gate
+        run: >-
+          python3 scripts/renderer_baseline.py
+          --profiles screen
+          --browser-mode headless
+          --readiness-only
+          --output output/renderer-baseline/canvaskit-readiness
+
       - name: Add render diff summary
         if: always()
         working-directory: rhwp-studio
         run: |
           for summary in \
             e2e/screenshots/render-diff/summary.md \
-            e2e/screenshots/render-diff/pdf-summary.md
+            e2e/screenshots/render-diff/pdf-summary.md \
+            ../output/renderer-baseline/canvaskit-readiness/baseline-report.md
           do
             if [ -f "$summary" ]; then
               cat "$summary" >> "$GITHUB_STEP_SUMMARY"
@@ -340,6 +353,7 @@ jobs:
           path: |
             rhwp-studio/e2e/screenshots/render-diff/
             output/e2e/
+            output/renderer-baseline/canvaskit-readiness/
             target/rhwp-studio-vite.log
           if-no-files-found: ignore
           retention-days: 14

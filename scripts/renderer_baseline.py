@@ -72,6 +72,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="skip canvas2d / canvaskit browser captures",
     )
+    parser.add_argument(
+        "--readiness-only",
+        action="store_true",
+        help="capture only manifest entries selected for the CanvasKit readiness gate",
+    )
     return parser.parse_args()
 
 
@@ -98,7 +103,9 @@ def parse_profiles(raw: str) -> list[str]:
     return ordered
 
 
-def load_manifest(manifest_path: Path, filter_pattern: str) -> dict:
+def load_manifest(
+    manifest_path: Path, filter_pattern: str, readiness_only: bool = False
+) -> dict:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     samples = manifest.get("samples", [])
     if not isinstance(samples, list) or not samples:
@@ -136,6 +143,8 @@ def load_manifest(manifest_path: Path, filter_pattern: str) -> dict:
             raise SystemExit(f"invalid baseline sample id: {sample.get('id')}")
         category = sample.get("category", "uncategorized")
         page = int(sample.get("page", 0))
+        if readiness_only and sample.get("canvaskitReadinessGate") is not True:
+            continue
         if filter_text and not (
             filter_text in str(sample_id).lower()
             or filter_text in str(file_name).lower()
@@ -338,9 +347,12 @@ def capture_browser_baseline(
     filter_pattern: str,
     profiles: list[str],
     canvaskit_surface: str,
-) -> Path:
+    readiness_only: bool,
+) -> tuple[Path, bool]:
     port = find_available_port()
     vite_url = f"http://127.0.0.1:{port}"
+    report_path = output_root / "browser-baseline-report.json"
+    report_path.unlink(missing_ok=True)
     dev_server = subprocess.Popen(
         [
             NPM_CMD,
@@ -369,17 +381,34 @@ def capture_browser_baseline(
         ]
         if filter_pattern:
             cmd.append(f"--filter={filter_pattern}")
-        run_command(
+        if readiness_only:
+            cmd.append("--readiness-only")
+        log_command(cmd, STUDIO_ROOT)
+        completed = subprocess.run(
             cmd,
-            STUDIO_ROOT,
-            {
-                "VITE_URL": vite_url,
-                "RHWP_CANVASKIT_SURFACE": canvaskit_surface,
-            },
+            cwd=STUDIO_ROOT,
+            env=command_env(
+                {
+                    "VITE_URL": vite_url,
+                    "RHWP_CANVASKIT_SURFACE": canvaskit_surface,
+                }
+            ),
+            check=False,
         )
     finally:
         stop_process(dev_server)
-    return output_root / "browser-baseline-report.json"
+    if completed.returncode == 0:
+        if not report_path.exists():
+            raise RuntimeError(f"browser baseline did not write report: {report_path}")
+        return report_path, True
+    if readiness_only and report_path.exists():
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        failed = ((report.get("canvaskitReadinessGate") or {}).get("summary") or {}).get(
+            "failed", 0
+        )
+        if isinstance(failed, int) and failed > 0:
+            return report_path, False
+    raise subprocess.CalledProcessError(completed.returncode, cmd)
 
 
 def repo_relative(path_value: str | Path) -> str:
@@ -778,6 +807,56 @@ def write_reports(
                     + " |"
                 )
 
+    browser_canvaskit_readiness = (
+        browser_data.get("canvaskitReadinessGate") if browser_data else None
+    )
+    if browser_canvaskit_readiness:
+        summary = browser_canvaskit_readiness.get("summary") or {}
+        criteria = browser_canvaskit_readiness.get("criteria") or {}
+        lines.extend(
+            [
+                "",
+                "## CanvasKit Readiness Gate",
+                "",
+                f"- mode: `{browser_canvaskit_readiness.get('mode', 'selectedCorpus')}`",
+                f"- profile: `{criteria.get('profile', '-')}`",
+                f"- target backend: `{criteria.get('targetBackend', '-')}`",
+                f"- surface: `{criteria.get('canvaskitSurface', '-')}`",
+                f"- total: {summary.get('total', 0)}",
+                f"- evaluated: {summary.get('evaluated', 0)}",
+                f"- passed: {summary.get('passed', 0)}",
+                f"- failed: {summary.get('failed', 0)}",
+                f"- missing: {summary.get('missing', 0)}",
+                "",
+                "| Sample | Category | Backend | Profile | Active Backend | Surface Backend | Surface Fallback | Passed | Blockers | Expected Gaps | Unexpected Gaps | Diff Ratio |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ---: |",
+            ]
+        )
+        for item in browser_canvaskit_readiness.get("checks", []):
+            selected_diff_ratio = item.get("selectedDiffRatio")
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        item.get("sampleId", "-"),
+                        item.get("category", "-"),
+                        item.get("targetBackend", "-"),
+                        item.get("profile", "-"),
+                        item.get("activeBackend") or "-",
+                        item.get("surfaceBackend") or "-",
+                        item.get("surfaceFallbackReason") or "-",
+                        "yes" if item.get("passed") else "no",
+                        "<br>".join(item.get("blockers") or []) or "-",
+                        "<br>".join(item.get("expectedUnsupportedOps") or []) or "-",
+                        "<br>".join(item.get("unexpectedUnsupportedOps") or []) or "-",
+                        f"{selected_diff_ratio:.6f}"
+                        if isinstance(selected_diff_ratio, (int, float))
+                        else "-",
+                    ]
+                )
+                + " |"
+            )
+
     browser_backend_parity = (
         browser_data.get("browserBackendParity") if browser_data else None
     )
@@ -1159,9 +1238,15 @@ def main() -> None:
             + canvaskit_surface
             + f" (allowed: {', '.join(ALLOWED_CANVASKIT_SURFACES)}; aliases: gpu, sw, cpu)"
         )
+    if args.readiness_only and profiles != ["screen"]:
+        raise SystemExit("--readiness-only requires --profiles=screen")
+    if args.readiness_only and canvaskit_surface != "auto":
+        raise SystemExit("--readiness-only requires --canvaskit-surface=auto")
+    if args.readiness_only and args.skip_browser:
+        raise SystemExit("--readiness-only cannot be combined with --skip-browser")
     ensure_dir(output_root)
 
-    manifest = load_manifest(manifest_path, args.filter)
+    manifest = load_manifest(manifest_path, args.filter, args.readiness_only)
     manifest["_path"] = str(manifest_path)
     shutil.copy2(manifest_path, output_root / manifest_path.name)
 
@@ -1180,7 +1265,7 @@ def main() -> None:
     )
 
     native_results: list[dict] = []
-    if not args.skip_native:
+    if not args.skip_native and not args.readiness_only:
         for sample in manifest["samples"]:
             print(f"\n[native] {sample['id']} ({sample['category']})", flush=True)
             backends = capture_native_sample(sample, output_root, profiles)
@@ -1192,15 +1277,17 @@ def main() -> None:
             )
 
     browser_report: Path | None = None
+    browser_capture_passed = True
     if not args.skip_browser:
         print("\n[browser] capturing canvas2d/canvaskit baseline", flush=True)
-        browser_report = capture_browser_baseline(
+        browser_report, browser_capture_passed = capture_browser_baseline(
             filtered_manifest_path,
             output_root / "browser",
             args.browser_mode,
             args.filter,
             profiles,
             canvaskit_surface,
+            args.readiness_only,
         )
 
     parity_report = run_native_canvaskit_parity_report(
@@ -1216,6 +1303,10 @@ def main() -> None:
         canvaskit_surface,
     )
     print(f"\n[baseline] complete: {output_root}", flush=True)
+    if not browser_capture_passed:
+        raise SystemExit(
+            f"CanvasKit readiness gate failed; see {output_root / 'baseline-report.md'}"
+        )
 
 
 if __name__ == "__main__":
