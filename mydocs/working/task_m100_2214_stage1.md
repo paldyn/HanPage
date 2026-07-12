@@ -1,23 +1,28 @@
 # Task M100 #2214 Stage 1 완료보고서 — 연속 입력 표시 불일치 경계 계측
 
+> 2026-07-13 정오표: 이 보고서의 최초 브라우저 통제만으로는 stale `PartialTable` cut과
+> warm `cell_units_cache`를 분리하지 못했다. 최신 devel의 cold/warm·cache-only 통제가
+> 직접 원인을 warm layout-cache 무효화 누락으로 좁혔다. 아래 §13이 §4~§12의
+> “explicit pagination only” 및 “cut 공동 원인” 해석을 대체한다.
+
 ## 0. 판정 요약
 
 - **계측 Stage 판정**: 완료
-- **후속 구현 판정**: 현재 구현계획 중단, 범위 재승인 필요
+- **후속 구현 판정**: 최신 교차검증 완료, 수행·구현계획 보정 승인 대기
 - **HWP**: RED, keyboard 3회 모두 44번째 추가 문자에서 4줄에서 5줄로 전환
 - **HWPX**: RED, keyboard 3회 모두 같은 44번째 문자에서 전환
-- **최초 불일치 경계**: 모델 text와 `LINE_SEG`는 최신이지만, stale `PartialTable` cut과
-  `cell_units_cache`를 입력으로 새 PageLayerTree가 생성되어 page text layout, Canvas와 caret이
-  함께 새 5번째 줄을 잃음
-- **통제 결과**: 시험한 대조군에서 pagination 없는 page full-layer render는 복구하지 못했고,
-  explicit deferred pagination flush 뒤에만 구조와 화면이 복구됨
+- **최초 불일치 경계**: 모델 text와 `LINE_SEG`는 최신이지만 deferred mutation이 warm
+  `cell_units_cache`를 비우지 않아 PageLayerTree, Canvas와 caret이 새 5번째 줄을 잃음
+- **통제 결과**: 같은 old cut에서도 cold는 exact, warm은 stale이며 pagination 없는 layout
+  cache clear만으로 tree/cursor가 복구됨. full flush는 추가로 cut과 `cellBounds`를 갱신함
 - **지연과의 관계**: 직접 연관됨. 새 offset이 stale fragment에 없어서
   `getCursorRectByPathNear()`가 115쪽을 탐색한 뒤 잘못된 첫 run으로 fallback하며 약 2.0초를 사용함
 - **production 변경**: 없음
 
-승인된 구현계획은 “explicit pagination만이 유일한 복구 수단이면 0-flush 범위 밖으로 판정하고
-재계획한다”는 중단 조건을 두었다. 이번 결과가 정확히 그 조건에 해당하므로 Stage 2 이후의 회귀
-계약과 production 수정에 들어가기 전에 수행·구현계획을 보정해야 한다.
+최신 결과에 따라 production 계약은 모든 deferred 셀 편집의 scoped layout-cache coherence와
+실제 cell-flow advance가 바뀌는 입력의 pre-cursor 1회 flush로 분리한다. global cache clear를
+generic partial invalidation에 넣는 한 줄 수정은 #1949/#2063 캐시를 매 키 전역 폐기하므로
+진단 통제로만 유지한다.
 
 ## 1. 기준 환경
 
@@ -44,6 +49,17 @@
 
 두 형식 모두 실제 앱 로드 뒤 `sourceFormat`, 115쪽, 활성 InputHandler, page 0 Canvas,
 font ready를 단언했다. HWPX validation에서는 자동 보정을 선택하지 않아 모델 변형을 피했다.
+
+### 1.1 최신 devel 교차검증 환경
+
+| 항목 | 값 |
+|------|----|
+| Git 기준 | `c7864c62f3aea359d1a25ecc704af037c33e4a58` |
+| worktree | `/private/tmp/rhwp-task2214-latest` (detached) |
+| WASM | 6,662,474 bytes, SHA-256 `41d675bebe3c981903ef7c0ab67b0e38393c379a215f12693901d57e73f2cb92` |
+| Studio | `http://127.0.0.1:7724`, HWP/HWPX 각 3회 |
+| 산출물 | `output/poc/task2214/crosscheck-c7864c62/` (ignored) |
+| production 변경 | 없음 |
 
 ## 2. 재현·계측 방법
 
@@ -257,8 +273,8 @@ pagination, page-tree 및 Canvas 전체 성능 범위를 이 Stage에서 모두 
 
 ## 8. 원인 판정
 
-선택된 판정표 행은 다음이며, 코드 수준 원인은 **stale PartialTable cut/cell-unit 입력으로 새로
-생성된 불일치 page tree**로 더 좁혔다.
+Stage 1 브라우저 통제 당시 선택한 판정표 행은 다음이었다. 최신 정오표 §13은 이 관찰을
+**warm cell-unit cache가 직접 원인이고 old cut은 충분조건이 아님**으로 더 좁힌다.
 
 > 모델/LINE_SEG는 최신이고 page layout/tree가 stale이며 page full-layer render로 복구되지 않고
 > explicit pagination만 복구한다 — stale pagination fragment.
@@ -267,10 +283,11 @@ pagination, page-tree 및 Canvas 전체 성능 범위를 이 Stage에서 모두 
 
 - 모델 text는 `N`, `N+1`, `N+2`를 모두 정확히 보존한다.
 - `LINE_SEG`는 `N`에서 즉시 5줄 `[0,44,84,122,129]`로 바뀐다.
-- stale `PartialTable` cut과 `cell_units_cache`는 새 line 129..174를 포함하지 않는다.
+- warm `cell_units_cache`를 사용하는 tree는 새 line 129..174를 포함하지 않는다.
 - uncached page text layout과 cached PageLayerTree가 모두 같은 129 cutoff를 보인다.
 - full-layer Canvas rebuild만으로는 복구되지 않는다.
-- explicit pagination만 fragment, Canvas, caret을 함께 복구한다.
+- Stage 1 브라우저 통제에서는 explicit pagination만 fragment, Canvas, caret을 함께 복구했다.
+  최신 native 통제에서는 pagination 없는 cache clear도 tree/cursor를 복구했다.
 - HWP/HWPX가 같은 경계를 보인다.
 
 기각한 후보:
@@ -345,30 +362,73 @@ output/poc/task2214/stage1/
 - 두 통제군을 독립 reload로 실행
 - production 변경 없이 단일 원인으로 축소
 
-중단 조건:
+당시 중단 조건:
 
 - pagination 없는 full-layer render는 복구하지 못함
-- 시험한 대조군 중 explicit pagination만 현재 노출된 복구 수단임
+- 시험한 브라우저 대조군 중 explicit pagination만 노출된 복구 수단이었음
 - 승인된 “입력 중 전체 pagination 0회” 조건만으로 production 해결안을 선택할 수 없음
 
-따라서 Stage 1 계측은 완료했지만, 승인된 구현계획대로 후속 구현은 여기서 중단한다.
+따라서 Stage 1 계측 뒤 후속 구현을 중단했다. §13의 추가 통제로 해당 중단 사유는
+“zero-pagination 복구 불가”에서 “scoped coherence와 flow-boundary flush 계약 재승인 필요”로
+대체됐다.
 
 ## 12. 다음 단계와 계획 보정안
 
-회귀 계약을 먼저 고정한다는 Stage 2의 목적은 유효하다. 다만 production 수정 전 다음 내용을
-수행·구현계획에 명시하고 다시 승인받아야 한다.
+최초 제안의 방향인 “경계 1회 flush로 geometry 정확성을 우선 복구”는 유지하되, 이를 모든
+cache coherence 문제의 대체재로 사용하지 않는다. 최신 결과에 따라 다음 순서로 보정한다.
 
-1. deferred mutation 결과에 최소한 `lineCountChanged` 또는 fragment 영향 신호를 추가한다.
-2. mutation의 deferred pending을 refresh 판정보다 먼저 등록해 fallback 시 현재 mutation을 잃지 않는다.
-3. 정확성 복구 후보를 다음 두 갈래로 비교한다.
-   - 줄/fragment 경계에서만 한 번 수행하는 보수적 pagination
-   - host paragraph 또는 영향 page 범위만 갱신하는 bounded/partial pagination
-4. 단순 cursor search 조기 종료만으로 이슈를 닫지 않는다. 이는 2초 지연을 낮춰도 stale page tree와
-   누락 화면을 남긴다.
-5. 성능 가드는 “매 글자 115쪽 full pagination 금지”를 유지하되, 경계 1회의 허용 범위와 latency
-   상한을 새로 정한다. 현재 full flush 기준은 약 873–895ms이다.
-6. #2193에는 이번에 확정한 `getCursorRectByPathNear` 115쪽 miss/fallback 비용을 직접 연계하되,
-   문서 로드와 일반 Canvas 성능 조사는 계속 별도 범위로 유지한다.
+1. cold/warm/cache-only/full-flush 네 상태와 cell-flow signal을 회귀 계약으로 고정한다.
+2. 모든 deferred 셀 편집에서 편집 cell과 소유 table cache만 scoped eviction한다.
+3. 단순 line-count가 아니라 상대 flow advance 변화인 `cellFlowChanged`를 반환한다.
+4. `cellFlowChanged=true`일 때만 cursor 조회 전에 full flush를 정확히 1회 수행한다.
+5. 안정 입력은 flush 0회, 44번째 경계는 1회, 50자 누계는 1회로 고정한다.
+6. 남는 약 0.95초 경계 flush의 partial paginator 대체는 #2193 후속으로 분리한다.
 
-**승인 요청**: stale pagination fragment를 확정 원인으로 받아들이고 위 범위로 수행·구현계획을
-보정한 뒤, 수정된 Stage 2/3 순서를 다시 승인받는다.
+## 13. 최신 devel 원인 격리 정오표
+
+### 13.1 native cold/warm matrix
+
+HWP/HWPX, batch/sequential, direct/path-near의 30-case matrix 결과는 같았다.
+
+| 상태 | model/tree max | cursor | query | `end_cut` |
+|------|----------------|--------|------:|----------:|
+| cold sequential 44 | 174/174 | `(569.7,341.9)` exact | 약 27ms | 37 |
+| prewarm sequential 44 | 174/129 | `(84.1,238.7)` fallback | 약 1.95s | 37 |
+| cold sequential 50 | 180/180 | `(629.7,341.9)` exact | 약 27ms | 37 |
+| 30자 warm + 20자 | 180/129 | `(84.1,238.7)` fallback | 약 1.94~1.97s | 37 |
+
+같은 final model과 cut에서 cold만 정확하므로 old `PartialTable` cut은 직접 원인의 충분조건이
+아니다. query API나 입력 단위도 판정을 바꾸지 않았다.
+
+### 13.2 pagination 없는 cache-only 격리
+
+warm 44자 상태에서 pagination 없이 full cache invalidation만 수행한 crate-internal 통제는
+두 형식에서 동일했다.
+
+| 상태 | tree max | cursor | cut | `cellBounds.h` |
+|------|---------:|--------|----:|---------------:|
+| stale warm | 129 | fallback | 37 | 945.9 |
+| cache clear only | 174 | exact | 37 | 945.9 |
+| explicit full flush | 174 | exact | 38 | 971.5 |
+
+이 통제로 visible tree/cursor의 직접 원인은 warm `cell_units_cache`임을 확정했다. 동시에
+cache-only는 geometry 전체를 확정하지 않으므로 production은 scoped eviction과 flow-boundary
+flush를 분리해야 한다.
+
+### 13.3 최신 Studio와 성능 관계
+
+최신 WASM에서도 HWP/HWPX 각 3회 모두 `N=44` RED였다. 일반 입력 p50은 약 35~36ms,
+경계 handler는 HWP 약 1.97초, HWPX 약 2.00~2.02초였다. mutation 자체는 약 0.2ms이고
+지연 대부분은 stale tree에서 새 offset을 찾지 못한 path-near 115쪽 scan이다. full flush는
+약 0.93~0.95초였다.
+
+따라서 표시 결함과 약 2초 입력 지연은 같은 cache coherence 결함이다. #2214에서는 정확한
+tree/cursor와 경계 1회 flush를 해결하고, 그 1회 비용을 bounded/partial paginator로 줄이는
+작업은 #2193 후속 범위로 남긴다.
+
+### 13.4 산출물
+
+- native matrix: `output/poc/task2214/crosscheck-c7864c62/native-matrix.json`
+- Studio summary: `output/poc/task2214/crosscheck-c7864c62/studio/summary.json`
+- HWP/HWPX diagnostics: 같은 경로의 `studio/{hwp,hwpx}-diagnostic.json`
+- 위 산출물과 latest worktree test-only probe는 ignored 진단 자료이며 production 변경이 아니다.
