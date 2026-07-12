@@ -184,3 +184,56 @@ fn assign_picture_image_invalid_target_leaves_document_unchanged() {
         .expect("컨트롤 레이아웃 조회 실패");
     assert_eq!(before, after, "실패 호출 후 레이아웃이 변형됐다");
 }
+
+/// [4단계] 그림 지정 후 HWPX 저장 왕복 — 재파싱에서 그림(BinData) 유지.
+#[test]
+fn assign_then_hwpx_roundtrip_preserves_image() {
+    let mut doc = load_doc();
+    let cell_path: &[(usize, usize, usize)] = &[(2, 3, 0)];
+    doc.assign_picture_image_native(0, 0, cell_path, 0, &minimal_png(), 1, 1, "png")
+        .expect("그림 지정 실패");
+
+    let bytes = doc.export_hwpx_native().expect("HWPX 직렬화 실패");
+    let reloaded = rhwp::wasm_api::HwpDocument::from_bytes(&bytes).expect("재파싱 실패");
+
+    let json = reloaded
+        .get_page_control_layout(0)
+        .expect("컨트롤 레이아웃 조회 실패");
+    assert!(
+        !json.contains("\"missing\":true"),
+        "HWPX 왕복 후 그림이 placeholder 로 되돌아갔다(BinData 소실): {json}"
+    );
+    let images = control_chunks(&json)
+        .into_iter()
+        .filter(|c| c.starts_with("{\"type\":\"image\""))
+        .count();
+    assert_eq!(
+        images, 2,
+        "HWPX 왕복 후 image 컨트롤 2건이어야 한다: {json}"
+    );
+}
+
+/// [4단계] 그림 지정 후 HWP(5.0 CFB) 저장 왕복 — 재파싱에서 그림(BinData) 유지.
+#[test]
+fn assign_then_hwp_roundtrip_preserves_image() {
+    let mut doc = load_doc();
+    let cell_path: &[(usize, usize, usize)] = &[(2, 3, 0)];
+    doc.assign_picture_image_native(0, 0, cell_path, 0, &minimal_png(), 1, 1, "png")
+        .expect("그림 지정 실패");
+
+    let bytes = doc.export_hwp_with_adapter().expect("HWP 직렬화 실패");
+    let reloaded = rhwp::wasm_api::HwpDocument::from_bytes(&bytes).expect("재파싱 실패");
+
+    let json = reloaded
+        .get_page_control_layout(0)
+        .expect("컨트롤 레이아웃 조회 실패");
+    assert!(
+        !json.contains("\"missing\":true"),
+        "HWP 왕복 후 그림이 placeholder 로 되돌아갔다(BinData 소실): {json}"
+    );
+    let images = control_chunks(&json)
+        .into_iter()
+        .filter(|c| c.starts_with("{\"type\":\"image\""))
+        .count();
+    assert_eq!(images, 2, "HWP 왕복 후 image 컨트롤 2건이어야 한다: {json}");
+}
