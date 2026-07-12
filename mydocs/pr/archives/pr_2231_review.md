@@ -71,7 +71,8 @@ renderer/typeset/layout 경로와 페이지 수가 바뀌므로 visual sweep 대
 
 ## 운영 기록
 
-현재 작업은 contributor 모드로 진행하므로 `mydocs/orders/` 오늘할일 파일은 생성하거나 갱신하지 않는다.
+collaborator self PR 경로에 따라 `mydocs/orders/20260712.md`에 PR #2231 처리 내역을 같은
+PR head에 포함했다.
 
 ## 최종 권고
 
