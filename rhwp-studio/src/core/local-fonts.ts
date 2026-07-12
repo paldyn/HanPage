@@ -296,6 +296,14 @@ function decodeSfntName(bytes: Uint8Array, platformId: number): string {
   return text;
 }
 
+/**
+ * macOS legacy name record는 문자 인코딩을 platform ID만으로 확정할 수 없다.
+ * 브라우저가 제공한 Unicode 이름은 유지하고, 이 record는 표시/별칭 후보에서 제외한다.
+ */
+function isUnicodeSfntPlatform(platformId: number): boolean {
+  return platformId === 0 || platformId === 3;
+}
+
 function parseSfntNameTable(buffer: ArrayBuffer): SfntFontNames {
   const view = new DataView(buffer);
   if (!byteRangeAvailable(view, 0, 6)) return emptySfntFontNames();
@@ -319,6 +327,7 @@ function parseSfntNameTable(buffer: ArrayBuffer): SfntFontNames {
     const relativeOffset = view.getUint16(recordOffset + 10, false);
     const valueOffset = stringOffset + relativeOffset;
     if (!byteRangeAvailable(view, valueOffset, length)) continue;
+    if (!isUnicodeSfntPlatform(platformId)) continue;
 
     const name = decodeSfntName(
       new Uint8Array(buffer, valueOffset, length),
@@ -376,6 +385,12 @@ function preferredLocalFontDisplayName(fullNames: readonly string[], families: r
     ?? '';
 }
 
+/** UTF-8/UTF-16 이름을 legacy code page로 오독했을 때의 전형적인 깨짐을 제외한다. */
+function isUsableFontDisplayName(value: string): boolean {
+  if (!value.trim() || /[\u0000-\u001f\u007f-\u009f\ufffd]/.test(value)) return false;
+  return !/[\u00ab\u00bb\u00c2\u00c3\u00d0\u00db]/.test(value);
+}
+
 function makeLocalFontRecord(fontData: Pick<FontData, 'family' | 'fullName' | 'postscriptName' | 'style'>, sfntNames: SfntFontNames = emptySfntFontNames()): LocalFontRecord | null {
   const families = normalizeFontNames([fontData.family, ...sfntNames.families]);
   const fullNames = normalizeFontNames([fontData.fullName, ...sfntNames.fullNames]);
@@ -419,9 +434,16 @@ function normalizeLocalFontRecords(value: unknown): LocalFontRecord[] {
     });
     if (!record) continue;
     const aliases = normalizeFontNames([...record.aliases, ...(Array.isArray(data.aliases) ? data.aliases : [])]);
-    const displayName = typeof data.displayName === 'string' && data.displayName.trim()
-      ? data.displayName.trim()
-      : preferredLocalFontDisplayName(aliases.filter(name => HANGUL_RE.test(name)), [record.fullName, record.family]) || record.displayName;
+    const displayCandidates = [
+      typeof data.displayName === 'string' ? data.displayName.trim() : '',
+      typeof data.fullName === 'string' ? data.fullName.trim() : '',
+      typeof data.family === 'string' ? data.family.trim() : '',
+      ...aliases,
+    ].filter(isUsableFontDisplayName);
+    const displayName = displayCandidates.find(name => HANGUL_RE.test(name))
+      ?? displayCandidates[0]
+      ?? preferredLocalFontDisplayName(aliases.filter(name => HANGUL_RE.test(name)), [record.fullName, record.family])
+      ?? record.family;
     const normalized = { ...record, displayName, aliases };
     const key = normalizeFontAlias(normalized.postscriptName || normalized.fullName || normalized.family);
     if (key && !records.has(key)) records.set(key, normalized);

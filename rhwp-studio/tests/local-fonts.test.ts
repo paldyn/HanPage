@@ -144,8 +144,13 @@ function utf16Be(value: string): Uint8Array {
   return bytes;
 }
 
-function createSfntWithNameRecords(entries: ReadonlyArray<{ nameId: number; value: string }>): Uint8Array {
-  const encoded = entries.map(entry => ({ ...entry, bytes: utf16Be(entry.value) }));
+function createSfntWithNameRecords(entries: ReadonlyArray<{
+  nameId: number;
+  value: string;
+  platformId?: number;
+  bytes?: Uint8Array;
+}>): Uint8Array {
+  const encoded = entries.map(entry => ({ ...entry, bytes: entry.bytes ?? utf16Be(entry.value) }));
   const nameTableOffset = 12 + 16;
   const stringsOffset = 6 + encoded.length * 12;
   const nameTableLength = stringsOffset + encoded.reduce((sum, entry) => sum + entry.bytes.length, 0);
@@ -164,7 +169,7 @@ function createSfntWithNameRecords(entries: ReadonlyArray<{ nameId: number; valu
   let stringCursor = 0;
   encoded.forEach((entry, index) => {
     const recordOffset = nameTableOffset + 6 + index * 12;
-    view.setUint16(recordOffset, 3, false);
+    view.setUint16(recordOffset, entry.platformId ?? 3, false);
     view.setUint16(recordOffset + 2, 1, false);
     view.setUint16(recordOffset + 4, 0x0412, false);
     view.setUint16(recordOffset + 6, entry.nameId, false);
@@ -497,6 +502,80 @@ test('SFNT 지역화 이름을 보존해 HWP 한글 full name을 영문 family�
     assert.match(cssChain, /^"08SeoulHangang"/);
     assert.equal(stored.version, 2);
     assert.equal('blob' in (stored.fontRecords?.[0] ?? {}), false);
+  } finally {
+    await clearStoredLocalFonts();
+    resetLocalFontsForTests();
+    restoreGlobals(originals);
+  }
+});
+
+test('legacy Macintosh name record는 표시 이름에 섞지 않는다', async () => {
+  const g = globalThis as TestGlobals;
+  const originals = {
+    browser: g.browser,
+    chrome: g.chrome,
+    document: g.document,
+    localStorage: g.localStorage,
+    queryLocalFonts: g.queryLocalFonts,
+  };
+  const storage = createStorage();
+  resetLocalFontsForTests();
+  g.browser = undefined;
+  g.chrome = undefined;
+  g.localStorage = storage;
+  g.queryLocalFonts = async () => [{
+    family: 'Browser Font',
+    fullName: 'Browser Font Regular',
+    postscriptName: 'BrowserFont-Regular',
+    style: 'Regular',
+    blob: async () => new Blob([createSfntWithNameRecords([
+      { nameId: 1, value: '!legacy', platformId: 1, bytes: new TextEncoder().encode('!legacy') },
+      { nameId: 4, value: '!legacy display', platformId: 1, bytes: new TextEncoder().encode('!legacy display') },
+    ])]),
+  }];
+
+  try {
+    assert.deepEqual(await detectLocalFonts({ force: true }), ['Browser Font Regular']);
+  } finally {
+    await clearStoredLocalFonts();
+    resetLocalFontsForTests();
+    restoreGlobals(originals);
+  }
+});
+
+test('저장된 깨진 표시 이름은 브라우저 family 이름으로 복구한다', async () => {
+  const g = globalThis as TestGlobals;
+  const originals = {
+    browser: g.browser,
+    chrome: g.chrome,
+    document: g.document,
+    localStorage: g.localStorage,
+    queryLocalFonts: g.queryLocalFonts,
+  };
+  const snapshot: LocalFontSnapshot = {
+    version: 2,
+    detectedAt: '2026-07-12T00:00:00.000Z',
+    families: ['Browser Font'],
+    fontRecords: [{
+      family: 'Browser Font',
+      fullName: 'Browser Font Regular',
+      postscriptName: 'BrowserFont-Regular',
+      style: 'Regular',
+      displayName: '»Ã깨진 이름',
+      aliases: ['Browser Font', 'Browser Font Regular', '»Ã깨진 이름'],
+    }],
+    source: 'local-font-access',
+  };
+  const storage = createStorage({ [STORAGE_KEY]: JSON.stringify(snapshot) });
+  resetLocalFontsForTests();
+  g.browser = undefined;
+  g.chrome = undefined;
+  g.localStorage = storage;
+  g.queryLocalFonts = undefined;
+
+  try {
+    await loadStoredLocalFonts();
+    assert.deepEqual(getLocalFonts(), ['Browser Font Regular']);
   } finally {
     await clearStoredLocalFonts();
     resetLocalFontsForTests();
