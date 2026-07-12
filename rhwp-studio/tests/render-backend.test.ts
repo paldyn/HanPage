@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 import {
   resolveCanvasKitRenderMode,
+  resolveCanvasKitRenderModeRequest,
   resolveCanvasKitSurfaceRequest,
   resolveRenderBackend,
   resolveRenderBackendRequest,
@@ -21,6 +22,7 @@ import {
   layerPaintOpReplayPlane,
   renderLayerReplayPlane,
 } from '../src/view/canvaskit/replay-plane.ts';
+import { isExpectedCanvasKitUnsupportedOp } from '../src/view/canvaskit/diagnostics.ts';
 import type { LayerInfo, LayerPaintOp } from '../src/core/types.ts';
 import { glyphOutlinePayloadResourceKey, glyphOutlinePayloadStatus } from '../src/view/glyph-outline-payload-status.ts';
 
@@ -40,8 +42,18 @@ test('render backend resolver reports invalid explicit values and keeps URL opt-
   };
   try {
     assert.equal(resolveRenderBackend(''), 'canvas2d');
+    assert.deepEqual(resolveRenderBackendRequest(''), {
+      backend: 'canvas2d',
+      source: 'default',
+    });
+    assert.deepEqual(resolveRenderBackendRequest('?renderer=canvaskit'), {
+      backend: 'canvaskit',
+      source: 'url',
+      requested: 'canvaskit',
+    });
     assert.deepEqual(resolveRenderBackendRequest('?renderer=unknown'), {
       backend: 'canvas2d',
+      source: 'url',
       requested: 'unknown',
       unsupportedReason: 'unsupportedRenderBackend',
     });
@@ -50,11 +62,69 @@ test('render backend resolver reports invalid explicit values and keeps URL opt-
   }
 });
 
+test('render backend module does not expose a persistent CanvasKit opt-in path', () => {
+  const source = readFileSync(new URL('../src/view/render-backend.ts', import.meta.url), 'utf8');
+  assert.equal(source.includes('rhwp.renderBackend'), false);
+  assert.equal(source.includes('persistRenderBackend'), false);
+});
+
+test('CanvasKit readiness classification keeps new diagnostic suffixes unexpected', () => {
+  for (const expected of [
+    'glyphOutline:unsupportedColorGlyph',
+    'imageEffect:grayScale',
+    'textRun:verticalText',
+  ]) {
+    assert.equal(isExpectedCanvasKitUnsupportedOp(expected), true, expected);
+  }
+  for (const unexpected of [
+    'glyphOutline:replayInvariant',
+    'imageEffect:futureEffect',
+    'textRun:newCoverageGap',
+    'renderPage',
+    'unknown',
+  ]) {
+    assert.equal(isExpectedCanvasKitUnsupportedOp(unexpected), false, unexpected);
+  }
+});
+
 test('CanvasKit mode resolver exposes default and conservative compat direct modes', () => {
   assert.equal(resolveCanvasKitRenderMode(''), 'default');
   assert.equal(resolveCanvasKitRenderMode('?canvaskitMode=compat'), 'compat');
   assert.equal(resolveCanvasKitRenderMode('?skiaMode=compatibility'), 'compat');
   assert.equal(resolveCanvasKitRenderMode('?canvaskitMode=overlay'), 'default');
+  assert.deepEqual(resolveCanvasKitRenderModeRequest('?canvaskitMode=compat'), {
+    mode: 'compat',
+    source: 'url',
+    requested: 'compat',
+  });
+  assert.deepEqual(resolveCanvasKitRenderModeRequest('?canvaskitMode=overlay'), {
+    mode: 'default',
+    source: 'url',
+    requested: 'overlay',
+    unsupportedReason: 'unsupportedCanvasKitMode',
+  });
+});
+
+test('CanvasKit mode request reports storage selection and lets URL override it', () => {
+  const originalStorage = (globalThis as { localStorage?: unknown }).localStorage;
+  (globalThis as { localStorage?: unknown }).localStorage = {
+    getItem: (key: string) => key === 'rhwp.canvaskitMode' ? 'compat' : null,
+    setItem: () => undefined,
+  };
+  try {
+    assert.deepEqual(resolveCanvasKitRenderModeRequest(''), {
+      mode: 'compat',
+      source: 'storage',
+      requested: 'compat',
+    });
+    assert.deepEqual(resolveCanvasKitRenderModeRequest('?canvaskitMode=default'), {
+      mode: 'default',
+      source: 'url',
+      requested: 'default',
+    });
+  } finally {
+    (globalThis as { localStorage?: unknown }).localStorage = originalStorage;
+  }
 });
 
 test('CanvasKit surface resolver records unsupported requests without throwing', () => {
@@ -136,7 +206,7 @@ test('PageRenderer uses filtered canvas layers for background, behind, and front
   assert.match(source, /createOrReuseFilteredCanvasLayer\(\s*pageIdx,\s*canvas,\s*renderScale,\s*'background'/);
   assert.match(source, /createOrReuseFilteredCanvasLayer\(\s*pageIdx,\s*canvas,\s*renderScale,\s*'behind'/);
   assert.match(source, /createOrReuseFilteredCanvasLayer\(\s*pageIdx,\s*canvas,\s*renderScale,\s*'front'/);
-  assert.match(source, /createFilteredCanvasLayer\(\s*pageIdx,\s*sourceCanvas,\s*renderScale,\s*layerKind\)/);
+  assert.match(source, /createFilteredCanvasLayer\(\s*pageIdx,\s*sourceCanvas,\s*renderScale,\s*layerKind,/);
   assert.match(source, /layer\.style\.background\s*=\s*'transparent'/);
   assert.match(source, /collectLayerPlaneSummary\(root,\s*summary,\s*null\)/);
 });
@@ -155,6 +225,12 @@ test('PageRenderer prefers lightweight overlay summary before full PageLayerTree
   assert.match(source, /const flowImageCount =/);
   assert.match(source, /const flowRawSvgCount =/);
   assert.match(source, /flowStaticCount/);
+});
+
+test('PageRenderer skips full flow-image JSON when the summary has no flow images', () => {
+  const source = readFileSync(new URL('../src/view/page-renderer.ts', import.meta.url), 'utf8');
+  assert.match(source, /reuseStaticFlow && layers\.flowImageCount > 0/);
+  assert.match(source, /\? this\.getFlowImagePaintOps\(pageIdx\)/);
 });
 
 test('CanvasView forwards text-edit invalidation as static overlay reuse context', () => {
@@ -217,9 +293,9 @@ test('PageRenderer reuses layer summaries on the text-edit fast path', () => {
   assert.match(source, /this\.layerSummaryCache\.clear\(\)/);
 });
 
-test('PageRenderer splits flow static images only on text-edit fast path', () => {
+test('PageRenderer splits flow static images before the first Canvas2D flow render', () => {
   const source = readFileSync(new URL('../src/view/page-renderer.ts', import.meta.url), 'utf8');
-  assert.match(source, /shouldUseStaticFlowReuse\(context,\s*layers\)/);
+  assert.match(source, /shouldSplitStaticFlow\(layers\)/);
   assert.match(source, /layers\.flowStaticCount > 0/);
   assert.match(source, /!layers\.hasBehind/);
   assert.match(source, /renderPageToCanvasFiltered\(pageIdx,\s*canvas,\s*renderScale,\s*'flow-dynamic'\)/);
@@ -227,6 +303,12 @@ test('PageRenderer splits flow static images only on text-edit fast path', () =>
   assert.match(source, /this\.flowSplitSupported = false/);
   assert.match(source, /flow-dynamic 렌더 미지원/);
   assert.match(source, /flow-static 지연 재렌더 실패/);
+  assert.match(source, /'flow-static',\s*layers,\s*allowReuse,\s*false/);
+  assert.match(source, /createOrReuseFlowImageLayer\(/);
+  assert.match(source, /usesDomFlowImages \? overlays\.rawSvgCount/);
+  assert.match(source, /element\.src = `data:\$\{image\.mime\};base64,\$\{image\.base64\}`/);
+  assert.match(source, /HWP_UNITS_PER_CSS_PIXEL = 75/);
+  assert.match(source, /applyFlowImageCrop\(element, image, displayScale\)/);
 });
 
 test('PageRenderer deferred image rerender preserves static layer reuse policy', () => {
@@ -236,9 +318,30 @@ test('PageRenderer deferred image rerender preserves static layer reuse policy',
   assert.match(source, /reuseStaticFlow/);
   assert.match(source, /reuseStaticOverlay/);
   assert.match(source, /const retryKey = `\$\{imageCount\}:\$\{policy\.retrySignature\}`/);
+  assert.match(source, /IMAGE_RE_RENDER_FALLBACK_DELAY_MS = 1500/);
+  assert.match(source, /const job: ReRenderJob/);
+  assert.match(source, /this\.prefetchLayerImages\(pageIdx\)/);
+  assert.match(source, /if \(decoded\) finish\(\)/);
+  assert.equal(source.includes('const delays = [200, 600, 1500]'), false);
   assert.match(source, /this\.reRenderPageCanvases\(pageIdx,\s*canvas,\s*renderScale,\s*policy\)/);
   assert.match(source, /this\.findOverlayLayer\(parent,\s*pageIdx,\s*'flow-static'\)/);
   assert.match(source, /if \(policy\.reuseStaticOverlay\) return/);
+});
+
+test('CanvasView renders visible pages before deferred prefetch work', () => {
+  const source = readFileSync(new URL('../src/view/canvas-view.ts', import.meta.url), 'utf8');
+  assert.match(source, /for \(const pageIdx of visiblePages\)/);
+  assert.match(source, /this\.schedulePrefetchPages\(prefetchPages\.filter/);
+  assert.match(source, /requestIdleCallback\(run, \{ timeout: 1000 \}\)/);
+  assert.match(source, /cancelPendingPrefetch\(\)/);
+});
+
+test('ViewportManager coalesces scroll events to one animation frame', () => {
+  const source = readFileSync(new URL('../src/view/viewport-manager.ts', import.meta.url), 'utf8');
+  assert.match(source, /scrollAnimationFrame: number \| null = null/);
+  assert.match(source, /if \(this\.scrollAnimationFrame !== null\) return/);
+  assert.match(source, /this\.scrollAnimationFrame = requestAnimationFrame/);
+  assert.match(source, /cancelAnimationFrame\(this\.scrollAnimationFrame\)/);
 });
 
 test('WasmBridge exposes flow split filtered render layer kinds', () => {
