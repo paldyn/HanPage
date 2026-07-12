@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 import {
   resolveCanvasKitRenderMode,
+  resolveCanvasKitRenderModeRequest,
   resolveCanvasKitSurfaceRequest,
   resolveRenderBackend,
   resolveRenderBackendRequest,
@@ -21,6 +22,7 @@ import {
   layerPaintOpReplayPlane,
   renderLayerReplayPlane,
 } from '../src/view/canvaskit/replay-plane.ts';
+import { isExpectedCanvasKitUnsupportedOp } from '../src/view/canvaskit/diagnostics.ts';
 import type { LayerInfo, LayerPaintOp } from '../src/core/types.ts';
 import { glyphOutlinePayloadResourceKey, glyphOutlinePayloadStatus } from '../src/view/glyph-outline-payload-status.ts';
 
@@ -40,8 +42,18 @@ test('render backend resolver reports invalid explicit values and keeps URL opt-
   };
   try {
     assert.equal(resolveRenderBackend(''), 'canvas2d');
+    assert.deepEqual(resolveRenderBackendRequest(''), {
+      backend: 'canvas2d',
+      source: 'default',
+    });
+    assert.deepEqual(resolveRenderBackendRequest('?renderer=canvaskit'), {
+      backend: 'canvaskit',
+      source: 'url',
+      requested: 'canvaskit',
+    });
     assert.deepEqual(resolveRenderBackendRequest('?renderer=unknown'), {
       backend: 'canvas2d',
+      source: 'url',
       requested: 'unknown',
       unsupportedReason: 'unsupportedRenderBackend',
     });
@@ -50,11 +62,69 @@ test('render backend resolver reports invalid explicit values and keeps URL opt-
   }
 });
 
+test('render backend module does not expose a persistent CanvasKit opt-in path', () => {
+  const source = readFileSync(new URL('../src/view/render-backend.ts', import.meta.url), 'utf8');
+  assert.equal(source.includes('rhwp.renderBackend'), false);
+  assert.equal(source.includes('persistRenderBackend'), false);
+});
+
+test('CanvasKit readiness classification keeps new diagnostic suffixes unexpected', () => {
+  for (const expected of [
+    'glyphOutline:unsupportedColorGlyph',
+    'imageEffect:grayScale',
+    'textRun:verticalText',
+  ]) {
+    assert.equal(isExpectedCanvasKitUnsupportedOp(expected), true, expected);
+  }
+  for (const unexpected of [
+    'glyphOutline:replayInvariant',
+    'imageEffect:futureEffect',
+    'textRun:newCoverageGap',
+    'renderPage',
+    'unknown',
+  ]) {
+    assert.equal(isExpectedCanvasKitUnsupportedOp(unexpected), false, unexpected);
+  }
+});
+
 test('CanvasKit mode resolver exposes default and conservative compat direct modes', () => {
   assert.equal(resolveCanvasKitRenderMode(''), 'default');
   assert.equal(resolveCanvasKitRenderMode('?canvaskitMode=compat'), 'compat');
   assert.equal(resolveCanvasKitRenderMode('?skiaMode=compatibility'), 'compat');
   assert.equal(resolveCanvasKitRenderMode('?canvaskitMode=overlay'), 'default');
+  assert.deepEqual(resolveCanvasKitRenderModeRequest('?canvaskitMode=compat'), {
+    mode: 'compat',
+    source: 'url',
+    requested: 'compat',
+  });
+  assert.deepEqual(resolveCanvasKitRenderModeRequest('?canvaskitMode=overlay'), {
+    mode: 'default',
+    source: 'url',
+    requested: 'overlay',
+    unsupportedReason: 'unsupportedCanvasKitMode',
+  });
+});
+
+test('CanvasKit mode request reports storage selection and lets URL override it', () => {
+  const originalStorage = (globalThis as { localStorage?: unknown }).localStorage;
+  (globalThis as { localStorage?: unknown }).localStorage = {
+    getItem: (key: string) => key === 'rhwp.canvaskitMode' ? 'compat' : null,
+    setItem: () => undefined,
+  };
+  try {
+    assert.deepEqual(resolveCanvasKitRenderModeRequest(''), {
+      mode: 'compat',
+      source: 'storage',
+      requested: 'compat',
+    });
+    assert.deepEqual(resolveCanvasKitRenderModeRequest('?canvaskitMode=default'), {
+      mode: 'default',
+      source: 'url',
+      requested: 'default',
+    });
+  } finally {
+    (globalThis as { localStorage?: unknown }).localStorage = originalStorage;
+  }
 });
 
 test('CanvasKit surface resolver records unsupported requests without throwing', () => {

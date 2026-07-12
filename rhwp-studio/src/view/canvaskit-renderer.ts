@@ -57,6 +57,7 @@ import {
   type CanvasKitReplayPlane,
   layerPaintOpReplayPlane,
 } from './canvaskit/replay-plane';
+import { isExpectedCanvasKitUnsupportedOp } from './canvaskit/diagnostics';
 import { glyphOutlinePayloadStatus } from './glyph-outline-payload-status';
 
 type CanvasKitApi = CanvasKit;
@@ -66,15 +67,30 @@ type SkSurface = Surface;
 type MutablePath = Path & Pick<PathBuilder, 'arcToRotated' | 'close' | 'cubicTo' | 'lineTo' | 'moveTo'>;
 type LayerColorGraph = NonNullable<NonNullable<LayerGlyphOutlineOp['colorLayers']>['paintGraph']>;
 type LayerColorGraphNode = NonNullable<LayerColorGraph['nodes']>[number];
+interface CanvasKitSurfaceTarget {
+  surface: SkSurface;
+  canvas: HTMLCanvasElement;
+}
 
 export interface CanvasKitRenderDiagnostics {
   mode: CanvasKitRenderMode;
   surfacePreference: CanvasKitSurfacePreference;
+  surfaceBackend: 'default' | 'software' | null;
   surfaceFallbackReason: string | null;
+  lastRenderCompleted: boolean;
   lastUnsupportedOps: string[];
+  lastExpectedUnsupportedOps: string[];
+  lastUnexpectedUnsupportedOps: string[];
   lastRenderError: string | null;
+  passesRuntimeReadinessGate: boolean;
+  readinessBlockers: CanvasKitReadinessBlocker[];
   hiddenCanvas2dOverlayUsed: false;
 }
+
+export type CanvasKitReadinessBlocker =
+  | 'renderNotCompleted'
+  | 'renderError'
+  | 'unexpectedUnsupportedOps';
 
 export class CanvasKitLayerRenderer {
   // Prevent pathological tiled fills from monopolizing the render loop.
@@ -84,8 +100,10 @@ export class CanvasKitLayerRenderer {
 
   private readonly imageCache = new Map<string, SkImage>();
   private readonly unsupportedOps = new Set<string>();
+  private surfaceBackend: 'default' | 'software' | null = null;
   private surfaceFallbackReason: string | null = null;
   private lastRenderError: string | null = null;
+  private lastRenderCompleted = false;
   private disposed = false;
 
   private constructor(
@@ -107,13 +125,12 @@ export class CanvasKitLayerRenderer {
     const resolvedSurfaceRequest = typeof surfaceRequest === 'string'
       ? { ...DEFAULT_CANVASKIT_SURFACE_REQUEST, preference: surfaceRequest, requested: surfaceRequest }
       : surfaceRequest;
-    // P16 한계 (후속 폰트 작업에서 보강 예정):
-    // 이 단계는 단일 기본 CJK typeface (NotoSansKR-Regular) 만 로드한다. 문서가
+    // 현재 CanvasKit 경로는 단일 기본 CJK typeface (NotoSansKR-Regular) 만 로드한다. 문서가
     // 지정한 fontFamily 별 typeface 매핑, glyph sidecar direct replay, fontFace
     // 폴백 체인은 아직 없다. 기본 typeface 로딩이 실패하면 (네트워크/디코딩 실패)
     // defaultTypeface=null 이 되고, 그 상태에서는 textRun 이 거의 그려지지 않아
-    // "글자가 안 나오는" 현상이 나타날 수 있다. 이는 P16 foundation 의 알려진
-    // non-goal 이며, 동일 컨트리뷰터의 후속 폰트 단계에서 다룬다 (Refs #536).
+    // "글자가 안 나오는" 현상이 나타날 수 있다. 정확한 문서 폰트 blob replay는
+    // 별도 후속 범위다 (Refs #536).
     let defaultTypeface: Typeface | null = null;
     let defaultFontManager: FontMgr | null = null;
     let defaultFontFamily: string | null = null;
@@ -141,15 +158,24 @@ export class CanvasKitLayerRenderer {
     );
   }
 
-  renderPage(tree: PageLayerTree, targetCanvas: HTMLCanvasElement, scale: number, pageInfo?: PageInfo): void {
+  renderPage(
+    tree: PageLayerTree,
+    targetCanvas: HTMLCanvasElement,
+    scale: number,
+    pageInfo?: PageInfo,
+  ): HTMLCanvasElement {
     if (this.disposed) {
       throw new Error('CanvasKit renderer가 이미 dispose되었습니다');
     }
     this.unsupportedOps.clear();
     this.lastRenderError = null;
+    this.lastRenderCompleted = false;
     let surface: SkSurface | null = null;
+    let renderedCanvas = targetCanvas;
     try {
-      surface = this.makeSurface(targetCanvas);
+      const surfaceTarget = this.makeSurface(targetCanvas);
+      surface = surfaceTarget.surface;
+      renderedCanvas = surfaceTarget.canvas;
       const canvas = surface.getCanvas();
       let hasPageBackground = false;
       const stack: LayerNode[] = [tree.root];
@@ -190,30 +216,54 @@ export class CanvasKitLayerRenderer {
       }
       canvas.restore();
       surface.flush();
+      this.lastRenderCompleted = true;
     } catch (error) {
       this.recordRenderFailure(error);
       throw error;
     } finally {
       surface?.delete();
     }
+    return renderedCanvas;
   }
 
   releaseLayerTree(_tree: PageLayerTree): void {
-    /* P16 does not intern per-tree native pictures yet. */
+    /* Per-tree native picture interning is not implemented yet. */
   }
 
   diagnostics(): CanvasKitRenderDiagnostics {
+    const lastUnsupportedOps = [...this.unsupportedOps].sort();
+    const lastExpectedUnsupportedOps = lastUnsupportedOps.filter(isExpectedCanvasKitUnsupportedOp);
+    const lastUnexpectedUnsupportedOps = lastUnsupportedOps.filter(
+      (op) => !isExpectedCanvasKitUnsupportedOp(op),
+    );
+    const surfaceFallbackReason = this.surfaceFallbackReason ?? this.surfaceRequest.unsupportedReason ?? null;
+    const readinessBlockers: CanvasKitReadinessBlocker[] = [];
+    if (!this.lastRenderCompleted) readinessBlockers.push('renderNotCompleted');
+    if (this.lastRenderError !== null) readinessBlockers.push('renderError');
+    if (lastUnexpectedUnsupportedOps.length > 0) readinessBlockers.push('unexpectedUnsupportedOps');
     return {
       mode: this.renderMode,
       surfacePreference: this.surfaceRequest.preference,
-      surfaceFallbackReason: this.surfaceFallbackReason ?? this.surfaceRequest.unsupportedReason ?? null,
-      lastUnsupportedOps: [...this.unsupportedOps].sort(),
+      surfaceBackend: this.surfaceBackend,
+      surfaceFallbackReason,
+      lastRenderCompleted: this.lastRenderCompleted,
+      lastUnsupportedOps,
+      lastExpectedUnsupportedOps,
+      lastUnexpectedUnsupportedOps,
       lastRenderError: this.lastRenderError,
+      passesRuntimeReadinessGate: readinessBlockers.length === 0,
+      readinessBlockers,
       hiddenCanvas2dOverlayUsed: false,
     };
   }
 
-  recordRenderFailure(error: unknown): void {
+  recordRenderFailure(error: unknown, resetReplayState = false): void {
+    if (resetReplayState) {
+      this.unsupportedOps.clear();
+      this.surfaceBackend = null;
+      this.surfaceFallbackReason = null;
+    }
+    this.lastRenderCompleted = false;
     this.lastRenderError = error instanceof Error ? error.message : String(error);
     this.unsupportedOps.add('renderPage');
   }
@@ -228,25 +278,74 @@ export class CanvasKitLayerRenderer {
     this.defaultFontManager?.delete();
   }
 
-  private makeSurface(targetCanvas: HTMLCanvasElement): SkSurface {
+  private makeSurface(
+    targetCanvas: HTMLCanvasElement,
+  ): CanvasKitSurfaceTarget {
+    this.surfaceBackend = null;
     this.surfaceFallbackReason = this.surfaceRequest.unsupportedReason ?? null;
-    if (this.surfaceRequest.preference === 'software') {
+    if (this.surfaceRequest.preference === 'webgpu' && this.surfaceFallbackReason === null) {
+      this.surfaceFallbackReason = 'webgpuSurfaceUnsupported';
+    }
+    const reuseSoftwareFallbackCanvas = targetCanvas.classList.contains('ck-replaced');
+    if (this.surfaceRequest.preference === 'software' || reuseSoftwareFallbackCanvas) {
       const swSurface = this.canvasKit.MakeSWCanvasSurface(targetCanvas);
-      if (swSurface) return swSurface;
+      if (swSurface) {
+        this.surfaceBackend = 'software';
+        if (reuseSoftwareFallbackCanvas && this.surfaceFallbackReason === null) {
+          this.surfaceFallbackReason = 'defaultSurfaceUnavailableUsingSoftware';
+        }
+        return { surface: swSurface, canvas: targetCanvas };
+      }
       this.surfaceFallbackReason = 'softwareSurfaceUnavailable';
     }
-    if (this.surfaceRequest.preference === 'webgpu') {
-      this.surfaceFallbackReason = 'webgpuSurfaceUnsupportedInP16';
+    const originalParent = targetCanvas.parentElement;
+    const originalChildIndex = originalParent
+      ? Array.prototype.indexOf.call(originalParent.children, targetCanvas)
+      : -1;
+    try {
+      const surface = this.canvasKit.MakeCanvasSurface(targetCanvas);
+      if (surface) {
+        const replacement = originalParent && originalChildIndex >= 0
+          ? originalParent.children.item(originalChildIndex)
+          : null;
+        if (targetCanvas.parentElement !== originalParent && replacement instanceof HTMLCanvasElement) {
+          this.surfaceBackend = 'software';
+          if (this.surfaceFallbackReason === null) {
+            this.surfaceFallbackReason = 'defaultSurfaceUnavailableUsingSoftware';
+          }
+          return { surface, canvas: replacement };
+        }
+        this.surfaceBackend = 'default';
+        return { surface, canvas: targetCanvas };
+      }
+    } catch {
+      if (this.surfaceFallbackReason === null) {
+        this.surfaceFallbackReason = 'defaultSurfaceCreationFailed';
+      }
     }
-    const surface = this.canvasKit.MakeCanvasSurface(targetCanvas)
-      ?? this.canvasKit.MakeSWCanvasSurface(targetCanvas);
-    if (!surface) {
-      throw new Error('CanvasKit surface를 만들 수 없습니다');
+    const internalReplacement = originalParent && originalChildIndex >= 0
+      ? originalParent.children.item(originalChildIndex)
+      : null;
+    let softwareCanvas = targetCanvas.parentElement !== originalParent
+      && internalReplacement instanceof HTMLCanvasElement
+      ? internalReplacement
+      : targetCanvas;
+    if (softwareCanvas === targetCanvas && targetCanvas.parentElement) {
+      const parent = targetCanvas.parentElement;
+      const replacement = targetCanvas.cloneNode(true) as HTMLCanvasElement;
+      replacement.classList.add('ck-replaced');
+      parent.replaceChild(replacement, targetCanvas);
+      softwareCanvas = replacement;
     }
-    if (this.surfaceRequest.preference === 'software') {
-      this.surfaceFallbackReason = 'softwareSurfaceUnavailableUsingDefaultSurface';
+    const softwareSurface = this.canvasKit.MakeSWCanvasSurface(softwareCanvas);
+    if (softwareSurface) {
+      this.surfaceBackend = 'software';
+      if (this.surfaceFallbackReason === null) {
+        this.surfaceFallbackReason = 'defaultSurfaceUnavailableUsingSoftware';
+      }
+      return { surface: softwareSurface, canvas: softwareCanvas };
     }
-    return surface;
+    throw new Error('CanvasKit surface를 만들 수 없습니다');
   }
 
   private renderNode(
@@ -486,7 +585,7 @@ export class CanvasKitLayerRenderer {
     const graph = op.colorLayers?.paintGraph;
     const nodes = graph?.nodes ?? [];
     if (!graph || nodes.length === 0 || graph.rootNodeId === undefined) {
-      this.unsupportedOps.add('glyphOutline:unsupportedColorGlyph');
+      this.unsupportedOps.add('glyphOutline:replayInvariant');
       return;
     }
     const nodesById = new Map<number, LayerColorGraphNode>();
@@ -514,20 +613,20 @@ export class CanvasKitLayerRenderer {
     visited: Set<number>,
   ): void {
     if (visited.has(nodeId)) {
-      this.unsupportedOps.add('glyphOutline:unsupportedColorGlyph');
+      this.unsupportedOps.add('glyphOutline:replayInvariant');
       return;
     }
     visited.add(nodeId);
     const node = nodesById.get(nodeId);
     if (!node) {
-      this.unsupportedOps.add('glyphOutline:unsupportedColorGlyph');
+      this.unsupportedOps.add('glyphOutline:replayInvariant');
       return;
     }
     if (node.kind === 'transform') {
       const transformNode = node.transform;
       const matrix = this.affineToCanvasKitMatrix(transformNode?.transform);
       if (!matrix || transformNode?.childNodeId === undefined) {
-        this.unsupportedOps.add('glyphOutline:unsupportedColorGlyph');
+        this.unsupportedOps.add('glyphOutline:replayInvariant');
         return;
       }
       canvas.save();
@@ -541,7 +640,7 @@ export class CanvasKitLayerRenderer {
     }
     const pathNode = node.solidPath ?? node.linearGradientPath ?? node.radialGradientPath ?? node.sweepGradientPath;
     if (!pathNode?.commands) {
-      this.unsupportedOps.add('glyphOutline:unsupportedColorGlyph');
+      this.unsupportedOps.add('glyphOutline:replayInvariant');
       return;
     }
     const path = new this.canvasKit.Path() as MutablePath;

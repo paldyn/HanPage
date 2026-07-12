@@ -42,10 +42,11 @@ import { TableResizeRenderer } from '@/engine/table-resize-renderer';
 import { Ruler } from '@/view/ruler';
 import type { CanvasKitLayerRenderer } from '@/view/canvaskit-renderer';
 import {
-  resolveCanvasKitRenderMode,
+  resolveCanvasKitRenderModeRequest,
   resolveCanvasKitSurfaceRequest,
   resolveRenderBackendRequest,
   resolveRenderProfile,
+  type RenderBackendFallbackReason,
 } from '@/view/render-backend';
 
 const wasm = new WasmBridge();
@@ -77,6 +78,15 @@ let inputHandler: InputHandler | null = null;
 let toolbar: Toolbar | null = null;
 let ruler: Ruler | null = null;
 let editMode: EditorEditMode = 'normal';
+let rendererRuntimeRequest: {
+  backend: ReturnType<typeof resolveRenderBackendRequest>;
+  canvaskitMode: ReturnType<typeof resolveCanvasKitRenderModeRequest>;
+  canvaskitSurface: ReturnType<typeof resolveCanvasKitSurfaceRequest>;
+  renderProfile: ReturnType<typeof resolveRenderProfile>;
+} | null = null;
+let renderBackendFallbackReason: RenderBackendFallbackReason | null = null;
+let rendererInitializationError: string | null = null;
+let rendererInitialized = false;
 let extensionViewerSettings: ExtensionViewerSettings = {
   disableExternalWebFonts: false,
 };
@@ -241,15 +251,28 @@ async function initialize(): Promise<void> {
       initRhwpDev(wasm);
     }
     const renderBackendRequest = resolveRenderBackendRequest(window.location.search);
-    const canvaskitMode = resolveCanvasKitRenderMode(window.location.search);
+    const canvaskitModeRequest = resolveCanvasKitRenderModeRequest(window.location.search);
+    const canvaskitMode = canvaskitModeRequest.mode;
     const canvaskitSurfaceRequest = resolveCanvasKitSurfaceRequest(window.location.search);
     const renderProfile = resolveRenderProfile(window.location.search);
+    rendererRuntimeRequest = {
+      backend: renderBackendRequest,
+      canvaskitMode: canvaskitModeRequest,
+      canvaskitSurface: canvaskitSurfaceRequest,
+      renderProfile,
+    };
     if (renderBackendRequest.unsupportedReason) {
       console.warn(
         `[main] 지원하지 않는 renderer 값입니다: ${renderBackendRequest.requested}; Canvas2D를 사용합니다.`,
       );
     }
+    if (canvaskitModeRequest.unsupportedReason) {
+      console.warn(
+        `[main] 지원하지 않는 CanvasKit mode입니다: ${canvaskitModeRequest.requested}; default를 사용합니다.`,
+      );
+    }
     let renderBackend = renderBackendRequest.backend;
+    renderBackendFallbackReason = renderBackendRequest.unsupportedReason ?? null;
     let canvaskitRenderer: CanvasKitLayerRenderer | null = null;
 
     if (renderBackend === 'canvaskit') {
@@ -260,6 +283,7 @@ async function initialize(): Promise<void> {
       } catch (error) {
         console.error('[main] CanvasKit 초기화 실패, Canvas2D로 폴백합니다:', error);
         renderBackend = 'canvas2d';
+        renderBackendFallbackReason = 'canvaskitInitializationFailed';
       }
     }
     msg.textContent = 'HWP 파일을 선택해주세요.';
@@ -388,11 +412,16 @@ async function initialize(): Promise<void> {
       (window as any).__inputHandler = inputHandler;
       (window as any).__canvasView = canvasView;
       (window as any).__renderBackend = renderBackend;
+      (window as any).__renderBackendRequest = renderBackendRequest;
+      (window as any).__rendererRuntimeRequest = rendererRuntimeRequest;
+      (window as any).__renderBackendFallbackReason = renderBackendFallbackReason;
       (window as any).__canvaskitRenderMode = canvaskitMode;
       (window as any).__canvaskitSurfaceRequest = canvaskitSurfaceRequest;
       (window as any).__renderProfile = renderProfile;
     }
+    rendererInitialized = true;
   } catch (error) {
+    rendererInitializationError = error instanceof Error ? error.message : String(error);
     msg.textContent = `WASM 초기화 실패: ${error}`;
     console.error('[main] WASM 초기화 실패:', error);
   }
@@ -1151,6 +1180,26 @@ window.addEventListener('message', async (e) => {
         await initPromise;
         reply(wasm.pageCount);
         break;
+      case 'getRendererDiagnostics': {
+        await initPromise;
+        const pageIndex = Number(params?.page ?? 0);
+        if (!Number.isInteger(pageIndex) || pageIndex < 0) {
+          reply(undefined, 'page must be a non-negative integer');
+          break;
+        }
+        reply({
+          request: rendererRuntimeRequest,
+          initialized: rendererInitialized,
+          initializationError: rendererInitializationError,
+          effectiveBackend: rendererInitialized ? canvasView?.getRenderBackend() ?? null : null,
+          backendFallbackReason: renderBackendFallbackReason,
+          page: {
+            index: pageIndex,
+            canvaskit: canvasView?.getCanvasKitRenderDiagnostics(pageIndex) ?? null,
+          },
+        });
+        break;
+      }
       case 'getPageSvg':
         await initPromise;
         reply(wasm.renderPageSvg(params.page ?? 0));
