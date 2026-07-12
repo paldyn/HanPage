@@ -23507,12 +23507,8 @@ fn test_create_inline_tac_table() {
     // is_tac_table_inline 확인
     let seg_w = para.line_segs.first().map(|s| s.segment_width).unwrap_or(0);
     if let crate::model::control::Control::Table(t) = &para.controls[0] {
-        let is_inline = crate::renderer::height_measurer::is_tac_table_inline(
-            t,
-            seg_w,
-            &para.text,
-            &para.controls,
-        );
+        let is_inline =
+            crate::renderer::height_measurer::is_tac_table_inline_in_para(t, seg_w, para);
         eprintln!("  is_tac_table_inline: {} (seg_w={})", is_inline, seg_w);
         assert!(is_inline, "인라인 TAC 표로 판별되어야 함");
     }

@@ -217,7 +217,9 @@ fn into_table(source: HmlTable) -> Result<Control, HmlError> {
     let row_sizes = (0..source.row_count)
         .map(|row| cells.iter().filter(|cell| cell.row == row).count() as i16)
         .collect();
+    let attr = u32::from(source.common.treat_as_char);
     let mut table = Table {
+        attr,
         common: source.common,
         row_count: source.row_count,
         col_count: source.col_count,

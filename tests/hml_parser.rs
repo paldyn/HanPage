@@ -480,6 +480,7 @@ fn maps_real_hwpml_291_formatting_table_fixture_without_losing_inline_order() {
     assert_eq!((table.row_count, table.col_count), (1, 1));
     assert_eq!((table.common.width, table.common.height), (41956, 1282));
     assert!(table.common.treat_as_char);
+    assert_eq!(table.attr & 0x01, 0x01);
     assert!(table.common.flow_with_text);
     assert!(!table.common.allow_overlap);
     assert_eq!(

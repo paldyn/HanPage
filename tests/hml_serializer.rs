@@ -897,6 +897,25 @@ fn first_rectangle_mut(
     None
 }
 
+fn first_table_mut(
+    document: &mut rhwp::model::document::Document,
+) -> Option<(String, &mut rhwp::model::table::Table)> {
+    for (section_index, section) in document.sections.iter_mut().enumerate() {
+        for (paragraph_index, paragraph) in section.paragraphs.iter_mut().enumerate() {
+            for (control_index, control) in paragraph.controls.iter_mut().enumerate() {
+                let Control::Table(table) = control else {
+                    continue;
+                };
+                let path = format!(
+                    "/HWPML/BODY/SECTION[{section_index}]/P[{paragraph_index}]/CONTROL[{control_index}]/TABLE"
+                );
+                return Some((path, table));
+            }
+        }
+    }
+    None
+}
+
 #[test]
 fn omitted_table_and_cell_semantics_are_aggregated() {
     let mut core = DocumentCore::from_bytes(include_bytes!("../samples/hml/formatting_table.hml"))
@@ -928,6 +947,53 @@ fn omitted_table_and_cell_semantics_are_aggregated() {
     assert_eq!(blockers.len(), 2);
     assert_eq!(blockers[0].xml_path, expected_path);
     assert_eq!(blockers[1].xml_path, format!("{expected_path}/CELL[0]"));
+}
+
+#[test]
+fn table_attr_treat_as_char_mirror_is_not_a_false_preflight_blocker() {
+    let mut mirrored =
+        DocumentCore::from_bytes(include_bytes!("../samples/hml/formatting_table.hml"))
+            .expect("fixture should import");
+    let (_, table) = first_table_mut(mirrored.document_mut()).expect("fixture table");
+    assert!(table.common.treat_as_char);
+    assert_eq!(table.attr, 0x01);
+    mirrored
+        .export_hml_native()
+        .expect("the modeled treat-as-char mirror bit is representable in HML");
+
+    let mut common_only =
+        DocumentCore::from_bytes(include_bytes!("../samples/hml/formatting_table.hml"))
+            .expect("fixture should import");
+    let (_, table) = first_table_mut(common_only.document_mut()).expect("fixture table");
+    table.attr = 0;
+    common_only
+        .export_hml_native()
+        .expect("common.treat_as_char remains the HML source of truth");
+}
+
+#[test]
+fn contradictory_or_unknown_table_attr_bits_still_block_export() {
+    for attr in [0x01, 0x02] {
+        let mut core =
+            DocumentCore::from_bytes(include_bytes!("../samples/hml/formatting_table.hml"))
+                .expect("fixture should import");
+        let (expected_path, table) =
+            first_table_mut(core.document_mut()).expect("fixture should contain a table");
+        table.attr = attr;
+        if attr == 0x01 {
+            table.common.treat_as_char = false;
+        }
+
+        let HmlExportError::UnsupportedIr { blockers } = core
+            .export_hml_native()
+            .expect_err("contradictory or unknown table attr bits must block export")
+        else {
+            panic!("expected typed unsupported-IR refusal");
+        };
+        assert!(blockers
+            .iter()
+            .any(|blocker| blocker.xml_path == expected_path));
+    }
 }
 
 #[test]

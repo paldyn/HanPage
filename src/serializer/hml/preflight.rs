@@ -564,13 +564,17 @@ fn validate_text_box(
     );
 }
 
+fn table_attr_has_unrepresentable_bits(table: &Table) -> bool {
+    table.attr & !0x01 != 0 || (table.attr & 0x01 != 0 && !table.common.treat_as_char)
+}
+
 fn validate_table(table: &Table, path: &str, blockers: &mut Vec<HmlSaveBlocker>) {
     let expected_rows = (0..table.row_count)
         .map(|row| table.cells.iter().filter(|cell| cell.row == row).count() as i16)
         .collect::<Vec<_>>();
     let mut rebuilt = table.clone();
     rebuilt.rebuild_grid();
-    let omitted = table.attr != 0
+    let omitted = table_attr_has_unrepresentable_bits(table)
         || table.page_break != TablePageBreak::CellBreak
         || !table.repeat_header
         || !table.zones.is_empty()

@@ -2,11 +2,11 @@
 
 이 디렉터리는 독립 HML(HWPML) 입력을 분석하고 회귀 테스트하기 위한 샘플을 보관한다.
 샘플을 추가할 때는 원본 출처, 고정된 commit, 재배포 근거, 생성 도구, 인코딩,
-HWPML 버전, 리소스 형태, 시각 정답지의 출처를 함께 기록해야 한다.
+HWPML 버전, 리소스 형태, 보조 대조 자료의 출처를 함께 기록해야 한다.
 
 ## 현재 샘플
 
-| 파일 | 출처 | 재배포 | 실물 출처 판정 | 정답지 |
+| 파일 | 출처 | 재배포 | 실물 출처 판정 | 보조 대조 자료 |
 | --- | --- | --- | --- | --- |
 | `aligns.hml` | [`ohah/hwpjs`의 `aligns.hml`](https://github.com/ohah/hwpjs/blob/e2beadb2cfbbae6c814c4db6644383f054903c3c/crates/hwp-core/tests/fixtures/aligns.hml) | MIT, [`ohah-hwpjs-LICENSE.txt`](./ohah-hwpjs-LICENSE.txt) | 한컴 HML export로 강하게 추정되지만 생성 프로그램 버전과 OS는 upstream에 문서화되어 있지 않음 | `aligns-hancom-viewer-macos.pdf` |
 | `formatting_table.hml` | [`osik-kwon/osk_filter`의 `hml.hml`](https://github.com/osik-kwon/osk_filter/blob/8b483dc73edfe31b34c9c2324e1096be474fa341/test/sample/hml/hml.hml) | Unlicense, [`osk_filter-UNLICENSE.txt`](./osk_filter-UNLICENSE.txt) | 한컴 HML export로 강하게 추정되지만 생성 프로그램 버전과 OS는 upstream에 문서화되어 있지 않음 | `formatting-table-hancom-viewer-macos.pdf` |
