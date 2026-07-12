@@ -29,7 +29,8 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../..');
-const OUTPUT_ROOT = path.join(REPO_ROOT, 'output/poc/task2214/stage1');
+const OUTPUT_ROOT = process.env.ISSUE2214_OUTPUT_ROOT
+  ?? path.join(REPO_ROOT, 'output/poc/task2214/stage2');
 const TARGET = Object.freeze({
   sectionIndex: 0,
   paragraphIndex: 5,
@@ -826,7 +827,7 @@ function classifyFormat(result) {
   let cause = 'existing-green';
   if (!modelLatest || !linesLatest) cause = 'document-core-mutation-or-reflow';
   else if (pixelStale && fullLayerRecovers) cause = 'static-reuse-or-page-local-render-context';
-  else if (pixelStale && !layoutMatchesFlush && !fullLayerRecovers) cause = 'stale-pagination-fragment';
+  else if (pixelStale && !layoutMatchesFlush && !fullLayerRecovers) cause = 'stale-layout-input';
   else if (pixelStale && !treeMatchesFlush && !fullLayerRecovers) cause = 'stale-cached-page-tree';
   else if (pixelStale && !fullLayerRecovers) cause = 'explicit-pagination-only-or-multiple-boundaries';
 
@@ -942,7 +943,7 @@ async function main() {
     })),
   };
   writeJson(path.join(OUTPUT_ROOT, 'summary.json'), summary);
-  console.log(`\nStage 1 diagnostic written to ${OUTPUT_ROOT}`);
+  console.log(`\nIssue #2214 diagnostic written to ${OUTPUT_ROOT}`);
   console.log(JSON.stringify(summary.formats, null, 2));
 }
 

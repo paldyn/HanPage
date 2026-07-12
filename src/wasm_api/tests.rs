@@ -24037,3 +24037,361 @@ fn task1413_evaluate_table_formula_ex_equivalent() {
     );
     assert_eq!(format!("{rp:?}"), format!("{re:?}"));
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Issue2214TargetCut {
+    page_index: u32,
+    start_row: usize,
+    end_row: usize,
+    is_continuation: bool,
+    start_cut: Vec<usize>,
+    end_cut: Vec<usize>,
+    is_block_split: bool,
+}
+
+fn issue2214_target_cuts(doc: &HwpDocument) -> Vec<Issue2214TargetCut> {
+    use crate::renderer::pagination::PageItem;
+
+    let pages = doc
+        .core
+        .pagination
+        .iter()
+        .flat_map(|section| section.pages.iter())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        pages.len(),
+        doc.page_count() as usize,
+        "pagination page coverage"
+    );
+    pages
+        .into_iter()
+        .enumerate()
+        .map(|(global_page, page)| {
+            assert_eq!(page.section_index, 0, "#2214 target section");
+            assert_eq!(
+                page.page_index as usize, global_page,
+                "#2214 global page index"
+            );
+            let matches = page
+                .column_contents
+                .iter()
+                .flat_map(|column| column.items.iter())
+                .filter_map(|item| match item {
+                    PageItem::PartialTable {
+                        para_index: 0,
+                        control_index: 2,
+                        start_row,
+                        end_row,
+                        is_continuation,
+                        start_cut,
+                        end_cut,
+                        is_block_split,
+                    } => Some(Issue2214TargetCut {
+                        page_index: page.page_index,
+                        start_row: *start_row,
+                        end_row: *end_row,
+                        is_continuation: *is_continuation,
+                        start_cut: start_cut.clone(),
+                        end_cut: end_cut.clone(),
+                        is_block_split: *is_block_split,
+                    }),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                matches.len(),
+                1,
+                "page {global_page}: exactly one target PartialTable fragment"
+            );
+            matches.into_iter().next().expect("one target fragment")
+        })
+        .collect()
+}
+
+fn issue2214_assert_cut_continuity(label: &str, state: &str, cuts: &[Issue2214TargetCut]) {
+    assert_eq!(cuts.len(), 115, "{label} {state}: target page coverage");
+    assert!(!cuts[0].is_continuation, "{label} {state}: first fragment");
+    assert!(
+        cuts[0].start_cut.is_empty(),
+        "{label} {state}: first fragment starts at row origin"
+    );
+    assert!(
+        cuts.last().expect("last target cut").end_cut.is_empty(),
+        "{label} {state}: final fragment consumes the target table"
+    );
+    assert!(
+        cuts.iter().all(|cut| !cut.is_block_split),
+        "{label} {state}: #2214 fixture must remain a non-block split chain"
+    );
+    for cut in cuts {
+        assert!(
+            cut.start_row < cut.end_row,
+            "{label} {state}: page {} row range must advance",
+            cut.page_index
+        );
+        if cut.start_row + 1 == cut.end_row && !cut.start_cut.is_empty() && !cut.end_cut.is_empty()
+        {
+            assert_eq!(
+                cut.start_cut.len(),
+                cut.end_cut.len(),
+                "{label} {state}: page {} cut arity",
+                cut.page_index
+            );
+            assert!(
+                cut.start_cut
+                    .iter()
+                    .zip(&cut.end_cut)
+                    .all(|(start, end)| end >= start),
+                "{label} {state}: page {} cut components must not rewind",
+                cut.page_index
+            );
+            assert!(
+                cut.start_cut
+                    .iter()
+                    .zip(&cut.end_cut)
+                    .any(|(start, end)| end > start),
+                "{label} {state}: page {} cut must consume at least one unit",
+                cut.page_index
+            );
+        }
+    }
+    for (page, pair) in cuts.windows(2).enumerate() {
+        assert!(
+            pair[1].is_continuation,
+            "{label} {state}: page {} must be a continuation",
+            page + 1
+        );
+        if pair[0].end_cut.is_empty() {
+            assert!(
+                pair[1].start_cut.is_empty(),
+                "{label} {state}: page {} row boundary must restart without a cut",
+                page + 1
+            );
+            assert_eq!(
+                pair[1].start_row,
+                pair[0].end_row,
+                "{label} {state}: page {} row boundary must be contiguous",
+                page + 1
+            );
+        } else {
+            assert_eq!(
+                pair[0].end_cut,
+                pair[1].start_cut,
+                "{label} {state}: page {} end_cut must equal page {} start_cut",
+                page,
+                page + 1
+            );
+            assert_eq!(
+                pair[1].start_row,
+                pair[0].end_row - 1,
+                "{label} {state}: page {} split row must continue",
+                page + 1
+            );
+        }
+    }
+}
+
+/// #2214 진단 전용: pagination은 유지한 채 LayoutEngine 캐시만 비우면
+/// warm deferred edit의 stale tree가 복구되는지 격리한다.
+#[test]
+#[ignore = "diagnostic cache-isolation probe"]
+fn issue2214_layout_cache_clear_without_pagination_probe() {
+    use crate::renderer::render_tree::{RenderNode, RenderNodeType};
+
+    fn target_tree_ranges(doc: &HwpDocument) -> Vec<(u32, usize, usize)> {
+        fn visit(node: &RenderNode, page: u32, ranges: &mut Vec<(u32, usize, usize)>) {
+            if let RenderNodeType::TextRun(run) = &node.node_type {
+                if let (Some(start), Some(ctx)) = (run.char_start, run.cell_context.as_ref()) {
+                    let target = ctx.parent_para_index == 0
+                        && ctx.path.len() == 1
+                        && ctx.path.first().is_some_and(|entry| {
+                            entry.control_index == 2
+                                && entry.cell_index == 2
+                                && entry.cell_para_index == 5
+                        });
+                    if target {
+                        assert!(run.char_overlap.is_none(), "target run must not overlap");
+                        assert_eq!(
+                            run.text.chars().count(),
+                            run.text.encode_utf16().count(),
+                            "fixture target run must be BMP"
+                        );
+                        let end = start + run.text.encode_utf16().count();
+                        assert!(end > start, "target run must advance");
+                        ranges.push((page, start, end));
+                    }
+                }
+            }
+            for child in &node.children {
+                visit(child, page, ranges);
+            }
+        }
+
+        let mut ranges = Vec::new();
+        for page in 0..doc.page_count() {
+            let tree = doc
+                .build_page_render_tree(page)
+                .unwrap_or_else(|e| panic!("page {page} tree: {e}"));
+            let mut page_ranges = Vec::new();
+            visit(&tree.root, page, &mut page_ranges);
+            page_ranges.sort_unstable_by_key(|(_, start, end)| (*start, *end));
+            ranges.extend(page_ranges);
+        }
+        assert!(!ranges.is_empty(), "target paragraph ranges");
+        let mut contiguous_end = 0;
+        for (page, start, end) in &ranges {
+            assert_eq!(
+                *start, contiguous_end,
+                "page {page}: target UTF-16 ranges must have no gap or overlap"
+            );
+            contiguous_end = *end;
+        }
+        ranges
+    }
+
+    for (label, relative) in [
+        ("hwp", "samples/issue1949_giant_cell_nested_tables_perf.hwp"),
+        (
+            "hwpx",
+            "samples/issue1949_giant_cell_nested_tables_perf.hwpx",
+        ),
+    ] {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(relative);
+        let bytes = std::fs::read(path).expect("read #2214 fixture");
+        let mut doc = HwpDocument::from_bytes(&bytes).expect("load #2214 fixture");
+
+        // 실제 Studio처럼 편집 전에 페이지 트리/셀 유닛을 warm한다.
+        let initial_ranges = target_tree_ranges(&doc);
+        assert_eq!(
+            initial_ranges.last().map(|(_, _, end)| *end),
+            Some(130),
+            "{label}: initial max char"
+        );
+        doc.get_cursor_rect_in_cell_native(0, 0, 2, 2, 5, 130)
+            .expect("warm target cursor");
+
+        for inserted in 0..44 {
+            doc.insert_text_in_cell_native_deferred_pagination(0, 0, 2, 2, 5, 130 + inserted, "1")
+                .expect("deferred sequential insert");
+        }
+        let stale_cuts = issue2214_target_cuts(&doc);
+        issue2214_assert_cut_continuity(label, "stale", &stale_cuts);
+        let stale_cut = stale_cuts[0].clone();
+        let stale_ranges = target_tree_ranges(&doc);
+        let stale_max = stale_ranges
+            .last()
+            .map(|(_, _, end)| *end)
+            .expect("stale target end");
+        let stale_rect = doc
+            .get_cursor_rect_in_cell_native(0, 0, 2, 2, 5, 174)
+            .expect("stale direct rect");
+
+        // 전체 pagination 없이 page/layer/LayoutEngine 캐시만 비운다.
+        doc.invalidate_page_tree_cache();
+        let clear_only_cuts = issue2214_target_cuts(&doc);
+        issue2214_assert_cut_continuity(label, "cache-only", &clear_only_cuts);
+        let clear_only_cut = clear_only_cuts[0].clone();
+        let clear_only_ranges = target_tree_ranges(&doc);
+        let clear_only_max = clear_only_ranges
+            .last()
+            .map(|(_, _, end)| *end)
+            .expect("cache-only target end");
+        let clear_only_rect = doc
+            .get_cursor_rect_in_cell_native(0, 0, 2, 2, 5, 174)
+            .expect("clear-only direct rect");
+
+        doc.flush_deferred_pagination()
+            .expect("explicit pagination control");
+        let flushed_cuts = issue2214_target_cuts(&doc);
+        issue2214_assert_cut_continuity(label, "full-flush", &flushed_cuts);
+        let flushed_cut = flushed_cuts[0].clone();
+        let flushed_ranges = target_tree_ranges(&doc);
+        let flushed_max = flushed_ranges
+            .last()
+            .map(|(_, _, end)| *end)
+            .expect("flushed target end");
+        let flushed_rect = doc
+            .get_cursor_rect_in_cell_native(0, 0, 2, 2, 5, 174)
+            .expect("flushed direct rect");
+
+        eprintln!(
+            "#2214 {label}: stale max={stale_max} rect={stale_rect}; clear-only max={clear_only_max} rect={clear_only_rect}; flushed max={flushed_max} rect={flushed_rect}; cuts stale={stale_cut:?} clear={clear_only_cut:?} flushed={flushed_cut:?}"
+        );
+
+        assert_eq!(stale_max, 129, "{label}: warm stale reproduction");
+        assert_eq!(
+            clear_only_max, 174,
+            "{label}: cache clear must recover without pagination"
+        );
+        assert_eq!(flushed_max, 174, "{label}: flush oracle");
+        assert_eq!(
+            clear_only_ranges, flushed_ranges,
+            "{label}: cache-only target UTF-16 ranges must equal flush oracle"
+        );
+        assert_eq!(
+            stale_cut, clear_only_cut,
+            "{label}: cache clear must not change pagination cut"
+        );
+        assert_eq!(
+            stale_cuts, clear_only_cuts,
+            "{label}: cache clear must not change any page fingerprint"
+        );
+        assert_eq!(stale_cut.start_cut, Vec::<usize>::new());
+        assert_eq!(stale_cut.end_cut, vec![37], "{label}: stale page-zero cut");
+        assert_eq!(flushed_cut.start_cut, Vec::<usize>::new());
+        assert_eq!(
+            flushed_cut.end_cut,
+            vec![38],
+            "{label}: flushed page-zero cut"
+        );
+        assert_ne!(
+            clear_only_cut, flushed_cut,
+            "{label}: explicit pagination should update cut"
+        );
+        let changed_pages = clear_only_cuts
+            .iter()
+            .zip(&flushed_cuts)
+            .enumerate()
+            .filter_map(|(page, (clear, flushed))| (clear != flushed).then_some(page))
+            .collect::<Vec<_>>();
+        eprintln!(
+            "#2214 {label}: PartialTable fragments={} changed_after_flush={changed_pages:?}",
+            clear_only_cuts.len(),
+        );
+        assert_eq!(
+            clear_only_cuts.len(),
+            flushed_cuts.len(),
+            "{label}: page fingerprint count"
+        );
+        assert!(
+            changed_pages.contains(&0),
+            "{label}: flow-boundary flush must update target page fingerprint"
+        );
+        assert_eq!(
+            changed_pages,
+            (0..doc.page_count() as usize).collect::<Vec<_>>(),
+            "{label}: flow-boundary flush must update all target-table page fingerprints"
+        );
+        let clear_rect_json: Value =
+            serde_json::from_str(&clear_only_rect).expect("clear-only rect json");
+        let flushed_rect_json: Value =
+            serde_json::from_str(&flushed_rect).expect("flushed rect json");
+        for key in ["pageIndex", "x", "y", "height", "cellOverflowed"] {
+            assert_eq!(
+                clear_rect_json.get(key),
+                flushed_rect_json.get(key),
+                "{label}: cache-only cursor field {key} must equal flush oracle"
+            );
+        }
+        assert_ne!(
+            clear_rect_json.get("cellBounds"),
+            flushed_rect_json.get("cellBounds"),
+            "{label}: cache-only control must preserve deferred cell bounds"
+        );
+        assert_ne!(
+            stale_rect, flushed_rect,
+            "{label}: stale rect should differ from oracle"
+        );
+        assert_eq!(doc.page_count(), 115, "{label}: page count");
+    }
+}

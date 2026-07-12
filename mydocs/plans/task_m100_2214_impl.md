@@ -143,7 +143,7 @@ scoped 경로 계약이며, boundary full flush가 기존 전역 clear를 수행
 
 | 확정 결과 | 허용 후보 파일 | 최소 방향 |
 |-----------|----------------|-----------|
-| warm cell units가 stale하고 cache-only로 visible tree/cursor 복구 | `layout.rs`, `text_editing.rs` | 편집된 cell key와 소유 table flag key만 evict; unrelated cache 보존 |
+| warm cell units가 stale하고 cache-only로 visible tree/cursor 복구 | `layout.rs`, `text_editing.rs` | cached owner flag가 불변이면 edited cell만 evict; cached false→true일 때만 owner cells evict+flag update; unrelated cache 보존 |
 | 상대 cell-flow advance 변화에서 bounds/cut 갱신 필요 | `text_editing.rs`, `wasm_api.rs`, `wasm-bridge.ts`, `command.ts`, `input-handler.ts` | `cellFlowChanged`를 원자적으로 반환하고 cursor 조회 전 1회 flush |
 | 모델 text 또는 `LINE_SEG`부터 손실 | 현재 표시 이슈 범위 밖 | Studio 수정 중단, document-core 편집/reflow 이슈로 재분리 |
 
@@ -282,15 +282,18 @@ production을 수정하지 않고 cold/warm 원인, cache-only와 full-flush ora
    - cache-clear-only: max 174, exact cursor, cut 37, bounds 945.9
    - full flush: max 174, exact cursor, cut 38, bounds 971.5
    - direct/path-near 및 batch/sequential의 같은 판정
-2. 28자와 44번째 입력의 target paragraph 상대 flow advance를 비교한다.
+2. 28자 batch와 순차 1~50번째 입력의 target paragraph 상대 flow advance를 비교한다.
    - 28자: 변화 없음, 향후 `cellFlowChanged=false`
-   - 44번째: 1920HU 증가, 향후 `cellFlowChanged=true`
-3. 115쪽 target range와 `PartialTable` cut fingerprint를 수집해 gap/overlap을 검사한다.
-4. 기존 global clear가 unrelated cache까지 잃는 실행 가능한 crate-internal ignored RED를
-   추가하고 Stage 3에서 scoped API GREEN으로 전환한다.
-   - 두 cell/table cache를 warm한 뒤 global clear 대조에서는 unrelated `Arc`/flag hit 보존 실패
-   - scoped API에서는 편집 cell key와 소유 table flag key만 제거
-   - flush 0회인 일반 입력에서 unrelated cell/table의 cached `Arc`와 flag hit 보존
+   - 1~43/45~50번째: 매 key 변화 없음, 44번째만 `+1920HU`
+3. 115쪽 `PartialTable` structured cut chain과 exact cell-path UTF-16 render-tree range를 별도로
+   수집해 각각 gap/overlap을 검사한다.
+4. 실제 deferred call site와 global-clear 대조를 실행 가능한 crate-internal ignored RED로
+   추가하고 Stage 3에서 같은 assertion을 GREEN으로 전환한다.
+   - flag 불변 stable/44번째: target cell만 evict, sibling·owner flag identity 보존
+   - local false→true지만 cached owner flag=true: target cell만 evict, 다른 owner entries 보존
+   - empty nested host insert의 false→true: owner table 모든 cell units evict, owner flag=true 갱신
+   - 두 branch 모두 unrelated/nested table cache identity 보존
+   - global clear가 위 scope를 깨는 invariant/flag-changing synthetic 대조
 5. 기존 #2185 한 글자 `[0,44,84,122]`, `vpos=17160`, 115쪽과 저장·재로드
    기준을 그대로 유지한다.
 6. Studio E2E의 현재 HWP/HWPX warm RED, fallback 좌표, 약 2초 path-near 비용을 고정한다.
@@ -300,7 +303,13 @@ production을 수정하지 않고 cold/warm 원인, cache-only와 full-flush ora
 ```bash
 cargo test --profile release-test --test issue_2214_cache_matrix_probe -- --ignored --nocapture
 cargo test --profile release-test --lib issue2214_layout_cache_clear_without_pagination_probe -- --ignored --nocapture
+cargo test --profile release-test --test issue_2214_page_local_repaint issue_2214_cell_flow_transition_baseline -- --nocapture
+cargo test --profile release-test --test issue_2214_page_local_repaint issue_2214_warm_deferred_tree_and_cursor_are_exact_red -- --ignored --nocapture
+cargo test --profile release-test --lib issue2214_deferred_insert_uses_scoped_cache_eviction_red -- --ignored --nocapture
+cargo test --profile release-test --lib issue2214_deferred_insert_flag_change_evicts_owner_cells_red -- --ignored --nocapture
 cargo test --profile release-test --lib issue2214_global_clear_drops_unrelated_cache_red -- --ignored --nocapture
+cargo test --profile release-test --lib issue2214_cached_true_local_change_evicts_edited_cell_only_red -- --ignored --nocapture
+cargo test --profile release-test --lib issue2214_table_flag_change_evicts_owner_cells_only_red -- --ignored --nocapture
 cargo test --profile release-test --test issue_2185_korean_break_unit -- --nocapture
 ```
 
@@ -335,9 +344,15 @@ Task #2214: Stage 2 - warm cache 및 cell-flow 회귀 계약 고정
 #### 작업
 
 1. `LayoutEngine`에 편집 cell과 소유 table을 받는 scoped invalidation API를 추가한다.
-   - 해당 cell pointer의 `cell_units_cache` entry 제거
-   - 해당 table pointer의 `table_nested_text_flag_cache` entry 제거
-   - 다른 cell/table cache는 유지
+   - table-wide predicate 계산은 단일 helper에만 두고 test-only scan counter도 그 helper에 둔다.
+     mutation 구현에 별도 `table.cells` 전수 스캔을 추가하지 않는다.
+   - full-table rescan 대신 edited paragraph의 pre/post local contribution
+     (`trim-visible text && nested table`)을 mutation과 함께 계산
+   - cached owner flag=true 또는 local contribution 불변: edited cell entry만 제거, cached
+     owner flag와 same-table sibling identity 보존
+   - deferred insert가 cached false를 true로 바꾸는 경우에만 owner table의 모든 cell entries를
+     제거하고 owner flag cache를 `true`로 갱신
+   - unrelated table cell/flag cache는 두 branch 모두 보존
 2. deferred cell insert에서 mutation 전후 target paragraph의 상대 flow advance를 계산한다.
 
 ```text
@@ -348,14 +363,18 @@ last.vertical_pos + last.line_height + last.line_spacing - first.vertical_pos
    - text mutation
    - target paragraph reflow
    - 후속 paragraph vpos 재계산
-   - 편집 cell/table scoped cache eviction
+   - edited paragraph local contribution과 cached owner flag에 따른 scoped cache eviction/update
    - section/page-tree invalidation
 4. deferred insert JSON에 `cellFlowChanged`를 추가한다. line starts만 바뀌고 flow advance가
    같으면 false, 줄 추가·삭제나 높이 변화로 advance가 바뀌면 true다.
 5. HWP/HWPX native에서 warm tree/cursor를 GREEN으로 바꾸고, pagination은 0회·cut 37·
    bounds 945.9인 transient 상태를 명시적으로 확인한다.
 6. flush 0회인 일반 입력에서 unrelated cache hit가 유지되는 단위 테스트로 generic partial
-   invalidation의 global clear 회귀를 차단한다. 실제 boundary full flush의 전역 clear는 허용한다.
+   invalidation의 global clear 회귀를 차단한다. same-table sibling과 owner flag는 flag 불변
+   및 cached-true local-change fixture에서 identity/value를 보존하고, empty nested host가
+   cached false를 true로 바꾸는 fixture에서는 owner table 전체 cell units가 재계산되고 flag가
+   true로 갱신되는지 확인한다.
+   실제 boundary full flush의 전역 clear는 허용한다.
 
 #### 금지 변경
 
@@ -376,8 +395,15 @@ cargo test --profile release-test --lib layout_cache -- --nocapture
 
 - warm direct/path-near가 최신 offset을 exact hit하고 115쪽 fallback을 타지 않아야 한다.
 - 28자 `cellFlowChanged=false`, 44번째 `true`여야 한다.
-- unrelated cell/table cache hit가 보존돼야 한다.
-- scoped eviction에 ancestor generation 설계가 필요하거나 전 페이지 range가 깨지면 중단하고
+- unrelated table cache는 항상 보존하고, same-table sibling은 flag 불변 시 identity를
+  보존하며 owner flag cache도 유지해야 한다. flag 변화 시 owner cells는 반드시 재계산하고
+  owner flag cache는 새 값으로 갱신해야 한다.
+- stable key마다 owner table 전체를 다시 스캔하지 않아야 한다.
+- table-wide predicate가 단일 helper 밖에서 중복 구현되지 않아야 한다.
+- intentional RED는 같은 desired assertion의 non-ignored GREEN으로 승격한다.
+- edited paragraph local contribution과 cached flag만으로 안전하게 판정할 수 없거나 owner cell
+  집합을 안전하게 제거하려면,
+  또는 ancestor generation/owner graph 설계가 필요하거나 전 페이지 range가 깨지면 중단하고
   별도 설계 승인을 요청한다.
 - Stage 3 보고서와 production/test 변경을 같은 커밋에 포함하고 승인받기 전 Stage 4로 가지 않는다.
 
@@ -420,6 +446,10 @@ Task #2214: Stage 3 - 셀 layout cache coherence 및 flow 신호 정합
    - boundary handler: 현재 full flush 기준을 고려한 관찰 기준 1.5초 이하
    - CI hard gate는 시간 대신 flush 횟수, exact hit와 cache scope를 사용
 10. #1949/#2185/#2222, renderer contract와 일반 edit pipeline을 실행한다.
+11. Stage 1/2의 대형 진단 E2E에서 영구 assertion만 focused GREEN runner로 분리한다.
+    - HWP/HWPX warm 입력, exact tree/cursor, 2 rAF·850ms·1.6초 안정성
+    - 안정 입력 flush 0회, 44번째 경계 1회, 115쪽 유지
+    - timeline/PNG 전수 dump는 optional `--diagnose` 모드에만 남긴다.
 
 #### 검증
 
@@ -451,6 +481,7 @@ node e2e/issue-2214-page-local-repaint.test.mjs --mode=headless
   발견되면 optional `exactHit` 신호를 임의로 추가하지 않고 중단·재승인한다.
 - Canvas2D는 통과하지만 renderer contract, 정적 layer 표시 또는 rapid input이 퇴행하면
   Stage 3으로 돌아가 재승인한다.
+- focused E2E의 기본 실행이 `--diagnose` 없이 HWP/HWPX GREEN이어야 한다.
 - `mydocs/working/task_m100_2214_stage4.md`와 최종 E2E/test 보강을 같은 커밋에 포함하고
   승인받기 전 Stage 5로 가지 않는다.
 
@@ -477,7 +508,13 @@ Task #2214: Stage 4 - pre-cursor 경계 flush 및 Studio 정합
 5. 작업 완료일의 `mydocs/orders/yyyyMMdd.md`에 #2214 상태와 검증 요약을 갱신한다.
 6. #2193 종합 성능, boundary full flush를 bounded/partial paginator로 대체하는 후속과
    #2215 드래그 selection은 별도 범위임을 최종 보고서에 명시한다.
-7. 검증 실패로 production 수정이 필요하면 Stage 5에 섞지 않고 해당 Stage로 돌아가
+7. Stage 2 진단을 최종 PR용 영구 GREEN 계약으로 정리한다.
+   - 95초 full matrix는 최종 production으로 1회 실행하되, case별 기대 assertion을 추가하기
+     전에는 correctness GREEN이 아니라 diagnostic completion으로만 기록
+   - cold/prewarm, direct/path 및 44/50자 대표 case는 빠른 non-ignored 회귀로 축약
+   - cache-only/115쪽 probe의 핵심 assertion을 non-ignored GREEN으로 이관
+   - intentional RED와 필수 `#[ignore]`, `--diagnose`-only acceptance가 남지 않았는지 확인
+8. 검증 실패로 production 수정이 필요하면 Stage 5에 섞지 않고 해당 Stage로 돌아가
    변경 계획을 다시 승인받는다.
 
 #### 검증
@@ -485,6 +522,7 @@ Task #2214: Stage 4 - pre-cursor 경계 flush 및 Studio 정합
 ```bash
 cargo fmt --check
 cargo test --profile release-test --tests
+cargo test --profile release-test --test issue_2214_cache_matrix_probe -- --ignored --nocapture
 cargo clippy --all-targets --all-features -- -D warnings
 ```
 
@@ -510,6 +548,8 @@ git status --short
 #### 완료·승인 조건
 
 - 모든 게이트가 GREEN이고 계획된 tracked 산출물 외 변경이 없어야 한다.
+- matrix·수동 probe·대형 E2E의 핵심 계약이 정상 non-ignored GREEN 게이트로 이관되고,
+  최종 PR acceptance에 expected RED나 `--diagnose` 전용 실행이 남지 않아야 한다.
 - Stage 5 보고서, 최종 보고서와 오늘할일 갱신을 같은 커밋에 포함한다.
 - 최종 승인 전 이슈 close, push, PR, 통합을 수행하지 않는다.
 
@@ -540,7 +580,8 @@ Task #2214: Stage 5 - 전체 회귀 검증 및 결과 보고
 
 - 일반 입력은 scoped cache eviction과 기존 page-local/static reuse 경로를 유지하며 flush 0회다.
 - 44번째 cell-flow 경계는 cursor 조회 전에 flush 정확히 1회, 50자 누계도 1회다.
-- flush 0회인 일반 입력에서는 편집하지 않은 cell/table의 layout cache hit가 유지된다.
+- flush 0회인 일반 입력에서는 unrelated table cache hit가 유지된다. same-table sibling은 owner
+  flag 불변일 때만 identity를 보존하고, flag 변화 시 owner table cell units를 재계산한다.
 - cursor exact hit는 page 0에서 끝나며 115쪽 fallback scan은 0회다.
 - render 호출 수와 median/p95가 Stage 1 기준 대비 구조적으로 퇴행하지 않는다. 시간 상한은
   고정 환경 보고 게이트로 두고 CI는 cache scope와 호출 횟수를 단언한다.
@@ -550,6 +591,8 @@ Task #2214: Stage 5 - 전체 회귀 검증 및 결과 보고
 - HWP에서 결정적 재현이 되지 않거나 재현 위치·폰트 상태가 매 실행 달라진다.
 - 모델 text·`LINE_SEG` 또는 원본 형식 저장 데이터가 시간 경과로 손실된다.
 - scoped eviction 뒤에도 warm tree/cursor가 정확해지지 않는다.
+- edited paragraph local contribution과 cached flag만으로 판정할 수 없거나, flag 변화 시
+  owner-table-wide cell eviction/flag update를 unrelated cache 보존과 함께 구현할 수 없다.
 - cell-flow boundary flush 뒤에도 115쪽 range, bounds 또는 cut이 oracle과 일치하지 않는다.
 - 중첩 표 cache coherence에 ancestor generation/owner graph 재설계가 필요하다.
 - 전체 renderer/paginator 또는 일반 증분 pagination 설계가 필요하다.
