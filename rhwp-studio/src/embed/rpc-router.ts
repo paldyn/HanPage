@@ -6,6 +6,7 @@ export interface EmbedRpcHandlers {
     skipUnsavedGuard: boolean,
   ): Promise<{ pageCount: number }>;
   pageCount(): Promise<number>;
+  getRendererDiagnostics(page: number): Promise<unknown>;
   getPageSvg(page: number): Promise<string>;
   exportHwp(): Promise<Uint8Array>;
   exportHwpx(): Promise<Uint8Array>;
@@ -39,6 +40,13 @@ export async function routeEmbedRequest(
         params.skipUnsavedGuard === true,
       );
     case 'pageCount': return handlers.pageCount();
+    case 'getRendererDiagnostics': {
+      const page = Number(params.page ?? 0);
+      if (!Number.isInteger(page) || page < 0) {
+        throw new Error('page must be a non-negative integer');
+      }
+      return handlers.getRendererDiagnostics(page);
+    }
     case 'getPageSvg': return handlers.getPageSvg(
       typeof params.page === 'number' ? params.page : 0,
     );

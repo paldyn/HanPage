@@ -447,7 +447,6 @@ impl DocumentCore {
 
     /// 페이지 레이어 트리를 생성하여 반환한다 (native bridge / backend replay용).
     pub fn build_page_layer_tree(&self, page_num: u32) -> Result<PageLayerTree, HwpError> {
-        let tree = self.build_page_tree_cached(page_num)?;
         let _overflows = self.layout_engine.take_overflows();
         let output_options = LayerOutputOptions {
             show_paragraph_marks: self.show_paragraph_marks,
@@ -456,9 +455,11 @@ impl DocumentCore {
             clip_enabled: self.clip_enabled,
             debug_overlay: self.debug_overlay,
         };
-        let mut builder =
-            LayerBuilder::new(RenderProfile::Screen).with_output_options(output_options);
-        Ok(builder.build(&tree))
+        self.with_page_tree_cached(page_num, |tree| {
+            let mut builder =
+                LayerBuilder::new(RenderProfile::Screen).with_output_options(output_options);
+            Ok(builder.build(tree))
+        })
     }
 
     /// 바이너리 데이터를 0-based `bin_data_content` 인덱스로 반환한다.
@@ -887,7 +888,41 @@ impl VlmTarget {
 
 impl DocumentCore {
     pub fn get_page_layer_tree_native(&self, page_num: u32) -> Result<String, HwpError> {
-        Ok(self.build_page_layer_tree(page_num)?.to_json())
+        // [Task #2222] 직렬화 JSON 캐시 — 트리 캐시(#2227 with_page_tree_cached)가
+        // 있어도 1MB 급 재직렬화가 renderPage 마다 렌더 비용과 맞먹게 반복된다
+        // (주보 p2 실측: 15.2ms/회, JSON 1.05MB). 출력옵션 지문이 다르면 미스.
+        let idx = page_num as usize;
+        let fp = self.layer_output_options_fingerprint();
+        if let Some(variants) = self.layer_tree_json_cache.borrow().get(idx) {
+            if let Some((_, json)) = variants.iter().find(|(f, _)| *f == fp) {
+                return Ok(json.clone());
+            }
+        }
+        let json = self.build_page_layer_tree(page_num)?.to_json();
+        {
+            // 토글(투명선/잘림보기 등) 왕복이 매번 미스가 되지 않도록 페이지당
+            // 옵션 변형 4개까지 보관 (초과 시 가장 오래된 변형 제거).
+            let mut cache = self.layer_tree_json_cache.borrow_mut();
+            if cache.len() <= idx {
+                cache.resize_with(idx + 1, Vec::new);
+            }
+            let variants = &mut cache[idx];
+            variants.retain(|(f, _)| *f != fp);
+            if variants.len() >= 4 {
+                variants.remove(0);
+            }
+            variants.push((fp, json.clone()));
+        }
+        Ok(json)
+    }
+
+    /// [Task #2222] 레이어 출력옵션 5종의 비트 지문 — JSON 캐시 키.
+    fn layer_output_options_fingerprint(&self) -> u8 {
+        u8::from(self.show_paragraph_marks)
+            | (u8::from(self.show_control_codes) << 1)
+            | (u8::from(self.show_transparent_borders) << 2)
+            | (u8::from(self.clip_enabled) << 3)
+            | (u8::from(self.debug_overlay) << 4)
     }
 
     /// 페이지 overlay 이미지와 replay-plane summary만 작은 JSON으로 반환한다.
@@ -2074,6 +2109,59 @@ impl DocumentCore {
                             control_ref.section_index,
                             control_ref.para_index,
                             control_ref.control_index,
+                            layer_str
+                        ));
+                        return;
+                    }
+                    // [Task #2230] 그림 미지정 placeholder(kind="picture") 를
+                    // image 컨트롤로 방출 — findPictureAtClick 가 기존 image
+                    // 로직으로 hit 해 클릭 선택이 성립한다. missing 마커는
+                    // studio 가 더블클릭 시 그림 지정 진입을 분기하는 근거.
+                    // cellIdx/cellParaIdx/cellPath 는 Image 분기와 동일 포맷.
+                    if let Some(control_ref) = placeholder_node
+                        .control_ref
+                        .as_ref()
+                        .filter(|control_ref| control_ref.kind == "picture")
+                    {
+                        let (cell_str, cell_path_str) = match &placeholder_node.cell_context {
+                            Some(ctx) => {
+                                let (cei, cpi, _) = ctx.last_image_indices();
+                                let cell_str = match (cei, cpi) {
+                                    (Some(cei), Some(cpi)) => {
+                                        format!(",\"cellIdx\":{},\"cellParaIdx\":{}", cei, cpi)
+                                    }
+                                    _ => String::new(),
+                                };
+                                let entries: Vec<String> = ctx
+                                    .path
+                                    .iter()
+                                    .map(|e| {
+                                        format!(
+                                            "{{\"controlIndex\":{},\"cellIndex\":{},\"cellParaIndex\":{}}}",
+                                            e.control_index, e.cell_index, e.cell_para_index
+                                        )
+                                    })
+                                    .collect();
+                                let cell_path_str = format!(
+                                    ",\"parentParaIdx\":{},\"cellPath\":[{}]",
+                                    ctx.parent_para_index,
+                                    entries.join(",")
+                                );
+                                (cell_str, cell_path_str)
+                            }
+                            None => (String::new(), String::new()),
+                        };
+                        controls.push(format!(
+                            "{{\"type\":\"image\",\"missing\":true,\"x\":{:.1},\"y\":{:.1},\"w\":{:.1},\"h\":{:.1},\"secIdx\":{},\"paraIdx\":{},\"controlIdx\":{}{}{}{}}}",
+                            node.bbox.x,
+                            node.bbox.y,
+                            node.bbox.width,
+                            node.bbox.height,
+                            control_ref.section_index,
+                            control_ref.para_index,
+                            control_ref.control_index,
+                            cell_str,
+                            cell_path_str,
                             layer_str
                         ));
                         return;
@@ -3774,11 +3862,16 @@ impl DocumentCore {
         for i in from..cache.len() {
             cache[i] = None;
         }
+        let mut json_cache = self.layer_tree_json_cache.borrow_mut();
+        for i in from..json_cache.len() {
+            json_cache[i].clear();
+        }
     }
 
     /// 페이지 렌더 트리 캐시 전체 무효화.
     pub(crate) fn invalidate_page_tree_cache(&self) {
         self.page_tree_cache.borrow_mut().clear();
+        self.layer_tree_json_cache.borrow_mut().clear();
         // [Task #1949] IR 이 바뀌는 재조판 경계에서 셀 단위 레이아웃 캐시(포인터 키)도
         // 함께 비워 다른 IR 의 셀 포인터 재사용으로 인한 오재사용을 방지한다.
         self.layout_engine.clear_layout_caches();
@@ -3812,6 +3905,38 @@ impl DocumentCore {
         }
 
         Ok(tree)
+    }
+
+    /// 캐시된 페이지 렌더 트리를 참조로 사용한다.
+    ///
+    /// 레이어 tree 생성은 페이지 tree를 소유할 필요가 없다. Canvas2D의 layer summary와
+    /// 실제 재생은 같은 페이지를 연속 조회하므로, 캐시 히트마다 큰 tree를 복제하지 않는다.
+    pub(crate) fn with_page_tree_cached<T>(
+        &self,
+        page_num: u32,
+        build: impl FnOnce(&PageRenderTree) -> Result<T, HwpError>,
+    ) -> Result<T, HwpError> {
+        let idx = page_num as usize;
+        let cached = self
+            .page_tree_cache
+            .borrow()
+            .get(idx)
+            .is_some_and(Option::is_some);
+
+        if !cached {
+            let tree = self.build_page_tree(page_num)?;
+            let mut cache = self.page_tree_cache.borrow_mut();
+            if cache.len() <= idx {
+                cache.resize_with(idx + 1, || None);
+            }
+            cache[idx] = Some(tree);
+        }
+
+        let cache = self.page_tree_cache.borrow();
+        let tree = cache[idx]
+            .as_ref()
+            .expect("페이지 tree cache는 채운 뒤에 참조해야 한다");
+        build(tree)
     }
 
     /// 페이지 렌더 트리를 빌드한다.

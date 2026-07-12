@@ -3,19 +3,40 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
+import { PNG } from 'pngjs';
+
+import { comparePngBuffers } from './helpers.mjs';
 
 const studioRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(studioRoot, '..');
 const canvaskitPath = path.join(studioRoot, 'src/view/canvaskit-renderer.ts');
 const canvaskitDirectory = path.join(studioRoot, 'src/view/canvaskit');
+const canvaskitDiagnosticsPath = path.join(canvaskitDirectory, 'diagnostics.ts');
 const layerTypesPath = path.join(studioRoot, 'src/core/types.ts');
 const textIrV2DocPath = path.join(repoRoot, 'docs/text-ir-v2.md');
 const canvaskitParityPlanDocPath = path.join(repoRoot, 'docs/canvaskit-parity-implementation.md');
+const rendererBaselinePath = path.join(studioRoot, 'e2e/renderer-baseline.mjs');
+const rendererBaselineManifestPath = path.join(repoRoot, 'scripts/renderer_baseline_manifest.json');
+const mainPath = path.join(studioRoot, 'src/main.ts');
+const embedRpcRouterPath = path.join(studioRoot, 'src/embed/rpc-router.ts');
+const renderBackendPath = path.join(studioRoot, 'src/view/render-backend.ts');
+const pageRendererPath = path.join(studioRoot, 'src/view/page-renderer.ts');
+const canvasViewPath = path.join(studioRoot, 'src/view/canvas-view.ts');
+const renderDiffWorkflowPath = path.join(repoRoot, '.github/workflows/render-diff.yml');
 
 const canvaskitSource = fs.readFileSync(canvaskitPath, 'utf8');
+const canvaskitDiagnosticsSource = fs.readFileSync(canvaskitDiagnosticsPath, 'utf8');
 const layerTypesSource = fs.readFileSync(layerTypesPath, 'utf8');
 const textIrV2DocSource = fs.readFileSync(textIrV2DocPath, 'utf8');
 const canvaskitParityPlanDocSource = fs.readFileSync(canvaskitParityPlanDocPath, 'utf8');
+const rendererBaselineSource = fs.readFileSync(rendererBaselinePath, 'utf8');
+const rendererBaselineManifest = JSON.parse(fs.readFileSync(rendererBaselineManifestPath, 'utf8'));
+const mainSource = fs.readFileSync(mainPath, 'utf8');
+const embedRpcRouterSource = fs.readFileSync(embedRpcRouterPath, 'utf8');
+const renderBackendSource = fs.readFileSync(renderBackendPath, 'utf8');
+const pageRendererSource = fs.readFileSync(pageRendererPath, 'utf8');
+const canvasViewSource = fs.readFileSync(canvasViewPath, 'utf8');
+const renderDiffWorkflowSource = fs.readFileSync(renderDiffWorkflowPath, 'utf8');
 const normalizedCanvaskitParityPlanDocSource = canvaskitParityPlanDocSource.replace(/\s+/g, ' ');
 
 function extractBlockBody(source, signatureIndex, blockName) {
@@ -131,6 +152,9 @@ function requireSnippet(source, pattern, message) {
 
 const renderOpBody = extractMethodBody(canvaskitSource, 'renderOp');
 const renderNodeBody = extractMethodBody(canvaskitSource, 'renderNode');
+const diagnosticsBody = extractMethodBody(canvaskitSource, 'diagnostics');
+const makeSurfaceBody = extractMethodBody(canvaskitSource, 'makeSurface');
+const renderPageCanvasKitBody = extractMethodBody(pageRendererSource, 'renderPageCanvasKit');
 const renderOpCases = caseLabels(renderOpBody).sort();
 const layerOpTypes = layerPaintOpTypes();
 const layerNodeKindSet = layerNodeKinds();
@@ -209,7 +233,19 @@ const canvaskitParityPlanRequiredTokens = [
   'text.variantGroups',
   'ResourceArena',
   'render-diff CI',
+  'passesRuntimeReadinessGate',
+  'canvaskitReadinessGate',
 ];
+const expectedUnsupportedSetMatch = canvaskitDiagnosticsSource.match(
+  /const EXPECTED_CANVASKIT_UNSUPPORTED_OPS = new Set\(\[([\s\S]*?)\]\);/,
+);
+assert.notEqual(expectedUnsupportedSetMatch, null, 'missing CanvasKit expected unsupported op set');
+const expectedUnsupportedSetBody = expectedUnsupportedSetMatch[1];
+const expectedUnsupportedFunctionMatch = canvaskitDiagnosticsSource.match(
+  /export function isExpectedCanvasKitUnsupportedOp\(op: string\): boolean \{([\s\S]*?)\n\}/,
+);
+assert.notEqual(expectedUnsupportedFunctionMatch, null, 'missing CanvasKit expected unsupported helper');
+const expectedUnsupportedBody = expectedUnsupportedFunctionMatch[1];
 
 assert.deepEqual(
   renderOpCases,
@@ -236,6 +272,86 @@ requireSnippet(
   renderNodeBody,
   /this\.renderLeaf\(canvas, node, replayPlane, activeLayer\);/,
   'leaf nodes should go through renderLeaf',
+);
+requireSnippet(
+  diagnosticsBody,
+  /const lastUnsupportedOps = \[\.\.\.this\.unsupportedOps\]\.sort\(\);[\s\S]*?const lastExpectedUnsupportedOps = lastUnsupportedOps\.filter\(isExpectedCanvasKitUnsupportedOp\);[\s\S]*?const lastUnexpectedUnsupportedOps = lastUnsupportedOps\.filter\([\s\S]*?!isExpectedCanvasKitUnsupportedOp\(op\)/,
+  'CanvasKit diagnostics should split expected and unexpected unsupported operations',
+);
+requireSnippet(
+  expectedUnsupportedBody,
+  /return EXPECTED_CANVASKIT_UNSUPPORTED_OPS\.has\(op\);/,
+  'CanvasKit expected unsupported helper should use exact diagnostics only',
+);
+assert.doesNotMatch(
+  canvaskitDiagnosticsSource,
+  /startsWith\(/,
+  'CanvasKit readiness classification must not hide future diagnostic suffixes behind prefixes',
+);
+requireSnippet(
+  diagnosticsBody,
+  /if \(!this\.lastRenderCompleted\) readinessBlockers\.push\('renderNotCompleted'\);[\s\S]*?if \(this\.lastRenderError !== null\) readinessBlockers\.push\('renderError'\);[\s\S]*?if \(lastUnexpectedUnsupportedOps\.length > 0\) readinessBlockers\.push\('unexpectedUnsupportedOps'\);[\s\S]*?passesRuntimeReadinessGate: readinessBlockers\.length === 0/,
+  'CanvasKit diagnostics should expose deterministic runtime readiness blockers',
+);
+requireSnippet(
+  canvaskitSource,
+  /this\.lastRenderCompleted = false;[\s\S]*?surface\.flush\(\);[\s\S]*?this\.lastRenderCompleted = true;/,
+  'CanvasKit readiness should require a completed surface flush',
+);
+requireSnippet(
+  makeSurfaceBody,
+  /try \{[\s\S]*?MakeCanvasSurface\(targetCanvas\)[\s\S]*?this\.surfaceBackend = 'default'[\s\S]*?\} catch \{[\s\S]*?defaultSurfaceCreationFailed[\s\S]*?MakeSWCanvasSurface\(softwareCanvas\)[\s\S]*?this\.surfaceBackend = 'software'/,
+  'CanvasKit auto surface creation should fall back to software after default surface exceptions',
+);
+requireSnippet(
+  makeSurfaceBody,
+  /targetCanvas\.parentElement !== originalParent[\s\S]*?this\.surfaceBackend = 'software';[\s\S]*?canvas: replacement/,
+  'CanvasKit internal software fallback should expose its replacement canvas',
+);
+requireSnippet(
+  makeSurfaceBody,
+  /surfaceRequest\.preference === 'webgpu'[\s\S]*?surfaceFallbackReason = 'webgpuSurfaceUnsupported'[\s\S]*?reuseSoftwareFallbackCanvas/,
+  'CanvasKit repeated software fallback should preserve the original WebGPU rejection reason',
+);
+requireSnippet(
+  renderPageCanvasKitBody,
+  /canvaskitDiagnosticsByPage\.delete\(pageIdx\);[\s\S]*?try \{[\s\S]*?getPageInfo\(pageIdx\)[\s\S]*?getPageLayerTreeObject\(pageIdx[\s\S]*?renderStarted = true;[\s\S]*?recordRenderFailure\(error, !renderStarted\)[\s\S]*?if \(!renderStarted\) throw error/,
+  'CanvasKit page diagnostics should be cleared before page info or layer lowering can fail',
+);
+requireSnippet(
+  pageRendererSource,
+  /canvaskitDiagnosticsByPage = new Map<number, CanvasKitRenderDiagnostics>\(\)[\s\S]*?getCanvasKitRenderDiagnostics\(pageIdx: number\)[\s\S]*?this\.canvaskitDiagnosticsByPage\.get\(pageIdx\)[\s\S]*?this\.canvaskitDiagnosticsByPage\.set\(pageIdx, this\.canvaskitRenderer\.diagnostics\(\)\)/,
+  'PageRenderer should retain CanvasKit diagnostics by page instead of global last-render state',
+);
+requireSnippet(
+  canvasViewSource,
+  /getCanvasKitRenderDiagnostics\(pageIndex: number\)[\s\S]*?this\.pageRenderer\.getCanvasKitRenderDiagnostics\(pageIndex\)/,
+  'CanvasView should expose page-scoped CanvasKit diagnostics',
+);
+requireSnippet(
+  mainSource,
+  /async getRendererDiagnostics\(pageIndex\)[\s\S]*?initialized: rendererInitialized[\s\S]*?initializationError:[\s\S]*?effectiveBackend: rendererInitialized \?[\s\S]*?backendFallbackReason:[\s\S]*?getCanvasKitRenderDiagnostics\(pageIndex\)/,
+  'Studio iframe API should expose backend selection and page-scoped renderer diagnostics',
+);
+requireSnippet(
+  embedRpcRouterSource,
+  /case 'getRendererDiagnostics':[\s\S]*?Number\(params\.page \?\? 0\)[\s\S]*?page must be a non-negative integer[\s\S]*?handlers\.getRendererDiagnostics\(page\)/,
+  'Embed router should preserve renderer diagnostics and reject invalid page indexes',
+);
+assert.doesNotMatch(
+  mainSource,
+  /effectiveBackend: canvasView\?\.getRenderBackend\(\) \?\? 'canvas2d'/,
+  'Studio diagnostics must not report Canvas2D when no renderer initialized',
+);
+requireSnippet(
+  mainSource,
+  /CanvasKit 초기화 실패[\s\S]*?renderBackend = 'canvas2d';[\s\S]*?renderBackendFallbackReason = 'canvaskitInitializationFailed';/,
+  'CanvasKit initialization failure should remain an observable Canvas2D fallback',
+);
+assert.doesNotMatch(
+  renderBackendSource,
+  /rhwp\.renderBackend|persistRenderBackend/,
+  'CanvasKit backend opt-in should stay URL-only',
 );
 
 const directReplayOps = [
@@ -306,6 +422,41 @@ for (const [op, unsupportedReason] of objectFragmentFallbackOps) {
     `${op} fallback case should not direct-render before the fallback policy changes`,
   );
 }
+for (const expectedUnsupportedToken of [
+  'charOverlap',
+  'equation:unsupportedDirectReplay',
+  'rawSvg:unsupportedDirectReplay',
+  'glyphRun',
+  'tabLeader',
+  'textControlMark',
+  'textDecoration',
+  'textRunFont',
+  'image:dataMissing',
+  'image:invalidBounds',
+  'image:dimensionUnavailable',
+  'image:tileLimit',
+  'glyphOutline:unsupportedColorGlyph',
+  'imageEffect:grayScale',
+  'textRun:verticalText',
+  'textRun:scriptTextRequiresShaping',
+]) {
+  assert.ok(
+    expectedUnsupportedSetBody.includes(`'${expectedUnsupportedToken}'`),
+    `CanvasKit expected unsupported set should include ${expectedUnsupportedToken}`,
+  );
+}
+assert.ok(
+  !expectedUnsupportedSetBody.includes("'renderPage'"),
+  'CanvasKit render failures should stay unexpected readiness diagnostics',
+);
+assert.ok(
+  !expectedUnsupportedSetBody.includes("'unknown'"),
+  'CanvasKit unknown op diagnostics should stay unexpected readiness diagnostics',
+);
+assert.ok(
+  !expectedUnsupportedSetBody.includes("'glyphOutline:replayInvariant'"),
+  'CanvasKit replay invariants should stay unexpected readiness diagnostics',
+);
 
 const glyphOutlineCaseBody = extractSwitchCaseClusterBody(renderOpBody, 'glyphOutline');
 requireSnippet(
@@ -720,7 +871,7 @@ requireSnippet(
 );
 requireSnippet(
   renderColorPaintGraphNodeBody,
-  /visited\.has\(nodeId\)[\s\S]*?unsupportedColorGlyph[\s\S]*?return;[\s\S]*?visited\.add\(nodeId\);/,
+  /visited\.has\(nodeId\)[\s\S]*?replayInvariant[\s\S]*?return;[\s\S]*?visited\.add\(nodeId\);/,
   'glyphOutline color graph replay should record visited nodes before recursion',
 );
 requireSnippet(
@@ -768,6 +919,171 @@ for (const token of canvaskitParityPlanRequiredTokens) {
 assert.ok(
   textIrV2DocSource.includes('docs/canvaskit-parity-implementation.md'),
   'Text IR v2 contract should link to the CanvasKit parity implementation plan',
+);
+
+const shiftedInkExpected = new PNG({ width: 3, height: 1 });
+shiftedInkExpected.data.fill(255);
+shiftedInkExpected.data.set([0, 0, 0, 255], 0);
+const shiftedInkActual = new PNG({ width: 3, height: 1 });
+shiftedInkActual.data.fill(255);
+shiftedInkActual.data.set([0, 0, 0, 255], 4);
+const shiftedInkDiff = await comparePngBuffers(
+  PNG.sync.write(shiftedInkExpected),
+  PNG.sync.write(shiftedInkActual),
+  {
+    inkMaskNeighborhoodRadius: 1,
+    inkMaskMaxDiffPixels: 0,
+    nonInkMaxDiffPixels: 0,
+    solidInkMaxDiffPixels: 0,
+  },
+);
+assert.equal(shiftedInkDiff.passed, true, 'nearby rasterized ink should pass the ink-mask gate');
+assert.equal(shiftedInkDiff.hasVisualBudget, true);
+assert.equal(shiftedInkDiff.passMetric, 'rasterOnly');
+
+const collapsedInkExpected = new PNG({ width: 3, height: 1 });
+collapsedInkExpected.data.fill(255);
+collapsedInkExpected.data.set([0, 0, 0, 255], 0);
+collapsedInkExpected.data.set([0, 0, 0, 255], 8);
+const collapsedInkActual = new PNG({ width: 3, height: 1 });
+collapsedInkActual.data.fill(255);
+collapsedInkActual.data.set([0, 0, 0, 255], 4);
+const collapsedInkDiff = await comparePngBuffers(
+  PNG.sync.write(collapsedInkExpected),
+  PNG.sync.write(collapsedInkActual),
+  { inkMaskNeighborhoodRadius: 1, inkMaskMaxDiffPixels: 0 },
+);
+assert.equal(
+  collapsedInkDiff.passed,
+  false,
+  'one actual ink pixel must not satisfy multiple expected ink pixels',
+);
+assert.equal(collapsedInkDiff.inkMaskDiffPixels, 1);
+
+const augmentingInkExpected = new PNG({ width: 3, height: 2 });
+augmentingInkExpected.data.fill(255);
+augmentingInkExpected.data.set([0, 0, 0, 255], 4);
+augmentingInkExpected.data.set([0, 0, 0, 255], 12);
+const augmentingInkActual = new PNG({ width: 3, height: 2 });
+augmentingInkActual.data.fill(255);
+augmentingInkActual.data.set([0, 0, 0, 255], 0);
+augmentingInkActual.data.set([0, 0, 0, 255], 8);
+const augmentingInkDiff = await comparePngBuffers(
+  PNG.sync.write(augmentingInkExpected),
+  PNG.sync.write(augmentingInkActual),
+  { inkMaskNeighborhoodRadius: 1, inkMaskMaxDiffPixels: 0 },
+);
+assert.equal(
+  augmentingInkDiff.inkMaskDiffPixels,
+  0,
+  'one-to-one ink matching should find an augmenting path instead of depending on scan order',
+);
+
+const missingInkExpected = new PNG({ width: 3, height: 1 });
+missingInkExpected.data.fill(255);
+const missingInkActual = new PNG({ width: 3, height: 1 });
+missingInkActual.data.fill(255);
+missingInkActual.data.set([0, 0, 0, 255], 8);
+const missingInkDiff = await comparePngBuffers(
+  PNG.sync.write(missingInkExpected),
+  PNG.sync.write(missingInkActual),
+  { inkMaskMaxDiffPixels: 0 },
+);
+assert.equal(missingInkDiff.passed, false, 'new unmatched ink should fail the ink-mask gate');
+assert.equal(missingInkDiff.inkMaskDiffPixels, 1);
+const noBudgetDiff = await comparePngBuffers(
+  PNG.sync.write(missingInkExpected),
+  PNG.sync.write(missingInkExpected),
+);
+assert.equal(noBudgetDiff.hasVisualBudget, false, 'readiness requires an explicit visual budget');
+const blankInkDiff = await comparePngBuffers(
+  PNG.sync.write(missingInkExpected),
+  PNG.sync.write(missingInkExpected),
+  { maxDiffPixels: 0, minimumInkPixels: 1 },
+);
+assert.equal(blankInkDiff.passed, false, 'matching blank captures must not pass readiness');
+assert.equal(blankInkDiff.minimumInkBudgetPassed, false);
+assert.match(
+  comparePngBuffers.toString(),
+  /MAX_INK_MASK_MATCH_EDGES/,
+  'ink-mask maximum matching should stop before allocating an unbounded edge graph',
+);
+
+assert.deepEqual(
+  rendererBaselineManifest.samples
+    .filter((sample) => sample.canvaskitReadinessGate === true)
+    .map((sample) => sample.id)
+    .sort(),
+  ['image-crop', 'paragraph-line-basic', 'table-core'],
+  'CanvasKit readiness gate should stay limited to the representative paragraph/table/image corpus',
+);
+requireSnippet(
+  rendererBaselineSource,
+  /getCanvasKitRenderDiagnostics\?\.\(targetPageIndex\)[\s\S]*?canvasPool\?\.getCanvas\?\.\(targetPageIndex\)[\s\S]*?activeBackend: window\.__renderBackend[\s\S]*?request: window\.__rendererRuntimeRequest[\s\S]*?canvasOwnershipTracked/,
+  'CanvasKit baseline should read page-scoped diagnostics and effective backend selection',
+);
+requireSnippet(
+  rendererBaselineSource,
+  /readinessGateRequired: options\.readinessOnly[\s\S]*?backend\.key === 'canvaskit-default'[\s\S]*?profile === 'screen'[\s\S]*?options\.canvaskitSurface === 'auto'/,
+  'CanvasKit readiness gate should be explicit and limited to default screen/auto captures',
+);
+for (const readinessGuard of [
+  'backendNotActive',
+  'explicitCanvasKitRequestMissing',
+  'canvaskitModeRequestMismatch',
+  'canvaskitSurfaceRequestMismatch',
+  'canvaskitModeMismatch',
+  'canvaskitSurfacePreferenceMismatch',
+  'canvasOwnershipMismatch',
+  'diagnosticsUnavailable',
+  'runtime:readinessGateFailed',
+  'visualThresholdMissing',
+  'visualParityFailed',
+]) {
+  assert.ok(
+    rendererBaselineSource.includes(readinessGuard),
+    `CanvasKit readiness baseline should keep guard ${readinessGuard}`,
+  );
+}
+requireSnippet(
+  rendererBaselineSource,
+  /canvaskitReadinessGate\.summary\.failed > 0[\s\S]*?process\.exitCode = 1/,
+  'CanvasKit readiness baseline should fail after writing its JSON report',
+);
+requireSnippet(
+  rendererBaselineSource,
+  /catch \(error\) \{[\s\S]*?captureError =[\s\S]*?writeFileSync\([\s\S]*?captureError/,
+  'CanvasKit readiness baseline should preserve a JSON report after browser capture failures',
+);
+assert.ok(
+  rendererBaselineSource.includes("--readiness-only cannot be combined with --filter"),
+  'CanvasKit readiness should reject partial filtered corpus runs',
+);
+assert.ok(
+  rendererBaselineSource.includes('BROWSER_PARITY_ALLOWED_THRESHOLDS'),
+  'CanvasKit readiness should validate visual threshold keys and ranges',
+);
+assert.ok(
+  rendererBaselineSource.includes('requires a positive minimumInkPixels threshold'),
+  'CanvasKit readiness samples should require an explicit positive ink floor',
+);
+requireSnippet(
+  renderDiffWorkflowSource,
+  /Run selected CanvasKit readiness gate[\s\S]*?scripts\/renderer_baseline\.py[\s\S]*?--readiness-only/,
+  'render-diff CI should run the selected CanvasKit readiness gate',
+);
+assert.ok(
+  renderDiffWorkflowSource.includes("RHWP_CHROMIUM_BUILD_ID: '1660786'")
+    && renderDiffWorkflowSource.includes('chromium@${RHWP_CHROMIUM_BUILD_ID}'),
+  'render-diff CI should pin the Chromium revision used by hard visual gates',
+);
+assert.ok(
+  !renderDiffWorkflowSource.includes('chromium@latest'),
+  'hard visual gates must not follow a moving Chromium revision',
+);
+assert.ok(
+  rendererBaselineSource.includes('chromiumBuildId'),
+  'CanvasKit readiness artifacts should identify the pinned Chromium snapshot',
 );
 
 console.log('renderer backend contract guard passed');

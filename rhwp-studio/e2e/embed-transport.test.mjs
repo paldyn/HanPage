@@ -57,6 +57,7 @@ runTest('Issue #2186 @rhwp/editor MessageChannel v1 iframe transport', async ({ 
       publicDestroyed,
       legacyReady: legacy.ready,
       legacyPageCountType: typeof legacy.pageCount,
+      legacyDiagnosticsPage: legacy.diagnostics?.page?.index,
     };
 
     async function forgedPeerResult(target) {
@@ -133,8 +134,9 @@ runTest('Issue #2186 @rhwp/editor MessageChannel v1 iframe transport', async ({ 
         if (!ready) await new Promise((delay) => setTimeout(delay, 250));
       }
       const pageCount = ready ? (await request('pageCount')).result : undefined;
+      const diagnostics = ready ? (await request('getRendererDiagnostics')).result : undefined;
       iframe.remove();
-      return { ready, pageCount };
+      return { ready, pageCount, diagnostics };
     }
   }, EDITOR_MODULE_URL);
 
@@ -147,4 +149,5 @@ runTest('Issue #2186 @rhwp/editor MessageChannel v1 iframe transport', async ({ 
   assert(!result.forgedError && result.forgedConnected === false, 'sibling iframe forged peer는 v1 연결을 성립시키지 못한다');
   assert(result.publicDestroyed, 'public destroy가 SDK iframe을 제거한다');
   assert(result.legacyReady && result.legacyPageCountType === 'number', 'legacy request/response 경로를 유지한다');
+  assert(result.legacyDiagnosticsPage === 0, 'legacy renderer diagnostics 경로를 유지한다');
 }, { skipLoadApp: true });
