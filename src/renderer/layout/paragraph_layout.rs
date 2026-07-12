@@ -4904,6 +4904,22 @@ impl LayoutEngine {
                                 let om_bottom =
                                     hwpunit_to_px(t.outer_margin_bottom as i32, self.dpi);
                                 let table_y = (y + baseline + om_bottom - table_h).max(y);
+                                // [Task #2212] 셀 안 인라인 TAC 표는 외곽 셀 경로를
+                                // 확장한 2단 cell_context 로 렌더해야 경로 기반 조회
+                                // (get_table_cell_bboxes_by_path 등)가 내부 셀을 찾는다.
+                                // table_layout 중첩 분기(:3475)와 동일한 확장 규칙 —
+                                // 내부 entry 의 cell/cp 는 layout_table 셀 루프가 채운다.
+                                let nested_ctx = cell_ctx.as_ref().map(|ctx| {
+                                    let mut c = ctx.clone();
+                                    c.path.push(crate::renderer::layout::CellPathEntry {
+                                        control_index: tac_ci,
+                                        cell_index: 0,
+                                        cell_para_index: 0,
+                                        text_direction: 0,
+                                    });
+                                    c
+                                });
+                                let nested_depth = usize::from(cell_ctx.is_some());
                                 self.layout_table(
                                     tree,
                                     col_node,
@@ -4915,10 +4931,10 @@ impl LayoutEngine {
                                     table_y,
                                     bdc,
                                     None,
-                                    0,
+                                    nested_depth,
                                     Some((para_index, tac_ci)),
                                     alignment,
-                                    None,
+                                    nested_ctx,
                                     0.0,
                                     0.0,
                                     Some(x),
