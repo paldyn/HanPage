@@ -26,7 +26,7 @@
 - `wasm-pack build --target web --out-dir pkg`가 성공했다.
 - `CARGO_INCREMENTAL=0 cargo clippy --all-targets -- -D warnings`가 경고 없이 성공했다.
 - `CARGO_INCREMENTAL=0 cargo test --profile release-test --tests` 전체 회귀가 exit 0으로 통과했다.
-- 작성 시점 참고로 원격 CI는 Native Skia tests를 제외한 필수 check가 성공했고, Native Skia tests는 진행 중이었다. merge 전 최신 run 상태를 다시 확인해야 한다.
+- 작성 시점 참고로 원격 CI는 Native Skia tests를 제외한 필수 check가 성공했다. Native Skia tests는 `Install native Skia runtime packages` 단계에서 장시간 `IN_PROGRESS`다. 통합 로컬 회귀/Clippy가 통과했으므로 코드 결함으로 분류하지 않으며, merge 전 force-cancel/re-run으로 원격 CI 운영 상태만 정리한다.
 
 ## 렌더 및 fixture 검토
 
@@ -38,4 +38,4 @@
 
 - `used_height`는 진단 값이지만 downstream dump parser가 의존할 수 있다. 전체 회귀는 통과했으며, merge 전 최신 원격 diff에 대해서도 같은 확인이 필요하다.
 - 괄호 폭 변경은 폰트 의존성이 크다. focused regression은 통과했으며, 전체 회귀 결과를 최종 문서에 추가 반영해야 한다.
-- 최종 권고: [#2232](https://github.com/edwardkim/rhwp/pull/2232) 선행 반영 뒤 conditional accept 후보. 최신 CI와 원격 head diff 재확인이 남아 있다.
+- 최종 권고: [#2232](https://github.com/edwardkim/rhwp/pull/2232) 선행 반영 뒤 수용. 현재 원격 head의 소스·샘플 patch는 통합 검증 코드와 동일하며, 남은 일은 Native Skia job 재실행뿐이다.

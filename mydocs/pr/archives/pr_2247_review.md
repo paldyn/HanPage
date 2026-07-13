@@ -36,4 +36,4 @@
 
 - 행 분할 규칙은 pagination 핵심 경로이며, 전체 회귀와 Clippy가 모두 통과했다.
 - 제안한 6쪽 정합은 재현됐고, 1쪽 `156631374` 표본은 [#2245](https://github.com/edwardkim/rhwp/pull/2245)의 핀으로 함께 보호된다.
-- 최종 권고: [#2232](https://github.com/edwardkim/rhwp/pull/2232)부터의 스택 순서로만 conditional accept. 최신 head diff와 CI를 재확인한 후 merge를 판단한다.
+- 최종 권고: [#2232](https://github.com/edwardkim/rhwp/pull/2232)부터의 스택 순서로 수용. 현재 원격 head의 소스·샘플 patch는 통합 검증 코드와 동일하고 원격 CI도 성공했다.

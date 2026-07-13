@@ -41,4 +41,5 @@
 ## 리스크와 권고
 
 - HWPX source gate는 [#2247](https://github.com/edwardkim/rhwp/pull/2247)과 [#2251](https://github.com/edwardkim/rhwp/pull/2251)의 페이지 핀까지 포함한 전체 회귀에서 통과했다.
-- 현재 쪽수 정합과 focused/full regression, Clippy는 수용 근거가 충분하다. 다만 p4의 font/layout 잔여, 최신 원격 head diff와 최신 CI 확인을 조건으로 conditional accept한다.
+- 현재 쪽수 정합과 focused/full regression, Clippy 및 원격 CI는 수용 근거가 충분하다. p4의 font/layout 잔여는 페이지 수 fix를 막지 않는 별도 fidelity 축으로 남긴다.
+- 최종 권고: 수용. 현재 원격 head의 소스·샘플 patch는 통합 검증 코드와 동일하며, 후속 통합 PR에는 p4 대표 visual asset을 증적으로 보존한다.

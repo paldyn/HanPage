@@ -41,4 +41,4 @@
 
 - 13px/100px/12px gate는 실제 조판 경로에 영향을 준다. positive page-pin과 기존 비수용 경계 regression을 포함한 전체 회귀는 통과했으며, gate별 독립 negative test 보강은 후속 품질 개선 후보로 남긴다.
 - [#2097](https://github.com/edwardkim/rhwp/issues/2097)은 본 압축 축을 해소해도 다른 sliver 계열이 남아 있으므로 자동 close 대상이 아니다.
-- 최종 권고: stacked top PR로 conditional accept 후보. 최신 head diff, 최신 CI 및 영구 visual asset 반영을 끝낸 뒤 merge 여부를 판단한다.
+- 최종 권고: stacked top PR로 수용. 현재 원격 head의 소스·샘플 patch는 통합 검증 코드와 동일하고 원격 CI도 성공했다. 후속 통합 PR에는 대표 visual asset을 검증 증적으로 보존한다.
