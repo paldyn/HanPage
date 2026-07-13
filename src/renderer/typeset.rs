@@ -14581,11 +14581,11 @@ impl TypesetEngine {
                 st.current_height + declared_total > available + DECLARED_FLOAT_FIT_TOLERANCE_PX;
             // 저장된 LineSeg와 객체 높이가 현재 쪽 본문 하단 안에 들어간다고 말하면,
             // host 줄 간격/선언 높이의 근소 초과만으로 먼저 이월하지 않는다.
-            let saved_object_bottom_fits_current = para
+            let saved_span = para
                 .line_segs
                 .iter()
                 .find(|ls| !is_synthetic_line_seg(ls))
-                .is_some_and(|seg| {
+                .map(|seg| {
                     let base = st.vpos_page_base.unwrap_or(0);
                     let v_off = signed_hwpunit(table.common.vertical_offset);
                     let top_hu = seg
@@ -14594,14 +14594,41 @@ impl TypesetEngine {
                         .saturating_sub(base);
                     let bottom_hu =
                         top_hu.saturating_add(table.common.height.min(i32::MAX as u32) as i32);
-                    let top_px = hwpunit_to_px(top_hu, self.dpi);
-                    let bottom_px = hwpunit_to_px(bottom_hu, self.dpi);
-                    top_px + 16.0 >= st.current_height
-                        && bottom_px <= available + DECLARED_FLOAT_FIT_TOLERANCE_PX
+                    (
+                        hwpunit_to_px(top_hu, self.dpi),
+                        hwpunit_to_px(bottom_hu, self.dpi),
+                    )
                 });
+            let saved_object_bottom_fits_current = saved_span.is_some_and(|(top_px, bottom_px)| {
+                top_px + 16.0 >= st.current_height
+                    && bottom_px <= available + DECLARED_FLOAT_FIT_TOLERANCE_PX
+            });
+            // [#2097] 저장 앵커가 현재 흐름 위치와 정합하는데 저장 하단이 쪽 본문을
+            // 넘으면, 원본 한글 레이아웃은 이월이 아니라 이 지점에서 표를 분할했다
+            // (2572521 pi36: 앵커 11000HU=146.7px == cur_h, 선언 839.8px 로 하단
+            // 986px 초과 — 저장 p3 만충 914.7px 실측, 이월 시 7쪽으로 +1). 이
+            // 형상은 선언-기준 이월을 건너뛰고 분할 경로로 보낸다.
+            let saved_anchor_splits_here = st.has_stored_line_segs
+                && saved_span.is_some_and(|(top_px, bottom_px)| {
+                    (top_px - st.current_height).abs() <= 16.0
+                        && bottom_px > available + DECLARED_FLOAT_FIT_TOLERANCE_PX
+                });
+            if std::env::var("RHWP_DIAG_SCAN").is_ok() {
+                eprintln!(
+                    "DIAG_SCAN DECL_DEFER? pi={} cur_h={:.1} declared={:.1} avail={:.1} saved={:?} bottom_fits={} splits_here={}",
+                    para_idx,
+                    st.current_height,
+                    declared_total,
+                    available,
+                    saved_span,
+                    saved_object_bottom_fits_current,
+                    saved_anchor_splits_here
+                );
+            }
             if !st.current_items.is_empty()
                 && declared_overflows_current
                 && !saved_object_bottom_fits_current
+                && !saved_anchor_splits_here
                 && !single_row_object_declared_fits_current
                 && (st.has_stored_line_segs || measured_fits_current)
                 && declared_total <= available
@@ -14963,6 +14990,19 @@ impl TypesetEngine {
                 && row_count > 1
                 && first_block_end < row_count
                 && fits_fresh_page;
+            // [#2097 진단] 첫 행 이월 결정 입력 — 동작 불변.
+            if std::env::var("RHWP_DIAG_SCAN").is_ok() {
+                eprintln!(
+                    "DIAG_SCAN FIRSTROW_DEFER? pi={} remaining={:.1} unit_h={:.1} min_content={:.1} splittable={} force={} clean_defer={}",
+                    para_idx,
+                    remaining_on_page,
+                    split_unit_h,
+                    min_content,
+                    first_row_splittable,
+                    first_row_force_splittable,
+                    multirow_clean_defer
+                );
+            }
             if (!first_row_splittable && !first_row_force_splittable)
                 || remaining_on_page < min_content
                 || multirow_clean_defer
