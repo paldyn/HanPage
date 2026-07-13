@@ -23,6 +23,7 @@
 - 통합 브랜치 focused release test에 `issue_2097_squeeze`가 포함됐고 1 test passed / 0 failed였다. 이 테스트는 `21761835_jeonjik_exemption_table.hwp`의 6쪽 핀을 확인한다.
 - HWP 2020 MCP CLI로 `pdf/task2146/21761835_jeonjik_exemption_table-2020.pdf`를 생성했고 6쪽, `status: success`, `run_status: 0`, `validation: ok`였다.
 - `wasm-pack build --target web --out-dir pkg`가 성공했다.
+- `CARGO_INCREMENTAL=0 cargo clippy --all-targets -- -D warnings`가 경고 없이 성공했다.
 
 ## visual sweep
 

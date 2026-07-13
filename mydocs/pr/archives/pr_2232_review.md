@@ -29,6 +29,7 @@
 - 통합 브랜치에서 `CARGO_INCREMENTAL=0 cargo test --profile release-test --test issue_1891 --test issue_1939 --test issue_1921_59043_pagination_pin --test issue_1100_exam_social_hwpx_header --test issue_2097_squeeze --test issue_2243`를 실행했고, 10 tests passed / 0 failed였다.
 - 이 PR 직접 관련 `issue_1891`은 3 tests passed로 76076/86712 HWP5-origin HWPX 쪽수 핀을 포함한다.
 - `wasm-pack build --target web --out-dir pkg`가 성공했다.
+- `CARGO_INCREMENTAL=0 cargo clippy --all-targets -- -D warnings`가 경고 없이 성공했다.
 - 작성 시점 참고로 원격 CI의 Rust/Build/Render Diff/CodeQL은 성공이었다. 최종 merge 조건은 최신 head 기준 CI 재통과다.
 
 ## 렌더 검토

@@ -27,6 +27,7 @@
   - `pdf/task2097/21298295_byeolpyo5_disaster-2020.pdf`: 2쪽
 - 통합 rhwp 결과는 각 2쪽으로 기준 PDF와 정합했다.
 - `wasm-pack build --target web --out-dir pkg`가 성공했다.
+- `CARGO_INCREMENTAL=0 cargo clippy --all-targets -- -D warnings`가 경고 없이 성공했다.
 
 ## visual sweep
 

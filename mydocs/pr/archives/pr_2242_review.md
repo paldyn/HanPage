@@ -24,6 +24,7 @@
 - 통합 브랜치의 focused release test에서 `issue_1891` 3 tests passed / 0 failed였다. 이 테스트는 86712=65, 76076=82쪽을 확인한다.
 - `CARGO_INCREMENTAL=0 cargo test --profile release-test --lib test_paren_narrow_is_font_conditioned`는 1 passed / 0 failed였다.
 - `wasm-pack build --target web --out-dir pkg`가 성공했다.
+- `CARGO_INCREMENTAL=0 cargo clippy --all-targets -- -D warnings`가 경고 없이 성공했다.
 - 작성 시점 참고로 원격 CI는 Native Skia tests를 제외한 필수 check가 성공했고, Native Skia tests는 진행 중이었다. merge 전 최신 run 상태를 다시 확인해야 한다.
 
 ## 렌더 및 fixture 검토

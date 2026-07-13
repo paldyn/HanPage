@@ -27,6 +27,7 @@
   - `pdf/task2243/36386907_gyeoljae_sewoon-2020.pdf`: 5쪽
   - `pdf/task2243/156631374_taxi_press-2020.pdf`: 1쪽
 - `wasm-pack build --target web --out-dir pkg`가 성공했다.
+- `CARGO_INCREMENTAL=0 cargo clippy --all-targets -- -D warnings`가 경고 없이 성공했다.
 
 ## visual sweep
 
