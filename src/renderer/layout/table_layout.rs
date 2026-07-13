@@ -6451,6 +6451,28 @@ impl LayoutEngine {
             if h > consumed_height {
                 consumed_height = h;
             }
+            // [#2097 진단] 셀별 walk 결과 — 동작 불변.
+            if std::env::var("RHWP_DIAG_BLKCUT").is_ok() {
+                let stop = if j >= units.len() {
+                    "end"
+                } else if units[j].hard_break_before {
+                    "hard"
+                } else {
+                    "budget"
+                };
+                eprintln!(
+                    "DIAG_BLKCUT cell[{}] r={} c={} units={} start={} j={} h={:.1} stop={} next_h={:.1}",
+                    i,
+                    cell.row,
+                    cell.col,
+                    units.len(),
+                    start,
+                    j,
+                    h,
+                    stop,
+                    units.get(j).map(|u| u.height).unwrap_or(0.0)
+                );
+            }
             end_cut.push(j);
         }
         RowCutResult {
@@ -6537,6 +6559,30 @@ impl LayoutEngine {
             }
             if h > 0.0 {
                 consumed_height = consumed_height.max(row_offset + h);
+            }
+            // [#2097 진단] 오프셋 walk 셀별 결과 — 동작 불변.
+            if std::env::var("RHWP_DIAG_BLKCUT").is_ok() {
+                let stop = if j >= units.len() {
+                    "end"
+                } else if units[j].hard_break_before {
+                    "hard"
+                } else {
+                    "budget"
+                };
+                eprintln!(
+                    "DIAG_BLKCUT(ofs) cell[{}] r={} c={} units={} start={} j={} h={:.1} row_off={:.1} cell_budget={:.1} stop={} next_h={:.1}",
+                    i,
+                    cell.row,
+                    cell.col,
+                    units.len(),
+                    start,
+                    j,
+                    h,
+                    row_offset,
+                    cell_budget,
+                    stop,
+                    units.get(j).map(|u| u.height).unwrap_or(0.0)
+                );
             }
             end_cut.push(j);
         }
