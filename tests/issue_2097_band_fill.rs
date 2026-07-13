@@ -21,10 +21,7 @@ const PINS: &[(&str, u32)] = &[
     ("samples/task2097/3248363_upmu_bunjang.hwpx", 4),
     // 동계열 다중 블록 통이월 누적 (11→8쪽, delta +3 전량 해소)
     ("samples/task2097/21217935_simsa_jipyo.hwp", 8),
-    // 동계열 (22→21쪽). 주의: 쪽 경계가 수치 경계선(knife-edge)에 있어
-    // release 프로파일에서는 FP/codegen 반올림 차로 22 가 관측된다
-    // (debug 21 = 한글 COM 21). 이 핀은 debug(cargo test) 기준이며,
-    // 툴체인 변경으로 flip 시 본 주석을 근거로 판정할 것.
+    // 동계열 (22→21쪽). debug/release 동일 (21 = 한글 COM 실측).
     ("samples/task2097/18095317_eogu_geumji.hwp", 21),
 ];
 
