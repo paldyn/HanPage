@@ -144,7 +144,17 @@ export class RhwpEditor {
    * @param page - 0부터 시작하는 페이지 번호
    */
   async getRendererDiagnostics(page = 0) {
-    return this._request('getRendererDiagnostics', { page });
+    if (!Number.isSafeInteger(page) || page < 0) {
+      throw new TypeError('page must be a non-negative safe integer');
+    }
+    if (!this._transport.supports('renderer-diagnostics-v1')) {
+      throw new Error('Renderer diagnostics v1 is not supported by this Studio');
+    }
+    const result = await this._request('getRendererDiagnostics', { page });
+    if (result?.schemaVersion !== 1 || result?.page?.index !== page) {
+      throw new Error('Studio returned invalid renderer diagnostics v1');
+    }
+    return result;
   }
 
   /**

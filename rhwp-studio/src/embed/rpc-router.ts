@@ -55,11 +55,11 @@ export async function routeEmbedRequest(
       );
     case 'pageCount': return handlers.pageCount();
     case 'getRendererDiagnostics': {
-      const page = Number(params.page ?? 0);
-      if (!Number.isInteger(page) || page < 0) {
-        throw new Error('page must be a non-negative integer');
+      const page = params.page ?? 0;
+      if (!Number.isSafeInteger(page) || (page as number) < 0) {
+        throw new Error('page must be a non-negative safe integer');
       }
-      return handlers.getRendererDiagnostics(page);
+      return handlers.getRendererDiagnostics(page as number);
     }
     case 'getPageSvg': return handlers.getPageSvg(
       typeof params.page === 'number' ? params.page : 0,
