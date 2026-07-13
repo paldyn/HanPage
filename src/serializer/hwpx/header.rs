@@ -166,10 +166,12 @@ fn write_fontfaces<W: Write>(
         )?;
         for (id, font) in fonts.iter().enumerate() {
             let id_str = id.to_string();
-            let binary_item_id_ref = font
-                .resolved_bin_data_id
-                .and_then(|bin_data_id| ctx.resolve_bin_id(bin_data_id))
-                .unwrap_or(font.bin_item_id_ref.as_str());
+            let binary_item_id_ref = resolve_font_binary_item_id_ref(
+                ctx,
+                font.resolved_bin_data_id,
+                &font.bin_item_id_ref,
+                &font.name,
+            )?;
             let mut font_attrs = vec![
                 ("id", id_str.as_str()),
                 ("face", font.name.as_str()),
@@ -177,7 +179,7 @@ fn write_fontfaces<W: Write>(
                 ("isEmbedded", if font.is_embedded { "1" } else { "0" }),
             ];
             if !binary_item_id_ref.is_empty() {
-                font_attrs.push(("binaryItemIDRef", binary_item_id_ref));
+                font_attrs.push(("binaryItemIDRef", binary_item_id_ref.as_str()));
             }
             // substFont(대체 글꼴)·typeInfo(파나포스 10바이트)가 IR에 있으면
             // 자식으로 복원한다. 원본 순서는 substFont → typeInfo. 둘 다 없으면
@@ -185,10 +187,7 @@ fn write_fontfaces<W: Write>(
             if font.subst_font.is_some() || font.type_info.is_some() {
                 start_tag_attrs(w, "hh:font", font_attrs.as_slice())?;
                 if let Some(sf) = &font.subst_font {
-                    let subst_binary_item_id_ref = sf
-                        .resolved_bin_data_id
-                        .and_then(|bin_data_id| ctx.resolve_bin_id(bin_data_id));
-                    write_subst_font(w, sf, subst_binary_item_id_ref)?;
+                    write_subst_font(w, sf, ctx)?;
                 }
                 if let Some(ti) = &font.type_info {
                     write_font_type_info(w, ti)?;
@@ -205,6 +204,25 @@ fn write_fontfaces<W: Write>(
 }
 
 static EMPTY_FONT_VEC: Vec<Font> = Vec::new();
+
+fn resolve_font_binary_item_id_ref(
+    ctx: &SerializeContext,
+    resolved_bin_data_id: Option<u16>,
+    original_ref: &str,
+    font_name: &str,
+) -> Result<String, SerializeError> {
+    match resolved_bin_data_id {
+        Some(bin_data_id) => ctx
+            .resolve_bin_id(bin_data_id)
+            .map(str::to_string)
+            .ok_or_else(|| {
+                SerializeError::XmlError(format!(
+                    "embedded font `{font_name}` references missing BinData id {bin_data_id}"
+                ))
+            }),
+        None => Ok(original_ref.to_string()),
+    }
+}
 
 fn font_type_str(alt_type: u8) -> &'static str {
     match alt_type {
@@ -254,9 +272,14 @@ fn write_font_type_info<W: Write>(w: &mut Writer<W>, ti: &[u8; 10]) -> Result<()
 fn write_subst_font<W: Write>(
     w: &mut Writer<W>,
     sf: &SubstFont,
-    resolved_binary_item_id_ref: Option<&str>,
+    ctx: &SerializeContext,
 ) -> Result<(), SerializeError> {
-    let binary_item_id_ref = resolved_binary_item_id_ref.unwrap_or(&sf.bin_item_id_ref);
+    let binary_item_id_ref = resolve_font_binary_item_id_ref(
+        ctx,
+        sf.resolved_bin_data_id,
+        &sf.bin_item_id_ref,
+        &sf.face,
+    )?;
     empty_tag(
         w,
         "hh:substFont",
@@ -264,7 +287,7 @@ fn write_subst_font<W: Write>(
             ("face", &sf.face),
             ("type", font_type_str(sf.font_type)),
             ("isEmbedded", if sf.is_embedded { "1" } else { "0" }),
-            ("binaryItemIDRef", binary_item_id_ref),
+            ("binaryItemIDRef", binary_item_id_ref.as_str()),
         ],
     )
 }
@@ -1439,7 +1462,7 @@ mod tests {
             resolved_bin_data_id: None,
         };
         let mut writer = Writer::new(Vec::new());
-        write_subst_font(&mut writer, &sf, None).expect("write substFont");
+        write_subst_font(&mut writer, &sf, &SerializeContext::default()).expect("write substFont");
         let xml = String::from_utf8(writer.into_inner()).unwrap();
         assert_eq!(
             xml,
@@ -1548,6 +1571,24 @@ mod tests {
         assert_eq!(xml.matches(r#"binaryItemIDRef="image2""#).count(), 2);
         assert!(!xml.contains("font-resource-alpha"));
         assert!(!xml.contains("font-resource-beta"));
+    }
+
+    #[test]
+    fn embedded_font_reference_to_missing_bin_data_is_an_error() {
+        let mut doc = Document::default();
+        doc.doc_info.font_faces = vec![Vec::new(); 7];
+        doc.doc_info.font_faces[0].push(Font {
+            name: "Missing Embedded Face".to_string(),
+            is_embedded: true,
+            bin_item_id_ref: "stale-font-ref".to_string(),
+            resolved_bin_data_id: Some(9),
+            ..Default::default()
+        });
+
+        let ctx = SerializeContext::collect_from_document(&doc);
+        let error = write_header(&doc, &ctx).expect_err("dangling font reference must fail");
+        assert!(error.to_string().contains("missing BinData id 9"));
+        assert!(!error.to_string().contains("stale-font-ref"));
     }
 
     #[test]

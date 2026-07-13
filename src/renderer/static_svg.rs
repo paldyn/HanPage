@@ -1,4 +1,8 @@
 pub(crate) fn static_svg_fragment_has_path_layer(fragment: &str) -> bool {
+    const MAX_STATIC_SVG_FRAGMENT_BYTES: usize = 1024 * 1024;
+    if fragment.len() > MAX_STATIC_SVG_FRAGMENT_BYTES {
+        return false;
+    }
     let Some(markup) = static_svg_markup_without_comments(fragment) else {
         return false;
     };
@@ -254,8 +258,23 @@ fn static_svg_attribute_is_unsafe(name: &str, value: &str) -> bool {
     if value.contains("javascript:")
         || value.contains("data:")
         || value.contains("url(")
+        || value.contains("var(")
         || value.contains("@import")
         || value.contains("expression(")
+    {
+        return true;
+    }
+    if matches!(name, "fill" | "stroke" | "color")
+        && matches!(
+            value.as_str(),
+            "context-fill"
+                | "context-stroke"
+                | "inherit"
+                | "initial"
+                | "revert"
+                | "revert-layer"
+                | "unset"
+        )
     {
         return true;
     }
@@ -374,6 +393,12 @@ mod tests {
             "<path d=\"M0 0 L1 1\" fill=\"url(https://example.invalid/p.svg#p)\"/>"
         ));
         assert!(!static_svg_fragment_has_path_layer(
+            "<path d=\"M0 0 L1 1\" fill=\"context-fill\"/>"
+        ));
+        assert!(!static_svg_fragment_has_path_layer(
+            "<path d=\"M0 0 L1 1\" stroke=\"var(--glyph-stroke)\"/>"
+        ));
+        assert!(!static_svg_fragment_has_path_layer(
             "<path d=\"M0 0 L1 1\" fill=\"u\\72l(https://example.invalid/p.svg#p)\"/>"
         ));
         assert!(!static_svg_fragment_has_path_layer(
@@ -385,5 +410,10 @@ mod tests {
         assert!(!static_svg_fragment_has_path_layer(
             "<path d=\"not-a-path\"/>"
         ));
+        let oversized = format!(
+            "<path d=\"M0 0 L1 1\"/><metadata>{}</metadata>",
+            "x".repeat(1024 * 1024)
+        );
+        assert!(!static_svg_fragment_has_path_layer(&oversized));
     }
 }

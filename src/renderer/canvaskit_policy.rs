@@ -10,6 +10,10 @@ use crate::paint::{
     TextDecorationKind, TextVariantKind,
 };
 use crate::renderer::composer::expand_pua_display_text;
+use crate::renderer::equation::{
+    layout::{LayoutBox, LayoutKind},
+    symbols::{DecoKind, FontStyleKind},
+};
 use crate::renderer::layer_renderer::{
     analyze_text_variant_selection, TextVariantSelectionOptions, VariantSelectedReason,
     VariantSelectionBackend,
@@ -360,9 +364,20 @@ impl CanvasKitReplayPlanBuilder {
             PaintOp::Image {
                 image, resolved, ..
             } => self.image_item(path, image, resolved.as_deref()),
-            PaintOp::Equation { .. } => {
+            PaintOp::Equation { equation, .. }
+                if canvaskit_equation_layout_is_supported(&equation.layout_box) =>
+            {
                 let mut item = direct_item(path, "equation", CanvasKitReplayFeature::Equation);
-                item.detail = Some("layoutBoxFallback".to_string());
+                item.detail = Some("boundedSemanticLayout".to_string());
+                item
+            }
+            PaintOp::Equation { .. } => {
+                let mut item = self.transition_overlay_item(
+                    path,
+                    "equation",
+                    CanvasKitReplayFeature::Equation,
+                );
+                item.detail = Some("unsupportedSemanticLayout".to_string());
                 item
             }
             PaintOp::FormObject { .. } => {
@@ -587,6 +602,131 @@ fn direct_item(
         compat_overlay_allowed: false,
         detail: None,
     }
+}
+
+fn canvaskit_equation_layout_is_supported(layout: &LayoutBox) -> bool {
+    const MAX_DEPTH: usize = 64;
+    const MAX_NODES: usize = 4096;
+    const MAX_TEXT_UTF16_UNITS: usize = 4096;
+
+    fn visit(
+        layout: &LayoutBox,
+        depth: usize,
+        remaining_nodes: &mut usize,
+        max_text_utf16_units: usize,
+    ) -> bool {
+        if depth > MAX_DEPTH
+            || *remaining_nodes == 0
+            || ![
+                layout.x,
+                layout.y,
+                layout.width,
+                layout.height,
+                layout.baseline,
+            ]
+            .into_iter()
+            .all(f64::is_finite)
+            || layout.width < 0.0
+            || layout.height < 0.0
+        {
+            return false;
+        }
+        *remaining_nodes -= 1;
+
+        let text_supported =
+            |text: &str| !text.is_empty() && text.encode_utf16().count() <= max_text_utf16_units;
+        let child = |child: &LayoutBox, remaining_nodes: &mut usize| {
+            visit(child, depth + 1, remaining_nodes, max_text_utf16_units)
+        };
+        match &layout.kind {
+            LayoutKind::Row(children) => children.iter().all(|item| child(item, remaining_nodes)),
+            LayoutKind::Text(text)
+            | LayoutKind::Number(text)
+            | LayoutKind::Symbol(text)
+            | LayoutKind::MathSymbol(text)
+            | LayoutKind::Function(text) => text_supported(text),
+            LayoutKind::Fraction { numer, denom } => {
+                child(numer, remaining_nodes) && child(denom, remaining_nodes)
+            }
+            LayoutKind::Atop { top, bottom } => {
+                child(top, remaining_nodes) && child(bottom, remaining_nodes)
+            }
+            LayoutKind::Sqrt { index, body } => {
+                index
+                    .as_deref()
+                    .is_none_or(|item| child(item, remaining_nodes))
+                    && child(body, remaining_nodes)
+            }
+            LayoutKind::Superscript { base, sup } => {
+                child(base, remaining_nodes) && child(sup, remaining_nodes)
+            }
+            LayoutKind::Subscript { base, sub } => {
+                child(base, remaining_nodes) && child(sub, remaining_nodes)
+            }
+            LayoutKind::SubSup { base, sub, sup } => {
+                child(base, remaining_nodes)
+                    && child(sub, remaining_nodes)
+                    && child(sup, remaining_nodes)
+            }
+            LayoutKind::BigOp { symbol, sub, sup } => {
+                text_supported(symbol)
+                    && sub
+                        .as_deref()
+                        .is_none_or(|item| child(item, remaining_nodes))
+                    && sup
+                        .as_deref()
+                        .is_none_or(|item| child(item, remaining_nodes))
+            }
+            LayoutKind::Limit { sub, .. } => sub
+                .as_deref()
+                .is_none_or(|item| child(item, remaining_nodes)),
+            LayoutKind::Matrix { cells, .. } => cells
+                .iter()
+                .flatten()
+                .all(|item| child(item, remaining_nodes)),
+            LayoutKind::Rel { arrow, over, under } => {
+                child(over, remaining_nodes)
+                    && child(arrow, remaining_nodes)
+                    && under
+                        .as_deref()
+                        .is_none_or(|item| child(item, remaining_nodes))
+            }
+            LayoutKind::EqAlign { rows } => rows
+                .iter()
+                .all(|(left, right)| child(left, remaining_nodes) && child(right, remaining_nodes)),
+            LayoutKind::Paren { left, right, body } => {
+                (left.is_empty() || text_supported(left))
+                    && (right.is_empty() || text_supported(right))
+                    && child(body, remaining_nodes)
+            }
+            LayoutKind::Decoration { kind, body } => {
+                matches!(
+                    kind,
+                    DecoKind::Hat
+                        | DecoKind::Dot
+                        | DecoKind::DDot
+                        | DecoKind::Bar
+                        | DecoKind::Vec
+                        | DecoKind::Dyad
+                        | DecoKind::Under
+                        | DecoKind::Underline
+                        | DecoKind::Overline
+                        | DecoKind::StrikeThrough
+                ) && child(body, remaining_nodes)
+            }
+            LayoutKind::FontStyle { style, body } => {
+                matches!(
+                    style,
+                    FontStyleKind::Roman | FontStyleKind::Italic | FontStyleKind::Bold
+                ) && child(body, remaining_nodes)
+            }
+            LayoutKind::Space(width) => width.is_finite(),
+            LayoutKind::Newline | LayoutKind::Empty => true,
+        }
+    }
+
+    let mut remaining_nodes = MAX_NODES;
+    visit(layout, 0, &mut remaining_nodes, MAX_TEXT_UTF16_UNITS)
 }
 
 fn paint_op_type(op: &PaintOp) -> &'static str {
@@ -1165,7 +1305,10 @@ mod tests {
         assert_eq!(plan.summary.direct_required_items, 1);
         assert_eq!(plan.items[0].op_type, "equation");
         assert_eq!(plan.items[0].feature, CanvasKitReplayFeature::Equation);
-        assert_eq!(plan.items[0].detail.as_deref(), Some("layoutBoxFallback"));
+        assert_eq!(
+            plan.items[0].detail.as_deref(),
+            Some("boundedSemanticLayout")
+        );
         assert_eq!(plan.items[1].op_type, "rawSvg");
         assert_eq!(
             plan.items[1].feature,
@@ -1174,6 +1317,33 @@ mod tests {
         assert_eq!(
             plan.items[1].detail.as_deref(),
             Some("unsupportedDirectReplay")
+        );
+    }
+
+    #[test]
+    fn unsupported_equation_styles_are_not_reported_as_direct() {
+        let mut equation = equation_node();
+        equation.layout_box.kind = LayoutKind::FontStyle {
+            style: FontStyleKind::Blackboard,
+            body: Box::new(LayoutBox {
+                x: 0.0,
+                y: 0.0,
+                width: 8.0,
+                height: 12.0,
+                baseline: 10.0,
+                kind: LayoutKind::Text("x".to_string()),
+            }),
+        };
+        let tree = tree_with_ops(vec![PaintOp::equation(bbox(), equation)]);
+
+        let plan = analyze_canvaskit_replay_plan(&tree, CanvasKitReplayMode::Default);
+
+        assert_eq!(plan.summary.direct_items, 0);
+        assert_eq!(plan.summary.direct_required_items, 1);
+        assert_eq!(plan.summary.hidden_overlay_violations, 1);
+        assert_eq!(
+            plan.items[0].detail.as_deref(),
+            Some("unsupportedSemanticLayout")
         );
     }
 

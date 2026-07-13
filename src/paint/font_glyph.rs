@@ -1,25 +1,26 @@
 //! Producer-side lowering for font-native bitmap and SVG glyph resources.
 
-use std::{collections::HashSet, io::Read};
+use std::io::Read;
 
 use flate2::read::GzDecoder;
 use quick_xml::{events::Event, Reader};
 
 use crate::paint::{
-    font_blob_resource_key, resource_digest_hex, BinaryResourceKind, BinaryResourceRef,
-    BitmapGlyphFiltering, BitmapGlyphPayload, BitmapGlyphScalingPolicy, FontBlobKey,
-    FontBlobResource, FontDigest, FontFaceKey, FontFaceResource, FontPortability,
-    FontResourceSource, GlyphOutlinePayloadKind, GlyphRange, GlyphRunDiagnostics,
-    GlyphRunReplayEligibility, ImageResourceId, LayerAffineTransform, LayerGlyphOutlinePaint,
-    LayerNode, LayerNodeKind, LayerVector, LocalizedName, PaintOp, PaintTextStyle,
-    PaintVariantMeta, ResourceArena, SvgGlyphPayload, SvgResourceId, TextRunPlacement,
-    TextSourceId, TextSourceRange, TextSourceSpan, TextVariantKind, TextVariantQuality,
+    BitmapGlyphFiltering, BitmapGlyphPayload, BitmapGlyphScalingPolicy, GlyphOutlinePayloadKind,
+    GlyphRange, GlyphRunDiagnostics, GlyphRunReplayEligibility, ImageResourceId,
+    LayerAffineTransform, LayerGlyphOutlinePaint, LayerNode, LayerNodeKind, LayerVector, PaintOp,
+    PaintTextStyle, PaintVariantMeta, ResourceArena, SvgGlyphPayload, SvgResourceId, TextSourceId,
+    TextSourceRange, TextSourceSpan, TextVariantKind, TextVariantQuality,
 };
 use crate::renderer::render_tree::BoundingBox;
 
 const MAX_STATIC_SVG_GLYPH_BYTES: usize = 1024 * 1024;
 const MAX_BITMAP_GLYPH_BYTES: usize = 4 * 1024 * 1024;
 const MAX_BITMAP_GLYPH_PIXELS: u32 = 4096 * 4096;
+const MAX_FONT_NATIVE_SOURCE_BYTES: usize = 32 * 1024 * 1024;
+const MAX_FONT_NATIVE_SIDECARS_PER_PAGE: usize = 128;
+const MAX_FONT_NATIVE_ENCODED_BYTES_PER_PAGE: usize = 8 * 1024 * 1024;
+const MAX_FONT_NATIVE_DECODED_PIXELS_PER_PAGE: u64 = 32 * 1024 * 1024;
 
 fn png_dimensions(data: &[u8]) -> Option<(u32, u32)> {
     const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
@@ -72,6 +73,7 @@ impl FontBitmapGlyphDecodeOptions {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontBitmapGlyphDecodeError {
+    SourceFontTooLarge,
     FaceParseFailed,
     GlyphIdOutOfRange,
     InvalidRequestedPpem,
@@ -86,6 +88,7 @@ pub enum FontBitmapGlyphDecodeError {
 impl FontBitmapGlyphDecodeError {
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::SourceFontTooLarge => "sourceFontTooLarge",
             Self::FaceParseFailed => "faceParseFailed",
             Self::GlyphIdOutOfRange => "glyphIdOutOfRange",
             Self::InvalidRequestedPpem => "invalidRequestedPpem",
@@ -106,6 +109,9 @@ pub fn decode_font_bitmap_glyph_payload(
     options: &FontBitmapGlyphDecodeOptions,
     resources: &mut ResourceArena,
 ) -> Result<BitmapGlyphPayload, FontBitmapGlyphDecodeError> {
+    if font_data.len() > MAX_FONT_NATIVE_SOURCE_BYTES {
+        return Err(FontBitmapGlyphDecodeError::SourceFontTooLarge);
+    }
     if glyph_id > u32::from(u16::MAX) {
         return Err(FontBitmapGlyphDecodeError::GlyphIdOutOfRange);
     }
@@ -144,10 +150,29 @@ pub fn decode_font_bitmap_glyph_payload(
     }
 
     let scale = options.pixels_per_em as f64 / raster.pixels_per_em as f64;
+    let glyph_id = ttf_parser::GlyphId(glyph_id as u16);
+    let uses_sbix_offsets = face
+        .tables()
+        .sbix
+        .and_then(|table| table.best_strike(options.pixels_per_em))
+        .and_then(|strike| strike.get(glyph_id))
+        .is_some();
+    let (x, y) = if uses_sbix_offsets {
+        (
+            options.placement.x - f64::from(raster.x) * scale,
+            options.placement.y + options.baseline_y - f64::from(raster.height) * scale
+                + f64::from(raster.y) * scale,
+        )
+    } else {
+        (
+            options.placement.x + f64::from(raster.x) * scale,
+            options.placement.y + options.baseline_y
+                - (f64::from(raster.y) + f64::from(raster.height)) * scale,
+        )
+    };
     let placement = BoundingBox::new(
-        options.placement.x + f64::from(raster.x) * scale,
-        options.placement.y + options.baseline_y
-            - (f64::from(raster.y) + f64::from(raster.height)) * scale,
+        x,
+        y,
         f64::from(raster.width) * scale,
         f64::from(raster.height) * scale,
     );
@@ -189,6 +214,7 @@ impl FontSvgGlyphDecodeOptions {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontSvgGlyphDecodeError {
+    SourceFontTooLarge,
     FaceParseFailed,
     GlyphIdOutOfRange,
     MissingSvgGlyph,
@@ -206,6 +232,7 @@ pub enum FontSvgGlyphDecodeError {
 impl FontSvgGlyphDecodeError {
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::SourceFontTooLarge => "sourceFontTooLarge",
             Self::FaceParseFailed => "faceParseFailed",
             Self::GlyphIdOutOfRange => "glyphIdOutOfRange",
             Self::MissingSvgGlyph => "missingSvgGlyph",
@@ -229,6 +256,9 @@ pub fn decode_font_svg_glyph_payload(
     options: &FontSvgGlyphDecodeOptions,
     resources: &mut ResourceArena,
 ) -> Result<SvgGlyphPayload, FontSvgGlyphDecodeError> {
+    if font_data.len() > MAX_FONT_NATIVE_SOURCE_BYTES {
+        return Err(FontSvgGlyphDecodeError::SourceFontTooLarge);
+    }
     if glyph_id > u32::from(u16::MAX) {
         return Err(FontSvgGlyphDecodeError::GlyphIdOutOfRange);
     }
@@ -341,6 +371,9 @@ pub fn resolve_embedded_font_face_index(
     alternate_family: Option<&str>,
 ) -> Option<u32> {
     const MAX_COLLECTION_FACES: u32 = 256;
+    if bytes.len() > MAX_FONT_NATIVE_SOURCE_BYTES {
+        return None;
+    }
     let face_count = ttf_parser::fonts_in_collection(bytes).unwrap_or(1);
     if face_count == 0 || face_count > MAX_COLLECTION_FACES {
         return None;
@@ -395,7 +428,9 @@ pub fn lower_font_native_glyph_sidecars(
         fonts,
         report: FontGlyphLoweringReport::default(),
         next_text_source_id: 0,
-        registered_font_indices: HashSet::new(),
+        emitted_sidecars: 0,
+        encoded_resource_bytes: 0,
+        decoded_resource_pixels: 0,
     };
     lowerer.lower_node(root);
     lowerer.report
@@ -406,7 +441,9 @@ struct FontGlyphLowerer<'a, 'font> {
     fonts: &'a [EmbeddedFontFace<'font>],
     report: FontGlyphLoweringReport,
     next_text_source_id: u32,
-    registered_font_indices: HashSet<usize>,
+    emitted_sidecars: usize,
+    encoded_resource_bytes: usize,
+    decoded_resource_pixels: u64,
 }
 
 impl FontGlyphLowerer<'_, '_> {
@@ -455,15 +492,26 @@ impl FontGlyphLowerer<'_, '_> {
             return None;
         }
         let paint_style = PaintTextStyle::from(&run.style);
-        if !paint_style.is_fill_only_glyph_replay() || run.rotation.abs() > f64::EPSILON {
+        if !paint_style.is_fill_only_glyph_replay()
+            || run.rotation.abs() > f64::EPSILON
+            || run.is_vertical
+            || run.style.bold
+            || run.style.italic
+            || (run.style.ratio - 1.0).abs() > f64::EPSILON
+            || self.emitted_sidecars >= MAX_FONT_NATIVE_SIDECARS_PER_PAGE
+        {
             return None;
         }
         let char_shape_id = run.char_shape_id?;
         let language_index = crate::renderer::style_resolver::detect_lang_category(character);
-        let (font_index, font) = self.fonts.iter().enumerate().find(|(_, font)| {
+        let font = self.fonts.iter().find(|font| {
             font.char_shape_id == char_shape_id && font.language_index == language_index
         })?;
         self.report.attempted_runs += 1;
+        if font.bytes.len() > MAX_FONT_NATIVE_SOURCE_BYTES {
+            self.report.rejected_runs += 1;
+            return None;
+        }
         let face = match ttf_parser::Face::parse(font.bytes, font.face_index) {
             Ok(face) => face,
             Err(_) => {
@@ -487,6 +535,22 @@ impl FontGlyphLowerer<'_, '_> {
             bbox,
         );
         bitmap_options.baseline_y = run.baseline;
+        let glyph_id_u16 = ttf_parser::GlyphId(glyph_id as u16);
+        let Some(raster) = face.glyph_raster_image(glyph_id_u16, bitmap_options.pixels_per_em)
+        else {
+            self.report.rejected_runs += 1;
+            return None;
+        };
+        let encoded_bytes = raster.data.len();
+        let decoded_pixels = u64::from(raster.width) * u64::from(raster.height);
+        if self.encoded_resource_bytes.saturating_add(encoded_bytes)
+            > MAX_FONT_NATIVE_ENCODED_BYTES_PER_PAGE
+            || self.decoded_resource_pixels.saturating_add(decoded_pixels)
+                > MAX_FONT_NATIVE_DECODED_PIXELS_PER_PAGE
+        {
+            self.report.rejected_runs += 1;
+            return None;
+        }
         let bitmap = decode_font_bitmap_glyph_payload(
             font.bytes,
             font.face_index,
@@ -495,39 +559,23 @@ impl FontGlyphLowerer<'_, '_> {
             self.resources,
         )
         .ok();
-        let svg = if bitmap.is_none() {
-            decode_font_svg_glyph_payload(
-                font.bytes,
-                font.face_index,
-                glyph_id,
-                &FontSvgGlyphDecodeOptions::new(source_range, glyph_range),
-                self.resources,
-            )
-            .ok()
-        } else {
-            None
-        };
         let payload_kind = if bitmap.is_some() {
             self.report.emitted_bitmap_glyphs += 1;
+            self.emitted_sidecars += 1;
+            self.encoded_resource_bytes += encoded_bytes;
+            self.decoded_resource_pixels += decoded_pixels;
             GlyphOutlinePayloadKind::BitmapGlyph
-        } else if svg.is_some() {
-            self.report.emitted_svg_glyphs += 1;
-            GlyphOutlinePayloadKind::SvgGlyph
         } else {
             self.report.rejected_runs += 1;
             return None;
         };
 
-        self.register_font_resource(font_index, font);
         let equivalence_group = format!("text-{text_source_id}");
         let mut variant = PaintVariantMeta::text_run_default(equivalence_group.clone());
         variant.variant_id = "glyphOutline".to_string();
         variant.variant_kind = TextVariantKind::GlyphOutline;
         variant.is_default_fallback = false;
-        variant.requires = vec![
-            "fontResources".to_string(),
-            format!("text.glyphOutline.{}", payload_kind.as_str()),
-        ];
+        variant.requires = vec![format!("text.glyphOutline.{}", payload_kind.as_str())];
         variant.quality = Some(TextVariantQuality::Exact);
         variant.anchor_op_id = Some(equivalence_group);
         let placement = crate::paint::text_shape::text_run_placement(bbox, run);
@@ -543,7 +591,7 @@ impl FontGlyphLowerer<'_, '_> {
             payload_kind,
             color_layers: None,
             bitmap_glyph: bitmap,
-            svg_glyph: svg,
+            svg_glyph: None,
             paint_style,
             placement,
             paths: Vec::new(),
@@ -561,77 +609,6 @@ impl FontGlyphLowerer<'_, '_> {
                 reason: Some("fontNativeGlyphPayload".to_string()),
             },
         })
-    }
-
-    fn register_font_resource(&mut self, font_index: usize, font: &EmbeddedFontFace<'_>) {
-        if !self.registered_font_indices.insert(font_index) {
-            return;
-        }
-        let digest_value = resource_digest_hex(font.bytes);
-        let data_ref = BinaryResourceRef {
-            kind: BinaryResourceKind::FontBlob,
-            id: font_blob_resource_key(font.bytes.len(), &digest_value),
-        };
-        if !self
-            .resources
-            .font_resources()
-            .blobs
-            .iter()
-            .any(|blob| blob.data_ref.as_ref() == Some(&data_ref))
-        {
-            self.resources.intern_font_blob_bytes(font.bytes);
-            let blob_key = FontBlobKey(data_ref.id.clone());
-            let digest = FontDigest {
-                algorithm: "blake3".to_string(),
-                value: digest_value,
-            };
-            self.resources
-                .font_resources_mut()
-                .blobs
-                .push(FontBlobResource {
-                    id: blob_key,
-                    digest: Some(digest.clone()),
-                    source: FontResourceSource::Embedded,
-                    data_ref: Some(data_ref.clone()),
-                    portability: FontPortability::PortableBlob {
-                        digest,
-                        data_ref: data_ref.clone(),
-                    },
-                });
-        }
-        let blob_key = FontBlobKey(data_ref.id.clone());
-        let face_key = FontFaceKey(format!("{}:face:{}", blob_key.0, font.face_index));
-        if self
-            .resources
-            .font_resources()
-            .faces
-            .iter()
-            .any(|face| face.id == face_key)
-        {
-            return;
-        }
-        self.resources
-            .font_resources_mut()
-            .faces
-            .push(FontFaceResource {
-                id: face_key,
-                blob_key,
-                face_index: font.face_index,
-                postscript_name: None,
-                family_names: std::iter::once(LocalizedName {
-                    locale: None,
-                    value: font.family.to_string(),
-                })
-                .chain(font.alternate_family.map(|family| LocalizedName {
-                    locale: None,
-                    value: family.to_string(),
-                }))
-                .collect(),
-                style_names: Vec::new(),
-                weight_class: None,
-                width_class: None,
-                italic: None,
-            });
     }
 }
 
@@ -682,7 +659,7 @@ mod tests {
                 payload.placement.width,
                 payload.placement.height,
             ),
-            (12.0, 18.0, 16.0, 16.0)
+            (10.0, 21.0, 16.0, 16.0)
         );
         assert_eq!(resources.image_count(), 1);
         assert!(resources
@@ -942,7 +919,153 @@ mod tests {
             ops.as_slice(),
             [PaintOp::TextRun { .. }, PaintOp::GlyphOutline { .. }]
         ));
-        assert_eq!(resources.font_resources().blobs.len(), 1);
-        assert_eq!(resources.font_resources().faces.len(), 1);
+        assert!(resources.font_resources().blobs.is_empty());
+        assert!(resources.font_resources().faces.is_empty());
+    }
+
+    #[test]
+    fn normal_lowering_keeps_text_fallback_for_unrepresented_run_styles() {
+        for case in ["bold", "italic", "vertical", "ratio"] {
+            let bbox = BoundingBox::new(10.0, 20.0, 16.0, 16.0);
+            let mut run = crate::renderer::render_tree::TextRunNode {
+                text: "\u{E100}".to_string(),
+                style: crate::renderer::TextStyle {
+                    font_family: "fixture family".to_string(),
+                    font_size: 16.0,
+                    ..Default::default()
+                },
+                char_shape_id: Some(7),
+                para_shape_id: None,
+                section_index: None,
+                para_index: None,
+                char_start: None,
+                cell_context: None,
+                is_para_end: false,
+                is_line_break_end: false,
+                rotation: 0.0,
+                is_vertical: false,
+                char_overlap: None,
+                border_fill_id: 0,
+                baseline: 12.0,
+                field_marker: Default::default(),
+            };
+            match case {
+                "bold" => run.style.bold = true,
+                "italic" => run.style.italic = true,
+                "vertical" => run.is_vertical = true,
+                "ratio" => run.style.ratio = 0.8,
+                _ => unreachable!(),
+            }
+            let mut root = LayerNode::leaf(bbox, None, vec![PaintOp::text_run(bbox, run)]);
+            let mut resources = ResourceArena::default();
+            let report = lower_font_native_glyph_sidecars(
+                &mut root,
+                &mut resources,
+                &[EmbeddedFontFace {
+                    char_shape_id: 7,
+                    language_index: 0,
+                    family: "fixture family",
+                    alternate_family: None,
+                    bytes: fixture_font(),
+                    face_index: 0,
+                }],
+            );
+            assert_eq!(report.emitted_bitmap_glyphs, 0, "case={case}");
+            let LayerNodeKind::Leaf { ops } = root.kind else {
+                panic!("expected leaf");
+            };
+            assert!(matches!(ops.as_slice(), [PaintOp::TextRun { .. }]));
+        }
+    }
+
+    #[test]
+    fn oversized_source_font_is_rejected_before_parsing_or_interning() {
+        let mut oversized = fixture_font().to_vec();
+        oversized.resize(MAX_FONT_NATIVE_SOURCE_BYTES + 1, 0);
+        assert_eq!(
+            resolve_embedded_font_face_index(&oversized, "fixture family", None),
+            None
+        );
+
+        let mut resources = ResourceArena::default();
+        let result = decode_font_bitmap_glyph_payload(
+            &oversized,
+            0,
+            fixture_glyph_id('\u{E100}'),
+            &FontBitmapGlyphDecodeOptions::new(
+                16,
+                TextSourceRange::new(0, 3),
+                GlyphRange::new(0, 1),
+                BoundingBox::new(10.0, 20.0, 16.0, 16.0),
+            ),
+            &mut resources,
+        );
+        assert!(matches!(
+            result,
+            Err(FontBitmapGlyphDecodeError::SourceFontTooLarge)
+        ));
+        assert_eq!(resources.image_count(), 0);
+    }
+
+    #[test]
+    fn normal_lowering_enforces_page_sidecar_budget() {
+        let bbox = BoundingBox::new(0.0, 0.0, 16.0, 16.0);
+        let ops = (0..MAX_FONT_NATIVE_SIDECARS_PER_PAGE + 1)
+            .map(|_| {
+                PaintOp::text_run(
+                    bbox,
+                    crate::renderer::render_tree::TextRunNode {
+                        text: "\u{E100}".to_string(),
+                        style: crate::renderer::TextStyle {
+                            font_size: 16.0,
+                            ..Default::default()
+                        },
+                        char_shape_id: Some(7),
+                        para_shape_id: None,
+                        section_index: None,
+                        para_index: None,
+                        char_start: None,
+                        cell_context: None,
+                        is_para_end: false,
+                        is_line_break_end: false,
+                        rotation: 0.0,
+                        is_vertical: false,
+                        char_overlap: None,
+                        border_fill_id: 0,
+                        baseline: 12.0,
+                        field_marker: Default::default(),
+                    },
+                )
+            })
+            .collect();
+        let mut root = LayerNode::leaf(bbox, None, ops);
+        let mut resources = ResourceArena::default();
+        let report = lower_font_native_glyph_sidecars(
+            &mut root,
+            &mut resources,
+            &[EmbeddedFontFace {
+                char_shape_id: 7,
+                language_index: 0,
+                family: "fixture family",
+                alternate_family: None,
+                bytes: fixture_font(),
+                face_index: 0,
+            }],
+        );
+
+        assert_eq!(
+            report.emitted_bitmap_glyphs,
+            MAX_FONT_NATIVE_SIDECARS_PER_PAGE
+        );
+        let LayerNodeKind::Leaf { ops } = root.kind else {
+            panic!("expected leaf");
+        };
+        assert_eq!(
+            ops.iter()
+                .filter(|op| matches!(op, PaintOp::GlyphOutline { .. }))
+                .count(),
+            MAX_FONT_NATIVE_SIDECARS_PER_PAGE
+        );
+        assert_eq!(resources.image_count(), 1);
     }
 }

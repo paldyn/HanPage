@@ -119,8 +119,8 @@ def main() -> int:
     strike = Strike(ppem=16, resolution=72)
     strike.glyphs["bitmap"] = Glyph(
         glyphName="bitmap",
-        originOffsetX=0,
-        originOffsetY=0,
+        originOffsetX=2,
+        originOffsetY=3,
         graphicType="png ",
         imageData=bitmap_png(),
     )
