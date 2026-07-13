@@ -13845,6 +13845,12 @@ impl TypesetEngine {
                             r, b_end, block_h, block_content, rest, block_has_nested
                         );
                     }
+                    // [#2097 프로브 기록] 쪽 끝자락 한정(rest ≤ MAX_REST) 완화는 반증됨:
+                    // 3144149 p3(잔여 333.6px 에 342.4px 블록, 초과 8.8px, 콘텐츠
+                    // 123.8px)는 한글이 압축 수용(hc=6)하지만, 국소 수치가 동형인
+                    // kps-ai r=8..11(잔여 237.3px 에 243.3px, 초과 6.0px, 콘텐츠
+                    // 59.8px)은 한글이 이월(issue_1073 골든) — 잔여/초과/콘텐츠
+                    // 여유로는 분리 불가. 한글의 판별 신호는 별도 규명 필요.
                     if rest - block_content >= BOTTOM_SQUEEZE_MIN_HEADROOM_PX
                         && !block_has_nested
                         && rest <= BOTTOM_SQUEEZE_MAX_REST_PX
