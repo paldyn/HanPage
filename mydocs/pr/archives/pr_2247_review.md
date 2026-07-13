@@ -21,9 +21,10 @@
 ## 사전 검증
 
 - 통합 브랜치 focused release test에 `issue_2097_squeeze`가 포함됐고 1 test passed / 0 failed였다. 이 테스트는 `21761835_jeonjik_exemption_table.hwp`의 6쪽 핀을 확인한다.
-- HWP 2020 MCP CLI로 `pdf/task2146/21761835_jeonjik_exemption_table-2020.pdf`를 생성했고 6쪽, `status: success`, `run_status: 0`, `validation: ok`였다.
+- HWP 2020 MCP CLI로 `pdf/task2146/21761835_jeonjik_exemption_table-2020.pdf`를 생성했고 6쪽, SHA-256 `9b63df86d926cfc66e18045fb41e4200581803b7ec2fd191120fbedde02e5e08`, `status: success`, `run_status: 0`, `validation: ok`였다.
 - `wasm-pack build --target web --out-dir pkg`가 성공했다.
 - `CARGO_INCREMENTAL=0 cargo clippy --all-targets -- -D warnings`가 경고 없이 성공했다.
+- `CARGO_INCREMENTAL=0 cargo test --profile release-test --tests` 전체 회귀가 exit 0으로 통과했다.
 
 ## visual sweep
 
@@ -33,6 +34,6 @@
 
 ## 리스크와 권고
 
-- 행 분할 규칙은 pagination 핵심 경로이므로 전체 회귀와 Clippy가 필수다.
+- 행 분할 규칙은 pagination 핵심 경로이며, 전체 회귀와 Clippy가 모두 통과했다.
 - 제안한 6쪽 정합은 재현됐고, 1쪽 `156631374` 표본은 [#2245](https://github.com/edwardkim/rhwp/pull/2245)의 핀으로 함께 보호된다.
 - 최종 권고: [#2232](https://github.com/edwardkim/rhwp/pull/2232)부터의 스택 순서로만 conditional accept. 최신 head diff와 CI를 재확인한 후 merge를 판단한다.

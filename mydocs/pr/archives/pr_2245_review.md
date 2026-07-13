@@ -22,12 +22,13 @@
 
 - `CARGO_INCREMENTAL=0 cargo test --profile release-test --test issue_2243`가 4 tests passed / 0 failed였다.
 - HWP 2020 MCP CLI로 아래 기준 PDF를 새로 생성했고, 모두 `status: success`, `run_status: 0`, `validation: ok`였다.
-  - `pdf/task2243/36395325_gyeoljae_consulting-2020.pdf`: 5쪽
-  - `pdf/task2243/36382819_gyeoljae_pm_traffic-2020.pdf`: 3쪽
-  - `pdf/task2243/36386907_gyeoljae_sewoon-2020.pdf`: 5쪽
-  - `pdf/task2243/156631374_taxi_press-2020.pdf`: 1쪽
+  - `pdf/task2243/36395325_gyeoljae_consulting-2020.pdf`: 5쪽, SHA-256 `a786294ca3b903052afa23586892157d0d765c3d49823a077a90e9b81ca9d187`
+  - `pdf/task2243/36382819_gyeoljae_pm_traffic-2020.pdf`: 3쪽, SHA-256 `72c039fa80de571cf4f71b5990f082d8f91269625b659c3e6e1fab2edc4d1e79`
+  - `pdf/task2243/36386907_gyeoljae_sewoon-2020.pdf`: 5쪽, SHA-256 `f005e79be14c8dcae5e8416bdde1dd3e3a2836725c7e0fddc7e47b2015c795b9`
+  - `pdf/task2243/156631374_taxi_press-2020.pdf`: 1쪽, SHA-256 `59c4b40db7cffc11ed574bc4bca8843dbb46bc53a9cc3a2e24c1bf68be9224c3`
 - `wasm-pack build --target web --out-dir pkg`가 성공했다.
 - `CARGO_INCREMENTAL=0 cargo clippy --all-targets -- -D warnings`가 경고 없이 성공했다.
+- `CARGO_INCREMENTAL=0 cargo test --profile release-test --tests` 전체 회귀가 exit 0으로 통과했다.
 
 ## visual sweep
 
@@ -39,5 +40,5 @@
 
 ## 리스크와 권고
 
-- HWPX source gate가 HWP5 regression을 막는 핵심이므로 [#2247](https://github.com/edwardkim/rhwp/pull/2247)과 [#2251](https://github.com/edwardkim/rhwp/pull/2251)의 페이지 핀까지 포함해 전체 회귀를 수행해야 한다.
-- 현재 쪽수 정합과 focused test는 수용 근거가 충분하다. 다만 p4의 font/layout 잔여, 최신 원격 head diff, 전체 회귀/Clippy, 최신 CI 확인을 조건으로 conditional accept한다.
+- HWPX source gate는 [#2247](https://github.com/edwardkim/rhwp/pull/2247)과 [#2251](https://github.com/edwardkim/rhwp/pull/2251)의 페이지 핀까지 포함한 전체 회귀에서 통과했다.
+- 현재 쪽수 정합과 focused/full regression, Clippy는 수용 근거가 충분하다. 다만 p4의 font/layout 잔여, 최신 원격 head diff와 최신 CI 확인을 조건으로 conditional accept한다.

@@ -23,11 +23,12 @@
 
 - 통합 브랜치에서 `issue_2097_squeeze` 1 test passed / 0 failed 및 `issue_2243` 4 tests passed / 0 failed였다.
 - HWP 2020 MCP CLI로 아래 기준 PDF를 생성했고 모두 `status: success`, `run_status: 0`, `validation: ok`였다.
-  - `pdf/task2097/1741000_project_application-2020.pdf`: 2쪽
-  - `pdf/task2097/21298295_byeolpyo5_disaster-2020.pdf`: 2쪽
+  - `pdf/task2097/1741000_project_application-2020.pdf`: 2쪽, SHA-256 `e728ebac08b5d6101b46d9c40978b066d17abba0e56a65a44ae969fbac0a3a3c`
+  - `pdf/task2097/21298295_byeolpyo5_disaster-2020.pdf`: 2쪽, SHA-256 `53dbae22029198dc1107bef33ad187cb7cbcde16c871deb4f8b1f87482df07b3`
 - 통합 rhwp 결과는 각 2쪽으로 기준 PDF와 정합했다.
 - `wasm-pack build --target web --out-dir pkg`가 성공했다.
 - `CARGO_INCREMENTAL=0 cargo clippy --all-targets -- -D warnings`가 경고 없이 성공했다.
+- `CARGO_INCREMENTAL=0 cargo test --profile release-test --tests` 전체 회귀가 exit 0으로 통과했다.
 
 ## visual sweep
 
@@ -38,6 +39,6 @@
 
 ## 리스크와 권고
 
-- 13px/100px/12px gate는 실제 조판 경로에 영향을 주므로, positive page-pin 외에 각 gate의 비수용 경계 regression이 계속 유지되는지 전체 회귀에서 확인해야 한다.
+- 13px/100px/12px gate는 실제 조판 경로에 영향을 준다. positive page-pin과 기존 비수용 경계 regression을 포함한 전체 회귀는 통과했으며, gate별 독립 negative test 보강은 후속 품질 개선 후보로 남긴다.
 - [#2097](https://github.com/edwardkim/rhwp/issues/2097)은 본 압축 축을 해소해도 다른 sliver 계열이 남아 있으므로 자동 close 대상이 아니다.
-- 최종 권고: stacked top PR로 conditional accept 후보. 최신 head diff, 전체 회귀, Clippy, 최신 CI 및 영구 visual asset 반영을 끝낸 뒤 merge 여부를 판단한다.
+- 최종 권고: stacked top PR로 conditional accept 후보. 최신 head diff, 최신 CI 및 영구 visual asset 반영을 끝낸 뒤 merge 여부를 판단한다.

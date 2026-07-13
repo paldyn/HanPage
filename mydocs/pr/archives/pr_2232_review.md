@@ -30,6 +30,7 @@
 - 이 PR 직접 관련 `issue_1891`은 3 tests passed로 76076/86712 HWP5-origin HWPX 쪽수 핀을 포함한다.
 - `wasm-pack build --target web --out-dir pkg`가 성공했다.
 - `CARGO_INCREMENTAL=0 cargo clippy --all-targets -- -D warnings`가 경고 없이 성공했다.
+- `CARGO_INCREMENTAL=0 cargo test --profile release-test --tests` 전체 회귀가 exit 0으로 통과했다.
 - 작성 시점 참고로 원격 CI의 Rust/Build/Render Diff/CodeQL은 성공이었다. 최종 merge 조건은 최신 head 기준 CI 재통과다.
 
 ## 렌더 검토
@@ -39,6 +40,6 @@
 
 ## 리스크와 권고
 
-- 영향 범위가 넓은 typeset/reflow 변경이라 하위 stacked PR의 쪽수 핀과 전체 회귀, Clippy를 모두 다시 확인해야 한다.
+- 영향 범위가 넓은 typeset/reflow 변경이라 하위 stacked PR의 쪽수 핀을 함께 확인했다. 전체 회귀와 Clippy도 통과했다.
 - 현재 근거로는 원칙적으로 수용 후보이나, 단독 merge가 아니라 [#2242](https://github.com/edwardkim/rhwp/pull/2242) → [#2245](https://github.com/edwardkim/rhwp/pull/2245) → [#2247](https://github.com/edwardkim/rhwp/pull/2247) → [#2251](https://github.com/edwardkim/rhwp/pull/2251) 순서의 통합 검토 대상으로 유지한다.
-- 최종 권고: 최신 원격 head diff, 전체 회귀, Clippy, 최신 CI를 재확인한 뒤 conditional accept를 merge 판단으로 전환한다.
+- 최종 권고: 최신 원격 head diff와 최신 CI를 재확인한 뒤 conditional accept를 merge 판단으로 전환한다.
