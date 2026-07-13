@@ -36,10 +36,10 @@
 - 기준 이전 `upstream/devel`에서 `36395325_gyeoljae_consulting.hwpx`는 7쪽이었고, 통합 결과는 5쪽으로 줄어 기준 PDF와 맞았다.
 - sweep 자동 후보는 `36395325` 4쪽의 `line_order_overlap`, `column_line_band_drift` 2건만 남았다. 나머지 6개 문서에는 후보가 없었고 render tree tail overflow도 없었다.
 - `36395325` 4쪽의 현재 결과는 기준 PDF와 같은 `성과관리 체계` 페이지이나, macOS 로컬 font/layout 차이로 line geometry는 완전 동일하지 않다. 이 항목은 페이지 수 fix의 blocker는 아니지만 font fidelity 잔여로 보존한다.
-- 임시 산출물은 `target/visual-sweep-planet6897/task2243-36395325/` 아래에 있다. merge 가능 판단 전 대표 `review_004.png`를 후속 통합 PR의 `mydocs/pr/assets/`에 영구 보존해야 한다.
+- 임시 산출물은 `target/visual-sweep-planet6897/task2243-36395325/` 아래에 있다. 대표 증적은 [정상 p1 review PNG](../assets/pr_2256_36395325_gyeoljae_consulting_p1_review.png)와 [잔여 후보 p4 review PNG](../assets/pr_2256_36395325_gyeoljae_consulting_p4_review.png)로 영구 보존했다.
 
 ## 리스크와 권고
 
 - HWPX source gate는 [#2247](https://github.com/edwardkim/rhwp/pull/2247)과 [#2251](https://github.com/edwardkim/rhwp/pull/2251)의 페이지 핀까지 포함한 전체 회귀에서 통과했다.
 - 현재 쪽수 정합과 focused/full regression, Clippy 및 원격 CI는 수용 근거가 충분하다. p4의 font/layout 잔여는 페이지 수 fix를 막지 않는 별도 fidelity 축으로 남긴다.
-- 최종 권고: 수용. 현재 원격 head의 소스·샘플 patch는 통합 검증 코드와 동일하며, 후속 통합 PR에는 p4 대표 visual asset을 증적으로 보존한다.
+- 최종 권고: 수용. 현재 원격 head의 소스·샘플 patch는 통합 검증 코드와 동일하며, p4 대표 visual asset을 증적으로 보존했다.

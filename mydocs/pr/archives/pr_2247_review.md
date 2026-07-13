@@ -29,7 +29,7 @@
 ## visual sweep
 
 - 통합 결과는 MCP 기준 PDF와 6쪽으로 정합했고 자동 후보는 0건이었다.
-- visual accuracy proxy 평균은 8.26927%로 낮다. 한컴 PDF와 macOS 로컬 폰트의 차이, 마스킹/텍스트 rendering 차이를 포함한 지표여서 페이지 수 기준 fix의 단독 pass/fail 근거로 사용하지 않았다.
+- visual accuracy proxy 평균은 8.26927%로 낮다. 한컴 PDF와 macOS 로컬 폰트의 차이, 마스킹/텍스트 rendering 차이를 포함한 지표여서 페이지 수 기준 fix의 단독 pass/fail 근거로 사용하지 않았다. 대표 [p1 review PNG](../assets/pr_2256_21761835_jeonjik_exemption_table_p1_review.png)를 증적으로 보존했다.
 - layout overflow diagnostic은 1건(약 4.8px)이 남았지만 render tree tail overflow는 없었다. 향후 table-row fine fidelity 축으로 추적할 비차단 잔여다.
 
 ## 리스크와 권고

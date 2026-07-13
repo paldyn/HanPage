@@ -35,10 +35,10 @@
 - 두 task2097 표본 모두 자동 후보 0건이었다.
 - `1741000` proxy 평균은 9.33597%, `21298295`는 9.12393%였다. macOS의 로컬 글꼴/렌더 차이에 민감한 지표이므로 쪽수 fix의 단독 pass/fail 지표로 삼지 않았다.
 - 각각 layout overflow diagnostic 2건, 3건이 있었으나 render tree tail overflow는 없었다.
-- 임시 sweep 산출물은 `target/visual-sweep-planet6897/task2097-*` 아래에 있다. 최종 수용 전 대표 review PNG와 MCP PDF를 통합 PR 자산으로 보존한다.
+- 임시 sweep 산출물은 `target/visual-sweep-planet6897/task2097-*` 아래에 있다. MCP PDF와 대표 [1741000 p1 review PNG](../assets/pr_2256_1741000_project_application_p1_review.png), [21298295 p1 review PNG](../assets/pr_2256_21298295_byeolpyo5_disaster_p1_review.png)를 통합 PR 증적으로 보존했다.
 
 ## 리스크와 권고
 
 - 13px/100px/12px gate는 실제 조판 경로에 영향을 준다. positive page-pin과 기존 비수용 경계 regression을 포함한 전체 회귀는 통과했으며, gate별 독립 negative test 보강은 후속 품질 개선 후보로 남긴다.
 - [#2097](https://github.com/edwardkim/rhwp/issues/2097)은 본 압축 축을 해소해도 다른 sliver 계열이 남아 있으므로 자동 close 대상이 아니다.
-- 최종 권고: stacked top PR로 수용. 현재 원격 head의 소스·샘플 patch는 통합 검증 코드와 동일하고 원격 CI도 성공했다. 후속 통합 PR에는 대표 visual asset을 검증 증적으로 보존한다.
+- 최종 권고: stacked top PR로 수용. 현재 원격 head의 소스·샘플 patch는 통합 검증 코드와 동일하고 원격 CI도 성공했다. 대표 visual asset을 검증 증적으로 보존했다.
