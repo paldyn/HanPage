@@ -75,7 +75,7 @@ export async function createEditor(container, options = {}) {
  *
  * iframe 내부의 rhwp-studio와 postMessage로 통신합니다.
  */
-class RhwpEditor {
+export class RhwpEditor {
   constructor(iframe, transport) {
     this._iframe = iframe;
     this._transport = transport;
@@ -137,6 +137,14 @@ class RhwpEditor {
    */
   async getPageSvg(page = 0) {
     return this._request('getPageSvg', { page });
+  }
+
+  /**
+   * 선택된 renderer와 페이지별 CanvasKit readiness 진단을 반환합니다.
+   * @param page - 0부터 시작하는 페이지 번호
+   */
+  async getRendererDiagnostics(page = 0) {
+    return this._request('getRendererDiagnostics', { page });
   }
 
   /**

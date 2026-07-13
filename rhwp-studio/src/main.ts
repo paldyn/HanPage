@@ -899,6 +899,11 @@ async function loadFile(file: File, options: { skipUnsavedGuard?: boolean } = {}
   }
 }
 
+function resetCanvasKitDocumentState(): void {
+  canvaskitRenderer?.resetDocumentResources();
+  canvasView?.resetRendererDiagnostics();
+}
+
 async function loadBytes(
   data: Uint8Array,
   fileName: string,
@@ -911,6 +916,7 @@ async function loadBytes(
   }
   await updateLoadProgress(25, '문서 파싱 및 쪽 계산 중...');
   const docInfo = wasm.loadDocument(data, fileName);
+  resetCanvasKitDocumentState();
   await updateLoadProgress(45, '자동 저장 준비 중...');
   forgetConvertedHmlSaveHandle(fileHandle);
   wasm.currentFileHandle = fileHandle;
@@ -973,6 +979,7 @@ async function createNewDocument(): Promise<void> {
   try {
     msg.textContent = '새 문서 생성 중...';
     const docInfo = wasm.createNewDocument();
+    resetCanvasKitDocumentState();
     await autosaveManager.beginDocument(
       { fileName: wasm.fileName, sourceFormat: wasm.getSourceFormat() },
       { discardPreviousDraft: true },
@@ -1175,6 +1182,7 @@ installEmbedRuntime({
     async getRendererDiagnostics(pageIndex) {
       await initPromise;
       return {
+        schemaVersion: 1 as const,
         request: rendererRuntimeRequest,
         initialized: rendererInitialized,
         initializationError: rendererInitializationError,

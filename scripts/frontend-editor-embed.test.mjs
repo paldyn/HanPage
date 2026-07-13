@@ -46,6 +46,7 @@ test('@rhwp/editor public API uses exact-origin MessageChannel v1 binary transpo
 
   assert.equal(await editor.pageCount(), 3);
   assert.equal(await editor.getPageSvg(2), '<svg data-page="2"/>');
+  assert.deepEqual(await editor.getRendererDiagnostics(2), rendererDiagnostics(2));
 
   const input = new Uint8Array([1, 2, 3]);
   assert.deepEqual(await editor.loadFile(input, 'sample.hwp'), { pageCount: 3 });
@@ -185,6 +186,7 @@ function responseFor(message, legacy = false) {
     case 'ready': return true;
     case 'pageCount': return 3;
     case 'getPageSvg': return `<svg data-page="${message.params.page}"/>`;
+    case 'getRendererDiagnostics': return rendererDiagnostics(message.params.page);
     case 'loadFile': return { pageCount: 3 };
     case 'exportHwp': return legacy ? [4, 5, 6] : new Uint8Array([4, 5, 6]);
     case 'exportHwpx': return legacy ? [7, 8, 9] : new Uint8Array([7, 8, 9]);
@@ -200,6 +202,18 @@ function responseFor(message, legacy = false) {
     case 'exportHwpVerify': return verifyResult();
     default: throw new Error(`Unexpected method: ${message.method}`);
   }
+}
+
+function rendererDiagnostics(page) {
+  return {
+    schemaVersion: 1,
+    request: null,
+    initialized: true,
+    initializationError: null,
+    effectiveBackend: 'canvaskit',
+    backendFallbackReason: null,
+    page: { index: page, canvaskit: null },
+  };
 }
 
 function verifyResult() {

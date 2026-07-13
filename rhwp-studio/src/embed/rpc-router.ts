@@ -8,13 +8,23 @@ export interface EmbedRpcHandlers {
     skipUnsavedGuard: boolean,
   ): Promise<{ pageCount: number }>;
   pageCount(): Promise<number>;
-  getRendererDiagnostics(page: number): Promise<unknown>;
+  getRendererDiagnostics(page: number): Promise<EmbedRendererDiagnosticsV1>;
   getPageSvg(page: number): Promise<string>;
   exportHwp(): Promise<Uint8Array>;
   exportHwpx(): Promise<Uint8Array>;
   exportHml(): Promise<Uint8Array>;
   getHmlSaveState(): Promise<HmlSaveState>;
   exportHwpVerify(): Promise<unknown>;
+}
+
+export interface EmbedRendererDiagnosticsV1 {
+  schemaVersion: 1;
+  request: unknown;
+  initialized: boolean;
+  initializationError: string | null;
+  effectiveBackend: 'canvas2d' | 'canvaskit' | null;
+  backendFallbackReason: string | null;
+  page: { index: number; canvaskit: unknown };
 }
 
 function asParams(value: unknown): Record<string, unknown> {

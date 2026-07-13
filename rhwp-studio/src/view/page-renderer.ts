@@ -155,6 +155,14 @@ export class PageRenderer {
     };
   }
 
+  releasePageDiagnostics(pageIdx: number): void {
+    this.canvaskitDiagnosticsByPage.delete(pageIdx);
+  }
+
+  releaseAllPageDiagnostics(): void {
+    this.canvaskitDiagnosticsByPage.clear();
+  }
+
   private renderPageCanvasKit(
     pageIdx: number,
     canvas: HTMLCanvasElement,
