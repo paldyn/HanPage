@@ -1,5 +1,6 @@
 const EXPECTED_CANVASKIT_UNSUPPORTED_OPS = new Set([
   'charOverlap',
+  'equation:invalidLayoutFallback',
   'equation:unsupportedDirectReplay',
   'glyphOutline',
   'glyphOutline:glyphOutlineStrokeStyleUnsupported',
