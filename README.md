@@ -390,6 +390,7 @@ v0.7.x 배포 주기 누적 외부 기여자: [@ahnbu](https://github.com/ahnbu)
 - P25 widens exact font replay proof coverage for variation instances, TTC/OTC face indexes, font blob `dataRef`, and digest mismatch while keeping `TextRun` fallback for unproven construction cases.
 - P26 closes guarded Text IR v2 authority gaps for `MixedPerGlyph`, non-horizontal glyph orientation, `glyphTransforms`, and line-break telemetry while keeping `TextRun` fallback as the compatibility path.
 - P27 separates font resolver diagnostics from portable glyph replay proof. CanvasKit/native-style selection now requires matching `fontResources`, blob `dataRef`, interned bytes, and digest agreement before a `Portable` glyph run can be selected.
+- P34 keeps Canvas2D as the browser default and hardens the explicit `?renderer=canvaskit` path with page-scoped runtime diagnostics. CI runs a selected paragraph/table/image readiness corpus and requires the effective CanvasKit backend, zero unexpected replay gaps, no render failure, and a passing Canvas2D visual threshold.
 - CI covers the native Skia path with `cargo test --features native-skia skia --lib`; the feature is not available on `wasm32` targets.
 - The initial native Skia path is a PNG raster backend with core image/equation/raw-svg replay; full CanvasKit glyph replay, exact native glyph replay, real font blob extraction, complex text shaping, advanced image parity, and native form replay stay as follow-up work.
 - C ABI export is intentionally left for a later PR.
