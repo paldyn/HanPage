@@ -66,7 +66,11 @@ import {
   layerPaintOpReplayPlane,
 } from './canvaskit/replay-plane';
 import { isExpectedCanvasKitUnsupportedOp } from './canvaskit/diagnostics';
-import { glyphOutlinePayloadStatus } from './glyph-outline-payload-status';
+import { layerResourceKeyMatches } from './canvaskit/resource-key';
+import {
+  glyphOutlinePayloadResourceKey,
+  glyphOutlinePayloadStatus,
+} from './glyph-outline-payload-status';
 import { parseStaticSvgPathLayers, type StaticSvgPathLayer } from './static-svg-path-layers';
 import { loadLocalFontBytesFor, localFontFaceKey, resolveLocalFont, type LocalFontRecord } from '@/core/local-fonts';
 
@@ -130,9 +134,12 @@ export class CanvasKitLayerRenderer {
   private static readonly MAX_IMAGE_TILE_DRAWS = 4096;
   private static readonly MAX_IMAGE_CACHE_ENTRIES = 128;
   private static readonly MAX_IMAGE_FAILURE_CACHE_ENTRIES = 128;
+  private static readonly MAX_SVG_GLYPH_CACHE_ENTRIES = 128;
   private static readonly MAX_ENCODED_IMAGE_BASE64_LENGTH = 24 * 1024 * 1024;
   private static readonly MAX_DECODED_IMAGE_PIXELS = 32 * 1024 * 1024;
   private static readonly MAX_IMAGE_CACHE_PIXELS = 64 * 1024 * 1024;
+  private static readonly MAX_BITMAP_GLYPH_BASE64_LENGTH = Math.ceil(4 * 1024 * 1024 / 3) * 4;
+  private static readonly MAX_STATIC_SVG_GLYPH_BYTES = 1024 * 1024;
   private static readonly MAX_PLACEHOLDER_DASH_SEGMENTS_PER_AXIS = 2048;
   private static readonly MAX_EQUATION_LAYOUT_DEPTH = 64;
   private static readonly MAX_EQUATION_LAYOUT_NODES = 4096;
@@ -146,7 +153,7 @@ export class CanvasKitLayerRenderer {
   private readonly svgGlyphParseFailures = new Set<string>();
   private readonly localTypefaces = new Map<string, CanvasKitLocalTypeface>();
   private readonly localTypefaceLoadFailures = new Set<string>();
-  private readonly localTypefacePending = new Set<string>();
+  private readonly localTypefacePending = new Map<string, number>();
   private readonly unsupportedOps = new Set<string>();
   private surfaceBackend: 'default' | 'software' | null = null;
   private surfaceFallbackReason: string | null = null;
@@ -221,7 +228,7 @@ export class CanvasKitLayerRenderer {
       if (!record || !faceKey || this.localTypefaces.has(faceKey)
         || this.localTypefaceLoadFailures.has(faceKey) || this.localTypefacePending.has(faceKey)) continue;
       pendingRecords.set(faceKey, record);
-      this.localTypefacePending.add(faceKey);
+      this.localTypefacePending.set(faceKey, generation);
     }
 
     let registered = 0;
@@ -260,7 +267,11 @@ export class CanvasKitLayerRenderer {
         await new Promise<void>(resolve => window.setTimeout(resolve, 0));
       }
     } finally {
-      for (const faceKey of pendingRecords.keys()) this.localTypefacePending.delete(faceKey);
+      for (const faceKey of pendingRecords.keys()) {
+        if (this.localTypefacePending.get(faceKey) === generation) {
+          this.localTypefacePending.delete(faceKey);
+        }
+      }
     }
     return registered;
   }
@@ -333,6 +344,7 @@ export class CanvasKitLayerRenderer {
       throw error;
     } finally {
       surface?.delete();
+      this.currentResources = undefined;
       this.lastRenderDurationMs = performance.now() - renderStartedAt;
       this.renderCount += 1;
     }
@@ -557,10 +569,22 @@ export class CanvasKitLayerRenderer {
     if (!payload || index === null || !payload.placement) return null;
     const base64 = resources?.images?.[index];
     const resourceKey = resources?.imageKeys?.[index];
+    const payloadResourceKey = glyphOutlinePayloadResourceKey(op);
+    let bytes: Uint8Array;
+    try {
+      if (typeof base64 !== 'string'
+        || base64.length > CanvasKitLayerRenderer.MAX_BITMAP_GLYPH_BASE64_LENGTH) {
+        return null;
+      }
+      bytes = base64ToBytes(base64);
+    } catch {
+      return null;
+    }
     if (
-      typeof base64 !== 'string'
-      || typeof resourceKey !== 'string'
-      || !op.payloadResourceKey?.endsWith(`:resource:${resourceKey}`)
+      typeof resourceKey !== 'string'
+      || payloadResourceKey === null
+      || op.payloadResourceKey !== `${payloadResourceKey}:resource:${resourceKey}`
+      || !layerResourceKeyMatches('img', resourceKey, bytes)
     ) {
       return null;
     }
@@ -584,31 +608,55 @@ export class CanvasKitLayerRenderer {
     if (!payload || index === null) return null;
     const fragment = resources?.svgFragments?.[index];
     const resourceKey = resources?.svgKeys?.[index];
+    const payloadResourceKey = glyphOutlinePayloadResourceKey(op);
+    if (typeof fragment !== 'string'
+      || fragment.length > CanvasKitLayerRenderer.MAX_STATIC_SVG_GLYPH_BYTES) {
+      return null;
+    }
+    const fragmentBytes = new TextEncoder().encode(fragment);
     if (
-      typeof fragment !== 'string'
+      fragmentBytes.byteLength > CanvasKitLayerRenderer.MAX_STATIC_SVG_GLYPH_BYTES
       || typeof resourceKey !== 'string'
-      || !op.payloadResourceKey?.endsWith(`:resource:${resourceKey}`)
+      || payloadResourceKey === null
+      || op.payloadResourceKey !== `${payloadResourceKey}:resource:${resourceKey}`
+      || !layerResourceKeyMatches('svg', resourceKey, fragmentBytes)
     ) {
       return null;
     }
     const cached = this.svgGlyphPathCache.get(resourceKey);
-    if (cached) return cached;
+    if (cached) {
+      this.svgGlyphPathCache.delete(resourceKey);
+      this.svgGlyphPathCache.set(resourceKey, cached);
+      return cached;
+    }
     if (this.svgGlyphParseFailures.has(resourceKey)) return null;
 
-    const layers = parseStaticSvgPathLayers(fragment);
+    const layers = parseStaticSvgPathLayers(fragment, op.paintStyle?.color ?? '#000000');
     if (layers.length === 0) {
-      this.svgGlyphParseFailures.add(resourceKey);
+      this.rememberSvgGlyphParseFailure(resourceKey);
       return null;
     }
     if (!staticSvgPathLayersAreReplayable(
       layers,
       pathData => this.canvasKit.Path.MakeFromSVGString(pathData),
     )) {
-      this.svgGlyphParseFailures.add(resourceKey);
+      this.rememberSvgGlyphParseFailure(resourceKey);
       return null;
+    }
+    if (this.svgGlyphPathCache.size >= CanvasKitLayerRenderer.MAX_SVG_GLYPH_CACHE_ENTRIES) {
+      const oldestKey = this.svgGlyphPathCache.keys().next().value as string | undefined;
+      if (oldestKey !== undefined) this.svgGlyphPathCache.delete(oldestKey);
     }
     this.svgGlyphPathCache.set(resourceKey, layers);
     return layers;
+  }
+
+  private rememberSvgGlyphParseFailure(resourceKey: string): void {
+    if (this.svgGlyphParseFailures.size >= CanvasKitLayerRenderer.MAX_SVG_GLYPH_CACHE_ENTRIES) {
+      const oldestKey = this.svgGlyphParseFailures.values().next().value as string | undefined;
+      if (oldestKey !== undefined) this.svgGlyphParseFailures.delete(oldestKey);
+    }
+    this.svgGlyphParseFailures.add(resourceKey);
   }
 
   private renderNode(
@@ -938,27 +986,36 @@ export class CanvasKitLayerRenderer {
           if (!path) continue;
           this.applyGlyphPathFillRule(path, layer.fillRule);
           if (layer.fill !== null) {
-            const paint = this.makeFillPaint(layer.fill, layer.opacity);
-            canvas.drawPath(path, paint);
-            paint.delete?.();
+            let paint: SkPaint | null = null;
+            try {
+              paint = this.makeFillPaint(layer.fill, layer.opacity);
+              canvas.drawPath(path, paint);
+            } finally {
+              paint?.delete?.();
+            }
           }
           if (layer.stroke) {
             const stroke = layer.stroke;
-            const paint = this.makeStrokePaint(stroke.color, stroke.width, stroke.opacity);
-            paint.setStrokeJoin(this.canvasKit.StrokeJoin[
-              stroke.lineJoin === 'round' ? 'Round' : stroke.lineJoin === 'bevel' ? 'Bevel' : 'Miter'
-            ]);
-            paint.setStrokeCap(this.canvasKit.StrokeCap[
-              stroke.lineCap === 'round' ? 'Round' : stroke.lineCap === 'square' ? 'Square' : 'Butt'
-            ]);
-            paint.setStrokeMiter(stroke.miterLimit);
-            const effect = stroke.dashArray
-              ? this.canvasKit.PathEffect.MakeDash(stroke.dashArray, stroke.dashOffset)
-              : null;
-            if (effect) paint.setPathEffect(effect);
-            canvas.drawPath(path, paint);
-            effect?.delete?.();
-            paint.delete?.();
+            let paint: SkPaint | null = null;
+            let effect: ReturnType<typeof this.canvasKit.PathEffect.MakeDash> | null = null;
+            try {
+              paint = this.makeStrokePaint(stroke.color, stroke.width, stroke.opacity);
+              paint.setStrokeJoin(this.canvasKit.StrokeJoin[
+                stroke.lineJoin === 'round' ? 'Round' : stroke.lineJoin === 'bevel' ? 'Bevel' : 'Miter'
+              ]);
+              paint.setStrokeCap(this.canvasKit.StrokeCap[
+                stroke.lineCap === 'round' ? 'Round' : stroke.lineCap === 'square' ? 'Square' : 'Butt'
+              ]);
+              paint.setStrokeMiter(stroke.miterLimit);
+              effect = stroke.dashArray
+                ? this.canvasKit.PathEffect.MakeDash(stroke.dashArray, stroke.dashOffset)
+                : null;
+              if (effect) paint.setPathEffect(effect);
+              canvas.drawPath(path, paint);
+            } finally {
+              effect?.delete?.();
+              paint?.delete?.();
+            }
           }
         } finally {
           path?.delete?.();
@@ -1512,22 +1569,55 @@ export class CanvasKitLayerRenderer {
       this.unsupportedOps.add('equation:unsupportedDirectReplay');
       return;
     }
+    const scaleX = op.layoutBox.width > 0 && op.bbox.width > 0
+      ? op.bbox.width / op.layoutBox.width
+      : 1;
     const budget: EquationRenderBudget = {
       remainingNodes: CanvasKitLayerRenderer.MAX_EQUATION_LAYOUT_NODES,
     };
-    if (!this.renderEquationBox(
-      canvas,
-      op.layoutBox,
-      op.bbox.x,
-      op.bbox.y,
-      op.color ?? '#000000',
-      Math.max(1, op.fontSize ?? op.bbox.height),
-      false,
-      false,
-      0,
-      budget,
-    )) {
-      this.unsupportedOps.add('equation:invalidLayoutFallback');
+    const recorder = new this.canvasKit.PictureRecorder();
+    let picture: ReturnType<typeof recorder.finishRecordingAsPicture> | null = null;
+    let recordingFinished = false;
+    let replayed = false;
+    try {
+      const recordingCanvas = recorder.beginRecording(this.rect(op.bbox));
+      recordingCanvas.save();
+      recordingCanvas.translate(op.bbox.x, op.bbox.y);
+      if (Math.abs(scaleX - 1) > 0.01) recordingCanvas.scale(scaleX, 1);
+      try {
+        replayed = this.renderEquationBox(
+          recordingCanvas,
+          op.layoutBox,
+          0,
+          0,
+          op.color ?? '#000000',
+          Math.max(1, op.fontSize ?? op.bbox.height),
+          false,
+          false,
+          0,
+          budget,
+        );
+      } finally {
+        recordingCanvas.restore();
+      }
+      picture = recorder.finishRecordingAsPicture();
+      recordingFinished = true;
+      if (replayed) canvas.drawPicture(picture);
+    } catch {
+      replayed = false;
+    } finally {
+      if (!recordingFinished) {
+        try {
+          picture = recorder.finishRecordingAsPicture();
+        } catch {
+          picture = null;
+        }
+      }
+      picture?.delete?.();
+      recorder.delete?.();
+    }
+    if (!replayed) {
+      this.unsupportedOps.add('equation:invalidLayout');
     }
   }
 
@@ -1713,6 +1803,7 @@ export class CanvasKitLayerRenderer {
             fontSize,
           );
       case 'fontStyle': {
+        if (!['roman', 'italic', 'bold'].includes(layout.kind.fontStyle)) return false;
         const nextItalic = layout.kind.fontStyle === 'roman'
           ? false
           : layout.kind.fontStyle === 'italic'
@@ -1766,10 +1857,13 @@ export class CanvasKitLayerRenderer {
     ) {
       return false;
     }
-    const font = new this.canvasKit.Font(this.defaultTypeface, Math.max(1, fontSize));
-    const paint = this.makeFillPaint(color);
+    let font: Font | null = null;
+    let paint: SkPaint | null = null;
     try {
+      font = new this.canvasKit.Font(this.defaultTypeface, Math.max(1, fontSize));
+      paint = this.makeFillPaint(color);
       const glyphIds = font.getGlyphIDs(text, Array.from(text).length);
+      if (!glyphIds || glyphIds.some((glyphId) => glyphId === 0)) return false;
       const glyphWidths = font.getGlyphWidths(glyphIds) ?? [];
       const measuredWidth = glyphWidths.reduce((sum, width) => sum + width, 0);
       const drawWidth = targetWidth > 0 && measuredWidth > 0 ? targetWidth : measuredWidth;
@@ -1785,8 +1879,8 @@ export class CanvasKitLayerRenderer {
       canvas.drawText(text, centered ? x + (targetWidth - drawWidth) / 2 : x, baselineY, paint, font);
       return true;
     } finally {
-      font.delete?.();
-      paint.delete?.();
+      font?.delete?.();
+      paint?.delete?.();
     }
   }
 
@@ -1849,7 +1943,6 @@ export class CanvasKitLayerRenderer {
     const strokeWidth = Math.max(fontSize * 0.03, 0.5);
     switch (decoration) {
       case 'hat':
-      case 'check':
         return this.drawEquationLine(canvas, centerX - halfWidth * 0.6, y + fontSize * 0.15, centerX, y, color, strokeWidth)
           && this.drawEquationLine(canvas, centerX, y, centerX + halfWidth * 0.6, y + fontSize * 0.15, color, strokeWidth);
       case 'bar':
@@ -1884,7 +1977,7 @@ export class CanvasKitLayerRenderer {
         }
       }
       default:
-        return this.drawEquationLine(canvas, centerX - halfWidth * 0.5, y, centerX + halfWidth * 0.5, y, color, strokeWidth);
+        return false;
     }
   }
 
@@ -1931,22 +2024,44 @@ export class CanvasKitLayerRenderer {
         dash + gap,
         op.bbox.height / CanvasKitLayerRenderer.MAX_PLACEHOLDER_DASH_SEGMENTS_PER_AXIS,
       );
-      for (let x = op.bbox.x; x < op.bbox.x + op.bbox.width; x += horizontalStep) {
-        const end = Math.min(x + horizontalStep * dash / (dash + gap), op.bbox.x + op.bbox.width);
-        canvas.drawLine(x, op.bbox.y, end, op.bbox.y, paint);
-        canvas.drawLine(x, op.bbox.y + op.bbox.height, end, op.bbox.y + op.bbox.height, paint);
-      }
-      for (let y = op.bbox.y; y < op.bbox.y + op.bbox.height; y += verticalStep) {
-        const end = Math.min(y + verticalStep * dash / (dash + gap), op.bbox.y + op.bbox.height);
-        canvas.drawLine(op.bbox.x, y, op.bbox.x, end, paint);
-        canvas.drawLine(op.bbox.x + op.bbox.width, y, op.bbox.x + op.bbox.width, end, paint);
+      try {
+        for (let x = op.bbox.x; x < op.bbox.x + op.bbox.width; x += horizontalStep) {
+          const end = Math.min(x + horizontalStep * dash / (dash + gap), op.bbox.x + op.bbox.width);
+          canvas.drawLine(x, op.bbox.y, end, op.bbox.y, paint);
+          canvas.drawLine(x, op.bbox.y + op.bbox.height, end, op.bbox.y + op.bbox.height, paint);
+        }
+        for (let y = op.bbox.y; y < op.bbox.y + op.bbox.height; y += verticalStep) {
+          const end = Math.min(y + verticalStep * dash / (dash + gap), op.bbox.y + op.bbox.height);
+          canvas.drawLine(op.bbox.x, y, op.bbox.x, end, paint);
+          canvas.drawLine(op.bbox.x + op.bbox.width, y, op.bbox.x + op.bbox.width, end, paint);
+        }
+      } finally {
+        paint.delete?.();
       }
       const icon = Math.max(14, Math.min(36, Math.min(op.bbox.width, op.bbox.height) * 0.4));
       const ix = op.bbox.x + (op.bbox.width - icon) / 2;
       const iy = op.bbox.y + (op.bbox.height - icon * 0.75) / 2;
-      canvas.drawRect(this.canvasKit.XYWHRect(ix, iy, icon, icon * 0.75), paint);
-      canvas.drawLine(ix, iy + icon * 0.75, ix + icon, iy, paint);
-      paint.delete?.();
+      const iconBounds = this.canvasKit.XYWHRect(ix, iy, icon, icon * 0.75);
+      let iconFill: SkPaint | null = null;
+      let iconStroke: SkPaint | null = null;
+      let missingStroke: SkPaint | null = null;
+      try {
+        iconFill = this.makeFillPaint('#ffffff');
+        iconStroke = this.makeStrokePaint('#888888', 1);
+        missingStroke = this.makeStrokePaint('#cc4444', 1.5);
+        canvas.drawRect(iconBounds, iconFill);
+        canvas.drawRect(iconBounds, iconStroke);
+        canvas.drawLine(ix + icon * 0.08, iy + icon * 0.62, ix + icon * 0.32, iy + icon * 0.30, iconStroke);
+        canvas.drawLine(ix + icon * 0.32, iy + icon * 0.30, ix + icon * 0.52, iy + icon * 0.62, iconStroke);
+        canvas.drawLine(ix + icon * 0.52, iy + icon * 0.62, ix + icon * 0.68, iy + icon * 0.42, iconStroke);
+        canvas.drawLine(ix + icon * 0.68, iy + icon * 0.42, ix + icon * 0.92, iy + icon * 0.62, iconStroke);
+        canvas.drawCircle(ix + icon * 0.72, iy + icon * 0.20, icon * 0.07, iconStroke);
+        canvas.drawLine(ix, iy + icon * 0.75, ix + icon, iy, missingStroke);
+      } finally {
+        missingStroke?.delete?.();
+        iconStroke?.delete?.();
+        iconFill?.delete?.();
+      }
       return;
     }
     this.drawStyledShape(canvas, op.bbox, {

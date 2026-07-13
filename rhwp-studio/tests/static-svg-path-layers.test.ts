@@ -12,6 +12,14 @@ test('parses the font-native static SVG path subset', () => {
   assert.equal(layers[0].fill, '#00a0c8');
 });
 
+test('inherits currentColor from the glyph paint style', () => {
+  const [layer] = parseStaticSvgPathLayers(
+    '<svg><path d="M0 0H1V1Z" fill="currentColor"/></svg>',
+    '#123456',
+  );
+  assert.equal(layer?.fill, '#123456');
+});
+
 test('rejects active, external, escaped, and malformed SVG payloads', () => {
   const invalid = [
     '<svg><script>alert(1)</script><path d="M0 0H1V1Z"/></svg>',

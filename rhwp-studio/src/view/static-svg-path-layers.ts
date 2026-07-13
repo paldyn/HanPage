@@ -72,15 +72,18 @@ const STATIC_SVG_UNSUPPORTED_INDIRECT_PAINT_VALUES = new Set([
   'unset',
 ]);
 
-export function parseStaticSvgPathLayers(fragment: string): StaticSvgPathLayer[] {
-  return parseStaticSvgFragmentLayers(fragment).paths;
+export function parseStaticSvgPathLayers(
+  fragment: string,
+  currentColor = '#000000',
+): StaticSvgPathLayer[] {
+  return parseStaticSvgFragmentLayers(fragment, currentColor).paths;
 }
 
 export function parseStaticSvgTextLayers(fragment: string): StaticSvgTextLayer[] {
-  return parseStaticSvgFragmentLayers(fragment).texts;
+  return parseStaticSvgFragmentLayers(fragment, '#000000').texts;
 }
 
-function parseStaticSvgFragmentLayers(fragment: string): {
+function parseStaticSvgFragmentLayers(fragment: string, currentColor: string): {
   paths: StaticSvgPathLayer[];
   texts: StaticSvgTextLayer[];
 } {
@@ -92,7 +95,7 @@ function parseStaticSvgFragmentLayers(fragment: string): {
   const paths: StaticSvgPathLayer[] = [];
   const texts: StaticSvgTextLayer[] = [];
   const paintStateStack: StaticSvgPaintState[] = [{
-    color: '#000000',
+    color: currentColor,
     fill: null,
     fillRuleValue: null,
     fillOpacity: 1,

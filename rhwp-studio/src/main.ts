@@ -249,9 +249,9 @@ function prepareCanvasKitLocalFonts(fontNames: readonly string[] | undefined): v
   const requestedFonts = [...fontNames];
   void (async () => {
     await loadStoredLocalFonts();
-    const registered = await renderer.prepareLocalFonts(requestedFonts);
-    if (registered > 0 && renderer === canvaskitRenderer) {
-      // 글꼴 face만 바뀌므로 문서와 편집 위치는 유지한 채 현재 페이지를 다시 그린다.
+    await renderer.prepareLocalFonts(requestedFonts);
+    if (renderer === canvaskitRenderer) {
+      // 등록 성공 여부와 관계없이 pending 진단이 끝난 상태를 page snapshot에 반영한다.
       eventBus.emit('document-view-changed');
     }
   })().catch((error) => {
