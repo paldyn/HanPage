@@ -1,17 +1,17 @@
 <p align="center">
-  <img src="assets/logo/logo-256.png" alt="rhwp logo" width="128" />
+  <img src="assets/logo/logo-256.png" alt="HanPage logo" width="128" />
 </p>
 
-<h1 align="center">rhwp</h1>
+<h1 align="center">HanPage</h1>
 
 <p align="center">
-  <strong>All HWP, Open for Everyone</strong><br/>
-  <em>Open-source HWP document viewer & editor — Rust + WebAssembly</em>
+  <strong>Korean documents anywhere</strong> — no installation, just a browser<br/>
+  <em>HWP/HWPX viewer · editor — powered by <a href="https://github.com/edwardkim/rhwp">rhwp</a></em>
 </p>
 
 <p align="center">
-  <a href="https://github.com/edwardkim/rhwp/actions/workflows/ci.yml"><img src="https://github.com/edwardkim/rhwp/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="https://edwardkim.github.io/rhwp/"><img src="https://img.shields.io/badge/Demo-GitHub%20Pages-blue" alt="Demo" /></a>
+  <a href="https://github.com/paldyn/HanPage/actions/workflows/ci.yml"><img src="https://github.com/paldyn/HanPage/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://hanpage.paldyn.com/"><img src="https://img.shields.io/badge/Demo-hanpage.paldyn.com-blue" alt="Demo" /></a>
   <a href="https://www.npmjs.com/package/@rhwp/core"><img src="https://img.shields.io/npm/v/@rhwp/core?label=npm" alt="npm" /></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=edwardkim.rhwp-vscode"><img src="https://img.shields.io/badge/VS%20Code-Marketplace-007ACC" alt="VS Code" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
@@ -20,22 +20,31 @@
 </p>
 
 <p align="center">
+  <a href="https://oosmetrics.com/repo/edwardkim/rhwp"><img src="https://api.oosmetrics.com/api/v1/badge/achievement/921c34bc-4dd3-4409-ba2e-2d99c8b4a9b6.svg" alt="rhwp engine: Top 2 in WebAssembly by originality - 2026-04-21" /></a>
+  <a href="https://oosmetrics.com/repo/edwardkim/rhwp"><img src="https://api.oosmetrics.com/api/v1/badge/achievement/fd1e3217-b99a-4ec2-8cba-98429f3d91c7.svg" alt="rhwp engine: Top 2 in Editors by originality - 2026-04-21" /></a>
+</p>
+
+<p align="center">
   <a href="README.md">한국어</a> | <strong>English</strong>
 </p>
 
 ---
 
-Open **HWP/HWPX files and supported HML documents anywhere**. Free, no installation required.
+**HanPage** is paldyn's hosted redistribution of the open-source HWP/HWPX viewer · editor engine [rhwp](https://github.com/edwardkim/rhwp), served at [hanpage.paldyn.com](https://hanpage.paldyn.com/). Open Korean documents in the browser, no installation required.
 
-**HWP** is the dominant document format in South Korea — used by government agencies, schools, courts, and most organizations. Until now, there has been no viable open-source solution to read or edit these files.
+**HWP** is the dominant document format in South Korea — used by government agencies, schools, courts, and most organizations. The rhwp engine, written in Rust and compiled to WebAssembly, renders HWP documents directly in the browser with accuracy that matches (and sometimes exceeds) the proprietary viewer.
 
-rhwp changes that. Built with Rust and compiled to WebAssembly, it renders HWP documents directly in the browser with accuracy that matches (and sometimes exceeds) the proprietary viewer. The goal: break the walls of a closed format so that every person, every AI, and every platform can read and write Korean documents freely.
-
-> **[Live Demo](https://edwardkim.github.io/rhwp/)** | **[VS Code Extension](https://marketplace.visualstudio.com/items?itemName=edwardkim.rhwp-vscode)** | **[Open VSX](https://open-vsx.org/extension/edwardkim/rhwp-vscode)**
+> **[Live Demo](https://hanpage.paldyn.com/)** | **[VS Code Extension](https://marketplace.visualstudio.com/items?itemName=edwardkim.rhwp-vscode)** | **[Open VSX](https://open-vsx.org/extension/edwardkim/rhwp-vscode)**
 
 <p align="center">
-  <img src="assets/screenshots/render-example-1.png" alt="rhwp rendering example — KTX route map" width="700" />
+  <img src="assets/screenshots/render-example-1.png" alt="HanPage rendering example — KTX route map" width="700" />
 </p>
+
+## Engine — rhwp
+
+The parser · renderer · editor engine used by HanPage is the open-source project [rhwp](https://github.com/edwardkim/rhwp). Current engine version **v0.7.13** (MIT License, © 2025-2026 Edward Kim and contributors).
+
+For per-release cycle changes and external contributor credits, see upstream's [CHANGELOG](https://github.com/edwardkim/rhwp/blob/main/CHANGELOG.md) and [Releases](https://github.com/edwardkim/rhwp/releases). This paldyn repository forks the engine and manages the hanpage.paldyn.com hosting and redistribution artifacts.
 
 ## Roadmap
 
@@ -54,8 +63,6 @@ Foundation  Typeset   Collab    Complete
 
 > The reason for completing the skeleton alone through v0.5.0 is simple — when the community arrives, the core architecture must already be solid so that direction does not drift.
 
-## Milestones
-
 ### v0.5.0 ~ v0.7.x — Foundation (current)
 
 > Reverse-engineering complete, read/write foundation established
@@ -70,220 +77,6 @@ Foundation  Typeset   Collab    Complete
 > HML support is limited to HWPML 2.9/2.91 structures verified by the current real-file corpus.
 > Supported equations can be imported and edited; HML-origin documents can be saved back to HML
 > after a preservation preflight. Pictures and embedded/external resources remain blocked from lossy save.
-
-#### v0.7.18 Cycle (2026-07-11)
-
-> Patch after v0.7.17 — large-scale rendering fidelity (floating/front objects, RowBreak
-> tables, page-bottom trust), huge-table performance, editor caret/undo/OLE parity,
-> lenient parsing & HWPX preservation, WMF shape rewrite
-
-**Rendering fidelity**
-- Floating/front object pagination parity with Hangul (#1994/#1995/#2004/#2006/#2007/#2019)
-- RowBreak table corrections (#1921/#1937/#1842/#2097) + page-bottom saved-bounds trust (#2093)
-
-**Performance · Editor**
-- Huge-table render timeout resolved — 52,694 cells (#2063); late-page caret 3,064ms→33ms (#2021)
-
-**Parser · Serialization · Shapes**
-- Lenient loading of partially corrupted documents (#1932), HWPX preservation, WMF rewrite (#1943)
-
-#### v0.7.17 Cycle (2026-06-23)
-
-> Patch after v0.7.16 — first OOXML chart render-fidelity work, legacy-shape shapeComment
-> serialization, WASM options-object APIs, rhwp-studio table/picture/cursor editing fixes,
-> and a dependency bump batch
-
-**Rendering · charts**
-- 2D-approximation routing for 7 OOXML chart types (3D-bar/3D-pie/ofPie) + bar stacking/percent (C1a)
-- Keep v2 font authority on fallback, expand CanvasKit replay contract guards
-
-**Save contract · API**
-- Fixed missing shapeComment serialization on legacy shapes (ellipse/arc/polygon/curve/chart/ole)
-- Added 26 WASM options-object APIs (`*Ex`, backward-compatible) + consumer README/manual
-
-**rhwp-studio · extension**
-- Table row/column insert-delete regression fix, autosave/recovery, local-font consent, picture/cursor fidelity, table-cell editing/protection
-- Browser extension 0.2.6: viewer CSP fix, Chrome download interceptor side-effect removal
-
-#### v0.7.16 Cycle (2026-06-19)
-
-> Patch after v0.7.15 — HWPX save-contract (serializer fidelity) refinements, ClickHere
-> guide-text Hancom compatibility, rhwp-studio drag-and-drop security gate, and rendering/
-> table/picture fixes with many external contributor PRs
-
-**HWPX Save Contract (serializer fidelity)**
-- Preserved cell/text-box controls, linesegs, and captions; emit secPr margins and body
-  column (colPr) from the IR instead of template hardcoding
-- Preserved picture sizes, MEMO, shapeComment, registration axis, table pageBreak; lossless
-  roundtrip for DocInfo/numbering and more
-- Made parser autoNum width consistent, fixed newNum slot position, added enum-token surface check
-
-**Hancom Compatibility · rhwp-studio**
-- Fixed ClickHere (click-to-type) guide-text command format — resolves guide text not binding
-  in the Hancom editor
-- Drag-and-drop local file loading security gate (modal opt-in, extension/web common); ClickHere
-  editing and dark theme
-
-**Rendering · Other**
-- Native PDF export API, Text IR v2 font-proof gates, endnote height SSOT, rotated-cell picture placement
-- 27-sample chart corpus verification fixture; preserve mixed page sizes when printing
-
-#### v0.7.15 Cycle (2026-06-06)
-
-> Security patch — browser-extension service-worker fetch hardening, equation TAC flow/caret fixes,
-> HWPX save-contract follow-ups, and browser extension v0.2.4 preparation
-
-**Browser Extension Security**
-- Hardened Chrome/Firefox service-worker document-fetch sender validation, internal/localhost/private URL blocking, and final redirect URL revalidation
-- Uses `credentials: "omit"` for extension-side fetches and keeps automatically extracted thumbnail data out of the page DOM
-- Chrome/Edge/Firefox extension v0.2.4: no new permissions and no new external network endpoints
-
-**Equation and Endnote Flow**
-- Improved wrapping and paragraph-indent handling for equation TAC-only lines
-- Fixed caret movement across forced line breaks, equation TACs, endnote areas, and paragraph boundaries
-
-**HWPX Save Contract**
-- Fixed HWPX picture serialization for flip/rotation and `isEmbeded`
-- Preserved HWPX diagonal cell-border `hh:slash` / `hh:backSlash` type values
-- Preserved zero-length HWPX field ordering
-
-#### v0.7.13 Cycle (2026-05-18 ~ 2026-05-26)
-
-> Focused HWPX rendering/save compatibility fixes, exam/public-agency document regression fixes, and browser extension v0.2.3 preparation
-
-**HWPX → HWP Save Compatibility**
-- Improved table/cell axis contracts, cell LIST_HEADER materialization, gradient `BORDER_FILL`, cell inner margins, and cell background image fill mode serialization
-- Implemented memo control serialization, memo style preservation, TOC field marker/page text output, page-number hide/restart controls, and related paragraph-control save paths
-- Resolved multiple Hancom corruption/interrupted-render cases across `hwpx-h-01/02/03`, `mel-001`, `aift`, `exam_kor`, and `exam_social` fixtures
-
-**HWPX Rendering Parity**
-- Improved master pages (even/odd/last), headers/footers, paragraph numbering, paragraph borders, and exam passage boxes
-- Improved textbox positioning, gradient fills, and rounded-corner rendering
-- Improved SVG and web-canvas visual parity against Hancom-converted fixtures including `exam_kor.hwpx`, `exam_social.hwpx`, and `hwp3-sample16-hwp5.hwpx`
-
-**Pagination and Layout Fixes**
-- Fixed HWPX `treat_as_char` table LINE_SEG height over-inflation, nested table page splitting, picture pushdown/vpos double counting, and multi-column endnote vpos handling
-- Improved caret movement around TAC shapes and repeated spaces
-
-**Release and Extensions**
-- Published `@rhwp/core` / `@rhwp/editor` v0.7.13 to npm
-- Attached Linux/macOS/Windows CLI binaries and SHA-256 checksums to GitHub Release `v0.7.13`
-- rhwp Chrome / Edge / Firefox extension v0.2.3 bundles rhwp core 0.7.13 WASM, adds local `file://` access guidance, and suppresses duplicate local-file downloads on Chrome/Edge
-
-#### v0.7.12 Cycle (2026-05-12 ~ 2026-05-18)
-
-> Patch cycle after v0.7.11 — 19 external contributor PRs plus the 7-PR @jangster77 series
-
-**Core Regression Fixes**
-- Split original Issue #952 into five focused defects and completed them: page-border basis, empty-caption phantom advance, column-relative picture advance, inline TAC line mapping before line breaks, and duplicate inline-equation emission inside textboxes
-- Fixed WMF `SetTextAlign` vertical-bit interpretation and HWP3 empty-paragraph + page-break overflow page-count inflation
-- Enabled release LTO / `codegen-units=1` / strip to reduce CLI and WASM artifact size
-
-**rhwp-studio and APIs**
-- Added F5 body block selection, F3 range extension, menu hotkey infrastructure, and page-number restart UI/API support
-- Added `searchAllText`, `rhwpDev.goto()`, and the first document compare/history workflow
-- Improved editing reliability around unsaved-change protection, external clipboard paste priority, and nested-table hit testing
-
-**HWP3/WMF/EMF/Layout**
-- Improved EMF/WMF image rendering, HWP3 tab-spec handling, and HWP3/HWPX external image references
-- Fixed multiple regressions around header/footer picture rotation and mirroring, master-page table margins, equation Canvas/WASM rendering, and final-column flow
-
-**Contributor Thanks**
-- Contributors in this cycle: [@jangster77](https://github.com/jangster77), [@oksure](https://github.com/oksure), [@planet6897](https://github.com/planet6897), [@seo-rii](https://github.com/seo-rii), [@postmelee](https://github.com/postmelee), [@johndoekim](https://github.com/johndoekim), [@ubermensch1218](https://github.com/ubermensch1218), [@xogh3198](https://github.com/xogh3198), [@dragonnite1221-lgtm](https://github.com/dragonnite1221-lgtm)
-
-#### v0.7.11 Cycle (2026-05-10 ~ 2026-05-11)
-
-> Patch cycle after v0.7.10 — focused on Skia native raster, HWP3 native rendering, and rhwp-studio editing interactions
-
-**Rendering and Layout**
-- Advanced Skia native raster work for Issue #536: Layer IR contract hardening, text replay parity, and Text IR v2 compatibility contract
-- Improved HWP3 native rendering through staged fixes against the 763-page `hwp3-sample10.hwp` oracle
-- Organized Git LFS `pdf-large/` isolation and large-fixture handling
-
-**rhwp-studio Editing UX**
-- Improved scrollbar dragging, Korean IME chord-key detection, and the `Ctrl+N → Ctrl+M` shortcut adjustment to avoid Chrome-reserved shortcuts
-- Fixed Alt/Option+Arrow word navigation, table-cell context preservation during drag selection, and line/document-end caret movement
-- Added table-edit Undo/Redo, table-resize `SnapshotCommand`, multi-column/new-number dialogs, and Ctrl/Cmd+Arrow / Ctrl+E shortcuts
-
-**Contributor Thanks**
-- Contributors in this cycle: [@planet6897](https://github.com/planet6897), [@oksure](https://github.com/oksure), [@jangster77](https://github.com/jangster77), [@seo-rii](https://github.com/seo-rii), [@postmelee](https://github.com/postmelee), [@johndoekim](https://github.com/johndoekim), [@kihyunnn](https://github.com/kihyunnn)
-
-#### v0.7.10 Cycle (2026-05-06)
-
-> Patch cycle after v0.7.9 — absorbed 7 external contributors, introduced the AI/VLM PNG pipeline, and added the CLI binary release pipeline
-
-**New Features and Infrastructure**
-- Added the GitHub Release pipeline for Linux/macOS/Windows CLI binaries with SHA-256 checksums
-- Added native Skia `PageLayerTree → PNG` export, the `native-skia` feature gate, and `DocumentCore::render_page_png_native(page)`
-- Added the `export-png` CLI, `--vlm-target claude`, `--scale`, `--max-dimension`, `--font-path`, plus Korean/English manuals
-
-**Layout and Rendering Fixes**
-- Fixed HWP3 Square wrap cases, HWP3 conversion-identification heuristics, and the HWP 5.0 spec 0x18/0x1E swap
-- Fixed cell inline TAC Shape margin + indent, TAC table `outer_margin_bottom`, inline table + equation paragraph shifts, choice-cell fraction paragraph routing, and cell-internal TopAndBottom image 1-line offsets
-- Fixed PUA SVG output, exam_eng arrow glyph mapping, Square wrap table `horz_rel_to=Column`, and missing inline equation rendering
-
-**Contributor Thanks**
-- Contributors in this cycle: [@planet6897](https://github.com/planet6897), [@oksure](https://github.com/oksure), [@jangster77](https://github.com/jangster77), [@seo-rii](https://github.com/seo-rii), [@postmelee](https://github.com/postmelee), [@johndoekim](https://github.com/johndoekim), [@cskwork](https://github.com/cskwork)
-
-#### v0.7.9 Cycle (2026-05-01)
-
-> Task #501 (Hancom defensive logic for cell.padding) + cherry-pick of PR #428/#494/#478/#498 + 4 external contributors
-
-**Maintainer Regression Fix**
-- mel-001.hwp page 2 table cell height regression ([#501](https://github.com/edwardkim/rhwp/issues/501)) — added a Hancom-defensive-logic mimic guard for the case where `cell.padding > cell.height` (1700 HU vs 1280 HU). Wrote troubleshooting and wiki ([HWP Cell Padding Defensive Logic](https://github.com/edwardkim/rhwp/wiki/HWP-%EC%85%80-Padding-%EB%B0%A9%EC%96%B4-%EB%A1%9C%EC%A7%81))
-
-**External PR Cherry-picks (3 PRs / 17 commits)**
-- Picture serialization within group (external contribution by [@oksure](https://github.com/oksure) — PR [#428](https://github.com/edwardkim/rhwp/pull/428))
-- `Paragraph::utf16_pos_to_char_idx` public API ([#484](https://github.com/edwardkim/rhwp/issues/484)) — external contribution by [@DanMeon](https://github.com/DanMeon), PR [#494](https://github.com/edwardkim/rhwp/pull/494)
-- Layout/equation fixes bundled (7 Tasks / 10 commits — #488/#490/#483/#489/#495/#480/#476) — external contribution by [@planet6897](https://github.com/planet6897), PR [#478](https://github.com/edwardkim/rhwp/pull/478)
-
-**Regression Verification Infrastructure (External)**
-- Canvas visual diff pipeline (legacy Canvas ↔ PageLayerTree replay automated pixel diff, relates [#364](https://github.com/edwardkim/rhwp/issues/364)) — external contribution by [@seo-rii](https://github.com/seo-rii), PR [#498](https://github.com/edwardkim/rhwp/pull/498)
-
-#### v0.7.8 Cycle (2026-04-29)
-
-> Multiple external contributors + maintainer regression fixes + wiki/README organization — 15 external PRs cherry-picked
-
-#### v0.7.7 Cycle (2026-04-27)
-
-> v0.7.6 regression fix cycle — TypesetEngine pagination drift / page_num refresh / PartialTable + Square wrap (8 items consolidated)
-
-#### Recent Changes (v0.7.3 / extension v0.2.1, 2026-04-21)
-
-**rhwp-studio (library 0.7.3)**
-- HWPX-source documents: save disabled with user notification ([#196](https://github.com/edwardkim/rhwp/issues/196)) — prevents data loss until the HWPX→HWP full converter ([#197](https://github.com/edwardkim/rhwp/issues/197)) lands
-- HWPX→HWP IR mapping adapter assets preserved ([#178](https://github.com/edwardkim/rhwp/issues/178)) — rhwp self-roundtrip 100% recovered; Hancom compatibility deferred to #197
-- HWPX interleaved control char-offset fix for linebreak/embedded controls ([#213](https://github.com/edwardkim/rhwp/pull/213) by @jskang / [@yl-star7](https://github.com/yl-star7))
-- OLE / Chart / EMF native rendering — `<hp:pic>` placeholders, OOXML chart SVG, and native Skia-free EMF → SVG converter for the first time (external contribution by [@planet6897](https://github.com/planet6897) — PR [#221](https://github.com/edwardkim/rhwp/pull/221), 14-stage work)
-- HWPX SVG snapshot regression harness ([#173](https://github.com/edwardkim/rhwp/issues/173)) with `UPDATE_GOLDEN=1` regeneration (external contribution by [@seunghan91](https://github.com/seunghan91) — PR [#181](https://github.com/edwardkim/rhwp/pull/181))
-- Polygon resize + drag preview + shape-click-to-front (external contribution by [@bapdodi](https://github.com/bapdodi) — PR [#215](https://github.com/edwardkim/rhwp/pull/215))
-- Rotated shape resize cursor improvement + Flip handling (external contribution by [@bapdodi](https://github.com/bapdodi) — PR [#192](https://github.com/edwardkim/rhwp/pull/192))
-- HWP image effects (grayscale/black-and-white) reflected in SVG (external contribution by [@marsimon](https://github.com/marsimon) — PR [#149](https://github.com/edwardkim/rhwp/pull/149))
-- Windows CFB path separator fix (external contribution by [@dreamworker0](https://github.com/dreamworker0) — PR [#152](https://github.com/edwardkim/rhwp/pull/152))
-- HWPX Serializer — Document IR → HWPX save (external contribution by [@seunghan91](https://github.com/seunghan91) — PR [#170](https://github.com/edwardkim/rhwp/pull/170))
-- HWPX ZIP entry decompression cap + strikeout shape whitelist (external contribution by [@seunghan91](https://github.com/seunghan91) — PR [#153](https://github.com/edwardkim/rhwp/pull/153), PR [#154](https://github.com/edwardkim/rhwp/pull/154))
-- Shape resize width/height clamp (external contribution by [@seunghan91](https://github.com/seunghan91) — PR [#163](https://github.com/edwardkim/rhwp/pull/163))
-- Mobile dropdown menu icon/label overlap fix (external contribution by [@seunghan91](https://github.com/seunghan91) — PR [#161](https://github.com/edwardkim/rhwp/pull/161))
-
-**rhwp-chrome / Edge extension (v0.2.1)**
-- Chrome Web Store and Microsoft Edge Add-ons approved (2026-04-21)
-- Restored "remember last save location" for general file downloads while the extension is active ([#198](https://github.com/edwardkim/rhwp/issues/198))
-- Options page CSP fix ([#166](https://github.com/edwardkim/rhwp/issues/166))
-- CodeQL alert #16 (shell injection in build.mjs) resolved via `execFileSync` migration
-- HWP files: `Ctrl+S` overwrites the same file directly (external contribution by [@ahnbu](https://github.com/ahnbu) — PR [#189](https://github.com/edwardkim/rhwp/pull/189))
-- Thumbnail loading spinner cleanup + options CSP compatibility (external contribution by [@postmelee](https://github.com/postmelee) — PR [#168](https://github.com/edwardkim/rhwp/pull/168))
-- Block empty viewer tab on DEXT5-style download handlers
-
-**rhwp-firefox extension (v0.1.1, AMO submission pending)**
-- Firefox MV3 port of rhwp-chrome with `browser.*` namespace, Event Page background, and CSP-compatible options (external contribution by [@postmelee](https://github.com/postmelee) — PR [#169](https://github.com/edwardkim/rhwp/pull/169))
-- `__APP_VERSION__` regression fix in `vite.config.ts` (external contribution by [@postmelee](https://github.com/postmelee) — PR [#209](https://github.com/edwardkim/rhwp/pull/209))
-- Shared `rhwp-shared/sw/download-interceptor-common.js` module with #198 blacklist / MIME logic wired into Firefox's `onCreated`+`onChanged` dual-callback flow (external contribution by [@postmelee](https://github.com/postmelee) — PR [#214](https://github.com/edwardkim/rhwp/pull/214))
-
-**rhwp-safari extension (v0.2.1)**
-- Content-script `init()` gate split to honor hoverPreview / autoOpen independently from showBadges (external contribution by [@postmelee](https://github.com/postmelee) — PR [#224](https://github.com/edwardkim/rhwp/pull/224))
-
-**Thanks to contributors**
-v0.7.x cycle cumulative external contributors: [@ahnbu](https://github.com/ahnbu), [@bapdodi](https://github.com/bapdodi), [@cskwork](https://github.com/cskwork), Dangel, [@DanMeon](https://github.com/DanMeon), [@dragonnite1221-lgtm](https://github.com/dragonnite1221-lgtm), [@dreamworker0](https://github.com/dreamworker0), [@jangster77](https://github.com/jangster77), [@johndoekim](https://github.com/johndoekim), [@kihyunnn](https://github.com/kihyunnn), [@marsimon](https://github.com/marsimon), [@oksure](https://github.com/oksure), [@planet6897](https://github.com/planet6897), [@postmelee](https://github.com/postmelee), [@seanshin](https://github.com/seanshin), [@seo-rii](https://github.com/seo-rii), [@seunghan91](https://github.com/seunghan91), [@ubermensch1218](https://github.com/ubermensch1218), [@xogh3198](https://github.com/xogh3198), [@yl-star7](https://github.com/yl-star7)
 
 ### v1.0.0 — Typesetting Engine
 
@@ -354,7 +147,7 @@ See the [roadmap document](mydocs/eng/report/rhwp-milestone.md) for details.
 ### Multi-Renderer Backends
 - `PageRenderTree` can be lowered into a `PageLayerTree` paint IR before backend replay.
 - P1 public surfaces are Rust native `DocumentCore::build_page_layer_tree(page)` and WASM `getPageLayerTree(page)`.
-- Layer JSON starts at `schemaVersion: 1`, uses additive `schemaMinorVersion` / `resourceTableMinorVersion`, `unit: "px"`, and `coordinateSystem: "page-top-left-y-down"` to match the existing page render coordinates.
+- Layer JSON starts at `schemaVersion: 1`, uses `unit: "px"`, and uses `coordinateSystem: "page-top-left"` to match the existing page render coordinates.
 - Compatible schema changes should be additive; incompatible JSON shape changes require a schema version bump.
 - **Legacy SVG** remains the default compatibility output.
 - **Layered SVG** can be exercised with `RHWP_RENDER_PATH=layer-svg`.
@@ -367,10 +160,6 @@ See the [roadmap document](mydocs/eng/report/rhwp-milestone.md) for details.
 - P5 adds native Skia equation replay from `EquationNode.layout_box`, so equations are no longer placeholder boxes in the PNG path.
 - P5 replays the existing equation layout tree directly; it does not add CanvasKit equation replay or native form replay.
 - P6 adds native Skia `RawSvg` fragment rasterization through `resvg`, with external file href loading disabled.
-- P21 adds report-first renderer baseline sweep artifacts and shared replay-plane helpers so SVG, Canvas2D, CanvasKit, and native Skia compare the same background/behindText/flow/inFrontText plane ordering before the sweep becomes a default CI gate.
-- P22 keeps public Canvas on the existing layer path but reduces the WebCanvas layer adapter: core `PaintOp` leaves are replayed directly instead of being rebuilt as temporary `RenderNode` wrappers. Layer JSON also separates canonical `buildOptions`, `debugOptions`, and replay `outputOptions` metadata while keeping legacy `outputOptions` mirrors for compatibility.
-- P23 promotes SVG-derived PDF export to native `DocumentCore` APIs for single-page, explicit page selection, and full-document export. The CLI `export-pdf` command now uses the same native API surface, and render-diff CI writes a report-only PDF visual diff by rasterizing `export-pdf` output against browser Canvas output. Direct/vector PDF replay remains a follow-up.
-- P24-P27 harden strict text/glyph sidecar proof boundaries: bitmap/SVG glyph resource identity, variation/TTC/dataRef/digest proof, guarded orientation/transform authority, and font resolver/proof separation. `TextRun` remains the compatibility fallback whenever proof is incomplete.
 - CI covers the native Skia path with `cargo test --features native-skia skia --lib`; the feature is not available on `wasm32` targets.
 - The initial native Skia path is a PNG raster backend with core image/equation/raw-svg replay; full CanvasKit glyph replay, exact native glyph replay, real document font blob extraction, complex text shaping, advanced image parity, and native form replay stay as follow-up work.
 - C ABI export is intentionally left for a later PR.
@@ -683,20 +472,18 @@ graph TB
 
 ## Contributing
 
-Contributions are welcome. Please note the following first:
+This repository (paldyn/HanPage) manages the redistribution and hosting artifacts for the [rhwp](https://github.com/edwardkim/rhwp) engine. Contributions split by category:
 
-- **Target branch for PRs is `devel`**, not `main`. Although the GitHub default branch is `main`, all contributor PRs go to `devel`.
-- **Check first**: Look at [open issues](https://github.com/edwardkim/rhwp/issues) and [open PRs](https://github.com/edwardkim/rhwp/pulls) to avoid duplicating in-progress work.
-- **Issue close is by maintainer**: Submit only the PR for completed work. The maintainer will close the issue when the PR is merged.
-- **Hancom PDFs are not authoritative ground truth**: PDF output differs across Hancom tools (Editor / Viewer / Hancom Docs), versions (2010 / 2020 / 2022), and output paths (Hancom-native / OS print). See the [Hancom PDF Environment Dependency wiki](https://github.com/edwardkim/rhwp/wiki/한컴-PDF-환경-의존성) for environment-specific comparison data and PR review guidance.
+- **Engine itself (parser · renderer · pagination · editor · CLI · WASM · extensions)**: please submit PRs to upstream [edwardkim/rhwp](https://github.com/edwardkim/rhwp). The PR base is upstream's `devel`.
+- **HanPage hosting / redistribution (CI, gh-pages workflow, domain config, etc.)**: please open [Issues](https://github.com/paldyn/HanPage/issues) / [PRs](https://github.com/paldyn/HanPage/pulls) on this repository.
 
-For the full contribution flow (fork → branch → commit → PR), see [CONTRIBUTING.md](CONTRIBUTING.md).
+> **Hancom PDFs are not authoritative ground truth**: PDF output differs across Hancom tools (Editor / Viewer / Hancom Docs), versions (2010 / 2020 / 2022), and output paths (Hancom-native / OS print). See the [Hancom PDF Environment Dependency wiki](https://github.com/edwardkim/rhwp/wiki/한컴-PDF-환경-의존성) for environment-specific comparison data and PR review guidance.
 
-Questions and ideas are welcome on [Discussions](https://github.com/edwardkim/rhwp/discussions).
+For the full engine contribution flow (fork → branch → commit → PR), see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-### Wiki Resources
+### Wiki (upstream rhwp)
 
-Authoritative resources useful to contributors and fork users are organized in the [Wiki](https://github.com/edwardkim/rhwp/wiki):
+Authoritative technical resources for the rhwp engine are organized in the [upstream rhwp Wiki](https://github.com/edwardkim/rhwp/wiki):
 
 - [Hancom PDF Environment Dependency](https://github.com/edwardkim/rhwp/wiki/한컴-PDF-환경-의존성) — PDF differences across Hancom tools / versions / OS, and PR verification guidance
 - [HWP 5.0 Spec Errata](https://github.com/edwardkim/rhwp/wiki/HWP-5.0-Spec-Errata) — HWP 5.0 spec errata
@@ -719,4 +506,8 @@ This project is an independent open-source project with no affiliation, sponsors
 
 ## License
 
-[MIT License](LICENSE) — Copyright (c) 2025-2026 Edward Kim
+Engine [rhwp](https://github.com/edwardkim/rhwp): [MIT License](LICENSE) — Copyright (c) 2025-2026 Edward Kim and contributors
+
+HanPage redistribution artifacts (additions in this repository): MIT License — Copyright (c) 2026 paldyn
+
+This repository forks rhwp under the MIT License's redistribution grant to host hanpage.paldyn.com. See [LICENSE](LICENSE) and the accompanying license notice files for redistribution details.

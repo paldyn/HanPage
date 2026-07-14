@@ -223,22 +223,6 @@ rhwp ir-diff sample.hwpx sample.hwp --max-lines 50      # 출력 50줄 제한
 
 상세 매뉴얼: `mydocs/manual/ir_diff_command.md`
 
-### HWPX roundtrip 검증 (`hwpx-roundtrip`)
-
-HWPX 파일을 parse→serialize→재parse 하여 IR 뼈대 보존 + 패키지(ZIP) 구조 + 2-round 안정성을 검사한다.
-
-```bash
-rhwp hwpx-roundtrip sample.hwpx                                  # 단일 파일 검사
-rhwp hwpx-roundtrip --batch samples/hwpx                         # 폴더 전수 (재귀)
-rhwp hwpx-roundtrip --batch samples/hwpx -o output/poc/task1315  # inventory.tsv + *.rt.hwpx 산출
-```
-
-하드 실패 존재 시 종료 코드 1. `samples/hwpx/` 전수 회귀 게이트는 `cargo test --test hwpx_roundtrip_baseline` (신규 샘플 자동 포함, xfail/제외 등급은 테스트 파일의 상수 참조).
-
-> 주의: baseline 통과 = 구조(뼈대) 보존이며 시각 충실도 보장이 아니다.
-
-상세 매뉴얼: `mydocs/manual/hwpx_roundtrip_baseline.md`
-
 ### 디버깅 워크플로우
 
 레이아웃/간격 버그 디버깅 시 다음 순서로 진행한다:
@@ -431,7 +415,7 @@ git checkout -b feature/my-task
 git push origin feature/my-task
 
 # 3. 원본 저장소의 devel로 PR 생성
-gh pr create --repo edwardkim/rhwp --base devel --head {contributor}:feature/my-task --title "제목"
+gh pr create --repo paldyn/HanPage --base devel --head {contributor}:feature/my-task --title "제목"
 
 # 4. 메인테이너가 리뷰 + merge
 ```
@@ -440,7 +424,7 @@ gh pr create --repo edwardkim/rhwp --base devel --head {contributor}:feature/my-
 
 - **GitHub Issues**를 타스크 번호로 사용한다. 자동 채번으로 중복 방지.
 - **마일스톤 표기**: `M{버전}` (예: M100=v1.0.0, M05x=v0.5.x)
-- 새 타스크 등록: `gh issue create --repo edwardkim/rhwp --title "제목" --body "설명" --milestone "v1.0.0"`
+- 새 타스크 등록: `gh issue create --repo paldyn/HanPage --title "제목" --body "설명" --milestone "v1.0.0"`
 - 브랜치명: `local/task{issue번호}` (예: `local/task1`)
 - 커밋 메시지: `Task #1: 내용` (Issue 번호 참조)
 - `mydocs/orders/`에서 `M100 #1` 형식으로 마일스톤+이슈 참조

@@ -3,7 +3,7 @@
  */
 
 export interface EditorOptions {
-  /** rhwp-studio HTTP(S) URL. file:, data:, browser extension 등 opaque origin은 지원하지 않음 */
+  /** rhwp-studio HTTP(S) URL (기본: https://hanpage.paldyn.com/). file:, data:, browser extension 등 opaque origin은 지원하지 않음 */
   studioUrl?: string;
   /** iframe 너비 (기본: '100%') */
   width?: string;

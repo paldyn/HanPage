@@ -5,6 +5,10 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'));
 
+// [Task #1] 데스크톱(Tauri) 빌드 여부. VITE_TARGET=desktop 일 때 true.
+// 데스크톱 빌드에서는 PWA/Service Worker를 비활성화한다(아래 plugins 참조).
+const isDesktop = process.env.VITE_TARGET === 'desktop';
+
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
@@ -60,22 +64,25 @@ export default defineConfig({
         });
       },
     },
-    VitePWA({
+    // [Task #1] 데스크톱(Tauri) 빌드에서는 PWA/Service Worker를 비활성화한다.
+    // 웹뷰 커스텀 프로토콜에서 SW auto-update가 불필요하고 캐시 오동작 소지가 있어
+    // isDesktop일 때 VitePWA를 제외한다. 웹(GitHub Pages) 빌드는 기존대로 포함.
+    ...(isDesktop ? [] : [VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'icons/*.png'],
       manifest: {
-        name: 'rhwp-studio',
-        short_name: 'rhwp',
-        description: 'HWP/HWPX/HML 뷰어·에디터 — 알(R), 모두의 한글',
+        name: 'HanPage',
+        short_name: 'HanPage',
+        description: 'HWP/HWPX/HML 뷰어·에디터',
         lang: 'ko',
         theme_color: '#2b6cb0',
         background_color: '#ffffff',
         display: 'standalone',
-        start_url: '/rhwp/',
-        scope: '/rhwp/',
+        start_url: '/',
+        scope: '/',
         file_handlers: [
           {
-            action: '/rhwp/',
+            action: '/',
             accept: {
               'application/x-hwp': ['.hwp'],
               'application/hwp+zip': ['.hwpx'],
@@ -111,6 +118,6 @@ export default defineConfig({
       devOptions: {
         enabled: false,
       },
-    }),
+    })]),
   ],
 });

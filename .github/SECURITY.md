@@ -17,7 +17,7 @@ Use one of the following private channels:
 
 ### Option 1: GitHub Private Vulnerability Reporting (Preferred)
 
-[Report a vulnerability](https://github.com/edwardkim/rhwp/security/advisories/new)
+[Report a vulnerability](https://github.com/paldyn/HanPage/security/advisories/new)
 
 GitHub's private reporting keeps the disclosure confidential until a fix is released.
 

@@ -1,5 +1,9 @@
 name: Deploy to GitHub Pages
 
+# Pages 소스가 "Deploy from a branch (gh-pages)" 로 설정되어 있어,
+# 빌드 산출물을 gh-pages 브랜치에 푸시하는 방식으로 배포한다.
+# (artifact 기반 actions/deploy-pages 는 legacy/branch 모드와 호환되지 않음)
+
 on:
   push:
     branches: [main]
@@ -7,9 +11,21 @@ on:
       - 'mydocs/**'
       - 'docs/**'
       - 'samples/**'
-      - 'assets/**'
+      - 'pdf/**'
+      - 'pdf-large/**'
+      - 'pdf-2020/**'
+      - 'pdf-2010/**'
+      - 'tests/**'
+      - 'examples/**'
+      - 'npm/**'
+      - 'rhwp-firefox/**'
+      - 'rhwp-chrome/**'
+      - 'rhwp-vscode/**'
+      - 'rhwp-shared/**'
+      - 'HanPage-Desktop/**'
       - '*.md'
       - 'LICENSE'
+      - 'CLAUDE.md'
       - '.github/ISSUE_TEMPLATE/**'
       - '.github/FUNDING.yml'
       - '.github/CODE_OF_CONDUCT.md'
@@ -20,17 +36,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
+  group: pages-deploy
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build
+  deploy:
+    name: Build & Push to gh-pages
     runs-on: ubuntu-latest
 
     steps:
@@ -46,7 +60,7 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - name: Cache cargo registry & build
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -79,22 +93,16 @@ jobs:
 
       - name: Build rhwp-studio
         working-directory: rhwp-studio
-        run: npx vite build --base=/rhwp/
+        run: npx vite build --base=/
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      # --- gh-pages 브랜치에 푸시 (단일 커밋 유지) ---
+      - name: Push to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: rhwp-studio/dist
-
-  deploy:
-    name: Deploy
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: rhwp-studio/dist
+          publish_branch: gh-pages
+          force_orphan: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: 'deploy: ${{ github.sha }}'

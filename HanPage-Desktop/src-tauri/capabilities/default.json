@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "HanPage 메인 윈도우 기본 권한 집합 (1단계: core 기본만)",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

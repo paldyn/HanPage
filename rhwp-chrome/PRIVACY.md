@@ -25,7 +25,7 @@
 ### 오픈소스
 
 이 확장 프로그램은 MIT 라이선스로 공개된 오픈소스 소프트웨어입니다.
-소스 코드: https://github.com/edwardkim/rhwp
+소스 코드: https://github.com/paldyn/HanPage
 
 ---
 
@@ -54,4 +54,4 @@
 ### Open Source
 
 This extension is open-source software licensed under the MIT License.
-Source code: https://github.com/edwardkim/rhwp
+Source code: https://github.com/paldyn/HanPage

@@ -1,0 +1,19 @@
+{
+  "name": "hanpage-desktop",
+  "private": true,
+  "version": "0.7.18",
+  "description": "HanPage desktop app — Tauri shell around rhwp-studio (HWP/HWPX viewer/editor)",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "copy-wasm": "node -e \"const fs=require('fs');for(const f of ['rhwp_bg.wasm','rhwp.js'])fs.copyFileSync('../pkg/'+f,'../rhwp-studio/public/'+f)\"",
+    "build:frontend": "npm run copy-wasm && npm --prefix ../rhwp-studio run build:desktop",
+    "dev:frontend": "npm run copy-wasm && npm --prefix ../rhwp-studio run dev"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

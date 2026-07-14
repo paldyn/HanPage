@@ -2,7 +2,7 @@
 
 VSCode에서 HWP/HWPX 문서를 바로 열어볼 수 있는 확장 프로그램입니다.
 
-[rhwp](https://github.com/edwardkim/rhwp) 프로젝트의 WebAssembly 렌더링 엔진을 기반으로, 한컴오피스 한글 문서를 별도 프로그램 없이 VSCode 안에서 확인할 수 있습니다.
+[rhwp](https://github.com/paldyn/HanPage) 프로젝트의 WebAssembly 렌더링 엔진을 기반으로, 한컴오피스 한글 문서를 별도 프로그램 없이 VSCode 안에서 확인할 수 있습니다.
 
 ## 기능
 
@@ -65,7 +65,7 @@ npm run compile
 | usvg / svg2pdf | Apache-2.0 OR MIT |
 | pdf-writer | MIT OR Apache-2.0 |
 
-전체 목록: [THIRD_PARTY_LICENSES.md](https://github.com/edwardkim/rhwp/blob/main/THIRD_PARTY_LICENSES.md)
+전체 목록: [THIRD_PARTY_LICENSES.md](https://github.com/paldyn/HanPage/blob/main/THIRD_PARTY_LICENSES.md)
 
 ### npm 패키지 (빌드 도구)
 

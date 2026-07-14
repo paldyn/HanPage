@@ -61,6 +61,15 @@ Thumbs.db
 .env
 .env.docker
 
+# SSL/TLS 인증서·개인키 (로컬 dev 자체 서명 포함, 형상관리 금지)
+# web/https_server.py 용 인증서는 매뉴얼의 openssl 명령으로 각자 생성
+web/certs/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
 # E2E 스크린샷
 rhwp-studio/e2e/screenshots/
 

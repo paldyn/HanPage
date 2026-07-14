@@ -10,7 +10,7 @@ rhwp에 관심을 가져주셔서 감사합니다!
 
 코드를 보기 전에 먼저 사용해보세요:
 
-- **[온라인 데모](https://edwardkim.github.io/rhwp/)** — 브라우저에서 바로 HWP 파일 열기
+- **[온라인 데모](https://hanpage.paldyn.com/)** — 브라우저에서 바로 HWP 파일 열기
 - **[VS Code 확장](https://marketplace.visualstudio.com/items?itemName=edwardkim.rhwp-vscode)** — VS Code에서 HWP 미리보기
 - **[npm 패키지](https://www.npmjs.com/package/@rhwp/editor)** — 3줄로 HWP 에디터 임베드
 
@@ -18,8 +18,8 @@ rhwp에 관심을 가져주셔서 감사합니다!
 
 ```bash
 # 클론
-git clone https://github.com/edwardkim/rhwp.git
-cd rhwp
+git clone https://github.com/paldyn/HanPage.git
+cd HanPage
 
 # 빌드 + 테스트
 cargo build
@@ -34,10 +34,10 @@ npx vite --port 7700
 
 ### 3. 첫 기여 찾기
 
-- [`good first issue`](https://github.com/edwardkim/rhwp/labels/good%20first%20issue) 라벨이 붙은 이슈
+- [`good first issue`](https://github.com/paldyn/HanPage/labels/good%20first%20issue) 라벨이 붙은 이슈
 - 렌더링 불일치 제보 (한컴과 비교하여 스크린샷 첨부)
 - 문서 오타/개선
-- [Discussions](https://github.com/edwardkim/rhwp/discussions)에서 질문/아이디어 제안
+- [Discussions](https://github.com/paldyn/HanPage/discussions)에서 질문/아이디어 제안
 
 ## 기여 방법
 
@@ -45,7 +45,7 @@ npx vite --port 7700
 
 HWP 파일이 한컴과 다르게 렌더링되면 알려주세요:
 
-1. [이슈 생성](https://github.com/edwardkim/rhwp/issues/new?template=bug_report.md)
+1. [이슈 생성](https://github.com/paldyn/HanPage/issues/new?template=bug_report.md)
 2. **한컴 스크린샷** + **rhwp 스크린샷** 비교 첨부
 3. 가능하면 HWP 파일 첨부 (개인정보 제거 후)
 
@@ -56,14 +56,14 @@ HWP 파일이 한컴과 다르게 렌더링되면 알려주세요:
 컨트리뷰터는 **Fork 기반**으로 작업합니다. 저장소에 직접 push할 수 없으며, PR을 통해 코드를 제출합니다.
 
 ```
-[본인 Fork]                              [edwardkim/rhwp]
+[본인 Fork]                              [paldyn/HanPage]
 
 1. Fork (GitHub UI)
-   edwardkim/rhwp → myid/rhwp
+   paldyn/HanPage → myid/HanPage
 
 2. Clone
-   git clone https://github.com/myid/rhwp.git
-   cd rhwp
+   git clone https://github.com/myid/HanPage.git
+   cd HanPage
 
 3. 브랜치 생성 + 작업
    git checkout -b fix/issue-123
@@ -285,8 +285,8 @@ rhwp는 코드뿐 아니라 **작업 과정의 기록**도 프로젝트의 일�
 
 ## 소통
 
-- **[Discussions](https://github.com/edwardkim/rhwp/discussions)** — 질문, 아이디어, 기술 토론
-- **[Issues](https://github.com/edwardkim/rhwp/issues)** — 버그 리포트, 기능 요청
+- **[Discussions](https://github.com/paldyn/HanPage/discussions)** — 질문, 아이디어, 기술 토론
+- **[Issues](https://github.com/paldyn/HanPage/issues)** — 버그 리포트, 기능 요청
 
 ## Notice
 

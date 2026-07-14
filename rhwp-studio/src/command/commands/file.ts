@@ -32,6 +32,7 @@ import {
   type SaveDocumentResult,
   type FileSystemWindowLike,
 } from '@/command/file-system-access';
+import { getDesktopOpenHandler, getDesktopSaveHandler } from '@/core/desktop-bridge';
 
 /** [Task #833] 사용자 명시 cancel 에러 검출.
  * - AbortError: showSaveFilePicker / showOpenFilePicker 다이얼로그 취소
@@ -145,6 +146,21 @@ async function saveAsFormat(services: CommandServices, format: SaveFormat): Prom
     flushDeferredPaginationBeforeExplicitOutput(services, 'save-as');
     const sourceFormat = services.wasm.getSourceFormat();
     const saveName = fileNameForFormat(services.wasm.fileName, format);
+    // [Task #1 데스크톱] 네이티브 저장 dialog 분기(다른 이름으로). 브라우저에선 no-op.
+    const desktopSave = getDesktopSaveHandler();
+    if (desktopSave) {
+      const bytes = exportDocumentForFormat(services.wasm, format);
+      const r = await desktopSave({ bytes, suggestedName: saveName, saveAs: true });
+      if (r.status === 'saved') {
+        services.wasm.fileName = r.fileName;
+        services.documentState.markClean('save-as');
+        console.log(`[file:save-as] (native) ${r.fileName} (${(bytes.length / 1024).toFixed(1)}KB)`);
+        return;
+      }
+      if (r.status === 'cancelled') return;
+      reportSaveError('file:save-as', new Error(r.message));
+      return;
+    }
     const blob = createSaveBlob(services, format);
     const originalHandle = sourceFormat === 'hml' ? services.wasm.currentFileHandle : null;
     const result = await tryFileSystemSave(
@@ -197,6 +213,23 @@ export async function saveCurrentDocument(services: CommandServices): Promise<Sa
         forceSaveAs: target.forceSaveAs || format !== target.format,
         suggestedName: fileNameForFormat(services.wasm.fileName, format),
       };
+    }
+    // [Task #1 데스크톱] 네이티브 저장 dialog 분기. 브라우저에선 핸들러가 null →
+    // 아래 File System Access / 다운로드 폴백이 그대로 동작(웹 무변경).
+    const desktopSave = getDesktopSaveHandler();
+    if (desktopSave) {
+      const bytes = exportDocumentForFormat(services.wasm, target.format);
+      const r = await desktopSave({ bytes, suggestedName: target.suggestedName, saveAs: target.forceSaveAs });
+      if (r.status === 'saved') {
+        services.wasm.fileName = r.fileName;
+        services.documentState.markClean('save');
+        console.log(`[file:save] (native) ${r.fileName} (${(bytes.length / 1024).toFixed(1)}KB)`);
+        return 'saved';
+      }
+      if (r.status === 'cancelled') return 'cancelled';
+      console.error('[file:save] (native) 저장 실패:', r.message);
+      alert(`파일 저장에 실패했습니다:\n${r.message}`);
+      return 'failed';
     }
     const blob = createSaveBlob(services, target.format);
     const result = await tryFileSystemSave(
@@ -319,6 +352,21 @@ export const fileCommands: CommandDef[] = [
         if (!canReplace) return;
 
         const windowLike = window as FileSystemWindowLike;
+                // [Task #1 데스크톱] 네이티브 열기 dialog 분기. 브라우저에선 핸들러가 null →
+        // 아래 File System Access / file-input 경로가 그대로 동작(웹 무변경).
+        const desktopOpen = getDesktopOpenHandler();
+        if (desktopOpen) {
+          await desktopOpen((bytes, fileName) => {
+            services.eventBus.emit('open-document-bytes', {
+              bytes,
+              fileName,
+              fileHandle: null,
+              skipUnsavedGuard: true, // 위에서 이미 confirmSaveBeforeReplacingDocument 수행
+            });
+          });
+          return;
+        }
+
         const nativeOpenPickerAvailable = canUseOpenFilePicker(windowLike);
         const handle = await pickOpenFileHandle(windowLike);
         if (!handle) {

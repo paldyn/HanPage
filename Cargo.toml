@@ -4,7 +4,7 @@ version = "0.7.18"
 edition = "2021"
 description = "HWP file viewer and editor written in Rust, targeting WebAssembly"
 license = "MIT"
-repository = "https://github.com/edwardkim/rhwp"
+repository = "https://github.com/paldyn/HanPage"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
