@@ -31,9 +31,13 @@ const stbSidebarToggle = document.getElementById("stb-sidebar-toggle")!;
 const stbViewMode = document.getElementById("stb-view-mode")!;
 
 // 문서 상태
+type ZoomMode = "manual" | "fitWidth" | "fitPage";
+
 let hwpDoc: HwpDocument | null = null;
 let pageInfos: PageInfo[] = [];
+/** 실제 적용 중인 배율. 맞춤 모드에서도 계산된 값이 들어간다. */
 let currentZoom = 1.0;
+let zoomMode: ZoomMode = "manual";
 let currentPage = 0;
 let viewMode: "single" | "double" = "single";
 let fileName = "";
@@ -41,6 +45,12 @@ const PREFETCH_MARGIN = 300;
 const ZOOM_STEP = 0.1;
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 3.0;
+/** .page-row 의 CSS gap 과 일치해야 한다. */
+const ROW_GAP = 12;
+/** #scroll-container 의 세로 padding 과 일치해야 한다. */
+const CONTENT_PADDING = 12;
+/** 맞춤 배율에서 쪽 좌우로 남겨 두는 여백. */
+const SIDE_MARGIN = 12;
 
 interface PageInfo {
   width: number;
@@ -161,13 +171,53 @@ function updateStatusBar(): void {
 
 // ── 줌 제어 ──
 
-function applyZoom(newZoom: number, anchorY?: number): void {
-  newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
-  if (newZoom === currentZoom) return;
+const clampZoom = (z: number): number => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+
+/**
+ * 맞춤 배율을 계산한다.
+ *
+ * 쪽 크기가 서로 다른 문서(가로/세로 혼합)에서 스크롤 중 배율이 요동치지 않도록
+ * 현재 쪽이 아니라 문서 전체의 최대 폭·최대 높이를 기준으로 삼는다.
+ *
+ * availW/availH 를 넘기면 그 값을 쓴다. ResizeObserver 는 스크롤바를 제외한
+ * contentRect 를 주므로, 스크롤바 출현으로 인한 배율 진동을 피하려면 그 값을 넘겨야 한다.
+ */
+function computeFitZoom(mode: "fitWidth" | "fitPage", availW?: number, availH?: number): number {
+  if (pageInfos.length === 0) return currentZoom;
+
+  let maxW = 0;
+  let maxH = 0;
+  for (const pi of pageInfos) {
+    if (pi.width > maxW) maxW = pi.width;
+    if (pi.height > maxH) maxH = pi.height;
+  }
+  if (maxW <= 0 || maxH <= 0) return currentZoom;
+
+  const pagesPerRow = viewMode === "double" ? 2 : 1;
+  const contentW = maxW * pagesPerRow + ROW_GAP * (pagesPerRow - 1);
+
+  const w = (availW ?? scrollContainer.clientWidth) - SIDE_MARGIN * 2;
+  const h = (availH ?? scrollContainer.clientHeight) - CONTENT_PADDING * 2;
+  if (w <= 0 || h <= 0) return currentZoom;
+
+  const fitW = w / contentW;
+  if (mode === "fitWidth") return clampZoom(fitW);
+  return clampZoom(Math.min(fitW, h / maxH));
+}
+
+/**
+ * 배율을 적용하고 레이아웃을 재구성한다.
+ *
+ * @param relayoutAnyway 배율이 그대로여도 레이아웃을 다시 만든다.
+ *   1쪽↔2쪽 배치만 바뀌고 배율이 우연히 같을 때 필요하다.
+ */
+function setZoom(newZoom: number, anchorY?: number, relayoutAnyway = false): void {
+  newZoom = clampZoom(newZoom);
+  if (newZoom === currentZoom && !relayoutAnyway) return;
 
   const oldZoom = currentZoom;
 
-  // 앵커 기준점 (기본: ��포트 중앙)
+  // 앵커 기준점 (기본: 뷰포트 중앙)
   const containerRect = scrollContainer.getBoundingClientRect();
   const anchor = anchorY ?? (containerRect.top + containerRect.height / 2);
   const yInContainer = anchor - containerRect.top;
@@ -180,8 +230,35 @@ function applyZoom(newZoom: number, anchorY?: number): void {
   updateStatusBar();
 }
 
-stbZoomOut.addEventListener("click", () => applyZoom(currentZoom - ZOOM_STEP));
-stbZoomIn.addEventListener("click", () => applyZoom(currentZoom + ZOOM_STEP));
+/** 수동 배율로 전환하고 배율을 적용한다. (−/+ 버튼, Ctrl+휠, % 프리셋) */
+function setManualZoom(newZoom: number, anchorY?: number): void {
+  zoomMode = "manual";
+  setZoom(newZoom, anchorY);
+  updateStatusBar();
+}
+
+/**
+ * 쪽 배치와 맞춤 모드를 함께 설정한다.
+ *
+ * 맞춤 3항목(폭 맞춤 / 쪽 맞춤 / 두 쪽 맞춤)이 배치까지 결정하는 유일한 진입점이다.
+ */
+function applyZoomMode(mode: ZoomMode, nextViewMode: "single" | "double", zoom?: number): void {
+  const layoutChanged = nextViewMode !== viewMode;
+  const keepPage = currentPage;
+
+  viewMode = nextViewMode;
+  zoomMode = mode;
+
+  const target = mode === "manual" ? (zoom ?? currentZoom) : computeFitZoom(mode);
+  // 배치가 바뀌었는데 배율이 우연히 같으면 setZoom 이 조기 반환하므로 강제 재구성한다.
+  setZoom(target, undefined, layoutChanged);
+
+  if (layoutChanged) scrollToPage(keepPage);
+  updateStatusBar();
+}
+
+stbZoomOut.addEventListener("click", () => setManualZoom(currentZoom - ZOOM_STEP));
+stbZoomIn.addEventListener("click", () => setManualZoom(currentZoom + ZOOM_STEP));
 
 // Ctrl+마우스 휠 줌
 scrollContainer.addEventListener(
@@ -190,7 +267,7 @@ scrollContainer.addEventListener(
     if (!e.ctrlKey) return;
     e.preventDefault();
     const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-    applyZoom(currentZoom + delta, e.clientY);
+    setManualZoom(currentZoom + delta, e.clientY);
   },
   { passive: false }
 );
@@ -477,12 +554,8 @@ navReopen.addEventListener("click", () => toggleSidebar(false));
 
 function setViewMode(mode: "single" | "double"): void {
   if (mode === viewMode) return;
-  viewMode = mode;
   stbViewMode.textContent = mode === "double" ? "2쪽" : "1쪽";
-  const keepPage = currentPage;
-  buildPageLayout();
-  updateVisiblePages();
-  scrollToPage(keepPage);
+  applyZoomMode(zoomMode, mode);
 }
 
 stbViewMode.addEventListener("click", () => {
