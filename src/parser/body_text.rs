@@ -290,7 +290,15 @@ fn parse_para_text(data: &[u8]) -> (String, Vec<u32>, Vec<FieldRange>, Vec<[u16;
                     ext[k] = u16::from_le_bytes([data[bp], data[bp + 1]]);
                 }
             }
-            tab_extended.push(ext);
+            // 직렬화기의 "데이터 없음" 마커([0,...,0,0x0009] — body_text.rs 탭 방출부)는
+            // IR 에 싣지 않는다. 한컴 실측 탭 확장은 ext[2] 고바이트=종류 enum+1 이라
+            // 전부 0 일 수 없고, 이 마커를 tab_extended 로 실으면 레이아웃이 ext[0]=0 을
+            // 탭 결과 위치로 해석해 탭이 무폭이 된다 (#1892 — tab_extended 없던 HWP3
+            // 문단이 라운드트립 후 탭 스톱을 잃는 렌더 분기).
+            let is_null_ext = ext[..6].iter().all(|&v| v == 0) && ext[6] == 0x0009;
+            if !is_null_ext {
+                tab_extended.push(ext);
+            }
             pos += 16;
         } else if ch == 0x000A {
             // 줄 끝: char 컨트롤 (1 code unit = 2바이트)
@@ -441,6 +449,19 @@ fn parse_para_line_seg(data: &[u8]) -> Vec<LineSeg> {
             segment_width: r.read_i32().unwrap_or(0),
             tag: r.read_u32().unwrap_or(0),
         });
+    }
+
+    // [#2070] 전부 0 높이(lh=0, th=0)인 PARA_LINE_SEG 는 부재로 정규화한다.
+    // 생성계 문서(80168 등 규제영향분석서)는 lineseg 를 0 으로 채워 저장하는데,
+    // 0 높이 lineseg 는 배치 권위가 없고(한글은 열 때 재계산) 실저장 취급 시
+    // NO_LS 성장 경로가 죽어 셀/문단 높이가 선언값으로 붕괴한다
+    // (hwpx section.rs parse_paragraph 와 동일 규칙).
+    if !segs.is_empty()
+        && segs
+            .iter()
+            .all(|s| s.line_height == 0 && s.text_height == 0)
+    {
+        return Vec::new();
     }
 
     segs
@@ -805,45 +826,17 @@ fn parse_footnote_shape_record(data: &[u8]) -> FootnoteShape {
 
     fs.attr = r.read_u32().unwrap_or(0);
 
-    // attr에서 number_format, numbering, placement 추출
-    let num_fmt = fs.attr & 0xFF;
-    fs.number_format = match num_fmt {
-        0 => crate::model::footnote::NumberFormat::Digit,
-        1 => crate::model::footnote::NumberFormat::CircledDigit,
-        2 => crate::model::footnote::NumberFormat::UpperRoman,
-        3 => crate::model::footnote::NumberFormat::LowerRoman,
-        4 => crate::model::footnote::NumberFormat::UpperAlpha,
-        5 => crate::model::footnote::NumberFormat::LowerAlpha,
-        6 => crate::model::footnote::NumberFormat::CircledUpperAlpha,
-        7 => crate::model::footnote::NumberFormat::CircledLowerAlpha,
-        8 => crate::model::footnote::NumberFormat::HangulSyllable,
-        9 => crate::model::footnote::NumberFormat::CircledHangulSyllable,
-        10 => crate::model::footnote::NumberFormat::HangulJamo,
-        11 => crate::model::footnote::NumberFormat::CircledHangulJamo,
-        12 => crate::model::footnote::NumberFormat::HangulDigit,
-        13 => crate::model::footnote::NumberFormat::HanjaDigit,
-        14 => crate::model::footnote::NumberFormat::CircledHanjaDigit,
-        15 => crate::model::footnote::NumberFormat::HanjaGapEul,
-        16 => crate::model::footnote::NumberFormat::HanjaGapEulHanja,
-        _ => crate::model::footnote::NumberFormat::Digit,
-    };
-    fs.numbering = match (fs.attr >> 8) & 0x03 {
-        1 => crate::model::footnote::FootnoteNumbering::RestartSection,
-        2 => crate::model::footnote::FootnoteNumbering::RestartPage,
-        _ => crate::model::footnote::FootnoteNumbering::Continue,
-    };
-    fs.placement = match (fs.attr >> 8) & 0x03 {
-        1 => crate::model::footnote::FootnotePlacement::BelowText,
-        2 => crate::model::footnote::FootnotePlacement::RightColumn,
-        _ => crate::model::footnote::FootnotePlacement::EachColumn,
-    };
+    // 표 134: bit 8~9는 위치, bit 10~11은 번호 매기기이다.
+    fs.apply_attr_fields_from_raw();
 
     fs.user_char = char::from_u32(r.read_u16().unwrap_or(0) as u32).unwrap_or('\0');
     fs.prefix_char = char::from_u32(r.read_u16().unwrap_or(0) as u32).unwrap_or('\0');
     fs.suffix_char = char::from_u32(r.read_u16().unwrap_or(0) as u32).unwrap_or('\0');
     fs.start_number = r.read_u16().unwrap_or(1);
-    fs.separator_length = r.read_i16().unwrap_or(0);
+    fs.separator_length = r.read_i16().unwrap_or(0) as i32;
     fs.separator_margin_top = r.read_i16().unwrap_or(0);
+    // HWP5 실파일에서는 이 슬롯이 한컴 UI "구분선 위" 값으로 쓰이는 사례가 있다.
+    // HWPX aboveLine 은 separator_margin_top 에 들어오므로 정규화 접근자에서 합친다.
     fs.separator_margin_bottom = r.read_i16().unwrap_or(0);
     fs.note_spacing = r.read_i16().unwrap_or(0);
 

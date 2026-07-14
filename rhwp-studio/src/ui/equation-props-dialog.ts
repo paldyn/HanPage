@@ -1,6 +1,7 @@
 import type { WasmBridge } from '@/core/wasm-bridge';
 import type { EventBus } from '@/core/event-bus';
 import type { EquationProperties, NoteControlRef } from '@/core/types';
+import type { CommandServices } from '@/command/types';
 import { EquationEditorDialog } from './equation-editor-dialog';
 import { enableDialogDrag } from './dialog-drag';
 
@@ -69,6 +70,7 @@ export class EquationPropertiesDialog {
   constructor(
     private wasm: WasmBridge,
     private eventBus: EventBus,
+    private services?: CommandServices,
   ) {}
 
   open(sec: number, para: number, ci: number, cellIdx?: number, cellParaIdx?: number, noteRef?: NoteControlRef): void {
@@ -163,9 +165,6 @@ export class EquationPropertiesDialog {
         e.stopPropagation();
         this.hide();
       }
-    });
-    this.overlay.addEventListener('mousedown', (e) => {
-      if (e.target === this.overlay) this.hide();
     });
 
     enableDialogDrag(this.dialog, titleBar);
@@ -341,13 +340,32 @@ export class EquationPropertiesDialog {
     if (fontName && fontName !== this.props.fontName) updated.fontName = fontName;
 
     if (Object.keys(updated).length > 0) {
-      try {
+      const applyProps = () => {
         if (this.noteRef) {
           this.wasm.setNoteEquationProperties(this.noteRef, updated);
         } else {
           this.wasm.setEquationProperties(this.sec, this.para, this.ci, this.cellIdx, this.cellParaIdx, updated);
         }
-        this.eventBus.emit('document-changed');
+      };
+      try {
+        // [Issue #2077] 수식 속성 변경도 undo 대상이다 — 그림 속성 다이얼로그(#1320/#2028)와 동일하게
+        // 편집 라우터(executeOperation)를 통과시켜 스냅샷으로 기록한다. 기존에는 wasm
+        // setter 직접 호출 + document-changed emit 만 수행되어 Ctrl+Z 로 복구되지 않았다.
+        // services 미주입 환경에서만 직접 적용 fallback.
+        const ih = this.services?.getInputHandler();
+        if (ih) {
+          ih.executeOperation({
+            kind: 'snapshot',
+            operationType: 'objectProps',
+            operation: () => {
+              applyProps();
+              return ih.getCursorPosition();
+            },
+          });
+        } else {
+          applyProps();
+          this.eventBus.emit('document-changed');
+        }
       } catch (err) {
         console.warn('[EquationProperties] 수식 속성 설정 실패:', err);
       }
@@ -357,7 +375,7 @@ export class EquationPropertiesDialog {
 
   private openEditor(): void {
     this.hide();
-    const editor = new EquationEditorDialog(this.wasm, this.eventBus);
+    const editor = new EquationEditorDialog(this.wasm, this.eventBus, this.services);
     editor.open(this.sec, this.para, this.ci, this.cellIdx, this.cellParaIdx, this.noteRef);
   }
 

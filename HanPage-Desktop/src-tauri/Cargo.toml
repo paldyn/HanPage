@@ -1,6 +1,6 @@
 [package]
 name = "rhwp-desktop"
-version = "0.7.15"
+version = "0.7.18"
 description = "HanPage desktop application (Tauri shell wrapping rhwp-studio + WASM)"
 authors = ["paldyn"]
 edition = "2021"

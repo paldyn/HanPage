@@ -6,6 +6,7 @@
 use super::composer::{
     decode_pua_overlap_number, expand_pua_render_text, pua_to_display_text, CharOverlapInfo,
 };
+use super::form_caption::display_form_caption;
 pub(crate) use super::image_resolver::{
     bmp_bytes_to_png_bytes, detect_image_mime_type, pcx_bytes_to_png_bytes,
     real_picture_watermark_bytes_to_hancom_tone_png_bytes,
@@ -39,10 +40,12 @@ fn expand_pua_old_hangul(text: &str) -> String {
     }
     out
 }
-use super::layout::{compute_char_positions, split_into_clusters};
+use super::layout::{compute_char_positions, is_halfwidth_cjk_quote, split_into_clusters};
 use crate::model::control::FormType;
 use crate::model::style::{ImageFillMode, UnderlineType};
 use base64::Engine;
+
+const TEXT_MARK_CLIP_RIGHT_PAD: f64 = 48.0;
 
 /// SVG 폰트 임베딩 모드
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -376,13 +379,13 @@ impl SvgRenderer {
                                 };
                                 let mid_x = (cx + next_x) / 2.0 - mark_font_size * 0.25;
                                 self.output.push_str(&format!(
-                                    "<text x=\"{}\" y=\"{}\" font-size=\"{}\" fill=\"#4A90D9\">\u{2228}</text>\n",
+                                    "<text x=\"{}\" y=\"{}\" font-size=\"{}\" fill=\"#0066FF\">\u{2228}</text>\n",
                                     mid_x, node.bbox.y + run.baseline, mark_font_size,
                                 ));
                             } else if c == '\t' {
                                 let cx = node.bbox.x + char_positions[i];
                                 self.output.push_str(&format!(
-                                    "<text x=\"{}\" y=\"{}\" font-size=\"{}\" fill=\"#4A90D9\">\u{2192}</text>\n",
+                                    "<text x=\"{}\" y=\"{}\" font-size=\"{}\" fill=\"#0066FF\">\u{2192}</text>\n",
                                     cx, node.bbox.y + run.baseline, mark_font_size,
                                 ));
                             }
@@ -401,7 +404,7 @@ impl SvgRenderer {
                             "\u{21B5}"
                         };
                         self.output.push_str(&format!(
-                            "<text x=\"{}\" y=\"{}\" font-size=\"{}\" fill=\"#4A90D9\">{}</text>\n",
+                            "<text x=\"{}\" y=\"{}\" font-size=\"{}\" fill=\"#0066FF\">{}</text>\n",
                             mark_x,
                             node.bbox.y + run.baseline,
                             font_size,
@@ -512,6 +515,14 @@ impl SvgRenderer {
                 self.output.push_str(&r.svg);
             }
             RenderNodeType::Placeholder(ph) => {
+                // [Task #2225] 그림 미지정 placeholder 는 인쇄 등가 출력(SVG)에서
+                // 미출력 — 한컴 인쇄 동작 정합 (편집 뷰는 web_canvas 가 표시).
+                if matches!(
+                    ph.kind,
+                    crate::renderer::render_tree::PlaceholderKind::MissingPicture
+                ) {
+                    return;
+                }
                 // Task #195: 차트/OLE placeholder (점선 테두리 + 중앙 라벨)
                 let cx = node.bbox.x + node.bbox.width / 2.0;
                 let cy = node.bbox.y + node.bbox.height / 2.0;
@@ -530,9 +541,18 @@ impl SvgRenderer {
                 clip_rect: Some(cr),
             } => {
                 let clip_id = format!("body-clip-{}", node.id);
+                let right_pad = if self.show_paragraph_marks || self.show_control_codes {
+                    TEXT_MARK_CLIP_RIGHT_PAD
+                } else {
+                    0.0
+                };
                 self.defs.push(format!(
                     "<clipPath id=\"{}\"><rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\"/></clipPath>\n",
-                    clip_id, cr.x, cr.y, cr.width, cr.height,
+                    clip_id,
+                    cr.x,
+                    cr.y,
+                    cr.width + right_pad,
+                    cr.height,
                 ));
                 self.output
                     .push_str(&format!("<g clip-path=\"url(#{})\">", clip_id));
@@ -1520,6 +1540,11 @@ impl SvgRenderer {
             self.output
                 .push_str(&format!("<g filter=\"url(#{})\">\n", fid));
         }
+        let object_opacity = img.opacity.clamp(0.0, 1.0);
+        if object_opacity < 1.0 {
+            self.output
+                .push_str(&format!("<g opacity=\"{:.3}\">\n", object_opacity));
+        }
         // 밝기/대비 → SVG 필터 래핑
         // [Issue #677] 한컴 워터마크 효과 (effect != RealPic 이고 brightness/contrast 가
         // 비-zero) 는 저장값을 그대로 brightness/contrast 필터로 적용한다. JPEG 워터마크는
@@ -1650,6 +1675,9 @@ impl SvgRenderer {
             self.output.push_str("</g>\n");
         }
         if bc_filter_id.is_some() {
+            self.output.push_str("</g>\n");
+        }
+        if object_opacity < 1.0 {
             self.output.push_str("</g>\n");
         }
         if effect_filter_id.is_some() {
@@ -2267,10 +2295,11 @@ impl SvgRenderer {
                     x, y, w, h));
                 // 캡션 텍스트 (회색, 중앙)
                 if !form.caption.is_empty() {
+                    let caption = display_form_caption(&form.caption);
                     let font_size = (h * 0.55).min(12.0).max(7.0);
                     self.output.push_str(&format!(
                         "<text x=\"{}\" y=\"{}\" font-size=\"{:.1}\" fill=\"#808080\" text-anchor=\"middle\" dominant-baseline=\"central\" font-family=\"'맑은 고딕',sans-serif\">{}</text>\n",
-                        x + w / 2.0, y + h / 2.0, font_size, escape_xml(&form.caption)));
+                        x + w / 2.0, y + h / 2.0, font_size, escape_xml(caption.as_ref())));
                 }
             }
             FormType::CheckBox => {
@@ -2295,11 +2324,12 @@ impl SvgRenderer {
                 }
                 // 캡션
                 if !form.caption.is_empty() {
+                    let caption = display_form_caption(&form.caption);
                     let text_x = box_x + box_size + 3.0;
                     let font_size = (h * 0.55).min(12.0).max(7.0);
                     self.output.push_str(&format!(
                         "<text x=\"{}\" y=\"{}\" font-size=\"{:.1}\" fill=\"{}\" dominant-baseline=\"central\" font-family=\"'맑은 고딕',sans-serif\">{}</text>\n",
-                        text_x, y + h / 2.0, font_size, form.fore_color, escape_xml(&form.caption)));
+                        text_x, y + h / 2.0, font_size, form.fore_color, escape_xml(caption.as_ref())));
                 }
             }
             FormType::RadioButton => {
@@ -2320,11 +2350,12 @@ impl SvgRenderer {
                 }
                 // 캡션
                 if !form.caption.is_empty() {
+                    let caption = display_form_caption(&form.caption);
                     let text_x = cx + r + 3.0;
                     let font_size = (h * 0.55).min(12.0).max(7.0);
                     self.output.push_str(&format!(
                         "<text x=\"{}\" y=\"{}\" font-size=\"{:.1}\" fill=\"{}\" dominant-baseline=\"central\" font-family=\"'맑은 고딕',sans-serif\">{}</text>\n",
-                        text_x, y + h / 2.0, font_size, form.fore_color, escape_xml(&form.caption)));
+                        text_x, y + h / 2.0, font_size, form.fore_color, escape_xml(caption.as_ref())));
                 }
             }
             FormType::ComboBox => {
@@ -2644,10 +2675,19 @@ impl Renderer for SvgRenderer {
         let text = &expand_pua_old_hangul(text);
 
         let color = color_to_svg(style.color);
-        let font_size = if style.font_size > 0.0 {
+        let base_font_size = if style.font_size > 0.0 {
             style.font_size
         } else {
             12.0
+        };
+        // 위첨자/아래첨자는 레이아웃 advance 는 원래 run 기준으로 유지하고,
+        // 실제 SVG glyph 크기와 baseline 만 Canvas/HTML 출력과 동일하게 조정한다.
+        let (font_size, y) = if style.superscript {
+            (base_font_size * 0.7, y - base_font_size * 0.3)
+        } else if style.subscript {
+            (base_font_size * 0.7, y + base_font_size * 0.15)
+        } else {
+            (base_font_size, y)
         };
         let font_family = if style.font_family.is_empty() {
             "sans-serif".to_string()
@@ -2655,16 +2695,13 @@ impl Renderer for SvgRenderer {
             let fb = super::generic_fallback(&style.font_family);
             format!("{},{}", style.font_family, fb)
         };
+        let old_hangul_font_family = format!("'Source Han Serif K Old Hangul',{}", font_family);
 
         let ratio = if style.ratio > 0.0 { style.ratio } else { 1.0 };
         let has_ratio = (ratio - 1.0).abs() > 0.01;
 
         // 공통 스타일 속성 구성 (fill 제외 — 그림자/원본에서 각각 설정)
-        let mut base_attrs = format!(
-            "font-family=\"{}\" font-size=\"{}\"",
-            escape_xml(&font_family),
-            font_size,
-        );
+        let mut base_attrs = format!("font-size=\"{}\"", font_size);
         if style.is_visually_bold() {
             base_attrs.push_str(" font-weight=\"bold\"");
         } else if style.is_medium_weight() {
@@ -2673,6 +2710,19 @@ impl Renderer for SvgRenderer {
         if style.italic {
             base_attrs.push_str(" font-style=\"italic\"");
         }
+        let attrs_for_cluster = |cluster_str: &str, fill: &str| {
+            let cluster_font_family = if super::contains_old_hangul_jamo(cluster_str) {
+                &old_hangul_font_family
+            } else {
+                &font_family
+            };
+            format!(
+                "font-family=\"{}\" {} fill=\"{}\"",
+                escape_xml(cluster_font_family),
+                base_attrs,
+                fill,
+            )
+        };
 
         // 클러스터 단위 렌더링: 옛한글 자모 조합 시퀀스를 하나의 <text>로 묶음
         let char_positions = compute_char_positions(text, style);
@@ -2768,7 +2818,6 @@ impl Renderer for SvgRenderer {
         // 그림자 렌더링 (원본 아래에 오프셋된 그림자색 텍스트)
         if style.shadow_type > 0 {
             let shadow_color = color_to_svg(style.shadow_color);
-            let shadow_attrs = format!("{} fill=\"{}\"", base_attrs, shadow_color);
             let dx = style.shadow_offset_x;
             let dy = style.shadow_offset_y;
             for (cluster_idx, (char_idx, cluster_str)) in clusters.iter().enumerate() {
@@ -2803,6 +2852,7 @@ impl Renderer for SvgRenderer {
                     cluster_advance(*char_idx, cluster_str),
                     ratio,
                 );
+                let shadow_attrs = attrs_for_cluster(cluster_str, &shadow_color);
                 if has_ratio {
                     self.output.push_str(&format!(
                         "<text transform=\"translate({},{}) scale({:.4},1)\" {}{}>{}</text>\n",
@@ -2827,7 +2877,6 @@ impl Renderer for SvgRenderer {
         }
 
         // 원본 텍스트 렌더링
-        let common_attrs = format!("{} fill=\"{}\"", base_attrs, color);
         for (cluster_idx, (char_idx, cluster_str)) in clusters.iter().enumerate() {
             if cluster_str == " " || cluster_str == "\t" {
                 continue;
@@ -2856,6 +2905,7 @@ impl Renderer for SvgRenderer {
             let char_x = x + char_positions[*char_idx];
             let length_attrs =
                 svg_text_length_attrs(cluster_str, cluster_advance(*char_idx, cluster_str), ratio);
+            let common_attrs = attrs_for_cluster(cluster_str, &color);
 
             if has_ratio {
                 self.output.push_str(&format!(
@@ -3190,7 +3240,10 @@ fn color_to_svg(color: u32) -> String {
 }
 
 fn svg_text_length_attrs(cluster_str: &str, cluster_advance: f64, scale_x: f64) -> String {
-    if !cluster_str.chars().any(|ch| ch.is_ascii_alphanumeric()) {
+    if !cluster_str
+        .chars()
+        .any(|ch| ch.is_ascii_alphanumeric() || is_halfwidth_cjk_quote(ch))
+    {
         return String::new();
     }
     if !cluster_advance.is_finite() || cluster_advance <= 0.0 {

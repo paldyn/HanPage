@@ -183,6 +183,10 @@ export interface CursorRect {
   x: number;
   y: number;
   height: number;
+  /** 표 셀 내부 커서일 때만 제공되는 가시 셀 bbox */
+  cellBounds?: { x: number; y: number; w: number; h: number };
+  /** 원래 TextRun 좌표가 셀 bbox를 벗어나 보정됐는지 여부 */
+  cellOverflowed?: boolean;
 }
 
 /** WASM hitTest() 반환 타입 */
@@ -248,6 +252,7 @@ export interface FieldInfoResult {
   endCharIdx?: number;
   isGuide?: boolean;
   guideName?: string;
+  editableInForm?: boolean;
 }
 
 /** WASM getLineInfo() 반환 타입 */
@@ -410,6 +415,8 @@ export interface ParaProperties {
   patternColor?: string;   // '#RRGGBB'
   patternType?: number;    // 0=없음, 1~6=무늬
   borderSpacing?: number[];  // [좌, 우, 상, 하] HWPUNIT
+  borderConnect?: boolean;   // 문단 테두리 연결
+  borderIgnoreMargin?: boolean; // 문단 여백 무시
 }
 
 /** 테두리 선 정보 */
@@ -430,6 +437,8 @@ export interface CellProperties {
   paddingRight: number;
   paddingTop: number;
   paddingBottom: number;
+  /** 셀 고유 안 여백 지정 */
+  applyInnerMargin: boolean;
   /** 0=top, 1=center, 2=bottom */
   verticalAlign: number;
   /** 0=horizontal, 1=vertical */
@@ -437,6 +446,10 @@ export interface CellProperties {
   isHeader: boolean;
   /** 셀 보호 */
   cellProtect?: boolean;
+  /** 셀 필드 이름 */
+  fieldName?: string;
+  /** 양식 모드에서 편집 가능 */
+  editableInForm?: boolean;
   /** 테두리/배경 */
   borderFillId?: number;
   borderLeft?: BorderLineInfo;
@@ -447,6 +460,18 @@ export interface CellProperties {
   fillColor?: string;
   patternColor?: string;
   patternType?: number;
+  /** 대각선 선 종류 (0=없음, 1=실선, 2=파선, ...) */
+  diagonalLine?: number;
+  /** / 대각선 방향 비트 */
+  diagonalSlash?: number;
+  /** \ 대각선 방향 비트 */
+  diagonalBackSlash?: number;
+  /** 대각선 굵기 (0-6) */
+  diagonalWidth?: number;
+  /** 대각선 색상 (#rrggbb) */
+  diagonalColor?: string;
+  /** 중심선 방향: NONE / VERTICAL / HORIZONTAL / CROSS */
+  centerLine?: string;
 }
 
 /** WASM getTableProperties() 반환 타입 — HWPUNIT 원본값 */
@@ -518,7 +543,7 @@ export interface NoteControlRef {
 }
 
 export interface ControlLayoutItem {
-  type: 'table' | 'image' | 'shape' | 'equation' | 'group' | 'line';
+  type: 'table' | 'image' | 'shape' | 'equation' | 'group' | 'line' | 'ole';
   x: number;
   y: number;
   w: number;
@@ -546,6 +571,11 @@ export interface ControlLayoutItem {
   stableIndex?: number;
   /** [Task #1280 v2] 텍스트 어울림 모드(이미지뿐 아니라 shape/line/group에도 노출). */
   wrap?: string;
+  /**
+   * [Task #2230] 그림 미지정 placeholder(bin 참조 실패 + 외부 경로 없음).
+   * 더블클릭 시 그림 지정(파일 선택) 진입 분기 근거.
+   */
+  missing?: boolean;
 }
 
 /** 개체 참조 (그림/글상자 공용) */
@@ -553,7 +583,7 @@ export interface ObjectRef {
   sec: number;
   ppi: number;
   ci: number;
-  type: 'image' | 'shape' | 'equation' | 'group' | 'line';
+  type: 'image' | 'shape' | 'equation' | 'group' | 'line' | 'ole';
   /** 표 셀 내 수식인 경우: 셀 인덱스 */
   cellIdx?: number;
   /** 표 셀 내 수식인 경우: 셀 내 문단 인덱스 */
@@ -573,6 +603,8 @@ export interface ShapeProperties {
   vertOffset: number;
   horzOffset: number;
   textWrap: string;
+  /** 크기 고정 */
+  sizeProtect?: boolean;
   tbMarginLeft?: number;
   tbMarginRight?: number;
   tbMarginTop?: number;
@@ -617,6 +649,8 @@ export interface EquationProperties {
   vertOffset?: number;
   horzOffset?: number;
   textWrap?: string;
+  /** 크기 고정 */
+  sizeProtect?: boolean;
   zOrder?: number;
   instanceId?: number;
   outerMarginLeft?: number;
@@ -647,9 +681,17 @@ export interface PictureProperties {
   vertOffset: number;
   horzOffset: number;
   textWrap: string;
+  /** 쪽 영역 안으로 제한 */
+  restrictInPage?: boolean;
+  /** 서로 겹침 허용 */
+  allowOverlap?: boolean;
+  /** 크기 고정 */
+  sizeProtect?: boolean;
   brightness: number;
   contrast: number;
   effect: string;
+  /** 그림 개체 전체 투명도. 한컴 UI 기준 0=불투명, 100=완전 투명. */
+  transparency?: number;
   description: string;
   rotationAngle: number;
   horzFlip: boolean;
@@ -953,19 +995,37 @@ export interface LayerTextStyle {
   italic?: boolean;
   ratio?: number;
   underline?: string;
+  underlineShape?: number;
   strikethrough?: boolean;
+  strikeShape?: number;
+  outlineType?: number;
+  shadowType?: number;
+  shadowColor?: string;
+  shadowOffsetX?: number;
+  shadowOffsetY?: number;
+  emboss?: boolean;
+  engrave?: boolean;
+  superscript?: boolean;
+  subscript?: boolean;
+  underlineColor?: string;
+  strikeColor?: string;
   shadeColor?: string;
+  emphasisDot?: number;
 }
 
 export interface LayerTextRunOp {
   type: 'textRun';
   bbox: LayerBounds;
   text: string;
+  displayText?: string;
+  /** Run-local baseline offset from bbox.y when placement is absent. */
   baseline?: number;
   rotation?: number;
   isVertical?: boolean;
   style?: LayerTextStyle;
+  placement?: { runToPage?: LayerAffineTransform; baselineY?: number };
   positions?: number[];
+  displayPositions?: number[];
 }
 
 export interface LayerFootnoteMarkerOp {
@@ -1060,6 +1120,7 @@ export interface LayerImageOp {
   effect?: string;
   brightness?: number;
   contrast?: number;
+  opacity?: number;
   bakedWatermark?: boolean;
   wrap?: 'behindText' | 'inFrontOfText' | string;
   transform?: LayerPathTransform;

@@ -2,17 +2,275 @@
 
 use super::super::helpers::{
     border_line_type_to_u8_val, clipboard_color_to_css, clipboard_escape_html, color_ref_to_css,
-    detect_clipboard_image_mime, get_textbox_from_shape, utf16_pos_to_char_idx,
+    detect_clipboard_image_mime, get_textbox_from_shape, get_textbox_from_shape_mut,
+    utf16_pos_to_char_idx,
 };
+use super::super::queries::field_query::rebuild_char_offsets;
 use crate::document_core::{ClipboardData, DocumentCore};
 use crate::error::HwpError;
 use crate::model::control::Control;
 use crate::model::event::DocumentEvent;
-use crate::model::paragraph::{LineSeg, Paragraph};
+use crate::model::paragraph::{FieldRange, LineSeg, Paragraph};
 
 /// [Task #1161] 떠 있는 개체 반복 붙여넣기 cascade 1 회당 위치 오프셋(HWPUNIT).
 /// 약 2mm (1mm = 7200/25.4 ≈ 283.46 HWPUNIT). 한컴 정합은 작업지시자 시각 대조로 미세조정.
 const PASTE_CASCADE_STEP_HU: u32 = 567;
+
+fn clipboard_paragraphs_contain_field(paragraphs: &[Paragraph]) -> bool {
+    paragraphs.iter().any(|para| !para.field_ranges.is_empty())
+}
+
+fn clipboard_control_char_code(ctrl: &Control) -> u16 {
+    match ctrl {
+        Control::SectionDef(_) | Control::ColumnDef(_) => 0x0002,
+        Control::Field(_) => 0x0003,
+        Control::Table(_)
+        | Control::Shape(_)
+        | Control::Picture(_)
+        | Control::Hyperlink(_)
+        | Control::Ruby(_)
+        | Control::Equation(_)
+        | Control::Form(_)
+        | Control::Unknown(_) => 0x000B,
+        Control::HiddenComment(_) => 0x000F,
+        Control::Header(_) | Control::Footer(_) => 0x0010,
+        Control::Footnote(_) | Control::Endnote(_) => 0x0011,
+        Control::AutoNumber(_) | Control::NewNumber(_) => 0x0012,
+        Control::PageNumberPos(_) | Control::PageHide(_) => 0x0015,
+        Control::Bookmark(_) => 0x0016,
+        Control::CharOverlap(_) => 0x0017,
+    }
+}
+
+fn recompute_clipboard_control_mask(para: &Paragraph) -> u32 {
+    let mut mask = 0u32;
+    for ctrl in &para.controls {
+        mask |= 1u32 << clipboard_control_char_code(ctrl);
+    }
+    if !para.field_ranges.is_empty() {
+        mask |= 1u32 << 0x0004;
+    }
+    if para.text.contains('\t') {
+        mask |= 1u32 << 0x0009;
+    }
+    if para.text.contains('\n') {
+        mask |= 1u32 << 0x000A;
+    }
+    mask
+}
+
+fn strip_structural_controls_for_text_clipboard(para: &mut Paragraph) {
+    let old_controls = std::mem::take(&mut para.controls);
+    let old_records = std::mem::take(&mut para.ctrl_data_records);
+    let mut index_map = vec![None; old_controls.len()];
+    let mut new_controls = Vec::new();
+    let mut new_records = Vec::new();
+
+    for (old_idx, ctrl) in old_controls.into_iter().enumerate() {
+        if matches!(ctrl, Control::SectionDef(_) | Control::ColumnDef(_)) {
+            continue;
+        }
+        index_map[old_idx] = Some(new_controls.len());
+        new_records.push(old_records.get(old_idx).cloned().flatten());
+        new_controls.push(ctrl);
+    }
+
+    para.field_ranges = para
+        .field_ranges
+        .drain(..)
+        .filter_map(|mut fr| {
+            let new_idx = index_map.get(fr.control_idx).and_then(|idx| *idx)?;
+            fr.control_idx = new_idx;
+            Some(fr)
+        })
+        .collect();
+    para.controls = new_controls;
+    para.ctrl_data_records = new_records;
+    para.control_mask = recompute_clipboard_control_mask(para);
+    if !para.field_ranges.is_empty() {
+        rebuild_char_offsets(para);
+    }
+}
+
+fn text_to_split_logical_offset(para: &Paragraph, text_offset: usize) -> usize {
+    let control_positions = para.control_text_positions();
+    if control_positions.is_empty() {
+        return text_offset;
+    }
+
+    // 클립보드 range trimming 은 곧바로 Paragraph::split_at()을 호출한다.
+    // 따라서 커서 탐색용 논리 offset이 아니라 split_at()과 같은 movable control
+    // 기준으로 변환해야 non-TAC 그림이 텍스트 앞에 있어도 첫 글자를 잃지 않는다.
+    let before_count = para
+        .controls
+        .iter()
+        .enumerate()
+        .filter(|(_, ctrl)| Paragraph::is_split_movable_control(ctrl))
+        .filter_map(|(ci, _)| control_positions.get(ci))
+        .filter(|&&pos| pos < text_offset)
+        .count();
+    text_offset + before_count
+}
+
+fn clip_paragraph_text_range_for_clipboard(
+    source: &Paragraph,
+    start_char_offset: usize,
+    end_char_offset: usize,
+) -> Paragraph {
+    let text_len = source.text.chars().count();
+    let start = start_char_offset.min(text_len);
+    let end = end_char_offset.min(text_len).max(start);
+
+    let mut clipped = source.clone();
+    if end < text_len {
+        let end_logical = text_to_split_logical_offset(&clipped, end);
+        let _ = clipped.split_at(end_logical);
+    }
+    if start == 0 {
+        return clipped;
+    }
+
+    let control_positions = clipped.control_text_positions();
+    let old_controls = clipped.controls.clone();
+    let old_records = clipped.ctrl_data_records.clone();
+    let old_ranges = clipped.field_ranges.clone();
+
+    let start_logical = text_to_split_logical_offset(&clipped, start);
+    let mut suffix = clipped.split_at(start_logical);
+    let mut keep_control = vec![false; old_controls.len()];
+
+    for range in &old_ranges {
+        if range.start_char_idx >= start
+            && range.end_char_idx <= end
+            && range.control_idx < keep_control.len()
+        {
+            keep_control[range.control_idx] = true;
+        }
+    }
+
+    for (idx, ctrl) in old_controls.iter().enumerate() {
+        if matches!(
+            ctrl,
+            Control::SectionDef(_) | Control::ColumnDef(_) | Control::Field(_)
+        ) {
+            continue;
+        }
+        let pos = control_positions.get(idx).copied().unwrap_or(text_len);
+        if pos >= start && pos <= end {
+            keep_control[idx] = true;
+        }
+    }
+
+    let mut index_map = vec![None; old_controls.len()];
+    let mut new_controls = Vec::new();
+    let mut new_records = Vec::new();
+    for (old_idx, ctrl) in old_controls.into_iter().enumerate() {
+        if !keep_control.get(old_idx).copied().unwrap_or(false) {
+            continue;
+        }
+        index_map[old_idx] = Some(new_controls.len());
+        new_records.push(old_records.get(old_idx).cloned().flatten());
+        new_controls.push(ctrl);
+    }
+
+    let new_field_ranges: Vec<FieldRange> = old_ranges
+        .into_iter()
+        .filter_map(|mut range| {
+            if range.start_char_idx < start || range.end_char_idx > end {
+                return None;
+            }
+            let new_control_idx = index_map.get(range.control_idx).and_then(|idx| *idx)?;
+            range.start_char_idx -= start;
+            range.end_char_idx -= start;
+            range.control_idx = new_control_idx;
+            Some(range)
+        })
+        .collect();
+
+    suffix.controls = new_controls;
+    suffix.ctrl_data_records = new_records;
+    suffix.field_ranges = new_field_ranges;
+    suffix.control_mask = recompute_clipboard_control_mask(&suffix);
+    if !suffix.field_ranges.is_empty() {
+        rebuild_char_offsets(&mut suffix);
+    }
+    suffix
+}
+
+fn collect_max_clipboard_field_id(para: &Paragraph, max_id: &mut u32) {
+    for ctrl in &para.controls {
+        match ctrl {
+            Control::Field(field) => {
+                *max_id = (*max_id).max(field.field_id);
+            }
+            Control::Table(table) => {
+                for cell in &table.cells {
+                    for cell_para in &cell.paragraphs {
+                        collect_max_clipboard_field_id(cell_para, max_id);
+                    }
+                }
+                if let Some(caption) = &table.caption {
+                    for cap_para in &caption.paragraphs {
+                        collect_max_clipboard_field_id(cap_para, max_id);
+                    }
+                }
+            }
+            Control::Shape(shape) => {
+                if let Some(text_box) = get_textbox_from_shape(shape) {
+                    for tb_para in &text_box.paragraphs {
+                        collect_max_clipboard_field_id(tb_para, max_id);
+                    }
+                }
+            }
+            Control::Picture(pic) => {
+                if let Some(caption) = &pic.caption {
+                    for cap_para in &caption.paragraphs {
+                        collect_max_clipboard_field_id(cap_para, max_id);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn assign_new_clipboard_field_ids(para: &mut Paragraph, next_id: &mut u32) {
+    for ctrl in &mut para.controls {
+        match ctrl {
+            Control::Field(field) => {
+                field.field_id = (*next_id).max(1);
+                *next_id = next_id.saturating_add(1).max(1);
+            }
+            Control::Table(table) => {
+                for cell in &mut table.cells {
+                    for cell_para in &mut cell.paragraphs {
+                        assign_new_clipboard_field_ids(cell_para, next_id);
+                    }
+                }
+                if let Some(caption) = &mut table.caption {
+                    for cap_para in &mut caption.paragraphs {
+                        assign_new_clipboard_field_ids(cap_para, next_id);
+                    }
+                }
+            }
+            Control::Shape(shape) => {
+                if let Some(text_box) = get_textbox_from_shape_mut(shape) {
+                    for tb_para in &mut text_box.paragraphs {
+                        assign_new_clipboard_field_ids(tb_para, next_id);
+                    }
+                }
+            }
+            Control::Picture(pic) => {
+                if let Some(caption) = &mut pic.caption {
+                    for cap_para in &mut caption.paragraphs {
+                        assign_new_clipboard_field_ids(cap_para, next_id);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
 
 impl DocumentCore {
     pub fn has_internal_clipboard_native(&self) -> bool {
@@ -30,6 +288,19 @@ impl DocumentCore {
     /// 내부 클립보드를 초기화한다.
     pub fn clear_clipboard_native(&mut self) {
         self.clipboard = None;
+    }
+
+    fn renumber_pasted_field_ids(&self, clip_paras: &mut [Paragraph]) {
+        let mut max_id = 0u32;
+        for section in &self.document.sections {
+            for para in &section.paragraphs {
+                collect_max_clipboard_field_id(para, &mut max_id);
+            }
+        }
+        let mut next_id = max_id.saturating_add(1).max(1);
+        for para in clip_paras {
+            assign_new_clipboard_field_ids(para, &mut next_id);
+        }
     }
 
     /// 선택 영역을 내부 클립보드에 복사한다.
@@ -70,27 +341,20 @@ impl DocumentCore {
 
         if start_para_idx == end_para_idx {
             // 단일 문단 내 선택
-            let mut para = section.paragraphs[start_para_idx].clone();
-            let text_len = para.text.chars().count();
-
-            // 오른쪽 잘라내기 (end_offset 이후 제거)
-            if end_char_offset < text_len {
-                let _ = para.split_at(end_char_offset);
-            }
-            // 왼쪽 잘라내기 (start_offset 이전 제거)
-            if start_char_offset > 0 {
-                para = para.split_at(start_char_offset);
-            }
-
-            clip_paragraphs.push(para);
+            clip_paragraphs.push(clip_paragraph_text_range_for_clipboard(
+                &section.paragraphs[start_para_idx],
+                start_char_offset,
+                end_char_offset,
+            ));
         } else {
             // 다중 문단 선택
             // 첫 번째 문단: start_offset부터 끝까지
-            let mut first = section.paragraphs[start_para_idx].clone();
-            if start_char_offset > 0 {
-                first = first.split_at(start_char_offset);
-            }
-            clip_paragraphs.push(first);
+            let first_text_len = section.paragraphs[start_para_idx].text.chars().count();
+            clip_paragraphs.push(clip_paragraph_text_range_for_clipboard(
+                &section.paragraphs[start_para_idx],
+                start_char_offset,
+                first_text_len,
+            ));
 
             // 중간 문단: 전체 복사
             for i in (start_para_idx + 1)..end_para_idx {
@@ -98,18 +362,16 @@ impl DocumentCore {
             }
 
             // 마지막 문단: 처음부터 end_offset까지
-            let mut last = section.paragraphs[end_para_idx].clone();
-            let last_text_len = last.text.chars().count();
-            if end_char_offset < last_text_len {
-                let _ = last.split_at(end_char_offset);
-            }
-            clip_paragraphs.push(last);
+            clip_paragraphs.push(clip_paragraph_text_range_for_clipboard(
+                &section.paragraphs[end_para_idx],
+                0,
+                end_char_offset,
+            ));
         }
 
         // 구조적 컨트롤(SectionDef, ColumnDef 등) 제거 — 텍스트 복사에 불필요
         for para in &mut clip_paragraphs {
-            para.controls
-                .retain(|ctrl| !matches!(ctrl, Control::SectionDef(_) | Control::ColumnDef(_)));
+            strip_structural_controls_for_text_clipboard(para);
         }
 
         // 플레인 텍스트 추출
@@ -175,32 +437,32 @@ impl DocumentCore {
         let mut clip_paragraphs = Vec::new();
 
         if start_cell_para_idx == end_cell_para_idx {
-            let mut para = cell_paragraphs[start_cell_para_idx].clone();
-            let text_len = para.text.chars().count();
-            if end_char_offset < text_len {
-                let _ = para.split_at(end_char_offset);
-            }
-            if start_char_offset > 0 {
-                para = para.split_at(start_char_offset);
-            }
-            clip_paragraphs.push(para);
+            clip_paragraphs.push(clip_paragraph_text_range_for_clipboard(
+                &cell_paragraphs[start_cell_para_idx],
+                start_char_offset,
+                end_char_offset,
+            ));
         } else {
-            let mut first = cell_paragraphs[start_cell_para_idx].clone();
-            if start_char_offset > 0 {
-                first = first.split_at(start_char_offset);
-            }
-            clip_paragraphs.push(first);
+            let first_text_len = cell_paragraphs[start_cell_para_idx].text.chars().count();
+            clip_paragraphs.push(clip_paragraph_text_range_for_clipboard(
+                &cell_paragraphs[start_cell_para_idx],
+                start_char_offset,
+                first_text_len,
+            ));
 
             for i in (start_cell_para_idx + 1)..end_cell_para_idx {
                 clip_paragraphs.push(cell_paragraphs[i].clone());
             }
 
-            let mut last = cell_paragraphs[end_cell_para_idx].clone();
-            let last_text_len = last.text.chars().count();
-            if end_char_offset < last_text_len {
-                let _ = last.split_at(end_char_offset);
-            }
-            clip_paragraphs.push(last);
+            clip_paragraphs.push(clip_paragraph_text_range_for_clipboard(
+                &cell_paragraphs[end_cell_para_idx],
+                0,
+                end_char_offset,
+            ));
+        }
+
+        for para in &mut clip_paragraphs {
+            strip_structural_controls_for_text_clipboard(para);
         }
 
         let plain_text: String = clip_paragraphs
@@ -284,7 +546,15 @@ impl DocumentCore {
             char_offsets: vec![],
             char_shapes: vec![crate::model::paragraph::CharShapeRef {
                 start_pos: 0,
-                char_shape_id: para.char_shape_id_at(0).unwrap_or(0),
+                // 원본 문단 첫 글자가 아니라 컨트롤 앵커 위치의 글자모양을 복사한다.
+                char_shape_id: para
+                    .char_shape_id_at(
+                        para.control_text_positions()
+                            .get(control_idx)
+                            .copied()
+                            .unwrap_or(0),
+                    )
+                    .unwrap_or(0),
             }],
             line_segs: vec![ctrl_line_seg],
             para_shape_id: para.para_shape_id,
@@ -322,10 +592,11 @@ impl DocumentCore {
         para_idx: usize,
         char_offset: usize,
     ) -> Result<String, HwpError> {
-        let clip_paras = match &self.clipboard {
+        let mut clip_paras = match &self.clipboard {
             Some(c) if !c.paragraphs.is_empty() => c.paragraphs.clone(),
             _ => return Ok("{\"ok\":false,\"error\":\"clipboard empty\"}".to_string()),
         };
+        let contains_field = clipboard_paragraphs_contain_field(&clip_paras);
 
         // 인덱스 검증
         if section_idx >= self.document.sections.len() {
@@ -342,6 +613,7 @@ impl DocumentCore {
         }
 
         self.document.sections[section_idx].raw_stream = None;
+        self.renumber_pasted_field_ids(&mut clip_paras);
 
         let clip_count = clip_paras.len();
 
@@ -376,8 +648,8 @@ impl DocumentCore {
                 para: para_idx,
             });
             return Ok(super::super::helpers::json_ok_with(&format!(
-                "\"paraIdx\":{},\"charOffset\":{}",
-                para_idx, new_offset
+                "\"paraIdx\":{},\"charOffset\":{},\"containsField\":{}",
+                para_idx, new_offset, contains_field
             )));
         }
 
@@ -403,6 +675,15 @@ impl DocumentCore {
         let merge_point =
             self.document.sections[section_idx].paragraphs[last_para_idx].merge_from(&right_half);
 
+        for i in para_idx..=last_para_idx {
+            if !self.document.sections[section_idx].paragraphs[i]
+                .field_ranges
+                .is_empty()
+            {
+                rebuild_char_offsets(&mut self.document.sections[section_idx].paragraphs[i]);
+            }
+        }
+
         // 5. 영향받는 모든 문단 리플로우
         for i in para_idx..=last_para_idx {
             self.reflow_paragraph(section_idx, i);
@@ -420,8 +701,8 @@ impl DocumentCore {
             para: para_idx,
         });
         Ok(super::super::helpers::json_ok_with(&format!(
-            "\"paraIdx\":{},\"charOffset\":{}",
-            last_para_idx, merge_point
+            "\"paraIdx\":{},\"charOffset\":{},\"containsField\":{}",
+            last_para_idx, merge_point, contains_field
         )))
     }
 
@@ -469,6 +750,11 @@ impl DocumentCore {
 
         let last_para_idx = insert_idx - 1;
         let merge_point = cell_paras[last_para_idx].merge_from(&right_half);
+        for para in &mut cell_paras[cell_para_idx..=last_para_idx] {
+            if !para.field_ranges.is_empty() {
+                rebuild_char_offsets(para);
+            }
+        }
         Ok((last_para_idx, merge_point))
     }
 
@@ -482,10 +768,12 @@ impl DocumentCore {
         cell_para_idx: usize,
         char_offset: usize,
     ) -> Result<String, HwpError> {
-        let clip_paras = match &self.clipboard {
+        let mut clip_paras = match &self.clipboard {
             Some(c) if !c.paragraphs.is_empty() => c.paragraphs.clone(),
             _ => return Ok("{\"ok\":false,\"error\":\"clipboard empty\"}".to_string()),
         };
+        let contains_field = clipboard_paragraphs_contain_field(&clip_paras);
+        self.renumber_pasted_field_ids(&mut clip_paras);
 
         let (last_para_idx, merge_point) = {
             let section =
@@ -549,8 +837,8 @@ impl DocumentCore {
             para: parent_para_idx,
         });
         Ok(super::super::helpers::json_ok_with(&format!(
-            "\"cellParaIdx\":{},\"charOffset\":{}",
-            last_para_idx, merge_point
+            "\"cellParaIdx\":{},\"charOffset\":{},\"containsField\":{}",
+            last_para_idx, merge_point, contains_field
         )))
     }
 
@@ -562,10 +850,12 @@ impl DocumentCore {
         path: &[(usize, usize, usize)],
         char_offset: usize,
     ) -> Result<String, HwpError> {
-        let clip_paras = match &self.clipboard {
+        let mut clip_paras = match &self.clipboard {
             Some(c) if !c.paragraphs.is_empty() => c.paragraphs.clone(),
             _ => return Ok("{\"ok\":false,\"error\":\"clipboard empty\"}".to_string()),
         };
+        let contains_field = clipboard_paragraphs_contain_field(&clip_paras);
+        self.renumber_pasted_field_ids(&mut clip_paras);
         if path.is_empty() {
             return Err(HwpError::RenderError("경로가 비어있습니다".to_string()));
         }
@@ -593,8 +883,8 @@ impl DocumentCore {
             para: parent_para_idx,
         });
         Ok(super::super::helpers::json_ok_with(&format!(
-            "\"cellParaIdx\":{},\"charOffset\":{}",
-            last_para_idx, merge_point
+            "\"cellParaIdx\":{},\"charOffset\":{},\"containsField\":{}",
+            last_para_idx, merge_point, contains_field
         )))
     }
 
@@ -731,13 +1021,9 @@ impl DocumentCore {
 
         self.document.sections[section_idx].raw_stream = None;
 
-        // 커서 위치 문단의 속성 상속 (빈 문단 생성용)
+        // 커서 위치 문단의 속성 상속 (빈 문단 생성용) — 커서 offset 의 글자모양 기준.
         let current_para = &self.document.sections[section_idx].paragraphs[para_idx];
-        let default_char_shape_id: u32 = current_para
-            .char_shapes
-            .first()
-            .map(|cs| cs.char_shape_id)
-            .unwrap_or(0);
+        let default_char_shape_id: u32 = current_para.char_shape_id_at(char_offset).unwrap_or(0);
         let default_para_shape_id: u16 = current_para.para_shape_id;
 
         // 편집 영역 폭
@@ -1419,4 +1705,97 @@ impl DocumentCore {
     }
 
     // === 클립보드 HTML 붙여넣기 ===
+}
+
+#[cfg(test)]
+mod char_shape_inherit_tests {
+    use crate::document_core::DocumentCore;
+    use crate::model::paragraph::CharShapeRef;
+
+    /// 혼합 글자모양 문단: 텍스트 20자, 글자 인덱스 0~9 는 34, 10~ 는 37.
+    fn core_with_mixed_shape_paragraph() -> DocumentCore {
+        let mut core = DocumentCore::new_empty();
+        core.create_blank_document_native().unwrap();
+        core.insert_text_native(0, 0, 0, "0123456789abcdefghij")
+            .unwrap();
+        let para = &mut core.document.sections[0].paragraphs[0];
+        // 컨트롤(SectionDef 등)이 UTF-16 앞자리를 차지하므로 경계는 char_offsets 로 계산.
+        let boundary = para.char_offsets[10];
+        para.char_shapes = vec![
+            CharShapeRef {
+                start_pos: 0,
+                char_shape_id: 34,
+            },
+            CharShapeRef {
+                start_pos: boundary,
+                char_shape_id: 37,
+            },
+        ];
+        core
+    }
+
+    /// 혼합 문단 offset 12(글자모양 37 구간)에 인라인 표를 만들고 복사하면,
+    /// 클립보드 문단은 문단 첫 글자모양(34)이 아니라 컨트롤 앵커 위치의
+    /// 글자모양(37)을 가져야 한다.
+    #[test]
+    fn copy_control_uses_char_shape_at_control_anchor() {
+        let mut core = core_with_mixed_shape_paragraph();
+        let res = core
+            .create_table_ex_native(0, 0, 12, 1, 1, true, None, None)
+            .unwrap();
+        let ctrl_idx: usize = res
+            .split("\"controlIdx\":")
+            .nth(1)
+            .and_then(|s| s.split([',', '}']).next())
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap();
+
+        core.copy_control_native(0, 0, &[], ctrl_idx).unwrap();
+
+        let clip_para = core
+            .clipboard
+            .as_ref()
+            .and_then(|c| c.paragraphs.first())
+            .expect("클립보드 문단");
+        assert_eq!(
+            clip_para.char_shapes.first().map(|cs| cs.char_shape_id),
+            Some(37),
+            "클립보드 문단이 컨트롤 앵커 글자모양(37)이 아닌 값을 가짐"
+        );
+    }
+
+    /// 혼합 문단 offset 10 에 컨트롤을 붙여넣으면, 컨트롤 아래에 생성되는
+    /// 빈 문단은 커서 offset 글자모양(37)을 상속해야 한다.
+    #[test]
+    fn paste_control_empty_neighbor_inherits_char_shape_at_cursor_offset() {
+        let mut core = core_with_mixed_shape_paragraph();
+        let res = core
+            .create_table_ex_native(0, 0, 12, 1, 1, true, None, None)
+            .unwrap();
+        let ctrl_idx: usize = res
+            .split("\"controlIdx\":")
+            .nth(1)
+            .and_then(|s| s.split([',', '}']).next())
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap();
+        core.copy_control_native(0, 0, &[], ctrl_idx).unwrap();
+
+        let res = core.paste_control_native(0, 0, 10).unwrap();
+        let insert_para_idx: usize = res
+            .split("\"paraIdx\":")
+            .nth(1)
+            .and_then(|s| s.split([',', '}']).next())
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap();
+
+        let empty_neighbor = &core.document.sections[0].paragraphs[insert_para_idx + 1];
+        assert_eq!(
+            empty_neighbor
+                .char_shapes
+                .first()
+                .map(|cs| cs.char_shape_id),
+            Some(37),
+            "붙여넣기 후 빈 이웃 문단이 커서 offset 글자모양(37)이 아닌 값을 상속"
+        );
+    }
 }

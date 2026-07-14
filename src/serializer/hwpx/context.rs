@@ -68,12 +68,15 @@ impl<T: Copy + Eq + std::hash::Hash> IdPool<T> {
 pub struct BinDataEntry {
     /// content.hpf 의 `opf:item id` (예: "image1")
     pub manifest_id: String,
-    /// ZIP 엔트리 경로 (예: "BinData/image1.png")
+    /// ZIP 엔트리 경로 (예: "BinData/image1.png") 또는 외부 참조 원본 경로
+    /// (`is_embedded=false`, 예: `D:\다운로드\...`)
     pub href: String,
     /// MIME 타입 (예: "image/png")
     pub media_type: String,
     /// IR 상의 bin_data_id (storage_id) — 매핑 역추적용
     pub bin_data_id: u16,
+    /// content.hpf `isEmbeded` — false 면 외부 파일 참조(ZIP 엔트리 없음, #1891).
+    pub is_embedded: bool,
 }
 
 /// 1-pass 스캔으로 구축되는 직렬화 컨텍스트.
@@ -95,6 +98,14 @@ pub struct SerializeContext {
     /// 정합이지만, 셀·글상자 subList 의 colPr 는 원본 XML 에 인라인으로 존재한다.
     /// `render_control_slot` 의 ColumnDef 방출을 subList 경로(depth > 0)로 한정한다.
     pub sub_list_depth: u32,
+    /// 본문 첫 문단의 첫 ColumnDef(섹션 템플릿 colPr 앵커가 흡수하는 단 정의)의
+    /// **인라인 XML 방출만** 1회 억제하기 위한 consume-once 플래그 (#1584).
+    ///
+    /// ColumnDef 는 char-offset 슬롯(8유닛)을 점유하므로 `slots` 에는 그대로 남겨
+    /// 위치 정합을 보존하되, 첫 ColumnDef 의 `<hp:colPr>` XML 은 템플릿이 이미
+    /// 방출했으므로 중복 방지를 위해 건너뛴다. `write_section` 이 첫 문단 렌더 직전
+    /// true 로 설정하고, 첫 본문 ColumnDef 방출 시 `render_control_slot` 이 소거한다.
+    pub body_coldef_template_pending: bool,
 }
 
 impl SerializeContext {
@@ -113,14 +124,23 @@ impl SerializeContext {
         for (idx, _) in doc.doc_info.para_shapes.iter().enumerate() {
             ctx.para_shape_ids.register(idx as u16);
         }
+        // [#1384] borderFill id 는 1-based 방출(header.rs write_border_fill: idx+1)
+        // 이고 borderFillIDRef 도 1-based 참조이므로, 등록도 1-based 로 맞춘다.
+        // 종전 `idx`(0-based) 등록이라 마지막 id(예: exam_social 31)가 등록 범위
+        // (0~30) 밖으로 빠져 SERIALIZE_FAIL(미등록 borderFillIDRef)을 유발했다.
+        // 인라인 등록(표/셀, 아래)은 IR 값(1-based) 그대로라 본래 정합 — 이로써 통일.
         for (idx, _) in doc.doc_info.border_fills.iter().enumerate() {
-            ctx.border_fill_ids.register(idx as u16);
+            ctx.border_fill_ids.register((idx + 1) as u16);
         }
         for (idx, _) in doc.doc_info.tab_defs.iter().enumerate() {
             ctx.tab_pr_ids.register(idx as u16);
         }
+        // [#1409] numbering id 는 1-based 방출(header.rs write_numbering: id+1)이고
+        // 실물도 1-based 이므로 등록도 1-based 로 맞춘다 (#1384 borderFill 동형).
+        // numbering 은 reference 검사가 없어 현재 미표면화이나, 등록 축 일관성 +
+        // HWP5 변환·미래 검사 활성화 대비.
         for (idx, _) in doc.doc_info.numberings.iter().enumerate() {
-            ctx.numbering_ids.register(idx as u16);
+            ctx.numbering_ids.register((idx + 1) as u16);
         }
         for (idx, _) in doc.doc_info.styles.iter().enumerate() {
             ctx.style_ids.register(idx as u16);
@@ -144,14 +164,18 @@ impl SerializeContext {
             }
         }
 
-        // BinData: bin_data_content의 storage_id → manifest 엔트리 생성
-        for (i, bd) in doc.bin_data_content.iter().enumerate() {
-            let ext = if bd.extension.is_empty() {
-                "bin"
-            } else {
-                bd.extension.as_str()
-            };
-            let manifest_id = format!("image{}", i + 1);
+        // BinData: bin_data_content의 storage_id → manifest 엔트리 생성.
+        // manifest id 는 반드시 `image{bin_data_id}` — HWPX 파서(section.rs)가
+        // binaryItemIDRef 의 숫자를 그대로 bin_data_id 로 파싱하므로(숫자 불변식),
+        // 순번(i+1) 명명은 링크 항목으로 id 에 구멍이 있는 문서(#1891 73504)에서
+        // 이름과 id 가 어긋나 재파스 그림 참조가 엉킨다.
+        for bd in doc.bin_data_content.iter() {
+            // 빈 확장자는 원본과 동일하게 확장자 없이(`image{id}.`) 재직렬화한다.
+            // 예전엔 `.bin` 기본값을 붙였으나(#1981), 원본이 확장자 없는 BinData
+            // (`BinData/image13.` 등, OLE·미상 임베드)를 담은 경우 라운드트립 확장자
+            // 멀티셋이 `bin` vs `""` 로 어긋나 PKG_FAIL 이 났다. 원본 형태를 보존한다.
+            let manifest_id = format!("image{}", bd.id);
+            let ext = bd.extension.as_str();
             let href = format!("BinData/{}.{}", manifest_id, ext);
             let media_type = mime_from_ext(ext);
             ctx.bin_data_map.insert(
@@ -161,6 +185,34 @@ impl SerializeContext {
                     href,
                     media_type: media_type.to_string(),
                     bin_data_id: bd.id,
+                    is_embedded: true,
+                },
+            );
+        }
+
+        // 외부 참조(Link) BinData: 콘텐츠가 없어도 manifest 항목과 참조는 보존해야
+        // 한다 (#1891 — 미등록이면 해당 <hp:pic> 직렬화가 실패해 그림 컨트롤이
+        // 통째로 드롭되고 레이아웃 앵커가 사라져 렌더가 갈라진다). ZIP 엔트리는
+        // 만들지 않고 content.hpf 에 isEmbeded="0" + 원본 href 로만 방출한다.
+        // 명명은 위와 같은 숫자 불변식(`image{storage_id}`)을 따른다.
+        for bd in &doc.doc_info.bin_data_list {
+            if !matches!(bd.data_type, crate::model::bin_data::BinDataType::Link) {
+                continue;
+            }
+            // storage_id=0 은 "참조 없는 placeholder pic" 센티널(#1567)과 겹치므로
+            // 등록하지 않는다 (HWP5 Link 항목은 storage_id 미부여일 수 있음).
+            if bd.storage_id == 0 || ctx.bin_data_map.contains_key(&bd.storage_id) {
+                continue;
+            }
+            let ext = bd.extension.as_deref().unwrap_or("");
+            ctx.bin_data_map.insert(
+                bd.storage_id,
+                BinDataEntry {
+                    manifest_id: format!("image{}", bd.storage_id),
+                    href: bd.abs_path.clone().unwrap_or_default(),
+                    media_type: mime_from_ext(ext).to_string(),
+                    bin_data_id: bd.storage_id,
+                    is_embedded: false,
                 },
             );
         }
@@ -226,6 +278,21 @@ impl SerializeContext {
         self.para_id_counter += 1;
         id
     }
+
+    /// [Issue #1933] 스타일 목록 밖 styleIDRef 를 기본 스타일(0)로 강등한다.
+    ///
+    /// 일부 생성기 산출물(보도자료 계열)은 header 스타일 목록에 없는 style_id 를
+    /// 문단이 참조한다(파일 자기모순). 종전에는 `assert_all_refs_resolved` 가
+    /// 하드 실패해 "열리는데 저장 불가" 상태가 됐다. 한글은 이런 문서를 기본
+    /// 스타일로 폴백해 열고 저장하므로, 미등록 참조는 0(항상 등록됨)으로 강등한다.
+    /// 등록된 참조는 그대로 반환한다.
+    pub fn effective_style_id(&self, raw: u8) -> u8 {
+        if self.style_ids.is_registered(&(raw as u16)) {
+            raw
+        } else {
+            0
+        }
+    }
 }
 
 fn mime_from_ext(ext: &str) -> &'static str {
@@ -258,6 +325,66 @@ mod tests {
         let doc = Document::default();
         let ctx = SerializeContext::collect_from_document(&doc);
         ctx.assert_all_refs_resolved().expect("empty doc must pass");
+    }
+
+    #[test]
+    fn task1384_border_fill_registered_one_based() {
+        // borderFill 은 1-based(방출 id=idx+1, borderFillIDRef 1-based)이므로
+        // N 개 적재 시 마지막 참조 N 이 resolved 되어야 한다 (#1384 — 종전 0-based
+        // 등록이라 N 이 미등록으로 SERIALIZE_FAIL 했다).
+        use crate::model::style::BorderFill;
+        let mut doc = Document::default();
+        doc.doc_info.border_fills = vec![BorderFill::default(); 31];
+        let mut ctx = SerializeContext::collect_from_document(&doc);
+        // exam_social 패턴: charPr 가 borderFillIDRef=31(마지막) 참조.
+        ctx.border_fill_ids.reference(31);
+        ctx.assert_all_refs_resolved()
+            .expect("1-based 등록이면 borderFillIDRef=31 resolved");
+        // 0 은 1-based 축에 없음(미등록) — 회귀 가드 의미 명시.
+        assert!(!ctx.border_fill_ids.is_registered(&0));
+        assert!(ctx.border_fill_ids.is_registered(&31));
+    }
+
+    #[test]
+    fn task1409_numbering_registered_one_based() {
+        // numbering 도 1-based(방출 id=idx+1, 실물 1-based) — borderFill 동형(#1384).
+        // N 개 적재 시 마지막 id=N 이 등록되고 0 은 미등록이어야 한다.
+        use crate::model::style::Numbering;
+        let mut doc = Document::default();
+        doc.doc_info.numberings = vec![Numbering::default(); 8];
+        let ctx = SerializeContext::collect_from_document(&doc);
+        assert!(
+            ctx.numbering_ids.is_registered(&8),
+            "1-based 등록이면 마지막 numbering id=8 등록"
+        );
+        assert!(
+            !ctx.numbering_ids.is_registered(&0),
+            "0 은 1-based 축에 없음 (회귀 가드)"
+        );
+    }
+
+    #[test]
+    fn issue1981_empty_extension_bindata_keeps_no_ext() {
+        // 빈 확장자 BinData 는 `.bin` 을 붙이지 않고 원본 형태(`image{id}.`)로
+        // 재직렬화해야 한다 — 라운드트립 확장자 멀티셋 보존(#1981).
+        use crate::model::bin_data::BinDataContent;
+        let mut doc = Document::default();
+        doc.bin_data_content.push(BinDataContent {
+            id: 6,
+            data: vec![0, 1, 2],
+            extension: String::new(),
+        });
+        doc.bin_data_content.push(BinDataContent {
+            id: 7,
+            data: vec![3, 4, 5],
+            extension: "bmp".to_string(),
+        });
+        let ctx = SerializeContext::collect_from_document(&doc);
+        let e6 = &ctx.bin_data_map[&6];
+        assert_eq!(e6.href, "BinData/image6.", "빈 확장자는 .bin 금지");
+        assert_eq!(e6.media_type, "application/octet-stream");
+        let e7 = &ctx.bin_data_map[&7];
+        assert_eq!(e7.href, "BinData/image7.bmp");
     }
 
     #[test]

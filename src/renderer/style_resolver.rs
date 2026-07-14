@@ -7,8 +7,8 @@ use super::{hwpunit_to_px, GradientFillInfo, PatternFillInfo, TabStop};
 use crate::model::document::DocInfo;
 use crate::model::image::ImageEffect;
 use crate::model::style::{
-    Alignment, BorderFill, BorderLine, Bullet, CharShape, DiagonalLine, FillType, HeadType,
-    ImageFillMode, LineSpacingType, Numbering, ParaShape, TabDef, UnderlineType,
+    Alignment, BorderFill, BorderLine, Bullet, CenterLine, CharShape, DiagonalLine, FillType,
+    HeadType, ImageFillMode, LineSpacingType, Numbering, ParaShape, TabDef, UnderlineType,
 };
 use crate::model::ColorRef;
 
@@ -181,6 +181,9 @@ pub struct ResolvedParaStyle {
     pub tab_stops: Vec<TabStop>,
     /// 문단 오른쪽 끝 자동 탭 여부
     pub auto_tab_right: bool,
+    /// HWPX paraPr condense / HWP ParaShape attr1 bits 9..15.
+    /// Spec name: minimum spacing value, 0..75%.
+    pub condense_min_space: u8,
     /// 줄 나눔 기준 영어 단위 (0=단어, 1=하이픈, 2=글자) — attr1 bit 5-6
     pub english_break_unit: u8,
     /// 줄 나눔 기준 한글 단위 (0=어절, 1=글자) — attr1 bit 7
@@ -214,6 +217,7 @@ impl Default for ResolvedParaStyle {
             default_tab_width: 0.0,
             tab_stops: Vec::new(),
             auto_tab_right: false,
+            condense_min_space: 0,
             english_break_unit: 0,
             korean_break_unit: 0,
             widow_orphan: false,
@@ -241,6 +245,8 @@ pub struct ResolvedBorderStyle {
     pub diagonal_attr: u16,
     /// 대각선 정보
     pub diagonal: DiagonalLine,
+    /// 중심선 방향
+    pub center_line: CenterLine,
 }
 
 /// 해소된 이미지 채우기 정보
@@ -268,6 +274,7 @@ impl Default for ResolvedBorderStyle {
             image_fill: None,
             diagonal_attr: 0,
             diagonal: DiagonalLine::default(),
+            center_line: CenterLine::None,
         }
     }
 }
@@ -285,6 +292,9 @@ pub struct ResolvedStyleSet {
     pub numberings: Vec<Numbering>,
     /// 글머리표 정의 목록 (bullets[id]에 대응)
     pub bullets: Vec<Bullet>,
+    /// [#2070] HWP3 → HWP5 변환본 여부 (Document::is_hwp3_variant 전파).
+    /// 변환본 한정 레거시 폭 규칙(전체 폭) 게이트에 사용.
+    pub hwp3_variant: bool,
 }
 
 /// DocInfo 참조 테이블을 해소된 스타일 목록으로 변환한다.
@@ -312,6 +322,7 @@ pub fn resolve_styles_with_variant(
         border_styles,
         numberings,
         bullets,
+        hwp3_variant: is_hwp3_variant,
     }
 }
 
@@ -391,6 +402,12 @@ fn resolve_single_char_style(cs: &CharShape, doc_info: &DocInfo, dpi: f64) -> Re
 pub fn detect_lang_category(ch: char) -> usize {
     let cp = ch as u32;
     match cp {
+        // [#2070] ㆍ(아래아, U+318D)는 한컴이 USER 스크립트 폰트로 렌더한다.
+        // 80168 실문서(user=9='명조', 반각 오라클)와 사다리 v3(user=한양신명조,
+        // 전각 실측)를 동시에 만족하는 유일 분류. 호환 자모 블록이지만
+        // 한글(0)이 아니라 사용자(6)로 분류해 user 폰트를 태운다.
+        0x318D => 6,
+
         // 한국어: Hangul Jamo, Compatibility Jamo, Syllables
         0x1100..=0x11FF | 0x3130..=0x318F | 0xAC00..=0xD7AF |
         // Hangul Jamo Extended-A/B
@@ -725,18 +742,40 @@ pub(crate) fn is_heavy_display_face(font_family: &str) -> bool {
     )
 }
 
-/// 중고딕/태고딕 계열 (CSS font-weight 500) 폰트 판별.
-///
-/// HWP 에서 중고딕 계열은 Regular(400)과 Bold(700) 사이의 Medium(500) weight.
-/// Fallback 폰트 매칭 시 weight 500 힌트를 주어 선명도를 유지한다.
-pub(crate) fn is_medium_weight_face(font_family: &str) -> bool {
-    let primary = font_family
+fn primary_font_face(font_family: &str) -> &str {
+    font_family
         .split(',')
         .next()
         .unwrap_or(font_family)
         .trim()
         .trim_matches('\'')
-        .trim_matches('"');
+        .trim_matches('"')
+}
+
+/// Face name explicitly carries a bold weight.
+pub(crate) fn is_bold_weight_face(font_family: &str) -> bool {
+    let primary = primary_font_face(font_family);
+    let lower = primary.to_lowercase();
+    lower.contains("bold") || lower.contains("볼드")
+}
+
+/// Face name explicitly carries a light weight.
+pub(crate) fn is_light_weight_face(font_family: &str) -> bool {
+    let primary = primary_font_face(font_family);
+    let lower = primary.to_lowercase();
+    !is_bold_weight_face(font_family)
+        && (lower.contains("light")
+            || lower.contains("extralight")
+            || lower.contains("thin")
+            || lower.contains("ultralight"))
+}
+
+/// 중고딕/태고딕 계열 (CSS font-weight 500) 폰트 판별.
+///
+/// HWP 에서 중고딕 계열은 Regular(400)과 Bold(700) 사이의 Medium(500) weight.
+/// Fallback 폰트 매칭 시 weight 500 힌트를 주어 선명도를 유지한다.
+pub(crate) fn is_medium_weight_face(font_family: &str) -> bool {
+    let primary = primary_font_face(font_family);
     let lower = primary.to_lowercase();
     lower.contains("중고딕")
         || lower.contains("태고딕")
@@ -769,9 +808,15 @@ fn resolve_single_para_style(
     dpi: f64,
     is_hwp3_variant: bool,
 ) -> ResolvedParaStyle {
+    // [#2070] 비-Percent 줄간격(Fixed/SpaceOnly/Minimum)도 여백·문단간격·탭과
+    // 동일하게 저장값이 유효 HWPUNIT 의 2배다 — 통제 사다리(#2197)로 확정한
+    // 계약과 실문서 이중 실증: 시장구조조사 본문 ps Fixed 3320HU, 한글 PDF
+    // 줄 pitch 22.1px = 3320/2 (rhwp 종전 44.3px = 2배 팽창); 편람 한컴 HWPX
+    // case FIXED=1560/default=3120 (case=유효, default=저장). HWPX 파서도
+    // case×2 적재라 양 포맷 IR 동일 스케일 — 일괄 /2 가 정합.
     let line_spacing = match ps.line_spacing_type {
         LineSpacingType::Percent => ps.line_spacing as f64,
-        _ => hwpunit_to_px(ps.line_spacing, dpi),
+        _ => hwpunit_to_px(ps.line_spacing, dpi) / 2.0,
     };
 
     // 기본 탭 간격: HWP 기본값 80pt (8000 HWPUNIT)
@@ -827,6 +872,7 @@ fn resolve_single_para_style(
         default_tab_width,
         tab_stops,
         auto_tab_right,
+        condense_min_space: ((ps.attr1 >> 9) & 0x7f).min(75) as u8,
         english_break_unit: ((ps.attr1 >> 5) & 0x03) as u8,
         korean_break_unit: ((ps.attr1 >> 7) & 0x01) as u8,
         widow_orphan: (ps.attr1 >> 16) & 1 != 0 || (ps.attr2 >> 5) & 1 != 0,
@@ -925,6 +971,11 @@ fn resolve_single_border_style(bf: &BorderFill) -> ResolvedBorderStyle {
         image_fill,
         diagonal_attr: bf.attr,
         diagonal: bf.diagonal,
+        center_line: if bf.center_line != CenterLine::None {
+            bf.center_line
+        } else {
+            CenterLine::from_hwp_attr(bf.attr)
+        },
     }
 }
 
@@ -1141,8 +1192,9 @@ mod tests {
             LineSpacingType::Percent
         );
 
-        // 고정 타입: 1200 HWPUNIT → px 변환
-        let expected = hwpunit_to_px(1200, DEFAULT_DPI);
+        // 고정 타입: 저장값 1200 HWPUNIT 은 유효값의 2배(여백·문단간격·탭과 동일
+        // 규약, #2070/#2197) → resolve 시 /2 후 px 변환
+        let expected = hwpunit_to_px(1200, DEFAULT_DPI) / 2.0;
         assert!((styles.para_styles[1].line_spacing - expected).abs() < 0.01);
         assert_eq!(
             styles.para_styles[1].line_spacing_type,

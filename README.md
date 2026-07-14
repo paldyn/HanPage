@@ -66,10 +66,15 @@ HanPage 가 사용하는 파서·렌더·편집 엔진은 오픈소스 프로젝
 > 역공학 완성, 읽기/쓰기 기반 구축
 
 - HWP 5.0 / HWPX 파서, 문단·표·수식·이미지·차트 렌더링
+- HML(HWPML 2.9/2.91) 가져오기: 본문·서식·표·사각형 글상자·지원 수식, loss-safe HML/HWP/HWPX 저장
 - 페이지네이션 (다단 분할, 표 행 분할), 머리말/꼬리말/바탕쪽/각주
 - SVG 내보내기 (CLI) + Canvas 렌더링 (WASM/Web)
 - 웹 에디터 + hwpctl 호환 API (30 Actions, Field API)
 - 1,100+ 테스트
+
+> HML은 실제 corpus로 확인된 HWPML 2.9/2.91 구조만 제한 지원합니다. 지원 범위의 수식은
+> 가져와 편집할 수 있고, 보존 불가 요소가 없는 HML 원본은 preflight 검사 후 HML로 다시
+> 저장할 수 있습니다. 그림·내장/외부 리소스 등 미지원 요소는 경고하고 손실 저장을 차단합니다.
 
 <!-- 사이클별 상세는 upstream rhwp CHANGELOG 참조 -->
 
@@ -95,7 +100,7 @@ HanPage 가 사용하는 파서·렌더·편집 엔진은 오픈소스 프로젝
 - 전체 HWP 기능 커버리지, 접근성(a11y), 모바일 대응
 - 공공기관 실무 투입 가능 수준
 
-자세한 내용은 [로드맵 문서](mydocs/report/rhwp-milestone.md)를 참조하세요.
+자세한 내용은 [로드맵 문서](mydocs/report/archives/rhwp-milestone.md)를 참조하세요.
 
 ---
 
@@ -179,7 +184,7 @@ HanPage 가 사용하는 파서·렌더·편집 엔진은 오픈소스 프로젝
 
 ## npm 패키지 — 웹에서 바로 사용하기
 
-현재 배포 버전은 `@rhwp/core` / `@rhwp/editor` v0.7.13입니다.
+현재 배포 버전은 `@rhwp/core` / `@rhwp/editor` v0.7.18입니다.
 
 ### 에디터 임베드 (3줄)
 

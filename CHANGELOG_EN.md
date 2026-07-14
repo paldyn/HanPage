@@ -4,6 +4,179 @@ This document records the major changes of the rhwp project.
 
 > 한국어 버전은 [CHANGELOG.md](CHANGELOG.md) 를 참조하세요.
 
+## [0.7.18] — 2026-07-11
+
+> Patch release following v0.7.17 — large-scale rendering fidelity fixes (floating/front
+> object pagination, RowBreak tables, endnote flow), huge-table performance, editor
+> caret/undo/OLE parity, lenient parsing & expanded HWPX preservation, WMF shape rewrite.
+> Includes 21 internal refactoring rounds with zero behavioral regressions. Public API
+> remains backward compatible — PATCH.
+
+### Rendering fidelity
+- Floating/front object pagination parity: one-image-per-page splitting (#1995/#2004/#2006),
+  paper-anchored behind-text tables (#1994), floating-form over-pagination 81→18 pages
+  (#2019), nested 1×1 cell content pagination (#2007).
+- RowBreak tables: block-cut sliver absorption (#1921), footnote-heavy over-pagination
+  (#1937), missing-LINE_SEG cell line-height correction 213→159 pages (#1842),
+  declared-fit trust expansion (#2097), vert_offset double-counting (#2015).
+- Bottom saved-bounds trust (#2093), page-bottom anchored frame vpos=0 preservation
+  (#1920/#2158), Hancom-family Latin/punctuation widths mapped to Haansoft Batang
+  metrics (#2156), and more.
+
+### Performance
+- Removed O(pages×cell) re-measurement via cell_units memoization (#1949); removed O(n²)
+  cell measurement for a 52,694-cell document render timeout (#2063); DocumentCore: Send
+  restored via Rc→Arc (#2087).
+
+### Editor (rhwp-studio)
+- Caret on late pages: 3,064ms→33ms via page-hint search (#2021). Unified undo snapshot
+  routing for find&replace and picture/equation property dialogs (#2037/#2028/#2077).
+  OLE selection/caption/paste parity (#2069), table-cell Enter caret fixes (#2164/#1951).
+
+### Parser & serialization
+- Lenient decoding fallback for partially corrupted documents (#1932), unregistered
+  styleIDRef demotion (#1933), encrypted-HWPX detection (#1946), MAX_XML_SIZE 256MB
+  (#1917). HWPX preservation: note shapes (#1984), breakLatinWord (#1986), secPr fields
+  (#1987), curSz=0 sentinel (#2017). HWP5 page_def/CommonObjAttr round-trip (#1915/#1916).
+
+### WMF/Shapes
+- write_line rewrite fixing connectLine corruption (#1943), legacy drawText emission
+  (#1944), shape restrictInPage bottom clamp (#2075), cell-anchored picture
+  vertical_align (#2071).
+
+### Internal quality
+- 21 complexity-refactoring rounds: max CC 288→117 (−59%), zero behavioral regressions
+  across all rounds (#1904/#2131), metric formula v2.1 + reduction-potential scanner
+  (#2130), quality dashboard published under mydocs/metrics/.
+### Contributors
+
+268 contributor PRs merged this cycle (since v0.7.17), GitHub handles in alphabetical order:
+
+- @humdrum00001010 — HWPX package-graph serialization (#1675), endnote parity (#1875), +3
+- @jangster77 (Taesup Jang) — 130 PRs: table/editing parity, external PR integration & reviews, OLE object parity (#2103), long-input caret/IME (#2172)
+- @johndoekim — bangjeom rendering (#1738), OOXML chart C1c/C1d (#1890/#1954/#2140), +3
+- @kkyu8925 — empty-host co-anchored float table orphan control (#1767), +3 *(first contribution — welcome!)*
+- @lpaiu-cs — undo snapshot routing trilogy (#2028/#2039/#2078), restrictInPage clamps (#2033/#2076), BinData id allocation (#2040), cell-anchored picture valign (#2074) *(first contribution — welcome!)*
+- @oleg-sung — centered cell paragraph vpos after TAC shape (#1674) *(first contribution — welcome!)*
+- @physwkim — cell_units Rc→Arc Send restoration (#2087), new-paragraph format inheritance (#2095)
+- @planet6897 (Jaeook Ryu) — 74 PRs: rendering-fidelity series (RowBreak tables, floating/front object pagination, huge-table performance #2063, 10k-document surveys)
+- @postmelee (Taegyu Lee) — 28 PRs: CI release-test migration (#1739), frontend refactoring plan v2 (#2080) & Phase 0 baseline (#2174, in progress)
+- @seo-rii — CanvasKit object-gap diagnostics (#1806), +2
+- @snvtac — endnote reset-rewind column placement (#1495) *(first contribution — welcome!)*
+
+Dependencies: 6 dependabot PRs (including the quick-xml 0.41 security release).
+
+
+## [0.7.17] — 2026-06-23
+
+> Patch following v0.7.16 — first OOXML chart render-fidelity work, legacy-shape shapeComment
+> serialization, WASM options-object APIs, many rhwp-studio table/picture/cursor editing fixes,
+> render-authority hardening, and a dependency bump batch. Public APIs remain backward-compatible
+> (positional APIs kept) — PATCH. Browser extension 0.2.6 included.
+
+### API
+- Added options-object variants `*Ex(options_json[, image_data])` for 26 high-arity (7+) WASM
+  public APIs (#1413). Existing positional APIs are kept (backward-compatible); `*Ex` performs
+  the same operation via JSON options, making downstream less fragile to mid-signature changes.
+  Consumer (@rhwp/core) README guidance + consumer edit API manual added (#1445).
+  Convention: `mydocs/manual/wasm_api_options_convention.md`.
+
+### Rendering (charts)
+- Routed 7 of the 27 OOXML chart types whose data was already extracted (4 3D-bar, 1 3D-pie,
+  2 ofPie) to 2D-approximation rendering — removes the "chart (unsupported)" placeholder
+  (#1453, C1a / #1431 Track C).
+- Bar charts now honor `c:grouping` (stacked/percentStacked) — 6 stacked/percent bar types (#1453).
+
+### HWPX save contract (serializer fidelity)
+- Fixed missing `hp:shapeComment` serialization on legacy shapes (ellipse/arc/polygon/curve/
+  chart/ole) routed through `render_common_shape_xml` — round-trip preserved (#1451).
+- Excluded false `ir-diff` differences on tab_extended reserved fields [3,4,5] (#1473).
+
+### Rendering
+- Keep v2 font authority on fallback, expand CanvasKit replay contract guards (#1429/#1447/#1469).
+- TAC picture vs text vertical alignment in table cells (#1352). Reflow on un-inline picture (#1459).
+
+### rhwp-studio
+- Autosave + recovery UI for unsaved documents (#1448). Local-font detection consent (opt-in) (#1328).
+- Page-border preview toggle restore (#1426). Picture insert / inline cursor fidelity (#1452).
+- Table row/column insert/delete regression fix (preserve table height when adding rows/cols right
+  after creation) + Hancom-style unified dialog/shortcuts (#1481).
+- Table-cell drag selection + Hancom-compatible table editing (#1443), cell protection (#493).
+- Block manipulation of size-locked objects (#1436), inline-picture wrap + paragraph border (#1440).
+- Style apply / table caption / format copy (#1470), platform-specific menu shortcut display (#1476).
+
+### Browser extension (0.2.6)
+- Fixed viewer inline-script CSP violation (theme-init.js split) + dark icon asset recovery (#1444).
+- Removed the global side effect of the Chrome `onDeterminingFilename` listener — switched to
+  `onCreated`/`onChanged` observers so other extensions' `download({filename})` subfolder saves
+  are no longer disrupted (#1471).
+
+### Infra
+- Track `Cargo.lock` in git — reproducible builds + stable CI cache keys (#1423, macOS FFI excluded).
+- Dependency bump batch: zip 8.6.0, serde_json 1.0.150, snafu 0.9.1, subsetter 0.2.6,
+  skia-safe 0.99.0, unicode-segmentation 1.13.3, wasm-bindgen-test 0.3.75, @types/chrome 0.2.0
+  (#1461–#1468).
+
+### Contributors
+
+Contributor PRs merged in this cycle (since v0.7.16; GitHub handles, alphabetical):
+
+- @jangster77 (Taesup Jang) — table row/column insert-delete regression (#1481), table-cell drag
+  selection & editing (#1443) / cell protection (#493), TAC picture alignment / size-lock /
+  inline-wrap (#1352/#1436/#1440), autosave recovery (#1448), picture/cursor fidelity (#1452/#1459),
+  style/caption/shortcut (#1470/#1476)
+- @johndoekim — OOXML chart C1a routing + bar stacking (#1453)
+- @oksure (Hyunwoo Park) — exclude false ir-diff on tab_extended reserved fields (#1473)
+- @postmelee — local-font consent (#1328), page-border toggle (#1426), Chrome download
+  interceptor side-effect fix (#1471), PR review workflow docs (#1425)
+- @seo-rii — keep v2 font authority (#1429), expand CanvasKit replay guards (#1447/#1469)
+
+## [0.7.16] — 2026-06-19
+
+> Patch following v0.7.15 — refines the HWPX save contract (serializer fidelity), fixes
+> ClickHere guide-text binding in the Hancom editor, adds a drag-and-drop security gate to
+> rhwp-studio, and lands many rendering/table/picture fixes plus external contributor PRs.
+> Public APIs remain backward-compatible — PATCH.
+
+### HWPX save contract (serializer fidelity)
+- Preserve controls inside cell/text-box subLists, original linesegs, and table/picture/group captions (#1379/#1380/#1387/#1403).
+- Emit secPr page margins and body column (colPr) definitions from the IR instead of template hardcoding (#1388/#1407).
+- Preserve picture size elements (curSz/imgRect/imgDim), MEMO field parameters, shapeComment, borderFill/numbering registration axis, and table pageBreak (#1389/#1391/#1392/#1384/#1409/#1393).
+- Make parser autoNum width consistent, fix newNum slot position (#1382/#1407); add an enum-token surface-format check (#1402).
+- Lossless roundtrip for DocInfo, numbering paraHead, cellzoneList, useKerning/useFontSpace (#1405/#1350), and hp:tc cell field-name parsing (#1401).
+
+### Hancom compatibility
+- Fix the ClickHere guide-text (Direction) command format to match Hancom's reference output — resolves guide text not binding in the Hancom editor (#1434).
+
+### rhwp-studio security & UX
+- Exclude drag-and-drop local file loading from default behavior; require explicit opt-in via a modal confirm dialog before loading (#1439). Works in both extension and web modes.
+- ClickHere form-mode/boundary editing, edit caret/focus, object aspect-ratio lock / size protection, table-cell TAC picture vertical alignment (#1419/#1428/#1430/#1436/#1352/#258).
+- Dark theme support and residual UI contrast cleanup (#1420/#1422). Fix replaceAll save loss, image Shift resize, post table-create F5 handling (#1398/#1400/#1404).
+
+### Rendering
+- Native PDF export API (DocumentCore) + report-only PDF visual diff (#1359). Text IR v2 font-proof gates, exact font replay proof, glyph orientation/transform authority (#1421/#1429/#1312).
+- Endnote height-model measurement SSOT / gate recalibration, official endnote shape model normalization, integral glyph (#1363/#1370/#1410/#1314/#1377); page-area-limited table-cell / rotated-cell picture placement (#1282).
+
+### Other
+- Add a 27-sample chart corpus (OOXML + legacy) verification fixture (#1431, P-1); split endnote dump / sweep verification infra (#1395).
+- Preserve mixed page sizes when printing (#1383); Onsamiro picture wrap / paragraph border alignment (#1441).
+
+### Contributors
+
+External contributor PRs merged in this cycle (after v0.7.15; GitHub handles, alphabetical):
+
+- @Martinel2 — useFontSpace IR field + HWP5/HWPX parser & serializer (#1350)
+- @Mireutale — HWPX table-cell tab/line-break inline serialization, picture effects/shadow roundtrip (#1360/#1349)
+- @jangster77 (Taesup Jang) — endnote shape model normalization, ClickHere form/edit, dark theme, table-cell picture / size protection, Onsamiro alignment (#1410/#1419/#1420/#1427/#1430/#1435/#1437/#1441), verification infra (#1395)
+- @johndoekim — 27-sample chart corpus (#1431 / PR #1432)
+- @msjang (Minseok Jang) — preserve mixed page sizes when printing (#1383)
+- @mrshinds — TAC table host-line spacing (#1376)
+- @oksure (Hyunwoo Park) — replaceAll save loss, createEmpty default section, image resize, hp:tc cell name, post-create F5, caption parse/serialize (#1398/#1399/#1400/#1401/#1404/#1406)
+- @physwkim (Sang Woo Kim) — HWPX lossless roundtrip (DocInfo/cellzoneList/useKerning, etc.) (#1405)
+- @planet6897 (Jaeuk Ryu) — endnote height SSOT/gate, integral glyph, endnote divergence diagnosis/closure (#1314/#1371/#1374/#1377 / PR #1390)
+- @postmelee — rhwp-studio dark-mode residual UI contrast (#1422 / PR #1424)
+- @seo-rii (Seohyun Lee) — renderer baseline sweep, native PDF export API, Text IR v2 font-proof gates (#1312/#1359/#1421/#1429)
+
 ## [0.7.15] — 2026-06-06
 
 > Security patch following v0.7.14 — hardens browser-extension service-worker fetch paths,

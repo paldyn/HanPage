@@ -3,11 +3,33 @@ import { PageSetupDialog } from '@/ui/page-setup-dialog';
 import { AboutDialog } from '@/ui/about-dialog';
 import { showSaveAs } from '@/ui/save-as-dialog';
 import { showUnsavedChangesDialog } from '@/ui/unsaved-changes-dialog';
+import { showHmlSaveFormatDialog } from '@/ui/hml-save-format-dialog';
 import {
+  fileNameForFormat,
+  markConvertedHmlSaveHandle,
+  requiresSaveFormatChoice,
+  resolveSaveTarget,
+  type SaveFormat,
+} from '@/command/save-target';
+import { SAVE_FORMAT_DETAILS } from '@/command/save-format';
+import { exportDocumentForFormat } from '@/command/save-document-format';
+import {
+  readHmlSaveContext,
+  resolveHmlSaveCapability,
+} from '@/core/hml-save-capability';
+import {
+  appendPrintStyle,
+  appendSvgPage,
+  createPrintPage,
+  type PrintPage,
+} from '@/command/print-pages';
+import {
+  canUseOpenFilePicker,
   pickOpenFileHandle,
   readFileFromHandle,
   saveDocumentToFileSystem,
   type FileSystemFileHandleLike,
+  type SaveDocumentResult,
   type FileSystemWindowLike,
 } from '@/command/file-system-access';
 import { getDesktopOpenHandler, getDesktopSaveHandler } from '@/core/desktop-bridge';
@@ -23,47 +45,181 @@ function isUserCancelError(e: unknown): boolean {
       && (e.name === 'AbortError' || e.name === 'NotAllowedError');
 }
 
-function hwpSaveFileName(fileName: string): string {
-  const trimmed = fileName.trim() || 'document.hwp';
-  if (/\.(hwp|hwpx)$/i.test(trimmed)) {
-    return trimmed.replace(/\.(hwp|hwpx)$/i, '.hwp');
+function saveBaseNameFor(fileName: string, format: SaveFormat): string {
+  return fileNameForFormat(fileName, format).replace(/\.(hwp|hwpx|hml)$/i, '');
+}
+
+function flushDeferredPaginationBeforeExplicitOutput(
+  services: CommandServices,
+  reason: string,
+): void {
+  services.getInputHandler()?.flushDeferredPaginationIfNeeded(reason);
+}
+
+async function chooseSaveAsFormat(services: CommandServices): Promise<SaveFormat | null> {
+  const sourceFormat = services.wasm.getSourceFormat();
+  if (sourceFormat !== 'hml') return sourceFormat === 'hwpx' ? 'hwpx' : 'hwp';
+  const context = getHmlSaveContext(services);
+  return showHmlSaveFormatDialog(
+    context.metadata,
+    context.exporterAvailable,
+  );
+}
+
+function createSaveBlob(services: CommandServices, format: SaveFormat): Blob {
+  const bytes = exportDocumentForFormat(services.wasm, format);
+  return new Blob([bytes as unknown as BlobPart], {
+    type: SAVE_FORMAT_DETAILS[format].mimeType,
+  });
+}
+
+function isHmlSaveEnabled(services: CommandServices): boolean {
+  const context = getHmlSaveContext(services);
+  return resolveHmlSaveCapability(
+    context.metadata,
+    context.exporterAvailable,
+  ).hmlEnabled;
+}
+
+function getHmlSaveContext(services: CommandServices) {
+  return readHmlSaveContext(
+    () => services.wasm.getHmlOpenMetadata(),
+    () => services.wasm.hasHmlExportCapability(),
+  );
+}
+
+async function tryFileSystemSave(
+  services: CommandServices,
+  format: SaveFormat,
+  blob: Blob,
+  suggestedName: string,
+  forceSaveAs: boolean,
+  currentHandle: FileSystemFileHandleLike | null,
+): Promise<SaveDocumentResult | 'cancelled'> {
+  try {
+    return await saveDocumentToFileSystem({
+      blob,
+      suggestedName,
+      currentHandle,
+      windowLike: window as FileSystemWindowLike,
+      forceSaveAs,
+      saveFormat: format,
+    });
+  } catch (error) {
+    if (isUserCancelError(error)) return 'cancelled';
+    console.warn('[file:save] File System Access API 실패, 폴백:', error);
+    return { method: 'fallback', handle: null, fileName: suggestedName };
   }
-  return `${trimmed}.hwp`;
 }
 
-function hwpSaveBaseName(fileName: string): string {
-  return hwpSaveFileName(fileName).replace(/\.hwp$/i, '');
-}
-
-function hwpSaveCurrentHandle(
+function completeHandleSave(
+  services: CommandServices,
   sourceFormat: string,
-  handle: FileSystemFileHandleLike | null,
-): FileSystemFileHandleLike | null {
-  if (sourceFormat === 'hwpx' && handle && !handle.name.toLowerCase().endsWith('.hwp')) {
-    return null;
+  result: SaveDocumentResult,
+  reason: 'save' | 'save-as',
+): void {
+  if (sourceFormat === 'hml') markConvertedHmlSaveHandle(result.handle);
+  services.wasm.currentFileHandle = result.handle;
+  services.wasm.fileName = result.fileName;
+  services.documentState.markClean(reason);
+}
+
+function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function promptFallbackName(
+  suggestedName: string,
+  format: SaveFormat,
+): Promise<string | null> {
+  const result = await showSaveAs(saveBaseNameFor(suggestedName, format), format);
+  return result ? fileNameForFormat(result, format) : null;
+}
+
+async function saveAsFormat(services: CommandServices, format: SaveFormat): Promise<void> {
+  try {
+    flushDeferredPaginationBeforeExplicitOutput(services, 'save-as');
+    const sourceFormat = services.wasm.getSourceFormat();
+    const saveName = fileNameForFormat(services.wasm.fileName, format);
+    // [Task #1 데스크톱] 네이티브 저장 dialog 분기(다른 이름으로). 브라우저에선 no-op.
+    const desktopSave = getDesktopSaveHandler();
+    if (desktopSave) {
+      const bytes = exportDocumentForFormat(services.wasm, format);
+      const r = await desktopSave({ bytes, suggestedName: saveName, saveAs: true });
+      if (r.status === 'saved') {
+        services.wasm.fileName = r.fileName;
+        services.documentState.markClean('save-as');
+        console.log(`[file:save-as] (native) ${r.fileName} (${(bytes.length / 1024).toFixed(1)}KB)`);
+        return;
+      }
+      if (r.status === 'cancelled') return;
+      reportSaveError('file:save-as', new Error(r.message));
+      return;
+    }
+    const blob = createSaveBlob(services, format);
+    const originalHandle = sourceFormat === 'hml' ? services.wasm.currentFileHandle : null;
+    const result = await tryFileSystemSave(
+      services,
+      format,
+      blob,
+      saveName,
+      true,
+      originalHandle,
+    );
+    if (result === 'cancelled') return;
+    if (result.method !== 'fallback') {
+      completeHandleSave(services, sourceFormat, result, 'save-as');
+      return;
+    }
+    const downloadName = await promptFallbackName(saveName, format);
+    if (!downloadName) return;
+    services.wasm.fileName = downloadName;
+    downloadBlob(blob, downloadName);
+    services.documentState.markClean('save-as');
+  } catch (error) {
+    reportSaveError('file:save-as', error);
   }
-  return handle;
+}
+
+function reportSaveError(scope: string, error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`[${scope}] 저장 실패:`, message);
+  alert(`파일 저장에 실패했습니다:\n${message}`);
 }
 
 export type SaveCurrentDocumentResult = 'saved' | 'cancelled' | 'failed' | 'unsupported';
 
 export async function saveCurrentDocument(services: CommandServices): Promise<SaveCurrentDocumentResult> {
   try {
-    const saveName = services.wasm.fileName;
+    flushDeferredPaginationBeforeExplicitOutput(services, 'save');
     const sourceFormat = services.wasm.getSourceFormat();
-    const isHwpx = sourceFormat === 'hwpx';
-    if (isHwpx) {
-      alert('HWPX 형식은 현재 베타 단계라 직접 저장이 비활성화되어 있습니다.');
-      return 'unsupported';
+    let target = resolveSaveTarget(
+      sourceFormat,
+      services.wasm.fileName,
+      services.wasm.currentFileHandle,
+    );
+    const hmlEnabled = target.format !== 'hml' || isHmlSaveEnabled(services);
+    if (requiresSaveFormatChoice(target, hmlEnabled)) {
+      const format = await chooseSaveAsFormat(services);
+      if (format === null) return 'cancelled';
+      target = {
+        ...target,
+        format,
+        forceSaveAs: target.forceSaveAs || format !== target.format,
+        suggestedName: fileNameForFormat(services.wasm.fileName, format),
+      };
     }
-
-    const bytes = services.wasm.exportHwp();
-
     // [Task #1 데스크톱] 네이티브 저장 dialog 분기. 브라우저에선 핸들러가 null →
     // 아래 File System Access / 다운로드 폴백이 그대로 동작(웹 무변경).
     const desktopSave = getDesktopSaveHandler();
     if (desktopSave) {
-      const r = await desktopSave({ bytes, suggestedName: hwpSaveFileName(saveName), saveAs: false });
+      const bytes = exportDocumentForFormat(services.wasm, target.format);
+      const r = await desktopSave({ bytes, suggestedName: target.suggestedName, saveAs: target.forceSaveAs });
       if (r.status === 'saved') {
         services.wasm.fileName = r.fileName;
         services.documentState.markClean('save');
@@ -75,55 +231,41 @@ export async function saveCurrentDocument(services: CommandServices): Promise<Sa
       alert(`파일 저장에 실패했습니다:\n${r.message}`);
       return 'failed';
     }
-
-    const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/x-hwp' });
-    console.log(`[file:save] format=${sourceFormat}, isHwpx=${isHwpx}, ${bytes.length} bytes`);
-
-    try {
-      const saveResult = await saveDocumentToFileSystem({
-        blob,
-        suggestedName: saveName,
-        currentHandle: services.wasm.currentFileHandle,
-        windowLike: window as FileSystemWindowLike,
-      });
-
-      if (saveResult.method !== 'fallback') {
-        services.wasm.currentFileHandle = saveResult.handle;
-        services.wasm.fileName = saveResult.fileName;
-        services.documentState.markClean('save');
-        console.log(`[file:save] ${saveResult.fileName} (${(bytes.length / 1024).toFixed(1)}KB)`);
-        return 'saved';
-      }
-    } catch (e) {
-      if (isUserCancelError(e)) return 'cancelled';
-      console.warn('[file:save] File System Access API 실패, 폴백:', e);
+    const blob = createSaveBlob(services, target.format);
+    const result = await tryFileSystemSave(
+      services,
+      target.format,
+      blob,
+      target.suggestedName,
+      target.forceSaveAs,
+      services.wasm.currentFileHandle,
+    );
+    if (result === 'cancelled') return 'cancelled';
+    if (result.method !== 'fallback') {
+      completeHandleSave(services, sourceFormat, result, 'save');
+      return 'saved';
     }
-
-    let downloadName = saveName;
-    if (services.wasm.isNewDocument) {
-      const baseName = saveName.replace(/\.hwp$/i, '');
-      const result = await showSaveAs(baseName);
-      if (!result) return 'cancelled';
-      downloadName = result;
-      services.wasm.fileName = downloadName;
-    }
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = downloadName;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-
+    const downloadName = await fallbackNameForCurrentSave(services, target);
+    if (!downloadName) return 'cancelled';
+    downloadBlob(blob, downloadName);
     services.documentState.markClean('save');
-    console.log(`[file:save] ${downloadName} (${(bytes.length / 1024).toFixed(1)}KB)`);
     return 'saved';
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[file:save] 저장 실패:', msg);
-    alert(`파일 저장에 실패했습니다:\n${msg}`);
+  } catch (error) {
+    reportSaveError('file:save', error);
     return 'failed';
   }
+}
+
+async function fallbackNameForCurrentSave(
+  services: CommandServices,
+  target: ReturnType<typeof resolveSaveTarget>,
+): Promise<string | null> {
+  if (!services.wasm.isNewDocument && !target.forceSaveAs) return target.suggestedName;
+  const downloadName = await promptFallbackName(target.suggestedName, target.format);
+  if (!downloadName) return null;
+  services.wasm.fileName = downloadName;
+  if (target.forceSaveAs) services.wasm.currentFileHandle = null;
+  return downloadName;
 }
 
 export async function confirmSaveBeforeReplacingDocument(
@@ -134,7 +276,7 @@ export async function confirmSaveBeforeReplacingDocument(
 
   const choice = await showUnsavedChangesDialog({
     fileName: services.wasm.fileName,
-    canSave: ctx.sourceFormat !== 'hwpx',
+    canSave: true, // HWPX 직접 저장 활성화로 모든 출처 저장 가능
   });
 
   if (choice === 'cancel') return false;
@@ -142,28 +284,6 @@ export async function confirmSaveBeforeReplacingDocument(
 
   const result = await saveCurrentDocument(services);
   return result === 'saved';
-}
-
-function appendPrintStyle(doc: Document, widthMm: number, heightMm: number): void {
-  const style = doc.createElement('style');
-  style.textContent = `
-@page { size: ${widthMm}mm ${heightMm}mm; margin: 0; }
-* { margin: 0; padding: 0; }
-body { background: #fff; }
-.page { page-break-after: always; width: ${widthMm}mm; height: ${heightMm}mm; overflow: hidden; }
-.page:last-child { page-break-after: auto; }
-.page svg { width: 100%; height: 100%; }
-@media screen {
-  body { background: #e5e7eb; display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 16px; }
-  .page { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-  .print-bar { position: fixed; top: 0; left: 0; right: 0; background: #1e293b; color: #fff; padding: 8px 16px; display: flex; align-items: center; gap: 12px; font: 14px sans-serif; z-index: 100; }
-  .print-bar button { padding: 6px 16px; background: #2563eb; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-  .print-bar button:hover { background: #1d4ed8; }
-  body { padding-top: 56px; }
-}
-@media print { .print-bar { display: none; } }
-`;
-  doc.head.appendChild(style);
 }
 
 function createPrintButton(doc: Document, id: string, label: string, background?: string): HTMLButtonElement {
@@ -175,27 +295,11 @@ function createPrintButton(doc: Document, id: string, label: string, background?
   return button;
 }
 
-function appendSvgPage(doc: Document, container: HTMLElement, svg: string): void {
-  const page = doc.createElement('div');
-  page.className = 'page';
-
-  const parsed = new DOMParser().parseFromString(svg, 'image/svg+xml');
-  const parseError = parsed.querySelector('parsererror');
-  if (parseError) {
-    throw new Error(`인쇄용 SVG 파싱 실패: ${parseError.textContent || 'parsererror'}`);
-  }
-
-  page.appendChild(doc.importNode(parsed.documentElement, true));
-  container.appendChild(page);
-}
-
 function setupPrintDocument(
   printWin: Window,
   fileName: string,
   pageCount: number,
-  widthMm: number,
-  heightMm: number,
-  svgPages: string[],
+  printPages: PrintPage[],
 ): void {
   const doc = printWin.document;
   doc.documentElement.lang = 'ko';
@@ -205,7 +309,7 @@ function setupPrintDocument(
   const meta = doc.createElement('meta');
   meta.setAttribute('charset', 'UTF-8');
   doc.head.appendChild(meta);
-  appendPrintStyle(doc, widthMm, heightMm);
+  appendPrintStyle(doc, printPages);
 
   const printBar = doc.createElement('div');
   printBar.className = 'print-bar';
@@ -216,8 +320,8 @@ function setupPrintDocument(
   printBar.append(printButton, closeButton, title);
 
   doc.body.replaceChildren(printBar);
-  for (const svg of svgPages) {
-    appendSvgPage(doc, doc.body, svg);
+  for (const printPage of printPages) {
+    appendSvgPage(doc, doc.body, printPage);
   }
 
   printButton.addEventListener('click', () => {
@@ -247,7 +351,8 @@ export const fileCommands: CommandDef[] = [
         const canReplace = await confirmSaveBeforeReplacingDocument(services);
         if (!canReplace) return;
 
-        // [Task #1 데스크톱] 네이티브 열기 dialog 분기. 브라우저에선 핸들러가 null →
+        const windowLike = window as FileSystemWindowLike;
+                // [Task #1 데스크톱] 네이티브 열기 dialog 분기. 브라우저에선 핸들러가 null →
         // 아래 File System Access / file-input 경로가 그대로 동작(웹 무변경).
         const desktopOpen = getDesktopOpenHandler();
         if (desktopOpen) {
@@ -262,8 +367,12 @@ export const fileCommands: CommandDef[] = [
           return;
         }
 
-        const handle = await pickOpenFileHandle(window as FileSystemWindowLike);
+        const nativeOpenPickerAvailable = canUseOpenFilePicker(windowLike);
+        const handle = await pickOpenFileHandle(windowLike);
         if (!handle) {
+          // File System Access API picker가 있었다면 null은 사용자 취소(예: Esc)다.
+          // 이때 숨김 input fallback을 다시 열면 파일 선택창이 곧바로 재오픈된다.
+          if (nativeOpenPickerAvailable) return;
           const fileInput = document.getElementById('file-input') as HTMLInputElement | null;
           if (fileInput) {
             fileInput.dataset.skipUnsavedGuard = 'true';
@@ -298,75 +407,32 @@ export const fileCommands: CommandDef[] = [
   },
   {
     // [Task #833] 다른 이름으로 저장 — currentFileHandle 무시 + 항상 picker.
+    // 출처 포맷 유지(HWPX→HWPX, HWP→HWP).
     id: 'file:save-as',
     label: '다른 이름으로 저장',
     shortcutLabel: 'Ctrl+Shift+S',
     canExecute: (ctx) => ctx.hasDocument,
     async execute(services) {
-      try {
-        const sourceFormat = services.wasm.getSourceFormat();
-        const isHwpx = sourceFormat === 'hwpx';
-        const saveName = hwpSaveFileName(services.wasm.fileName);
-        const bytes = services.wasm.exportHwp();
-
-        // [Task #1 데스크톱] 네이티브 저장 dialog 분기. 브라우저에선 핸들러가 null →
-        // 아래 File System Access / 다운로드 폴백이 그대로 동작(웹 무변경).
-        const desktopSave = getDesktopSaveHandler();
-        if (desktopSave) {
-          const r = await desktopSave({ bytes, suggestedName: saveName, saveAs: true });
-          if (r.status === 'saved') {
-            services.wasm.fileName = r.fileName;
-            console.log(`[file:save-as] (native) ${r.fileName} (${(bytes.length / 1024).toFixed(1)}KB)`);
-            return;
-          }
-          if (r.status === 'cancelled') return;
-          console.error('[file:save-as] (native) 저장 실패:', r.message);
-          alert(`파일 저장에 실패했습니다:\n${r.message}`);
-          return;
-        }
-
-        const blob = new Blob([bytes as unknown as BlobPart], { type: 'application/x-hwp' });
-        console.log(`[file:save-as] format=${sourceFormat}, hwpExport=${isHwpx}, ${bytes.length} bytes`);
-
-        try {
-          const saveResult = await saveDocumentToFileSystem({
-            blob,
-            suggestedName: saveName,
-            currentHandle: null,
-            windowLike: window as FileSystemWindowLike,
-            forceSaveAs: true,
-          });
-          if (saveResult.method !== 'fallback') {
-            services.wasm.currentFileHandle = saveResult.handle;
-            services.wasm.fileName = saveResult.fileName;
-            console.log(`[file:save-as] ${saveResult.fileName} (${(bytes.length / 1024).toFixed(1)}KB)`);
-            return;
-          }
-        } catch (e) {
-          if (isUserCancelError(e)) return;
-          console.warn('[file:save-as] File System Access API 실패, 폴백:', e);
-        }
-
-        // 폴백: 파일명 입력 → blob download
-        const baseName = hwpSaveBaseName(saveName);
-        const result = await showSaveAs(baseName);
-        if (!result) return;
-        const downloadName = result;
-        services.wasm.fileName = downloadName;
-
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = downloadName;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-
-        console.log(`[file:save-as] ${downloadName} (${(bytes.length / 1024).toFixed(1)}KB)`);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[file:save-as] 저장 실패:', msg);
-        alert(`파일 저장에 실패했습니다:\n${msg}`);
-      }
+      const format = await chooseSaveAsFormat(services);
+      if (format !== null) await saveAsFormat(services, format);
+    },
+  },
+  {
+    // [#1613] HWP 형식으로 저장 — 출처 무관 HWP 출력.
+    id: 'file:save-as-hwp',
+    label: 'HWP 형식으로 저장',
+    canExecute: (ctx) => ctx.hasDocument,
+    async execute(services) {
+      await saveAsFormat(services, 'hwp');
+    },
+  },
+  {
+    // [#1613] HWPX 형식으로 저장 — 출처 무관 HWPX 출력.
+    id: 'file:save-as-hwpx',
+    label: 'HWPX 형식으로 저장',
+    canExecute: (ctx) => ctx.hasDocument,
+    async execute(services) {
+      await saveAsFormat(services, 'hwpx');
     },
   },
   {
@@ -387,6 +453,7 @@ export const fileCommands: CommandDef[] = [
     shortcutLabel: 'Ctrl+P',
     canExecute: (ctx) => ctx.hasDocument,
     async execute(services) {
+      flushDeferredPaginationBeforeExplicitOutput(services, 'print');
       const wasm = services.wasm;
       const pageCount = wasm.pageCount;
       if (pageCount === 0) return;
@@ -397,19 +464,15 @@ export const fileCommands: CommandDef[] = [
 
       try {
         // SVG 페이지 생성
-        const svgPages: string[] = [];
+        const printPages: PrintPage[] = [];
         for (let i = 0; i < pageCount; i++) {
           if (statusEl) statusEl.textContent = `인쇄 준비 중... (${i + 1}/${pageCount})`;
           const svg = wasm.renderPageSvg(i);
-          svgPages.push(svg);
+          const pageInfo = wasm.getPageInfo(i);
+          printPages.push(createPrintPage(svg, pageInfo, i));
           // UI 갱신을 위한 양보
           if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
         }
-
-        // 첫 페이지 정보로 용지 크기 결정
-        const pageInfo = wasm.getPageInfo(0);
-        const widthMm = Math.round(pageInfo.width * 25.4 / 96);
-        const heightMm = Math.round(pageInfo.height * 25.4 / 96);
 
         // 인쇄 전용 창 생성
         const printWin = window.open('', '_blank');
@@ -418,7 +481,7 @@ export const fileCommands: CommandDef[] = [
           return;
         }
 
-        setupPrintDocument(printWin, wasm.fileName, pageCount, widthMm, heightMm, svgPages);
+        setupPrintDocument(printWin, wasm.fileName, pageCount, printPages);
 
         if (statusEl) statusEl.textContent = origStatus;
       } catch (err) {

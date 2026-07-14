@@ -68,10 +68,15 @@ Foundation  Typeset   Collab    Complete
 > Reverse-engineering complete, read/write foundation established
 
 - HWP 5.0 / HWPX parser, rendering for paragraphs, tables, equations, images, charts
+- HML (HWPML 2.9/2.91) import: text, formatting, tables, rectangle text boxes, and supported equations; loss-safe HML/HWP/HWPX save
 - Pagination (multi-column split, table row split), headers/footers, master pages, footnotes
 - SVG export (CLI) + Canvas rendering (WASM/Web)
 - Web editor + hwpctl-compatible API (30 Actions, Field API)
 - 1,100+ tests
+
+> HML support is limited to HWPML 2.9/2.91 structures verified by the current real-file corpus.
+> Supported equations can be imported and edited; HML-origin documents can be saved back to HML
+> after a preservation preflight. Pictures and embedded/external resources remain blocked from lossy save.
 
 ### v1.0.0 — Typesetting Engine
 
@@ -156,9 +161,9 @@ See the [roadmap document](mydocs/eng/report/rhwp-milestone.md) for details.
 - P5 replays the existing equation layout tree directly; it does not add CanvasKit equation replay or native form replay.
 - P6 adds native Skia `RawSvg` fragment rasterization through `resvg`, with external file href loading disabled.
 - CI covers the native Skia path with `cargo test --features native-skia skia --lib`; the feature is not available on `wasm32` targets.
-- The initial native Skia path is a PNG raster backend with core image/equation/raw-svg replay; CanvasKit, resource interning/cache, complex text shaping, advanced image parity, and native form replay stay as follow-up work.
+- The initial native Skia path is a PNG raster backend with core image/equation/raw-svg replay; full CanvasKit glyph replay, exact native glyph replay, real document font blob extraction, complex text shaping, advanced image parity, and native form replay stay as follow-up work.
 - C ABI export is intentionally left for a later PR.
-- `ResourceArena` is reserved in `PageLayerTree`; binary resource interning is not implemented yet.
+- `ResourceArena` now supports interned image, static SVG, and font blob resources for guarded replay proof; broader document extraction and full resource transport remain follow-up work.
 - This phase establishes the frontend/backend boundary for later CanvasKit and fuller native Skia backends.
 
 ### Web Editor
@@ -175,7 +180,7 @@ See the [roadmap document](mydocs/eng/report/rhwp-milestone.md) for details.
 
 ## npm Packages — Use in Your Web Project
 
-Current release: `@rhwp/core` / `@rhwp/editor` v0.7.13.
+Current release: `@rhwp/core` / `@rhwp/editor` v0.7.18.
 
 ### Embed a Full Editor (3 lines)
 

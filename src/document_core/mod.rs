@@ -17,6 +17,7 @@ pub mod validation;
 use crate::model::document::Document;
 use crate::model::event::DocumentEvent;
 use crate::model::paragraph::Paragraph;
+use crate::model::table::TableTransposeData;
 use crate::renderer::composer::ComposedParagraph;
 use crate::renderer::height_measurer::{MeasuredSection, MeasuredTable};
 use crate::renderer::layout::LayoutEngine;
@@ -38,6 +39,11 @@ pub(crate) struct ClipboardData {
     pub(crate) plain_text: String,
 }
 
+/// 표 셀 행/열 바꿈 전용 내부 버퍼
+pub(crate) struct TableTransposeClipboard {
+    pub(crate) data: TableTransposeData,
+}
+
 /// HWP 문서 핵심 도메인 모델
 ///
 /// 문서 데이터, 레이아웃 상태, 설정, 캐시를 포함한다.
@@ -51,6 +57,15 @@ pub struct DocumentCore {
     pub(crate) styles: ResolvedStyleSet,
     /// 구역별 구성된 문단 목록
     pub(crate) composed: Vec<Vec<ComposedParagraph>>,
+    /// [#2004] 부동(tac=false) 전면 이미지 스택을 인라인(tac=true)으로 재분류한 render-전용
+    /// 문단/구성. 섹션별 Some 이면 pagination·layout 이 원본 대신 이 정규화본을 사용한다.
+    /// **원본 `document` 는 무손상** → 직렬화(save) 정합 유지. paginate 시 재계산.
+    pub(crate) render_normalized: Vec<
+        Option<(
+            Vec<crate::model::paragraph::Paragraph>,
+            Vec<ComposedParagraph>,
+        )>,
+    >,
     /// DPI
     pub(crate) dpi: f64,
     /// 대체 폰트 경로
@@ -59,6 +74,8 @@ pub struct DocumentCore {
     pub(crate) layout_engine: LayoutEngine,
     /// 내부 클립보드
     pub(crate) clipboard: Option<ClipboardData>,
+    /// 표 셀 행/열 바꿈 복사 버퍼
+    pub(crate) table_transpose_clipboard: Option<TableTransposeClipboard>,
     /// [Task #1161] 떠 있는 개체(treat_as_char=false) 반복 붙여넣기 cascade 카운터.
     /// 새 컨트롤 복사 시 0 으로 리셋, 붙여넣기마다 +1 하여 위치 오프셋 누적(한컴 정합).
     pub(crate) paste_cascade_count: u32,
@@ -89,6 +106,10 @@ pub struct DocumentCore {
     pub(crate) para_column_map: Vec<Vec<u16>>,
     /// 페이지별 렌더 트리 캐시 (지연 구축, 부분 무효화)
     pub(crate) page_tree_cache: RefCell<Vec<Option<PageRenderTree>>>,
+    /// [Task #2222] 페이지 레이어 트리 JSON 캐시 — (출력옵션 지문, 직렬화 결과).
+    /// 이미지 base64 인라인으로 페이지당 1MB 급이라 재직렬화(실측 15ms/회)가
+    /// 렌더 자체와 맞먹는다. 편집 무효화는 page_tree_cache 와 동일 지점에서.
+    pub(crate) layer_tree_json_cache: RefCell<Vec<Vec<(u8, String)>>>,
     /// Batch 모드 플래그 — true이면 paginate() 스킵
     pub(crate) batch_mode: bool,
     /// 이벤트 로그 (Command 실행 시 누적)
@@ -110,12 +131,24 @@ pub struct DocumentCore {
     /// 구역별 문단 인덱스 오프셋 (삽입=+N, 삭제=-N, 페이지네이션 수렴 감지용)
     /// paginate() 후 리셋.
     pub(crate) para_offset: Vec<i32>,
-    /// 원본 파일 형식 (HWP/HWPX) — 저장 시 형식 분기용
+    /// 원본 파일 형식 — 저장 시 형식 분기용
     pub(crate) source_format: crate::parser::FileFormat,
+    /// HML 입력에서만 유지되는 버전·인코딩·손실 진단.
+    pub(crate) hml_metadata: Option<crate::parser::HmlImportMetadata>,
     /// HWPX 비표준 감지 등 문서 검증 경고.
     /// `from_bytes` 에서 자동 생성되며, 사용자 고지·선택적 reflow 에 사용 (#177).
     pub(crate) validation_report: validation::ValidationReport,
 }
+
+/// `DocumentCore` 는 스레드 경계 너머로 소유될 수 있어야 한다 — native 소비자(MCP 서버,
+/// 워커 풀)가 `Mutex<DocumentCore>` 를 다른 스레드로 보낸다. 내부 캐시 어딘가에 `Rc` 나
+/// 다른 `!Send` 타입이 들어오면 이 단언이 컴파일 타임에 깨진다.
+/// 내부 가변성(`Cell`/`RefCell`)은 `!Sync` 만 만들 뿐 `Send` 는 유지하므로 여기서 의도대로 통과한다.
+#[cfg(not(target_arch = "wasm32"))]
+const _: () = {
+    const fn assert_send<T: Send>() {}
+    assert_send::<DocumentCore>();
+};
 
 /// 활성 필드 위치 정보
 #[derive(Debug, Clone, PartialEq)]
@@ -221,10 +254,12 @@ impl DocumentCore {
             pagination: Vec::new(),
             styles: ResolvedStyleSet::default(),
             composed: Vec::new(),
+            render_normalized: Vec::new(),
             dpi: DEFAULT_DPI,
             fallback_font: DEFAULT_FALLBACK_FONT.to_string(),
             layout_engine: LayoutEngine::new(DEFAULT_DPI),
             clipboard: None,
+            table_transpose_clipboard: None,
             paste_cascade_count: 0,
             show_paragraph_marks: false,
             show_control_codes: false,
@@ -238,6 +273,7 @@ impl DocumentCore {
             dirty_paragraphs: Vec::new(),
             para_column_map: Vec::new(),
             page_tree_cache: RefCell::new(Vec::new()),
+            layer_tree_json_cache: RefCell::new(Vec::new()),
             batch_mode: false,
             event_log: Vec::new(),
             overflow_links_cache: RefCell::new(HashMap::new()),
@@ -248,8 +284,14 @@ impl DocumentCore {
             active_field: None,
             para_offset: Vec::new(),
             source_format: crate::parser::FileFormat::Hwp,
+            hml_metadata: None,
             validation_report: validation::ValidationReport::new(),
         }
+    }
+
+    /// HML 열기 메타데이터. 다른 입력 포맷은 `None`이다.
+    pub fn hml_metadata(&self) -> Option<&crate::parser::HmlImportMetadata> {
+        self.hml_metadata.as_ref()
     }
 
     /// 문서 검증 리포트에 대한 참조를 반환한다.

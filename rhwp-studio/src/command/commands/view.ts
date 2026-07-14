@@ -1,4 +1,6 @@
 import type { CommandDef } from '../types';
+import { setThemeMode, syncThemeMenu, type EffectiveTheme } from '../../core/theme';
+import { userSettings, type ThemeMode } from '../../core/user-settings';
 import { GridSettingsDialog } from '../../ui/grid-settings-dialog';
 import {
   type GridOffsetMm,
@@ -12,14 +14,61 @@ import { HWPUNIT_PER_MM } from '../../core/hwp-constants';
 const PX_TO_MM = 25.4 / 96;
 
 /** 배율 고정값 커맨드 생성 헬퍼 */
-function zoomLevel(pct: number): CommandDef {
+function zoomLevel(pct: number, shortcutLabel?: string): CommandDef {
   return {
     id: `view:zoom-${pct}`,
     label: `${pct}%`,
+    shortcutLabel,
     execute(services) {
       services.getViewportManager()?.setZoom(pct / 100);
     },
   };
+}
+
+function themeModeCommand(mode: ThemeMode, label: string): CommandDef {
+  return {
+    id: `view:theme-${mode}`,
+    label,
+    execute(services) {
+      const effective: EffectiveTheme = setThemeMode(mode);
+      syncThemeMenu(mode);
+      services.eventBus.emit('theme-changed', { mode, effective });
+      services.eventBus.emit('document-view-changed');
+    },
+  };
+}
+
+export function syncTextMarkMenu(showControlCodes: boolean, showParagraphMarks: boolean): void {
+  document.querySelectorAll('[data-cmd="view:ctrl-mark"]').forEach(el => {
+    el.classList.toggle('active', showControlCodes);
+  });
+  document.querySelectorAll('[data-cmd="view:para-mark"]').forEach(el => {
+    el.classList.toggle('active', showParagraphMarks);
+  });
+}
+
+/**
+ * view:toggle-clip 내부 상태(clipEnabled). true=잘림 적용, false=오버플로 표시(짤림보기 켜짐).
+ * 저장된 짤림보기 설정(clipView)에서 초기화한다. clipEnabled = !clipView.
+ */
+let clipEnabled = !userSettings.getViewSettings().clipView;
+
+/**
+ * 짤림보기(잘림 보기) 메뉴 활성 상태와 내부 상태를 동기화한다.
+ * 버튼 active = 잘림 미적용(오버플로 보임) = !enabled.
+ * 문서 로드 시 저장된 설정 적용에도 사용한다.
+ */
+export function syncClipMenu(enabled: boolean): void {
+  clipEnabled = enabled;
+  document.querySelectorAll('[data-cmd="view:toggle-clip"]').forEach(el => {
+    el.classList.toggle('active', !enabled);
+  });
+}
+
+function refreshCaretAfterViewChange(services: Parameters<CommandDef['execute']>[0]): void {
+  const inputHandler = services.getInputHandler() as any;
+  inputHandler?.updateCaret?.(true);
+  requestAnimationFrame(() => inputHandler?.updateCaret?.(true));
 }
 
 interface GridOriginMetrics {
@@ -116,6 +165,7 @@ export const viewCommands: CommandDef[] = [
   {
     id: 'view:zoom-fit-page',
     label: '쪽 맞춤',
+    shortcutLabel: 'Ctrl+G,P',
     execute(services) {
       const vm = services.getViewportManager();
       if (!vm || services.wasm.pageCount === 0) return;
@@ -130,6 +180,7 @@ export const viewCommands: CommandDef[] = [
   {
     id: 'view:zoom-fit-width',
     label: '폭 맞춤',
+    shortcutLabel: 'Ctrl+G,W',
     execute(services) {
       const vm = services.getViewportManager();
       if (!vm || services.wasm.pageCount === 0) return;
@@ -142,12 +193,24 @@ export const viewCommands: CommandDef[] = [
   },
   zoomLevel(50),
   zoomLevel(75),
-  zoomLevel(100),
+  zoomLevel(100, 'Ctrl+G,Q'),
   zoomLevel(125),
   zoomLevel(150),
   zoomLevel(200),
   zoomLevel(300),
+  themeModeCommand('system', '시스템 설정'),
+  themeModeCommand('light', '밝게'),
+  themeModeCommand('dark', '어둡게'),
   // ─── 보기 메뉴: 표시/숨기기 ─────────────────────────
+  {
+    id: 'view:form-mode',
+    label: '양식 모드',
+    canExecute: (ctx) => ctx.hasDocument,
+    execute(services) {
+      const next = services.getContext().isFormMode ? 'normal' : 'form';
+      services.setEditMode(next);
+    },
+  },
   {
     id: 'view:ctrl-mark',
     label: '조판 부호',
@@ -160,36 +223,33 @@ export const viewCommands: CommandDef[] = [
       // 조판부호 ON → 문단부호도 ON (한컴 기준: 조판부호는 문단부호를 포함)
       services.wasm.setShowControlCodes(next);
       services.wasm.setShowParagraphMarks(next);
-      document.querySelectorAll('[data-cmd="view:ctrl-mark"]').forEach(el => {
-        el.classList.toggle('active', next);
-      });
-      // 문단부호 버튼도 연동
-      document.querySelectorAll('[data-cmd="view:para-mark"]').forEach(el => {
-        el.classList.toggle('active', next);
-      });
+      userSettings.setShowControlCodes(next);
+      userSettings.setShowParagraphMarks(next);
+      syncTextMarkMenu(next, next);
+      refreshCaretAfterViewChange(services);
       services.eventBus.emit('document-view-changed');
     },
   },
-  (() => {
-    let showParaMarks = false;
-    return {
-      id: 'view:para-mark',
-      label: '문단 부호',
-      icon: 'icon-para-mark',
-      canExecute: (ctx) => ctx.hasDocument,
-      execute(services) {
-        showParaMarks = !showParaMarks;
-        services.wasm.setShowParagraphMarks(showParaMarks);
-        document.querySelectorAll('[data-cmd="view:para-mark"]').forEach(el => {
-          el.classList.toggle('active', showParaMarks);
-        });
-        services.eventBus.emit('document-view-changed');
-      },
-    } satisfies CommandDef;
-  })(),
+  {
+    id: 'view:para-mark',
+    label: '문단 부호',
+    icon: 'icon-para-mark',
+    shortcutLabel: 'Ctrl+G,T',
+    canExecute: (ctx) => ctx.hasDocument,
+    execute(services) {
+      const ctx = services.getContext();
+      const next = !ctx.showParagraphMarks;
+      services.wasm.setShowParagraphMarks(next);
+      userSettings.setShowParagraphMarks(next);
+      syncTextMarkMenu(ctx.showControlCodes, next);
+      refreshCaretAfterViewChange(services);
+      services.eventBus.emit('document-view-changed');
+    },
+  },
   {
     id: 'view:border-transparent',
     label: '투명 선',
+    shortcutLabel: 'Alt+V,T',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
       // WASM 실제 상태를 읽어 토글 — 셀 진입 자동 ON 등으로 인한 초기값 불일치 방지
@@ -202,22 +262,18 @@ export const viewCommands: CommandDef[] = [
       services.eventBus.emit('document-view-changed');
     },
   },
-  (() => {
-    let clipEnabled = true; // 기본: 잘림 적용 (편집용지 클립)
-    return {
-      id: 'view:toggle-clip',
-      label: '잘림 보기',
-      canExecute: (ctx) => ctx.hasDocument,
-      execute(services) {
-        clipEnabled = !clipEnabled;
-        services.wasm.setClipEnabled(clipEnabled);
-        document.querySelectorAll('[data-cmd="view:toggle-clip"]').forEach(el => {
-          el.classList.toggle('active', !clipEnabled);
-        });
-        services.eventBus.emit('document-view-changed');
-      },
-    } satisfies CommandDef;
-  })(),
+  {
+    id: 'view:toggle-clip',
+    label: '잘림 보기',
+    canExecute: (ctx) => ctx.hasDocument,
+    execute(services) {
+      const next = !clipEnabled;
+      services.wasm.setClipEnabled(next);
+      userSettings.setClipView(!next); // 짤림보기 켜짐(clipView) = 잘림 미적용(!clipEnabled)
+      syncClipMenu(next);
+      services.eventBus.emit('document-view-changed');
+    },
+  } satisfies CommandDef,
   {
     id: 'view:toggle-grid',
     label: '격자 보기',

@@ -5,12 +5,13 @@ import { MovePictureCommand, MoveShapeCommand, ResizeObjectCommand } from './com
 import type { ObjectResizeTarget } from './command';
 import { computeArrowResize, MIN_SIZE_HWP, type ArrowKey } from './picture-resize';
 import type { CellPathLike } from '@/core/types';
+import { showToast } from '@/ui/toast';
 
 type PictureObjectRef = {
   sec: number;
   ppi: number;
   ci: number;
-  type: 'image' | 'shape' | 'equation' | 'group' | 'line';
+  type: 'image' | 'shape' | 'equation' | 'group' | 'line' | 'ole';
   cellIdx?: number;
   cellParaIdx?: number;
   outerTableControlIdx?: number;
@@ -21,6 +22,8 @@ type PictureObjectRef = {
   x2?: number;
   y2?: number;
   headerFooter?: { kind: 'header' | 'footer'; outerParaIdx: number; outerControlIdx: number };
+  /** [Task #2230] 그림 미지정 placeholder — 더블클릭 시 그림 지정 진입. */
+  missing?: boolean;
 };
 
 function hasCellPath(ref: { cellPath?: CellPathLike } | null | undefined): ref is { cellPath: CellPathLike } {
@@ -56,6 +59,42 @@ function matchesControlRef(ctrl: any, ref: PictureObjectRef, layoutType: string)
   return true;
 }
 
+function syncOleObjectCaret(this: any, ref: PictureObjectRef, zoom: number): void {
+  if (ref.type !== 'ole' || ref.cellPath || ref.noteRef || ref.headerFooter) return;
+  try {
+    const rect = this.wasm.getCursorRect(ref.sec, ref.ppi, 0);
+    if (rect) this.caret.show(rect, zoom);
+    scheduleOleSelectionLayerStabilize.call(this, ref);
+  } catch (err) {
+    console.warn('[InputHandler] OLE 캐럿 표시 실패:', err);
+  }
+}
+
+function scheduleOleSelectionLayerStabilize(this: any, ref: PictureObjectRef): void {
+  const key = `${ref.sec}:${ref.ppi}:${ref.ci}`;
+  if (this._oleSelectionLayerStabilizeKey === key) return;
+  this._oleSelectionLayerStabilizeKey = key;
+  const stabilize = (finalPass: boolean) => {
+    try {
+      const current = this.cursor.getSelectedPictureRef?.();
+      const stillSelected = current?.type === 'ole' &&
+        current.sec === ref.sec &&
+        current.ppi === ref.ppi &&
+        current.ci === ref.ci;
+      if (stillSelected && !this.pictureObjectRenderer?.layer?.parentElement) {
+        this.renderPictureObjectSelection();
+      }
+    } finally {
+      if (finalPass && this._oleSelectionLayerStabilizeKey === key) {
+        this._oleSelectionLayerStabilizeKey = undefined;
+      }
+    }
+  };
+  window.setTimeout(() => stabilize(false), 80);
+  window.setTimeout(() => stabilize(false), 240);
+  window.setTimeout(() => stabilize(true), 500);
+}
+
 /**
  * [Task #1280 v2] 렌더 정렬키 (plane, zOrder, stableIndex). Rust `paper_node_sort_key`
  * (layout.rs)와 단일 진실 원천. 사전식으로 클수록 위(최상단). layer 필드 부재 시
@@ -82,10 +121,10 @@ function controlToRef(ctrl: any): PictureObjectRef {
   }
   return { sec: ctrl.secIdx, ppi: ctrl.paraIdx, ci: ctrl.controlIdx, type: ctrl.type,
     cellIdx: ctrl.cellIdx, cellParaIdx: ctrl.cellParaIdx, outerTableControlIdx: ctrl.outerTableControlIdx,
-    cellPath: ctrl.cellPath, noteRef: ctrl.noteRef, headerFooter: ctrl.headerFooter };
+    cellPath: ctrl.cellPath, noteRef: ctrl.noteRef, headerFooter: ctrl.headerFooter, missing: ctrl.missing };
 }
 
-/** 클릭 좌표에서 그림, 글상자, 수식 개체를 찾는다. */
+/** 클릭 좌표에서 그림, 글상자, 수식, OLE 개체를 찾는다. */
 /** 점과 선분 사이 최소 거리 (px) */
 function pointToSegmentDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
   const dx = x2 - x1, dy = y2 - y1;
@@ -94,6 +133,64 @@ function pointToSegmentDist(px: number, py: number, x1: number, y1: number, x2: 
   let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
   t = Math.max(0, Math.min(1, t));
   return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
+/**
+ * [Task #2230] 그림 미지정 placeholder 에 그림 지정 — 파일 선택 후
+ * assignPictureImage 커맨드를 스냅샷(Undo 지원)으로 실행한다.
+ * 개체 틀 크기는 유지된다 (한컴 placeholder 는 틀에 그림을 맞춤).
+ */
+export function promptAssignPictureImage(this: any, ref: PictureObjectRef): void {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/png,image/jpeg,image/gif,image/bmp,image/webp';
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    let objectUrl = '';
+    try {
+      const data = new Uint8Array(await file.arrayBuffer());
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+      const img = new Image();
+      objectUrl = URL.createObjectURL(file);
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => {
+          if (img.naturalWidth <= 0 || img.naturalHeight <= 0) {
+            reject(new Error('이미지 크기를 확인할 수 없습니다.'));
+            return;
+          }
+          resolve();
+        };
+        img.onerror = () => reject(new Error('브라우저가 이 이미지 파일을 읽지 못했습니다.'));
+        img.src = objectUrl;
+      });
+      const cellPathJson = hasCellPath(ref) ? JSON.stringify(ref.cellPath) : '';
+      // 지정 후에는 실그림이므로 placeholder 선택 상태를 먼저 해제한다
+      // (스냅샷 실행의 full refresh 가 stale 선택 표시를 남기지 않도록).
+      this.cursor.exitPictureObjectSelection();
+      this.pictureObjectRenderer?.clear();
+      this.eventBus.emit('picture-object-selection-changed', false);
+      // 스냅샷 경로의 refreshAfterOperation('full') 이 전면 재렌더를 수행한다.
+      this.executeOperation({ kind: 'snapshot', operationType: 'assignPictureImage', operation: (wasm: any) => {
+        wasm.assignPictureImage(
+          ref.sec, ref.ppi, cellPathJson, ref.ci,
+          data, img.naturalWidth, img.naturalHeight, ext,
+        );
+        return this.cursor.getPosition();
+      }});
+      this.textarea.focus();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn('[promptAssignPictureImage] 그림 지정 실패:', err);
+      showToast({
+        message: `그림을 지정할 수 없습니다.\n${msg}`,
+        durationMs: 6000,
+      });
+    } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    }
+  };
+  input.click();
 }
 
 export function findPictureAtClick(this: any,
@@ -121,7 +218,7 @@ export function findPictureAtClick(this: any,
         }
       }
       if (shapeHit && nestedPic) {
-        return { sec: nestedPic.secIdx, ppi: nestedPic.paraIdx, ci: nestedPic.controlIdx, type: nestedPic.type, cellIdx: nestedPic.cellIdx, cellParaIdx: nestedPic.cellParaIdx, outerTableControlIdx: nestedPic.outerTableControlIdx, cellPath: nestedPic.cellPath, noteRef: nestedPic.noteRef, headerFooter: nestedPic.headerFooter };
+        return { sec: nestedPic.secIdx, ppi: nestedPic.paraIdx, ci: nestedPic.controlIdx, type: nestedPic.type, cellIdx: nestedPic.cellIdx, cellParaIdx: nestedPic.cellParaIdx, outerTableControlIdx: nestedPic.outerTableControlIdx, cellPath: nestedPic.cellPath, noteRef: nestedPic.noteRef, headerFooter: nestedPic.headerFooter, missing: nestedPic.missing };
       }
     }
     // Task #516 결함 3 (옵션 3-C): BehindText 그림은 텍스트 영역 위에서는 후순위.
@@ -133,7 +230,7 @@ export function findPictureAtClick(this: any,
     const behindCtrls: any[] = [];
     let topHit: any = null;
     for (const ctrl of layout.controls) {
-      if (ctrl.type !== 'image' && ctrl.type !== 'shape' && ctrl.type !== 'equation' && ctrl.type !== 'group' && ctrl.type !== 'line') continue;
+      if (ctrl.type !== 'image' && ctrl.type !== 'shape' && ctrl.type !== 'equation' && ctrl.type !== 'group' && ctrl.type !== 'line' && ctrl.type !== 'ole') continue;
       if (ctrl.secIdx === undefined || ctrl.paraIdx === undefined || ctrl.controlIdx === undefined) continue;
       // [Task #825] 머리말/꼬리말 그림: headerFooter marker 가 함께 있어야 lookup 가능.
       // (없으면 본문 picture 동작 그대로.)
@@ -217,7 +314,7 @@ export function findPictureAtClick(this: any,
         for (const ctrl of behindCtrls) {
           if (pageX >= ctrl.x && pageX <= ctrl.x + ctrl.w &&
               pageY >= ctrl.y && pageY <= ctrl.y + ctrl.h) {
-            return { sec: ctrl.secIdx, ppi: ctrl.paraIdx, ci: ctrl.controlIdx, type: ctrl.type, cellIdx: ctrl.cellIdx, cellParaIdx: ctrl.cellParaIdx, outerTableControlIdx: ctrl.outerTableControlIdx, cellPath: ctrl.cellPath, noteRef: ctrl.noteRef, headerFooter: ctrl.headerFooter };
+            return { sec: ctrl.secIdx, ppi: ctrl.paraIdx, ci: ctrl.controlIdx, type: ctrl.type, cellIdx: ctrl.cellIdx, cellParaIdx: ctrl.cellParaIdx, outerTableControlIdx: ctrl.outerTableControlIdx, cellPath: ctrl.cellPath, noteRef: ctrl.noteRef, headerFooter: ctrl.headerFooter, missing: ctrl.missing };
           }
         }
       }
@@ -228,7 +325,7 @@ export function findPictureAtClick(this: any,
 
 /** 선택된 개체의 bbox를 페이지 레이아웃에서 찾는다. */
 export function findPictureBbox(this: any,
-  ref: { sec: number; ppi: number; ci: number; type?: 'image' | 'shape' | 'equation' | 'group' | 'line'; cellIdx?: number; cellParaIdx?: number; cellPath?: CellPathLike; noteRef?: any },
+  ref: { sec: number; ppi: number; ci: number; type?: 'image' | 'shape' | 'equation' | 'group' | 'line' | 'ole'; cellIdx?: number; cellParaIdx?: number; cellPath?: CellPathLike; noteRef?: any },
 ): { pageIndex: number; x: number; y: number; w: number; h: number; x1?: number; y1?: number; x2?: number; y2?: number } | null {
   const matchType = ref.type ?? 'image';
   // line은 shape의 하위 타입 → layout에서 'line'으로 반환됨
@@ -284,9 +381,12 @@ export function renderPictureObjectSelection(this: any): void {
         }
       }
       if (minX < Infinity) {
+        const locked = refs.some((r: PictureObjectRef) => isObjectSizeProtected.call(this, r));
         this.pictureObjectRenderer.render(
           { pageIndex, x: minX, y: minY, width: maxX - minX, height: maxY - minY },
           zoom,
+          0,
+          locked,
         );
       } else {
         this.pictureObjectRenderer.clear();
@@ -358,15 +458,12 @@ export function renderPictureObjectSelection(this: any): void {
 
           // 회전각 조회 (shape + image)
           let rotAngle = 0;
-          if (ref.type === 'shape') {
-            try {
-              const props = this.wasm.getShapeProperties(ref.sec, ref.ppi, ref.ci);
-              rotAngle = (props.rotationAngle as number) ?? 0;
-            } catch { /* ignore */ }
-          } else if (ref.type === 'image') {
+          let locked = false;
+          if (ref.type !== 'equation') {
             try {
               const props = getObjectProperties.call(this, ref);
               rotAngle = (props.rotationAngle as number) ?? 0;
+              locked = !!props.sizeProtect;
             } catch { /* ignore */ }
           }
 
@@ -374,7 +471,9 @@ export function renderPictureObjectSelection(this: any): void {
             { pageIndex: p, x: bx, y: by, width: bw, height: bh },
             zoom,
             rotAngle,
+            locked,
           );
+          syncOleObjectCaret.call(this, ref as PictureObjectRef, zoom);
           return;
         }
       }
@@ -411,7 +510,7 @@ export function isShapeBorderClick(this: any,
 
 /** 개체 속성을 타입에 따라 조회한다. */
 export function getObjectProperties(this: any, ref: PictureObjectRef): any {
-  if (ref.type === 'shape' || ref.type === 'line' || ref.type === 'group') {
+  if (ref.type === 'shape' || ref.type === 'line' || ref.type === 'group' || ref.type === 'ole') {
     if (hasCellPath(ref)) {
       return this.wasm.getCellShapePropertiesByPath(ref.sec, ref.ppi, ref.cellPath, ref.ci);
     }
@@ -434,7 +533,7 @@ export function getObjectProperties(this: any, ref: PictureObjectRef): any {
 
 /** 개체 속성을 타입에 따라 변경한다. */
 export function setObjectProperties(this: any, ref: PictureObjectRef, props: Record<string, unknown>): void {
-  if (ref.type === 'shape' || ref.type === 'line' || ref.type === 'group') {
+  if (ref.type === 'shape' || ref.type === 'line' || ref.type === 'group' || ref.type === 'ole') {
     if (hasCellPath(ref)) {
       this.wasm.setCellShapePropertiesByPath(ref.sec, ref.ppi, ref.cellPath, ref.ci, props);
       return;
@@ -460,9 +559,20 @@ export function setObjectProperties(this: any, ref: PictureObjectRef, props: Rec
   }
 }
 
+/** 크기 고정 개체인지 조회한다. 조회 실패 시 기존 조작 흐름을 막지 않는다. */
+export function isObjectSizeProtected(this: any, ref: PictureObjectRef | null | undefined): boolean {
+  if (!ref) return false;
+  try {
+    const props = getObjectProperties.call(this, ref);
+    return !!props?.sizeProtect;
+  } catch {
+    return false;
+  }
+}
+
 /** 개체를 타입에 따라 삭제한다. */
 export function deleteObjectControl(this: any, ref: PictureObjectRef): void {
-  if (ref.type === 'shape' || ref.type === 'group' || ref.type === 'line') {
+  if (ref.type === 'shape' || ref.type === 'group' || ref.type === 'line' || ref.type === 'ole') {
     this.wasm.deleteShapeControl(ref.sec, ref.ppi, ref.ci);
   } else if (ref.type === 'equation') {
     this.wasm.deleteEquationControl(ref.sec, ref.ppi, ref.ci);
@@ -495,6 +605,7 @@ export function resizeSelectedPicture(this: any, key: ArrowKey): void {
     const pending: { r: PictureObjectRef; target: ObjectResizeTarget }[] = [];
     for (const r of targets) {
       const props = getObjectProperties.call(this, r);
+      if (props.sizeProtect) continue;
       const resized = computeArrowResize(key, props.width, props.height, step);
       if (!resized) continue;
       pending.push({
@@ -532,6 +643,60 @@ export function resizeSelectedPicture(this: any, key: ArrowKey): void {
 /** 1 page px = 7200/96 = 75 HWPUNIT */
 const PX_TO_HWP = 7200 / 96;
 // MIN_SIZE_HWP 는 picture-resize.ts 에서 import (드래그/키보드 리사이즈 공용 하한)
+
+function isCornerResizeDir(dir: string): boolean {
+  return dir === 'nw' || dir === 'ne' || dir === 'sw' || dir === 'se';
+}
+
+function isRotatedImageCornerResize(state: any, angleDeg: number): boolean {
+  const normalized = ((angleDeg % 360) + 360) % 360;
+  return state.ref?.type === 'image' && isCornerResizeDir(state.dir) && normalized !== 0;
+}
+
+function usesRotatedPictureFrame(state: any, angleDeg: number): boolean {
+  const normalized = ((angleDeg % 360) + 360) % 360;
+  return state.ref?.type === 'image' && normalized !== 0;
+}
+
+function frameFromActualPictureBbox(
+  bbox: { x: number; y: number; width: number; height: number },
+  angleDeg: number,
+  rotatedFrame: boolean,
+): { width: number; height: number; frameX: number; frameY: number } {
+  const actualW = Math.max(bbox.width, 1);
+  const actualH = Math.max(bbox.height, 1);
+  let frameW = actualW;
+  let frameH = actualH;
+
+  if (rotatedFrame) {
+    const rad = angleDeg * Math.PI / 180;
+    const cosA = Math.abs(Math.cos(rad));
+    const sinA = Math.abs(Math.sin(rad));
+    frameW = actualW * cosA + actualH * sinA;
+    frameH = actualW * sinA + actualH * cosA;
+  }
+
+  return {
+    width: Math.max(Math.round(frameW * PX_TO_HWP), MIN_SIZE_HWP),
+    height: Math.max(Math.round(frameH * PX_TO_HWP), MIN_SIZE_HWP),
+    frameX: bbox.x - Math.max(0, frameW - actualW) / 2,
+    frameY: bbox.y - Math.max(0, frameH - actualH) / 2,
+  };
+}
+
+function originalFrameTopLeftFromState(
+  state: any,
+  rotatedFrame: boolean,
+): { frameX: number; frameY: number } {
+  if (!rotatedFrame) return { frameX: state.bbox.x, frameY: state.bbox.y };
+
+  const frameW = Math.max((state.origWidth ?? 0) / PX_TO_HWP, state.bbox.w);
+  const frameH = Math.max((state.origHeight ?? 0) / PX_TO_HWP, state.bbox.h);
+  return {
+    frameX: state.bbox.x - Math.max(0, frameW - state.bbox.w) / 2,
+    frameY: state.bbox.y - Math.max(0, frameH - state.bbox.h) / 2,
+  };
+}
 
 /**
  * 회전각을 반영하여 리사이즈 후 새 bbox(비회전 기준)를 계산한다.
@@ -571,6 +736,16 @@ function calcResizedBboxRotated(
 
   // 최종 출력용 크기는 절대값 사용 (최소 크기는 아주 작게만 제한)
   const MIN = 1; 
+  if (isRotatedImageCornerResize(state, angleDeg)) {
+    const signX = dir.includes('e') ? 1 : -1;
+    const signY = dir.includes('s') ? 1 : -1;
+    const diagonal = Math.hypot(w0, h0) || 1;
+    const deltaAlongDiagonal = (signX * localDx * w0 + signY * localDy * h0) / diagonal;
+    const minScale = MIN / Math.max(w0, h0, MIN);
+    const scale = Math.max((diagonal + deltaAlongDiagonal) / diagonal, minScale);
+    valW = w0 * scale;
+    valH = h0 * scale;
+  }
   const newW = Math.max(Math.abs(valW), MIN);
   const newH = Math.max(Math.abs(valH), MIN);
 
@@ -597,6 +772,11 @@ export function updatePictureResizeDrag(this: any, e: MouseEvent): void {
   if (!this.pictureResizeState || !this.pictureObjectRenderer) return;
   const zoom = this.viewportManager.getZoom();
   const state = this.pictureResizeState;
+  if (isObjectSizeProtected.call(this, state.ref)) {
+    this.cleanupPictureResizeDrag();
+    this.renderPictureObjectSelection();
+    return;
+  }
 
   // 핸들은 고정, 예비 테두리만 갱신
   const rotAngle = (state.rotationAngle ?? 0) as number;
@@ -613,6 +793,11 @@ export function updatePictureResizeDrag(this: any, e: MouseEvent): void {
 
   // 다중 선택: 드래그 중 실시간으로 개체 크기/위치 반영
   if (state.multiRefs && state.multiRefs.length > 0) {
+    if (state.multiRefs.some((r: PictureObjectRef) => isObjectSizeProtected.call(this, r))) {
+      this.cleanupPictureResizeDrag();
+      this.renderPictureObjectSelection();
+      return;
+    }
     const scaleX = newBbox.width / state.bbox.w;
     const scaleY = newBbox.height / state.bbox.h;
     const origX = state.bbox.x;
@@ -635,8 +820,8 @@ export function updatePictureResizeDrag(this: any, e: MouseEvent): void {
         const newW = Math.max(Math.round(r.origWidth * sx), MIN_SIZE_HWP);
         const newH = Math.max(Math.round(r.origHeight * sy), MIN_SIZE_HWP);
         const updated: Record<string, unknown> = { width: newW, height: newH };
-        if (deltaH !== 0) updated['horzOffset'] = ((r.origHorzOffset + deltaH) >>> 0);
-        if (deltaV !== 0) updated['vertOffset'] = ((r.origVertOffset + deltaV) >>> 0);
+        if (deltaH !== 0) updated['horzOffset'] = r.origHorzOffset + deltaH;
+        if (deltaV !== 0) updated['vertOffset'] = r.origVertOffset + deltaV;
         setObjectProperties.call(this, r, updated);
       }
       this.eventBus.emit('document-changed');
@@ -645,23 +830,26 @@ export function updatePictureResizeDrag(this: any, e: MouseEvent): void {
 
   // 단일 선택 (그룹/shape/image 등): 드래그 중 실시간 크기/위치 반영
   if (!state.multiRefs && state.ref.type !== 'line') {
-    const newW = Math.max(Math.round(newBbox.width * PX_TO_HWP), MIN_SIZE_HWP);
-    const newH = Math.max(Math.round(newBbox.height * PX_TO_HWP), MIN_SIZE_HWP);
+    const rotatedFrame = usesRotatedPictureFrame(state, rotAngle);
+    const resizedFrame = frameFromActualPictureBbox(newBbox, rotAngle, rotatedFrame);
+    const originalFrame = originalFrameTopLeftFromState(state, rotatedFrame);
+    const newW = resizedFrame.width;
+    const newH = resizedFrame.height;
     // offset 은 페이지 절대값이 아니라 "저장 offset + 페이지좌표 델타"로 적용한다.
     // (중첩 picture 의 offset 은 컨테이너 상대 — 페이지 절대값이면 라이브 드래그 중
     //  이미지가 예비 테두리에서 벗어나 어긋난다. finishPictureResizeDrag 와 동일 방식.)
-    const newHorzOffset = Math.round(newBbox.x * PX_TO_HWP);
-    const newVertOffset = Math.round(newBbox.y * PX_TO_HWP);
-    const origHorzOffset = Math.round(state.bbox.x * PX_TO_HWP);
-    const origVertOffset = Math.round(state.bbox.y * PX_TO_HWP);
+    const newHorzOffset = Math.round(resizedFrame.frameX * PX_TO_HWP);
+    const newVertOffset = Math.round(resizedFrame.frameY * PX_TO_HWP);
+    const origHorzOffset = Math.round(originalFrame.frameX * PX_TO_HWP);
+    const origVertOffset = Math.round(originalFrame.frameY * PX_TO_HWP);
     const beforeHorzOffset = state.origHorzOffset ?? origHorzOffset;
     const beforeVertOffset = state.origVertOffset ?? origVertOffset;
     try {
       setObjectProperties.call(this, state.ref, {
         width: newW,
         height: newH,
-        horzOffset: ((beforeHorzOffset + (newHorzOffset - origHorzOffset)) >>> 0),
-        vertOffset: ((beforeVertOffset + (newVertOffset - origVertOffset)) >>> 0),
+        horzOffset: beforeHorzOffset + (newHorzOffset - origHorzOffset),
+        vertOffset: beforeVertOffset + (newVertOffset - origVertOffset),
       });
       this.eventBus.emit('document-changed');
     } catch { /* ignore */ }
@@ -671,6 +859,12 @@ export function updatePictureResizeDrag(this: any, e: MouseEvent): void {
 export function finishPictureResizeDrag(this: any, e: MouseEvent): void {
   const state = this.pictureResizeState;
   if (!state) { this.cleanupPictureResizeDrag(); return; }
+  if (isObjectSizeProtected.call(this, state.ref) ||
+      state.multiRefs?.some((r: PictureObjectRef) => isObjectSizeProtected.call(this, r))) {
+    this.cleanupPictureResizeDrag();
+    this.renderPictureObjectSelection();
+    return;
+  }
 
   const zoom = this.viewportManager.getZoom();
   const PX2HWP = PX_TO_HWP;
@@ -702,11 +896,11 @@ export function finishPictureResizeDrag(this: any, e: MouseEvent): void {
         const updated: Record<string, unknown> = { width: newW, height: newH };
         const before: Record<string, unknown> = { width: r.origWidth, height: r.origHeight };
         if (deltaH !== 0) {
-          updated['horzOffset'] = ((r.origHorzOffset + deltaH) >>> 0);
+          updated['horzOffset'] = r.origHorzOffset + deltaH;
           before['horzOffset'] = r.origHorzOffset;
         }
         if (deltaV !== 0) {
-          updated['vertOffset'] = ((r.origVertOffset + deltaV) >>> 0);
+          updated['vertOffset'] = r.origVertOffset + deltaV;
           before['vertOffset'] = r.origVertOffset;
         }
         const changed = Object.keys(updated).some(key => updated[key] !== before[key]);
@@ -728,12 +922,16 @@ export function finishPictureResizeDrag(this: any, e: MouseEvent): void {
 
   // 단일 선택 리사이즈 (회전 반영: pivot 고정, 위치도 갱신)
   const newBbox = calcResizedBboxRotated(state, e, zoom);
-  const newW = Math.max(Math.round(newBbox.width * PX2HWP), MIN_SIZE_HWP);
-  const newH = Math.max(Math.round(newBbox.height * PX2HWP), MIN_SIZE_HWP);
-  const newHorzOffset = Math.round(newBbox.x * PX2HWP);
-  const newVertOffset = Math.round(newBbox.y * PX2HWP);
-  const origHorzOffset = Math.round(state.bbox.x * PX2HWP);
-  const origVertOffset = Math.round(state.bbox.y * PX2HWP);
+  const rotAngle = (state.rotationAngle ?? 0) as number;
+  const rotatedFrame = usesRotatedPictureFrame(state, rotAngle);
+  const resizedFrame = frameFromActualPictureBbox(newBbox, rotAngle, rotatedFrame);
+  const originalFrame = originalFrameTopLeftFromState(state, rotatedFrame);
+  const newW = resizedFrame.width;
+  const newH = resizedFrame.height;
+  const newHorzOffset = Math.round(resizedFrame.frameX * PX2HWP);
+  const newVertOffset = Math.round(resizedFrame.frameY * PX2HWP);
+  const origHorzOffset = Math.round(originalFrame.frameX * PX2HWP);
+  const origVertOffset = Math.round(originalFrame.frameY * PX2HWP);
 
   try {
     const updated: Record<string, unknown> = {};
@@ -754,11 +952,11 @@ export function finishPictureResizeDrag(this: any, e: MouseEvent): void {
     const deltaHorz = newHorzOffset - origHorzOffset;
     const deltaVert = newVertOffset - origVertOffset;
     if (deltaHorz !== 0) {
-      updated['horzOffset'] = ((beforeHorzOffset + deltaHorz) >>> 0);
+      updated['horzOffset'] = beforeHorzOffset + deltaHorz;
       before['horzOffset'] = beforeHorzOffset;
     }
     if (deltaVert !== 0) {
-      updated['vertOffset'] = ((beforeVertOffset + deltaVert) >>> 0);
+      updated['vertOffset'] = beforeVertOffset + deltaVert;
       before['vertOffset'] = beforeVertOffset;
     }
     if (Object.keys(updated).length > 0) {
@@ -851,8 +1049,8 @@ export function updatePictureMoveDrag(this: any, e: MouseEvent): void {
     for (const ref of targets) {
       const props = getObjectProperties.call(this, ref);
       setObjectProperties.call(this, ref, {
-        horzOffset: ((props.horzOffset + deltaH) >>> 0),
-        vertOffset: ((props.vertOffset + deltaV) >>> 0),
+        horzOffset: props.horzOffset + deltaH,
+        vertOffset: props.vertOffset + deltaV,
       });
     }
     this.pictureMoveState.lastPageX = px;
@@ -874,7 +1072,7 @@ export function finishPictureMoveDrag(this: any): void {
     if (totalDeltaH !== 0 || totalDeltaV !== 0) {
       const targets = multiRefs || [{ ...this.pictureMoveState.ref, origHorzOffset: this.pictureMoveState.origHorzOffset, origVertOffset: this.pictureMoveState.origVertOffset }];
       for (const r of targets) {
-        const CmdClass = (r.type === 'shape' || r.type === 'line' || r.type === 'group') ? MoveShapeCommand : MovePictureCommand;
+        const CmdClass = (r.type === 'shape' || r.type === 'line' || r.type === 'group' || r.type === 'ole') ? MoveShapeCommand : MovePictureCommand;
         this.executeOperation({
           kind: 'record',
           command: new CmdClass(
@@ -902,6 +1100,13 @@ export function finishPictureMoveDrag(this: any): void {
 /** 회전 드래그 중: 마우스 각도에 따라 실시간 회전 적용 */
 export function updatePictureRotateDrag(this: any, e: MouseEvent): void {
   if (!this.pictureRotateState) return;
+  if (isObjectSizeProtected.call(this, this.pictureRotateState.ref)) {
+    this.isPictureRotateDragging = false;
+    this.pictureRotateState = null;
+    this.container.style.cursor = '';
+    this.renderPictureObjectSelection();
+    return;
+  }
   const sc = this.container.querySelector('#scroll-content');
   if (!sc) return;
   const cr = sc.getBoundingClientRect();

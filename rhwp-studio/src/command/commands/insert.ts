@@ -5,7 +5,9 @@ import { EquationPropertiesDialog } from '@/ui/equation-props-dialog';
 import { SymbolsDialog } from '@/ui/symbols-dialog';
 import { BookmarkDialog } from '@/ui/bookmark-dialog';
 import { EndnoteShapeDialog } from '@/ui/endnote-shape-dialog';
+import { FieldInsertDialog } from '@/ui/field-insert-dialog';
 import { showShapePicker } from '@/ui/shape-picker';
+import { showToast } from '@/ui/toast';
 import type { ShapeType } from '@/ui/shape-picker';
 import type { CellPathLike } from '@/core/types';
 
@@ -27,6 +29,7 @@ let equationPropsDialog: EquationPropertiesDialog | null = null;
 let symbolsDialog: SymbolsDialog | null = null;
 let bookmarkDialog: BookmarkDialog | null = null;
 let endnoteShapeDialog: EndnoteShapeDialog | null = null;
+let fieldInsertDialog: FieldInsertDialog | null = null;
 
 function enterNoteEditing(
   services: any,
@@ -84,15 +87,38 @@ export const insertCommands: CommandDef[] = [
       input.onchange = async () => {
         const file = input.files?.[0];
         if (!file) return;
-        const data = new Uint8Array(await file.arrayBuffer());
-        const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
-        // Image 엘리먼트로 원본 크기 측정
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        await new Promise<void>(r => { img.onload = () => r(); });
-        URL.revokeObjectURL(img.src);
-        // 마우스 영역 지정 모드 진입
-        ih.enterImagePlacementMode(data, ext, img.naturalWidth, img.naturalHeight, file.name);
+        let objectUrl = '';
+        try {
+          const data = new Uint8Array(await file.arrayBuffer());
+          const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+          const img = new Image();
+          objectUrl = URL.createObjectURL(file);
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => {
+              if (img.naturalWidth <= 0 || img.naturalHeight <= 0) {
+                reject(new Error('이미지 크기를 확인할 수 없습니다.'));
+                return;
+              }
+              resolve();
+            };
+            img.onerror = () => reject(new Error('브라우저가 이 이미지 파일을 읽지 못했습니다.'));
+            img.src = objectUrl;
+          });
+          ih.enterImagePlacementMode(data, ext, img.naturalWidth, img.naturalHeight, file.name);
+          showToast({
+            message: '그림을 넣을 위치를 문서 본문 또는 표 셀 안에서 클릭하거나 드래그하세요.',
+            durationMs: 3500,
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn('[insert:image] 이미지 준비 실패:', err);
+          showToast({
+            message: `그림을 삽입할 수 없습니다.\n${msg}`,
+            durationMs: 6000,
+          });
+        } finally {
+          if (objectUrl) URL.revokeObjectURL(objectUrl);
+        }
       };
       input.click();
     },
@@ -129,7 +155,7 @@ export const insertCommands: CommandDef[] = [
         if (result.ok) {
           services.eventBus.emit('document-changed');
           if (!equationEditorDialog) {
-            equationEditorDialog = new EquationEditorDialog(services.wasm, services.eventBus);
+            equationEditorDialog = new EquationEditorDialog(services.wasm, services.eventBus, services);
           }
           equationEditorDialog.open(pos.sectionIndex, result.paraIdx, result.controlIdx);
         }
@@ -138,7 +164,40 @@ export const insertCommands: CommandDef[] = [
       }
     },
   },
-  stub('insert:field', '필드 입력', undefined, 'Ctrl+K+E'),
+  {
+    id: 'insert:field',
+    label: '필드 입력',
+    shortcutLabel: 'Ctrl+K+E',
+    canExecute: (ctx) => ctx.hasDocument && !ctx.isFormMode,
+    execute(services) {
+      const ih = services.getInputHandler();
+      if (!ih) return;
+      const pos = ih.getCursorPosition();
+      fieldInsertDialog = new FieldInsertDialog();
+      fieldInsertDialog.onApply = (props) => {
+        try {
+          const result = services.wasm.insertClickHereField(
+            pos,
+            props.guide,
+            props.memo,
+            props.name,
+            props.editable,
+          );
+          if (result.ok) {
+            const insertedPos = { ...pos, charOffset: result.charOffset ?? pos.charOffset };
+            ih.moveCursorTo(insertedPos);
+            ih.markCurrentFieldEndOutside();
+            services.wasm.clearActiveField();
+            services.eventBus.emit('document-mutated', 'insert-field');
+            services.eventBus.emit('document-changed');
+          }
+        } catch (err) {
+          console.warn('[insert:field] 누름틀 삽입 실패:', err);
+        }
+      };
+      fieldInsertDialog.show();
+    },
+  },
   stub('insert:caption-top', '캡션 - 위'),
   stub('insert:caption-lt', '캡션 - 왼쪽 위'),
   stub('insert:caption-lm', '캡션 - 왼쪽 가운데'),
@@ -154,8 +213,9 @@ export const insertCommands: CommandDef[] = [
     id: 'insert:footnote',
     label: '각주',
     icon: 'icon-footnote',
-    canExecute: () => true,
+    canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
+      if (!services.getContext().hasDocument) return;
       const ih = services.getInputHandler();
       if (!ih) return;
       const pos = ih.getPosition();
@@ -174,8 +234,9 @@ export const insertCommands: CommandDef[] = [
     id: 'insert:endnote',
     label: '미주',
     icon: 'icon-endnote',
-    canExecute: () => true,
+    canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
+      if (!services.getContext().hasDocument) return;
       const ih = services.getInputHandler();
       if (!ih) return;
       const pos = ih.getPosition();
@@ -255,13 +316,13 @@ export const insertCommands: CommandDef[] = [
       if (!ref) return;
       if (ref.type === 'equation') {
         if (!equationPropsDialog) {
-          equationPropsDialog = new EquationPropertiesDialog(services.wasm, services.eventBus);
+          equationPropsDialog = new EquationPropertiesDialog(services.wasm, services.eventBus, services);
         }
         equationPropsDialog.open(ref.sec, ref.ppi, ref.ci, ref.cellIdx, ref.cellParaIdx, ref.noteRef);
         return;
       }
       if (!picturePropsDialog) {
-        picturePropsDialog = new PicturePropsDialog(services.wasm, services.eventBus);
+        picturePropsDialog = new PicturePropsDialog(services.wasm, services.eventBus, services);
       }
       // [Task #825] 머리말/꼬리말 그림은 ref.headerFooter 동반 — dialog 에 전달.
       // [Task #1138] 표 셀 내 도형(shape/line) 은 cellPath 구성하여 dialog 에 전달
@@ -275,7 +336,7 @@ export const insertCommands: CommandDef[] = [
           ref.cellIdx !== undefined &&
           ref.cellParaIdx !== undefined &&
           (ref as any).outerTableControlIdx !== undefined &&
-          (ref.type === 'shape' || ref.type === 'line' || ref.type === 'image')
+          (ref.type === 'shape' || ref.type === 'line' || ref.type === 'image' || ref.type === 'ole')
         )
           ? [{
               controlIdx: (ref as any).outerTableControlIdx as number,
@@ -300,7 +361,7 @@ export const insertCommands: CommandDef[] = [
       const ref = ih.getSelectedPictureRef();
       if (!ref || ref.type !== 'equation') return;
       if (!equationEditorDialog) {
-        equationEditorDialog = new EquationEditorDialog(services.wasm, services.eventBus);
+        equationEditorDialog = new EquationEditorDialog(services.wasm, services.eventBus, services);
       }
       equationEditorDialog.open(ref.sec, ref.ppi, ref.ci, ref.cellIdx, ref.cellParaIdx, ref.noteRef);
     },
@@ -561,6 +622,7 @@ function applyRotationDelta(services: import('../types').CommandServices, delta:
   const ref = ih.getSelectedPictureRef();
   if (!ref || ref.type === 'equation' || ref.type === 'group' || ref.type === 'line') return;
   const props = getProps(services, ref);
+  if (props.sizeProtect) return;
   const cur = ((props.rotationAngle as number) ?? 0);
   let next = cur + delta;
   // -180 ~ 180 범위로 정규화
@@ -577,6 +639,7 @@ function toggleFlip(services: import('../types').CommandServices, key: 'horzFlip
   const ref = ih.getSelectedPictureRef();
   if (!ref || ref.type === 'equation' || ref.type === 'group' || ref.type === 'line') return;
   const props = getProps(services, ref);
+  if (props.sizeProtect) return;
   const cur = !!props[key];
   setProps(services, ref, { [key]: !cur });
   services.eventBus.emit('document-changed');

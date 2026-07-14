@@ -100,6 +100,7 @@ export const formatCommands: CommandDef[] = [
   {
     id: 'format:line-spacing-decrease',
     label: '줄 간격 줄이기',
+    shortcutLabel: 'Alt+Shift+A',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
       const ih = services.getInputHandler();
@@ -114,6 +115,7 @@ export const formatCommands: CommandDef[] = [
   {
     id: 'format:line-spacing-increase',
     label: '줄 간격 늘리기',
+    shortcutLabel: 'Alt+Shift+Z',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
       const ih = services.getInputHandler();
@@ -128,6 +130,7 @@ export const formatCommands: CommandDef[] = [
   {
     id: 'format:font-size-increase',
     label: '글꼴 크기 크게',
+    shortcutLabel: 'Alt+Shift+E',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
       services.getInputHandler()?.adjustFontSize(100); // +1pt
@@ -137,6 +140,7 @@ export const formatCommands: CommandDef[] = [
   {
     id: 'format:font-size-decrease',
     label: '글꼴 크기 작게',
+    shortcutLabel: 'Alt+Shift+R',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
       services.getInputHandler()?.adjustFontSize(-100); // -1pt
@@ -186,6 +190,7 @@ export const formatCommands: CommandDef[] = [
   {
     id: 'format:align-left',
     label: '왼쪽 정렬',
+    shortcutLabel: 'Ctrl+Shift+L',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
       services.getInputHandler()?.applyParaAlign('left');
@@ -194,6 +199,7 @@ export const formatCommands: CommandDef[] = [
   {
     id: 'format:align-center',
     label: '가운데 정렬',
+    shortcutLabel: 'Alt+Shift+C',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
       services.getInputHandler()?.applyParaAlign('center');
@@ -202,6 +208,7 @@ export const formatCommands: CommandDef[] = [
   {
     id: 'format:align-right',
     label: '오른쪽 정렬',
+    shortcutLabel: 'Alt+Shift+H',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
       services.getInputHandler()?.applyParaAlign('right');
@@ -210,6 +217,7 @@ export const formatCommands: CommandDef[] = [
   {
     id: 'format:align-justify',
     label: '양쪽 정렬',
+    shortcutLabel: 'Ctrl+Shift+M',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
       services.getInputHandler()?.applyParaAlign('justify');
@@ -218,6 +226,7 @@ export const formatCommands: CommandDef[] = [
   {
     id: 'format:align-distribute',
     label: '배분 정렬',
+    shortcutLabel: 'Alt+Shift+D',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
       services.getInputHandler()?.applyParaAlign('distribute');
@@ -419,7 +428,16 @@ export const formatCommands: CommandDef[] = [
 
       // 추가 요청
       dialog.onAddRequest = () => {
-        const addDlg = new StyleEditDialog(services.wasm, services.eventBus, 'add');
+        let baseInfo = {};
+        try {
+          baseInfo = {
+            charProps: ih.getCharProperties(),
+            paraProps: ih.getParaProperties(),
+          };
+        } catch {
+          baseInfo = {};
+        }
+        const addDlg = new StyleEditDialog(services.wasm, services.eventBus, 'add', undefined, baseInfo);
         addDlg.onSave = () => dialog.refresh();
         addDlg.show();
       };
@@ -450,11 +468,11 @@ export const formatCommands: CommandDef[] = [
         const ref = ih.getSelectedPictureRef();
         if (!ref) return;
         if (ref.type === 'equation') {
-          const dialog = new EquationPropertiesDialog(services.wasm, services.eventBus);
+          const dialog = new EquationPropertiesDialog(services.wasm, services.eventBus, services);
           dialog.open(ref.sec, ref.ppi, ref.ci, ref.cellIdx, ref.cellParaIdx, ref.noteRef);
           return;
         }
-        const dialog = new PicturePropsDialog(services.wasm, services.eventBus);
+        const dialog = new PicturePropsDialog(services.wasm, services.eventBus, services);
         dialog.open(ref.sec, ref.ppi, ref.ci, ref.type);
         return;
       }
@@ -464,7 +482,7 @@ export const formatCommands: CommandDef[] = [
         const pos = ih.getCursorPosition();
         if (pos.parentParaIndex === undefined || pos.controlIndex === undefined || pos.cellIndex === undefined) return;
         const tableCtx = { sec: pos.sectionIndex, ppi: pos.parentParaIndex, ci: pos.controlIndex };
-        const dialog = new TableCellPropsDialog(services.wasm, services.eventBus, tableCtx, pos.cellIndex, 'table');
+        const dialog = new TableCellPropsDialog(services.wasm, services.eventBus, tableCtx, pos.cellIndex, 'table', services);
         dialog.show();
       }
     },

@@ -157,6 +157,15 @@ pub enum IrDifference {
         section: usize,
         detail: String,
     },
+    /// 섹션 `<hp:visibility>`(첫쪽 머리말/꼬리말/바탕쪽 숨김·테두리·배경·첫 빈줄 숨김)
+    /// 불일치 — secPr visibility 보존 게이트 (#1637).
+    ///
+    /// 직렬화기가 visibility 를 IR 대신 템플릿 고정값으로 방출하면 hideFirstEmptyLine 등이
+    /// 드롭되어 페이지네이션이 달라진다(IR-invisible 결함). `detail` 형식은 `diff_page_def` 동형.
+    SectionVisibility {
+        section: usize,
+        detail: String,
+    },
     /// 표 캡션 불일치 — 캡션 보존 게이트 (#1387).
     ///
     /// `path` 는 `…tbl.caption` 까지의 중첩 경로. `detail` 은 존재 비대칭 또는
@@ -182,6 +191,51 @@ pub enum IrDifference {
     /// `path` 는 `…pic` / `…shape` / `…eq` 등 중첩 경로. `detail` 은
     /// `"expected={:?} actual={:?}"`.
     ObjectComment {
+        section: usize,
+        paragraph: usize,
+        path: String,
+        detail: String,
+    },
+    /// 필드 parameters / MEMO 본문 불일치 — 필드 보존 게이트 (#1391).
+    ///
+    /// `path` 는 `…field` (parameters) 또는 `…field.memo.p[k]` (본문 재귀).
+    FieldContent {
+        section: usize,
+        paragraph: usize,
+        path: String,
+        detail: String,
+    },
+    /// 그림 크기 요소(curSz/imgRect/imgDim) 불일치 — 그림 크기 보존 게이트 (#1389).
+    ///
+    /// `path` 는 `…pic`. `detail` 은 불일치 필드별 "field: expected=.. actual=.."
+    /// 세미콜론 연결.
+    PictureSize {
+        section: usize,
+        paragraph: usize,
+        path: String,
+        detail: String,
+    },
+    /// 표 `page_break` 불일치 — 표 분할 속성 보존 게이트 (#1393).
+    ///
+    /// 방출(serializer)은 PR #1405 에서 정정됨 — 본 게이트는 회귀 봉인용.
+    /// `path` 는 `…tbl`.
+    TablePageBreak {
+        section: usize,
+        paragraph: usize,
+        path: String,
+        detail: String,
+    },
+    /// 개체 `holdAnchorAndSO`(IR `prevent_page_break`) 불일치 — 페이지 하단 앵커
+    /// 개체에서 1→0 드롭 시 한글 페이지 붕괴를 유발(#1594). IR-invisible 였던 갭을 봉인.
+    ObjectHoldAnchor {
+        section: usize,
+        paragraph: usize,
+        path: String,
+        detail: String,
+    },
+    /// 개체 `flowWithText`(IR `flow_with_text`) 불일치 — 표(treatAsChar)에서 0→1 드롭 시
+    /// partial-split 임계가 흔들려 페이지네이션이 달라진다(#1637). IR-invisible 였던 갭을 봉인.
+    ObjectFlowWithText {
         section: usize,
         paragraph: usize,
         path: String,
@@ -271,6 +325,9 @@ impl std::fmt::Display for IrDifference {
             SectionPageDef { section, detail } => {
                 write!(f, "section[{}] page_def: {}", section, detail)
             }
+            SectionVisibility { section, detail } => {
+                write!(f, "section[{}] visibility: {}", section, detail)
+            }
             TableCaption {
                 section,
                 paragraph,
@@ -301,7 +358,94 @@ impl std::fmt::Display for IrDifference {
                 "section[{}] paragraph[{}]{} comment: {}",
                 section, paragraph, path, detail
             ),
+            FieldContent {
+                section,
+                paragraph,
+                path,
+                detail,
+            } => write!(
+                f,
+                "section[{}] paragraph[{}]{} field: {}",
+                section, paragraph, path, detail
+            ),
+            PictureSize {
+                section,
+                paragraph,
+                path,
+                detail,
+            } => write!(
+                f,
+                "section[{}] paragraph[{}]{} pic_size: {}",
+                section, paragraph, path, detail
+            ),
+            TablePageBreak {
+                section,
+                paragraph,
+                path,
+                detail,
+            } => write!(
+                f,
+                "section[{}] paragraph[{}]{} tbl page_break: {}",
+                section, paragraph, path, detail
+            ),
+            ObjectHoldAnchor {
+                section,
+                paragraph,
+                path,
+                detail,
+            } => write!(
+                f,
+                "section[{}] paragraph[{}]{} holdAnchorAndSO: {}",
+                section, paragraph, path, detail
+            ),
+            ObjectFlowWithText {
+                section,
+                paragraph,
+                path,
+                detail,
+            } => write!(
+                f,
+                "section[{}] paragraph[{}]{} flowWithText: {}",
+                section, paragraph, path, detail
+            ),
         }
+    }
+}
+
+/// 그림 크기 요소 비교 (#1389) — curSz(shape_attr current)·imgRect(border_x/y)·
+/// imgDim. 불일치 필드를 세미콜론으로 연결. 일치하면 None.
+fn diff_picture_size(
+    a: &crate::model::image::Picture,
+    b: &crate::model::image::Picture,
+) -> Option<String> {
+    let mut parts: Vec<String> = Vec::new();
+    if a.shape_attr.current_width != b.shape_attr.current_width
+        || a.shape_attr.current_height != b.shape_attr.current_height
+    {
+        parts.push(format!(
+            "curSz: expected={}x{} actual={}x{}",
+            a.shape_attr.current_width,
+            a.shape_attr.current_height,
+            b.shape_attr.current_width,
+            b.shape_attr.current_height
+        ));
+    }
+    if a.border_x != b.border_x || a.border_y != b.border_y {
+        parts.push(format!(
+            "imgRect: expected={:?}/{:?} actual={:?}/{:?}",
+            a.border_x, a.border_y, b.border_x, b.border_y
+        ));
+    }
+    if a.img_dim != b.img_dim {
+        parts.push(format!(
+            "imgDim: expected={:?} actual={:?}",
+            a.img_dim, b.img_dim
+        ));
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("; "))
     }
 }
 
@@ -311,6 +455,36 @@ fn diff_object_comment(a: &str, b: &str) -> Option<String> {
         None
     } else {
         Some(format!("expected={:?} actual={:?}", a, b))
+    }
+}
+
+/// 두 개체의 `prevent_page_break`(holdAnchorAndSO) 비교 (#1594). 다르면 detail, 같으면 None.
+fn diff_hold_anchor(
+    a: &crate::model::shape::CommonObjAttr,
+    b: &crate::model::shape::CommonObjAttr,
+) -> Option<String> {
+    if a.prevent_page_break == b.prevent_page_break {
+        None
+    } else {
+        Some(format!(
+            "expected={} actual={}",
+            a.prevent_page_break, b.prevent_page_break
+        ))
+    }
+}
+
+/// 두 개체의 `flow_with_text`(flowWithText) 비교 (#1637). 다르면 detail, 같으면 None.
+fn diff_flow_with_text(
+    a: &crate::model::shape::CommonObjAttr,
+    b: &crate::model::shape::CommonObjAttr,
+) -> Option<String> {
+    if a.flow_with_text == b.flow_with_text {
+        None
+    } else {
+        Some(format!(
+            "expected={} actual={}",
+            a.flow_with_text, b.flow_with_text
+        ))
     }
 }
 
@@ -358,6 +532,13 @@ pub fn diff_documents(a: &Document, b: &Document) -> IrDiff {
             &b.sections[i].section_def.page_def,
         ) {
             diff.push(IrDifference::SectionPageDef { section: i, detail });
+        }
+
+        // 섹션 visibility(hideFirstEmptyLine 등) 비교 (#1637) — secPr visibility 보존 게이트.
+        if let Some(detail) =
+            diff_visibility(&a.sections[i].section_def, &b.sections[i].section_def)
+        {
+            diff.push(IrDifference::SectionVisibility { section: i, detail });
         }
 
         // 문단별 char_shapes 시퀀스 비교 (#1378) — run 분할 보존 게이트.
@@ -531,6 +712,41 @@ fn diff_page_def(
             a.binding, b.binding
         ));
     }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("; "))
+    }
+}
+
+/// 섹션 `<hp:visibility>` 플래그 비교 (#1637) — secPr visibility 보존 게이트.
+///
+/// IR(SectionDef)에 보존되는 6필드만 비교한다(hideFirstPageNum·showLineNumber 는
+/// 파서가 IR 에 적재하지 않으므로 제외). 직렬화기가 visibility 를 IR 로 방출하지 않으면
+/// (특히 hide_empty_line) 페이지네이션이 달라지는 IR-invisible 결함을 게이트화한다.
+fn diff_visibility(
+    a: &crate::model::document::SectionDef,
+    b: &crate::model::document::SectionDef,
+) -> Option<String> {
+    let mut parts: Vec<String> = Vec::new();
+    macro_rules! cmp_field {
+        ($field:ident) => {
+            if a.$field != b.$field {
+                parts.push(format!(
+                    "{}: expected={} actual={}",
+                    stringify!($field),
+                    a.$field,
+                    b.$field
+                ));
+            }
+        };
+    }
+    cmp_field!(hide_header);
+    cmp_field!(hide_footer);
+    cmp_field!(hide_master_page);
+    cmp_field!(hide_border);
+    cmp_field!(hide_fill);
+    cmp_field!(hide_empty_line);
     if parts.is_empty() {
         None
     } else {
@@ -721,6 +937,18 @@ fn diff_paragraph_linesegs(
                     diff_paragraph_linesegs(out, section, paragraph, &p, qa, qb);
                 }
             }
+            // MEMO 본문 문단 lineseg 재귀 (#1391).
+            (Control::Field(fa), Control::Field(fb)) => {
+                for (k, (qa, qb)) in fa
+                    .memo_paragraphs
+                    .iter()
+                    .zip(fb.memo_paragraphs.iter())
+                    .enumerate()
+                {
+                    let p = format!("{path}/ctrl[{ci}]field.memo.p[{k}]");
+                    diff_paragraph_linesegs(out, section, paragraph, &p, qa, qb);
+                }
+            }
             _ => {}
         }
     }
@@ -819,6 +1047,33 @@ fn diff_paragraph_char_shapes(
     for (ci, (ctrl_a, ctrl_b)) in pa.controls.iter().zip(pb.controls.iter()).enumerate() {
         match (ctrl_a, ctrl_b) {
             (Control::Table(ta), Control::Table(tb)) => {
+                // 표 page_break 비교 (#1393) — 방출은 PR #1405 정정, 게이트 회귀 봉인.
+                if ta.page_break != tb.page_break {
+                    diff.push(IrDifference::TablePageBreak {
+                        section,
+                        paragraph,
+                        path: format!("{path}/ctrl[{ci}]tbl"),
+                        detail: format!("expected={:?} actual={:?}", ta.page_break, tb.page_break),
+                    });
+                }
+                // [#1594] holdAnchorAndSO 보존 게이트 — 페이지 하단 앵커 개체 붕괴 봉인.
+                if let Some(detail) = diff_hold_anchor(&ta.common, &tb.common) {
+                    diff.push(IrDifference::ObjectHoldAnchor {
+                        section,
+                        paragraph,
+                        path: format!("{path}/ctrl[{ci}]tbl"),
+                        detail,
+                    });
+                }
+                // [#1637] flowWithText 보존 게이트 — 표 partial-split 임계 변동 봉인.
+                if let Some(detail) = diff_flow_with_text(&ta.common, &tb.common) {
+                    diff.push(IrDifference::ObjectFlowWithText {
+                        section,
+                        paragraph,
+                        path: format!("{path}/ctrl[{ci}]tbl"),
+                        detail,
+                    });
+                }
                 for (cell_i, (cea, ceb)) in ta.cells.iter().zip(tb.cells.iter()).enumerate() {
                     for (k, (qa, qb)) in
                         cea.paragraphs.iter().zip(ceb.paragraphs.iter()).enumerate()
@@ -846,6 +1101,15 @@ fn diff_paragraph_char_shapes(
             }
             // 그림 캡션 비교 (#1403) — 존재/속성/문단 수 + 내부 문단 재귀.
             (Control::Picture(pia), Control::Picture(pib)) => {
+                // 그림 크기 요소 비교 (#1389) — curSz/imgRect/imgDim IR 보존 게이트.
+                if let Some(detail) = diff_picture_size(pia, pib) {
+                    diff.push(IrDifference::PictureSize {
+                        section,
+                        paragraph,
+                        path: format!("{path}/ctrl[{ci}]pic"),
+                        detail,
+                    });
+                }
                 if let Some(detail) = diff_table_caption(&pia.caption, &pib.caption) {
                     diff.push(IrDifference::ObjectCaption {
                         section,
@@ -859,6 +1123,15 @@ fn diff_paragraph_char_shapes(
                     diff_object_comment(&pia.common.description, &pib.common.description)
                 {
                     diff.push(IrDifference::ObjectComment {
+                        section,
+                        paragraph,
+                        path: format!("{path}/ctrl[{ci}]pic"),
+                        detail,
+                    });
+                }
+                // [#1594] holdAnchorAndSO 보존 게이트.
+                if let Some(detail) = diff_hold_anchor(&pia.common, &pib.common) {
+                    diff.push(IrDifference::ObjectHoldAnchor {
                         section,
                         paragraph,
                         path: format!("{path}/ctrl[{ci}]pic"),
@@ -886,6 +1159,24 @@ fn diff_paragraph_char_shapes(
                         detail,
                     });
                 }
+                // [#1594] holdAnchorAndSO 보존 게이트.
+                if let Some(detail) = diff_hold_anchor(&ea.common, &eb.common) {
+                    diff.push(IrDifference::ObjectHoldAnchor {
+                        section,
+                        paragraph,
+                        path: format!("{path}/ctrl[{ci}]eq"),
+                        detail,
+                    });
+                }
+                // [#1655] 수식 flowWithText 보존 게이트.
+                if let Some(detail) = diff_flow_with_text(&ea.common, &eb.common) {
+                    diff.push(IrDifference::ObjectFlowWithText {
+                        section,
+                        paragraph,
+                        path: format!("{path}/ctrl[{ci}]eq"),
+                        detail,
+                    });
+                }
             }
             (Control::Shape(sa), Control::Shape(sb)) => {
                 let p = format!("{path}/ctrl[{ci}]shape");
@@ -900,6 +1191,41 @@ fn diff_paragraph_char_shapes(
             (Control::Endnote(na), Control::Endnote(nb)) => {
                 for (k, (qa, qb)) in na.paragraphs.iter().zip(nb.paragraphs.iter()).enumerate() {
                     let p = format!("{path}/ctrl[{ci}]en.p[{k}]");
+                    diff_paragraph_char_shapes(diff, section, paragraph, &p, qa, qb);
+                }
+            }
+            // 필드 parameters / MEMO 본문 비교 (#1391).
+            (Control::Field(fa), Control::Field(fb)) => {
+                if fa.raw_parameters_xml != fb.raw_parameters_xml {
+                    diff.push(IrDifference::FieldContent {
+                        section,
+                        paragraph,
+                        path: format!("{path}/ctrl[{ci}]field"),
+                        detail: format!(
+                            "parameters: expected={:?} actual={:?}",
+                            fa.raw_parameters_xml, fb.raw_parameters_xml
+                        ),
+                    });
+                }
+                if fa.memo_paragraphs.len() != fb.memo_paragraphs.len() {
+                    diff.push(IrDifference::FieldContent {
+                        section,
+                        paragraph,
+                        path: format!("{path}/ctrl[{ci}]field"),
+                        detail: format!(
+                            "memo paragraphs: expected={} actual={}",
+                            fa.memo_paragraphs.len(),
+                            fb.memo_paragraphs.len()
+                        ),
+                    });
+                }
+                for (k, (qa, qb)) in fa
+                    .memo_paragraphs
+                    .iter()
+                    .zip(fb.memo_paragraphs.iter())
+                    .enumerate()
+                {
+                    let p = format!("{path}/ctrl[{ci}]field.memo.p[{k}]");
                     diff_paragraph_char_shapes(diff, section, paragraph, &p, qa, qb);
                 }
             }
@@ -1781,6 +2107,105 @@ mod tests {
         assert!(diff.is_empty(), "{:?}", diff.differences);
     }
 
+    // ---------- #1637: secPr visibility (hideFirstEmptyLine 등 게이트 동승) ----------
+
+    fn doc_with_visibility(hide_empty_line: bool, hide_header: bool) -> Document {
+        let mut doc = Document::default();
+        let mut section = crate::model::document::Section::default();
+        section.section_def.hide_empty_line = hide_empty_line;
+        section.section_def.hide_header = hide_header;
+        doc.sections.push(section);
+        doc
+    }
+
+    #[test]
+    fn task1637_visibility_in_gate() {
+        // hideFirstEmptyLine 등 visibility 차이는 diff_documents(게이트)에서 검출되어야 한다.
+        let a = doc_with_visibility(true, false);
+        let b = doc_with_visibility(false, false);
+        let diff = diff_documents(&a, &b);
+        assert_eq!(diff.differences.len(), 1, "{:?}", diff.differences);
+        match &diff.differences[0] {
+            IrDifference::SectionVisibility { section, detail } => {
+                assert_eq!(*section, 0);
+                assert_eq!(detail, "hide_empty_line: expected=true actual=false");
+            }
+            other => panic!("SectionVisibility 여야 함: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn task1637_visibility_equal_is_empty() {
+        // 동일 visibility 는 차이 0.
+        let diff = diff_documents(
+            &doc_with_visibility(true, true),
+            &doc_with_visibility(true, true),
+        );
+        assert!(diff.is_empty(), "{:?}", diff.differences);
+    }
+
+    #[test]
+    fn task1637_roundtrip_preserves_hide_empty_line() {
+        // hideFirstEmptyLine="1" 문서의 roundtrip 에서 값 보존 + 게이트 0 (직렬화기
+        // visibility IR 치환 검증). 종전엔 템플릿 고정값 "0" 으로 드롭되어 페이지네이션 변동.
+        // serialize_hwpx 는 HWPX 패키지(ZIP)를 반환하므로 reparse 로 값 보존을 검증한다.
+        let doc = doc_with_visibility(true, true);
+        let out = serialize_hwpx(&doc).expect("serialize");
+        let doc2 = parse_hwpx(&out).expect("reparse");
+        assert!(
+            doc2.sections[0].section_def.hide_empty_line,
+            "hide_empty_line=1 이 roundtrip 에서 보존되어야 한다"
+        );
+        assert!(
+            doc2.sections[0].section_def.hide_header,
+            "hide_header=1 이 roundtrip 에서 보존되어야 한다"
+        );
+        // visibility 축의 게이트 0 (다른 축의 near-empty-doc 직렬화 산물은 본 테스트 범위 밖).
+        assert!(
+            diff_visibility(&doc.sections[0].section_def, &doc2.sections[0].section_def).is_none(),
+            "visibility roundtrip 차이가 없어야 한다"
+        );
+    }
+
+    #[test]
+    fn task1637_table_flow_with_text_in_gate() {
+        // 표 flowWithText 차이는 diff_documents(게이트)에서 ObjectFlowWithText 로 검출.
+        use crate::model::table::Table;
+        let mut ta = Table::default();
+        ta.common.flow_with_text = false;
+        let mut tb = Table::default();
+        tb.common.flow_with_text = true;
+        let a = doc_with_control(crate::model::control::Control::Table(Box::new(ta)));
+        let b = doc_with_control(crate::model::control::Control::Table(Box::new(tb)));
+        let diff = diff_documents(&a, &b);
+        assert!(
+            diff.differences
+                .iter()
+                .any(|d| matches!(d, IrDifference::ObjectFlowWithText { .. })),
+            "표 flowWithText 차이는 게이트에서 검출되어야 한다: {:?}",
+            diff.differences
+        );
+    }
+
+    #[test]
+    fn task1655_equation_flow_with_text_in_gate() {
+        // 수식 flowWithText 차이도 diff_documents(게이트)에서 ObjectFlowWithText 로 검출.
+        let mut ea = crate::model::control::Equation::default();
+        ea.common.flow_with_text = false;
+        let mut eb = crate::model::control::Equation::default();
+        eb.common.flow_with_text = true;
+        let a = doc_with_control(crate::model::control::Control::Equation(Box::new(ea)));
+        let b = doc_with_control(crate::model::control::Control::Equation(Box::new(eb)));
+        let diff = diff_documents(&a, &b);
+        assert!(
+            diff.differences
+                .iter()
+                .any(|d| matches!(d, IrDifference::ObjectFlowWithText { .. })),
+            "수식 flowWithText 차이는 게이트에서 검출되어야 한다: {:?}",
+            diff.differences
+        );
+    }
+
     // ---------- #1403: 그림/도형/묶음 캡션 (게이트 동승) ----------
 
     #[test]
@@ -1990,5 +2415,172 @@ mod tests {
         let a = doc_with_control(crate::model::control::Control::Picture(Box::new(pa)));
         let b = doc_with_control(crate::model::control::Control::Picture(Box::new(pb)));
         assert!(diff_documents(&a, &b).is_empty());
+    }
+
+    #[test]
+    fn task1451_legacy_shape_comment_serialize_roundtrip() {
+        // #1451: render_common_shape_xml 경유 도형(polygon 등)의 shapeComment 가
+        // serialize → parse 왕복에서 보존되는지 직접 가드한다.
+        // 기존 task1392 게이트는 IR diff 검출만 하므로, 여기서 "보존 성공" 방향을 가드한다.
+        let mut poly = crate::model::shape::PolygonShape::default();
+        poly.common.description = "다각형입니다.".to_string();
+        let doc = roundtrip_doc_with_control(crate::model::control::Control::Shape(Box::new(
+            crate::model::shape::ShapeObject::Polygon(poly),
+        )));
+
+        let bytes = serialize_hwpx(&doc).expect("serialize");
+        let doc2 = parse_hwpx(&bytes).expect("parse");
+        let desc = match &doc2.sections[0].paragraphs[1].controls[0] {
+            crate::model::control::Control::Shape(s) => match s.as_ref() {
+                crate::model::shape::ShapeObject::Polygon(p) => &p.common.description,
+                other => panic!("Polygon 이어야 함: {other:?}"),
+            },
+            other => panic!("Shape 컨트롤이어야 함: {other:?}"),
+        };
+        assert_eq!(desc, "다각형입니다.", "polygon shapeComment 왕복 보존");
+    }
+
+    // ---------- #1391: 필드 parameters / MEMO 본문 게이트 동승 ----------
+
+    #[test]
+    fn task1391_field_parameters_loss_in_gate() {
+        let mut fa = crate::model::control::Field::default();
+        fa.raw_parameters_xml = Some("<hp:parameters cnt=\"1\"></hp:parameters>".into());
+        let fb = crate::model::control::Field::default();
+        let a = doc_with_control(crate::model::control::Control::Field(fa));
+        let b = doc_with_control(crate::model::control::Control::Field(fb));
+        let diff = diff_documents(&a, &b);
+        assert_eq!(diff.differences.len(), 1, "{:?}", diff.differences);
+        match &diff.differences[0] {
+            IrDifference::FieldContent { path, detail, .. } => {
+                assert_eq!(path, "/ctrl[0]field");
+                assert!(detail.starts_with("parameters: expected="), "{detail}");
+            }
+            other => panic!("FieldContent 여야 함: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn task1391_memo_paragraph_loss_in_gate() {
+        let mut fa = crate::model::control::Field::default();
+        fa.field_type = crate::model::control::FieldType::Memo;
+        fa.memo_paragraphs.push(Paragraph::default());
+        let mut fb = crate::model::control::Field::default();
+        fb.field_type = crate::model::control::FieldType::Memo;
+        let a = doc_with_control(crate::model::control::Control::Field(fa));
+        let b = doc_with_control(crate::model::control::Control::Field(fb));
+        let diff = diff_documents(&a, &b);
+        assert_eq!(diff.differences.len(), 1, "{:?}", diff.differences);
+        match &diff.differences[0] {
+            IrDifference::FieldContent { detail, .. } => {
+                assert_eq!(detail, "memo paragraphs: expected=1 actual=0");
+            }
+            other => panic!("FieldContent 여야 함: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn task1391_aift_memo_roundtrips() {
+        // 실샘플 — aift MEMO 2건 parameters + 본문 보존, roundtrip 게이트 0.
+        let bytes = std::fs::read("samples/hwpx/aift.hwpx").expect("샘플 읽기");
+        let doc1 = parse_hwpx(&bytes).expect("parse 원본");
+        let memo_count = doc1
+            .sections
+            .iter()
+            .flat_map(|s| &s.paragraphs)
+            .flat_map(|p| &p.controls)
+            .filter(|c| {
+                matches!(c, crate::model::control::Control::Field(f)
+                if f.field_type == crate::model::control::FieldType::Memo)
+            })
+            .count();
+        assert_eq!(memo_count, 2, "aift MEMO 2건");
+        let out = serialize_hwpx(&doc1).expect("serialize");
+        let doc2 = parse_hwpx(&out).expect("reparse");
+        let diff = diff_documents(&doc1, &doc2);
+        assert!(diff.is_empty(), "{:?}", diff.differences);
+    }
+
+    // ---------- #1389: 그림 크기 요소 게이트 동승 ----------
+
+    #[test]
+    fn task1389_picture_size_diff_in_gate() {
+        let mut pa = crate::model::image::Picture::default();
+        pa.shape_attr.current_width = 1366;
+        pa.img_dim = (49380, 45840);
+        let pb = crate::model::image::Picture::default(); // 크기 0
+        let a = doc_with_control(crate::model::control::Control::Picture(Box::new(pa)));
+        let b = doc_with_control(crate::model::control::Control::Picture(Box::new(pb)));
+        let diff = diff_documents(&a, &b);
+        assert_eq!(diff.differences.len(), 1, "{:?}", diff.differences);
+        match &diff.differences[0] {
+            IrDifference::PictureSize { path, detail, .. } => {
+                assert_eq!(path, "/ctrl[0]pic");
+                assert!(
+                    detail.contains("curSz") && detail.contains("imgDim"),
+                    "{detail}"
+                );
+            }
+            other => panic!("PictureSize 여야 함: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn task1389_ta_pic_size_roundtrips() {
+        // 실샘플 — ta-pic 셀 내 그림 curSz/imgRect/imgDim 보존, roundtrip 게이트 0.
+        let bytes = std::fs::read("samples/hwpx/ta-pic-001-r.hwpx").expect("샘플 읽기");
+        let doc1 = parse_hwpx(&bytes).expect("parse 원본");
+        // 셀 내 pic 의 img_dim 이 적재됐는지 전제 확인 (49380 등 비0).
+        let has_dim = doc1
+            .sections
+            .iter()
+            .flat_map(|s| &s.paragraphs)
+            .flat_map(|p| &p.controls)
+            .any(|c| matches!(c, crate::model::control::Control::Table(t)
+                if t.cells.iter().flat_map(|ce| &ce.paragraphs).flat_map(|q| &q.controls)
+                    .any(|cc| matches!(cc, crate::model::control::Control::Picture(pic) if pic.img_dim.0 > 0))));
+        assert!(has_dim, "셀 내 pic img_dim 적재 전제");
+        let out = serialize_hwpx(&doc1).expect("serialize");
+        let doc2 = parse_hwpx(&out).expect("reparse");
+        let diff = diff_documents(&doc1, &doc2);
+        assert!(diff.is_empty(), "{:?}", diff.differences);
+    }
+
+    // ---------- #1393: 표 page_break 게이트 동승 ----------
+
+    #[test]
+    fn task1393_table_page_break_diff_in_gate() {
+        use crate::model::table::TablePageBreak;
+        fn tbl(pb: TablePageBreak) -> crate::model::control::Control {
+            match table_control(&[]) {
+                crate::model::control::Control::Table(mut t) => {
+                    t.page_break = pb;
+                    crate::model::control::Control::Table(t)
+                }
+                _ => unreachable!(),
+            }
+        }
+        let a = doc_with_control(tbl(TablePageBreak::RowBreak));
+        let b = doc_with_control(tbl(TablePageBreak::CellBreak));
+        let diff = diff_documents(&a, &b);
+        assert_eq!(diff.differences.len(), 1, "{:?}", diff.differences);
+        match &diff.differences[0] {
+            IrDifference::TablePageBreak { path, detail, .. } => {
+                assert_eq!(path, "/ctrl[0]tbl");
+                assert_eq!(detail, "expected=RowBreak actual=CellBreak");
+            }
+            other => panic!("TablePageBreak 여야 함: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn task1393_form_002_page_break_roundtrips() {
+        // 실샘플 — form-002 표 page_break(CELL=RowBreak) 보존, roundtrip 게이트 0.
+        let bytes = std::fs::read("samples/hwpx/form-002.hwpx").expect("샘플 읽기");
+        let doc1 = parse_hwpx(&bytes).expect("parse 원본");
+        let out = serialize_hwpx(&doc1).expect("serialize");
+        let doc2 = parse_hwpx(&out).expect("reparse");
+        let diff = diff_documents(&doc1, &doc2);
+        assert!(diff.is_empty(), "{:?}", diff.differences);
     }
 }

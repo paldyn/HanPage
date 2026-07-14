@@ -23,6 +23,7 @@ pub mod control;
 pub mod crypto;
 pub mod doc_info;
 pub mod header;
+pub mod hml;
 pub mod hwp3;
 pub mod hwpx;
 pub mod ingest;
@@ -45,21 +46,42 @@ pub enum FileFormat {
     Hwpx,
     /// HWP 3.0 바이너리
     Hwp3,
-    /// Legacy raw HWPML XML (미지원 — 감지만, Issue #1053)
-    LegacyHwpml,
+    /// Standalone HWPML XML
+    Hml,
+    /// DRM/보안 컨테이너로 보호된 문서 (미지원 — 감지만, Issue #1982)
+    /// Fasoo(`\x9b DRMONE`) / SoftCamp SCDSA(`SCDSA00x`) 등. 복호화는 범위 밖.
+    DrmProtected,
+    /// 빈 파일(0 바이트) (Issue #1982)
+    Empty,
     /// 알 수 없는 포맷
     Unknown,
 }
 
-const FORMAT_PROBE_SCAN_LIMIT: usize = 4096;
-const UNSUPPORTED_HWPML_CODE: &str = "UNSUPPORTED_HWPML";
 const UNSUPPORTED_FILE_FORMAT_CODE: &str = "UNSUPPORTED_FILE_FORMAT";
-const SUPPORTED_FORMATS_HINT: &str = "현재 rhwp는 HWP 5.0, HWPX, 일부 HWP 3.0 문서만 지원합니다.";
-const UNSUPPORTED_HWPML_HINT: &str =
-    "현재 rhwp는 HWP 5.0, HWPX, 일부 HWP 3.0 문서만 지원합니다. 한컴오피스에서 HWP 5.0 또는 HWPX로 다시 저장한 뒤 열어주세요.";
+const SUPPORTED_FORMATS_HINT: &str =
+    "현재 rhwp는 HWP 5.0, HWPX, 일부 HWP 3.0, HWPML 2.9 문서를 지원합니다.";
+const DRM_PROTECTED_CODE: &str = "DRM_PROTECTED";
+const DRM_PROTECTED_HINT: &str =
+    "DRM/보안 컨테이너로 보호된 문서입니다. 한컴오피스 등 DRM 클라이언트에서 보호를 해제한 뒤 저장해 열어주세요.";
+const EMPTY_FILE_CODE: &str = "EMPTY_FILE";
+const EMPTY_FILE_HINT: &str = "빈 파일(0 바이트)입니다.";
+
+// DRM/보안 컨테이너 시그니처 (Issue #1982 — 10k 서베이 검출).
+// Fasoo: `\x9b DRMONE  This Document is encrypted and protected by Fasoo`.
+const FASOO_DRM_SIG: &[u8] = b"\x9b DRMONE";
+// SoftCamp SCDSA(Security Content Document Security Agent): `SCDSA002`/`SCDSA004`.
+const SCDSA_SIG: &[u8] = b"SCDSA";
 
 /// 파일 데이터의 매직 바이트로 포맷을 감지한다.
 pub fn detect_format(data: &[u8]) -> FileFormat {
+    if data.is_empty() {
+        return FileFormat::Empty;
+    }
+    // DRM/보안 컨테이너(미지원 — 감지만, Issue #1982). 정상 매직보다 먼저 판별해
+    // "알 수 없는 파일 형식" 대신 명확한 안내를 준다.
+    if data.starts_with(FASOO_DRM_SIG) || data.starts_with(SCDSA_SIG) {
+        return FileFormat::DrmProtected;
+    }
     if data.len() >= 8 {
         // CFB/OLE 시그니처: D0 CF 11 E0 A1 B1 1A E1
         if data[0] == 0xD0 && data[1] == 0xCF && data[2] == 0x11 && data[3] == 0xE0 {
@@ -75,82 +97,10 @@ pub fn detect_format(data: &[u8]) -> FileFormat {
     if data.len() >= 17 && &data[0..17] == b"HWP Document File" {
         return FileFormat::Hwp3;
     }
-    if detect_legacy_hwpml(data) {
-        return FileFormat::LegacyHwpml;
+    if hml::detect_hml_signature(data) {
+        return FileFormat::Hml;
     }
     FileFormat::Unknown
-}
-
-fn format_probe_prefix(data: &[u8]) -> &[u8] {
-    &data[..data.len().min(FORMAT_PROBE_SCAN_LIMIT)]
-}
-
-fn trim_format_probe_prefix(data: &[u8]) -> &[u8] {
-    let mut start = if data.starts_with(&[0xEF, 0xBB, 0xBF]) {
-        3
-    } else {
-        0
-    };
-    while start < data.len() && data[start].is_ascii_whitespace() {
-        start += 1;
-    }
-    &data[start..]
-}
-
-fn ascii_lower(byte: u8) -> u8 {
-    if byte.is_ascii_uppercase() {
-        byte + 32
-    } else {
-        byte
-    }
-}
-
-fn ascii_eq_ignore_case(left: &[u8], right: &[u8]) -> bool {
-    left.len() == right.len()
-        && left
-            .iter()
-            .zip(right.iter())
-            .all(|(a, b)| ascii_lower(*a) == ascii_lower(*b))
-}
-
-fn starts_with_ascii_ignore_case(data: &[u8], needle: &[u8]) -> bool {
-    data.get(..needle.len())
-        .is_some_and(|head| ascii_eq_ignore_case(head, needle))
-}
-
-fn contains_ascii_ignore_case(data: &[u8], needle: &[u8]) -> bool {
-    !needle.is_empty()
-        && data
-            .windows(needle.len())
-            .any(|window| ascii_eq_ignore_case(window, needle))
-}
-
-fn detect_legacy_hwpml(data: &[u8]) -> bool {
-    let prefix = trim_format_probe_prefix(format_probe_prefix(data));
-    let looks_like_xml = starts_with_ascii_ignore_case(prefix, b"<?xml")
-        || starts_with_ascii_ignore_case(prefix, b"<hwpml");
-
-    looks_like_xml && contains_ascii_ignore_case(prefix, b"<hwpml")
-}
-
-fn detect_legacy_hwpml_format_name(data: &[u8]) -> &'static str {
-    let prefix = format_probe_prefix(data);
-    let versions: &[(&[u8], &'static str)] = &[
-        (b"version=\"2.1\"", "HWPML 2.1"),
-        (b"version='2.1'", "HWPML 2.1"),
-        (b"hwpml=\"2.1\"", "HWPML 2.1"),
-        (b"hwpml='2.1'", "HWPML 2.1"),
-        (b"version=\"2.0\"", "HWPML 2.0"),
-        (b"version='2.0'", "HWPML 2.0"),
-        (b"version=\"1.0\"", "HWPML 1.0"),
-        (b"version='1.0'", "HWPML 1.0"),
-    ];
-    for (needle, format_name) in versions {
-        if contains_ascii_ignore_case(prefix, needle) {
-            return format_name;
-        }
-    }
-    "HWPML"
 }
 
 /// 파싱 에러 (통합)
@@ -163,6 +113,7 @@ pub enum ParseError {
     CryptoError(crypto::CryptoError),
     HwpxError(hwpx::HwpxError),
     Hwp3Error(hwp3::Hwp3Error),
+    HmlError(hml::HmlError),
     EncryptedDocument,
     /// 감지는 되었으나 지원하지 않는 포맷
     UnsupportedFormat {
@@ -182,6 +133,7 @@ impl std::fmt::Display for ParseError {
             ParseError::CryptoError(e) => write!(f, "암호 오류: {}", e),
             ParseError::HwpxError(e) => write!(f, "HWPX 오류: {}", e),
             ParseError::Hwp3Error(e) => write!(f, "HWP 3.0 오류: {}", e),
+            ParseError::HmlError(e) => write!(f, "HML 오류: {}", e),
             ParseError::EncryptedDocument => write!(f, "암호화된 문서는 지원하지 않습니다"),
             ParseError::UnsupportedFormat { code, format, hint } => {
                 write!(
@@ -204,6 +156,12 @@ impl From<hwpx::HwpxError> for ParseError {
 impl From<hwp3::Hwp3Error> for ParseError {
     fn from(e: hwp3::Hwp3Error) -> Self {
         ParseError::Hwp3Error(e)
+    }
+}
+
+impl From<hml::HmlError> for ParseError {
+    fn from(error: hml::HmlError) -> Self {
+        ParseError::HmlError(error)
     }
 }
 
@@ -261,7 +219,7 @@ fn parse_hwp_with_cfb(
     // 5-7. 미리보기, BinData, 추가 스트림
     let preview = extract_preview(&mut cfb);
     let bin_data_content = load_bin_data_content(&mut cfb, &doc_info.bin_data_list, compressed);
-    let extra_streams = collect_extra_streams(&mut cfb, &doc_info.bin_data_list);
+    let extra_streams = collect_extra_streams(&mut cfb, &doc_info.bin_data_list, &bin_data_content);
 
     // Document 조립
     let model_header = ModelFileHeader {
@@ -285,6 +243,13 @@ fn parse_hwp_with_cfb(
     // 다양한 스타일 사용 안하므로 작은 비율).
     let summary_hwp3_era = cfb.detect_hwp3_variant();
 
+    // [Issue #1770] rhwp HWPX→HWP 변환본 식별 — 마커 스트림 감지 (결정론).
+    // 변환본 IR 은 HWPX LINE_SEG 시멘틱 그대로이므로 pagination/렌더의
+    // is_hwpx_source 분기를 HWPX 로 해석해야 roundtrip 쪽수가 자기정합한다.
+    let is_hwpx_variant = extra_streams
+        .iter()
+        .any(|(p, _)| p == crate::document_core::converters::hwpx_to_hwp::HWPX_ORIGIN_STREAM_PATH);
+
     let mut doc = Document {
         header: model_header,
         doc_properties,
@@ -295,6 +260,7 @@ fn parse_hwp_with_cfb(
         extra_streams,
         hwpx_aux_entries: Vec::new(),
         is_hwp3_variant: false,
+        is_hwpx_variant,
     };
 
     // 자동 번호 할당 (문서 전체에서 순차적으로)
@@ -306,7 +272,10 @@ fn parse_hwp_with_cfb(
     // [Task #1001] HwpSummary HWP3 시대 년 AND PS/CS 비율 작음 → 변환본 확정.
     // 두 신호 결합으로 false positive 차단 (exam_eng 등 일반 HWP5 가 본문에
     // HWP3 시대 텍스트만 인용한 경우).
-    if summary_hwp3_era {
+    // [#1880 v2] rhwp HWPX→HWP 변환본 제외 — 원본 HWPX 가 HWP3-계보 요약정보를
+    // 승계해도 rhwp 변환본 IR 은 HWPX 시멘틱이므로 spacing 반감 보정이 오발동
+    // 하면 안 된다 (위 apply_hwp3_origin_fixup 게이트와 동일 근거).
+    if summary_hwp3_era && !doc.is_hwpx_variant {
         let total_paras: usize = doc.sections.iter().map(|s| s.paragraphs.len()).sum();
         if total_paras > 50 {
             let ps_r = doc.doc_info.para_shapes.len() as f64 / total_paras as f64;
@@ -322,10 +291,16 @@ fn parse_hwp_with_cfb(
                 // [Task #1037 → #1042 정정] ParaShape unit semantic normalize.
                 // HWP3 vs HWP5 variant 비교 결과 (diag_1042_hwp3_vs_hwp5_paragraph):
                 //   - margin_left/right: HWP5 raw = HWP3 raw 동일 → /2 적용은 wrong
-                //   - indent / spacing_before / spacing_after: HWP5 raw = HWP3 × 2 → /2 정합
+                //   - spacing_before / spacing_after: HWP5 raw = HWP3 × 2 → /2 정합
                 // margin_left/right /2 제거 — HWP3 정답 paragraph 분포 정합.
+                //
+                // [Task #1472] indent /2 제거 — IR 은 정답(full HWPUNIT, HWPX 일치)로 둔다.
+                //   종전 indent /2 는 본문 내어쓰기를 절반으로 훼손(한컴/HWPX 와 어긋남)하면서,
+                //   미주 TAC 수식 흐름의 available_width 계산이 indent_scale=2.0 으로 이를 되돌려
+                //   "수식 effective indent = (indent/2)×2 = full" 로 페이지네이션을 한컴과 정합시켰다.
+                //   재설계: IR indent 는 full 로 두고, 미주 수식 흐름의 indent_scale 을 변환본에서만
+                //   절반(2.0→1.0)으로 낮춰 effective indent(=full) 를 불변 유지한다(아래 렌더러).
                 for ps in &mut doc.doc_info.para_shapes {
-                    ps.indent /= 2;
                     ps.spacing_before /= 2;
                     ps.spacing_after /= 2;
                 }
@@ -427,6 +402,14 @@ fn fixup_line_segs_for_variant(paragraphs: &mut [crate::model::paragraph::Paragr
 }
 
 fn apply_hwp3_origin_fixup(doc: &mut Document) {
+    // [#1880 v2] rhwp HWPX→HWP 변환본(is_hwpx_variant, #1886 마커)은 한컴
+    // HWP3→HWP5 변환본이 아니다 — 결정론 마커가 비율 휴리스틱에 우선한다.
+    // 미게이트 시 저-스타일 대형 문서(2959953)가 비율에 걸려 margin_bottom
+    // -1600 이 오발동, HWPX 렌더와 페이지 기하가 21.3px 어긋나 PI_MOVED 유발
+    // (HWPX 파스는 #1608 에서 동종 감지 제거됨).
+    if doc.is_hwpx_variant {
+        return;
+    }
     let total_paragraphs: usize = doc.sections.iter().map(|s| s.paragraphs.len()).sum();
     if total_paragraphs <= 50 {
         return;
@@ -564,6 +547,7 @@ fn parse_hwp_with_lenient(
         preview: None,
         bin_data_content,
         extra_streams: Vec::new(),
+        is_hwpx_variant: false,
         hwpx_aux_entries: Vec::new(),
         is_hwp3_variant: false,
     };
@@ -749,12 +733,37 @@ fn assign_auto_numbers_in_controls(
 ) {
     use crate::model::control::Control;
 
+    fn assign_caption_auto_numbers(
+        caption: &mut Option<crate::model::shape::Caption>,
+        counters: &mut [u16; 6],
+        counter_index: fn(crate::model::control::AutoNumberType) -> usize,
+    ) {
+        if let Some(caption) = caption {
+            for para in &mut caption.paragraphs {
+                assign_auto_numbers_in_controls(&mut para.controls, counters, counter_index);
+            }
+        }
+    }
+
+    fn assign_text_box_auto_numbers(
+        text_box: &mut Option<crate::model::shape::TextBox>,
+        counters: &mut [u16; 6],
+        counter_index: fn(crate::model::control::AutoNumberType) -> usize,
+    ) {
+        if let Some(text_box) = text_box {
+            for para in &mut text_box.paragraphs {
+                assign_auto_numbers_in_controls(&mut para.controls, counters, counter_index);
+            }
+        }
+    }
+
     for ctrl in controls.iter_mut() {
         match ctrl {
             Control::AutoNumber(an) => {
                 let idx = counter_index(an.number_type);
                 counters[idx] += 1;
                 an.assigned_number = counters[idx];
+                an.number = counters[idx];
             }
             Control::Table(table) => {
                 // 표 내부 셀의 문단도 처리
@@ -768,61 +777,125 @@ fn assign_auto_numbers_in_controls(
                     }
                 }
                 // 표 캡션 처리
-                if let Some(ref mut caption) = table.caption {
-                    for para in &mut caption.paragraphs {
-                        assign_auto_numbers_in_controls(
-                            &mut para.controls,
-                            counters,
-                            counter_index,
-                        );
-                    }
-                }
+                assign_caption_auto_numbers(&mut table.caption, counters, counter_index);
             }
             Control::Picture(pic) => {
                 // 그림 캡션 처리
-                if let Some(ref mut caption) = pic.caption {
-                    for para in &mut caption.paragraphs {
-                        assign_auto_numbers_in_controls(
-                            &mut para.controls,
+                assign_caption_auto_numbers(&mut pic.caption, counters, counter_index);
+            }
+            Control::Shape(shape) => {
+                use crate::model::shape::ShapeObject;
+
+                match shape.as_mut() {
+                    ShapeObject::Line(s) => {
+                        assign_caption_auto_numbers(
+                            &mut s.drawing.caption,
+                            counters,
+                            counter_index,
+                        );
+                        assign_text_box_auto_numbers(
+                            &mut s.drawing.text_box,
                             counters,
                             counter_index,
                         );
                     }
-                }
-            }
-            Control::Shape(shape) => {
-                // 묶음 개체(Group)의 캡션 처리
-                if let crate::model::shape::ShapeObject::Group(ref mut group) = shape.as_mut() {
-                    if let Some(ref mut caption) = group.caption {
-                        for para in &mut caption.paragraphs {
-                            assign_auto_numbers_in_controls(
-                                &mut para.controls,
-                                counters,
-                                counter_index,
-                            );
-                        }
+                    ShapeObject::Rectangle(s) => {
+                        assign_caption_auto_numbers(
+                            &mut s.drawing.caption,
+                            counters,
+                            counter_index,
+                        );
+                        assign_text_box_auto_numbers(
+                            &mut s.drawing.text_box,
+                            counters,
+                            counter_index,
+                        );
                     }
-                }
-                // 도형(글상자 등) 캡션 처리
-                if let Some(ref mut drawing) = shape.drawing_mut() {
-                    if let Some(ref mut caption) = drawing.caption {
-                        for para in &mut caption.paragraphs {
-                            assign_auto_numbers_in_controls(
-                                &mut para.controls,
-                                counters,
-                                counter_index,
-                            );
-                        }
+                    ShapeObject::Ellipse(s) => {
+                        assign_caption_auto_numbers(
+                            &mut s.drawing.caption,
+                            counters,
+                            counter_index,
+                        );
+                        assign_text_box_auto_numbers(
+                            &mut s.drawing.text_box,
+                            counters,
+                            counter_index,
+                        );
                     }
-                    // 글상자 내부 문단의 자동 번호 처리
-                    if let Some(ref mut text_box) = drawing.text_box {
-                        for para in &mut text_box.paragraphs {
-                            assign_auto_numbers_in_controls(
-                                &mut para.controls,
+                    ShapeObject::Arc(s) => {
+                        assign_caption_auto_numbers(
+                            &mut s.drawing.caption,
+                            counters,
+                            counter_index,
+                        );
+                        assign_text_box_auto_numbers(
+                            &mut s.drawing.text_box,
+                            counters,
+                            counter_index,
+                        );
+                    }
+                    ShapeObject::Polygon(s) => {
+                        assign_caption_auto_numbers(
+                            &mut s.drawing.caption,
+                            counters,
+                            counter_index,
+                        );
+                        assign_text_box_auto_numbers(
+                            &mut s.drawing.text_box,
+                            counters,
+                            counter_index,
+                        );
+                    }
+                    ShapeObject::Curve(s) => {
+                        assign_caption_auto_numbers(
+                            &mut s.drawing.caption,
+                            counters,
+                            counter_index,
+                        );
+                        assign_text_box_auto_numbers(
+                            &mut s.drawing.text_box,
+                            counters,
+                            counter_index,
+                        );
+                    }
+                    ShapeObject::Group(s) => {
+                        assign_caption_auto_numbers(&mut s.caption, counters, counter_index);
+                    }
+                    ShapeObject::Picture(s) => {
+                        assign_caption_auto_numbers(&mut s.caption, counters, counter_index);
+                    }
+                    ShapeObject::Chart(s) => {
+                        if s.caption.is_some() {
+                            assign_caption_auto_numbers(&mut s.caption, counters, counter_index);
+                        } else {
+                            assign_caption_auto_numbers(
+                                &mut s.drawing.caption,
                                 counters,
                                 counter_index,
                             );
                         }
+                        assign_text_box_auto_numbers(
+                            &mut s.drawing.text_box,
+                            counters,
+                            counter_index,
+                        );
+                    }
+                    ShapeObject::Ole(s) => {
+                        if s.caption.is_some() {
+                            assign_caption_auto_numbers(&mut s.caption, counters, counter_index);
+                        } else {
+                            assign_caption_auto_numbers(
+                                &mut s.drawing.caption,
+                                counters,
+                                counter_index,
+                            );
+                        }
+                        assign_text_box_auto_numbers(
+                            &mut s.drawing.text_box,
+                            counters,
+                            counter_index,
+                        );
                     }
                 }
             }
@@ -891,22 +964,93 @@ impl DocumentParser for Hwp3Parser {
     }
 }
 
-/// 포맷 자동 감지 후 적절한 파서로 파싱
-pub fn parse_document(data: &[u8]) -> Result<Document, ParseError> {
+/// Standalone HWPML XML parser.
+pub struct HmlParser;
+
+impl DocumentParser for HmlParser {
+    fn parse(&self, data: &[u8]) -> Result<Document, ParseError> {
+        hml::parse_hml(data)
+            .map(|result| result.document)
+            .map_err(ParseError::from)
+    }
+}
+
+/// HML 입력에서만 제공되는 열기 메타데이터와 손실 진단.
+pub struct HmlImportMetadata {
+    pub hwpml_version: Option<String>,
+    pub sub_version: Option<String>,
+    pub style: Option<String>,
+    pub encoding: hml::HmlEncoding,
+    pub resource_count: usize,
+    pub warnings: Vec<hml::HmlWarning>,
+    pub preserved_fragments: Vec<hml::PreservedFragment>,
+}
+
+/// 공통 IR과 입력 포맷 전용 열기 메타데이터를 분리해 전달한다.
+pub struct ParsedDocument {
+    pub document: Document,
+    pub hml_metadata: Option<HmlImportMetadata>,
+}
+
+/// 포맷 자동 감지 후 공통 IR과 입력 메타데이터를 파싱한다.
+pub fn parse_document_with_metadata(data: &[u8]) -> Result<ParsedDocument, ParseError> {
     match detect_format(data) {
-        FileFormat::Hwp => HwpParser.parse(data),
-        FileFormat::Hwpx => HwpxParser.parse(data),
-        FileFormat::Hwp3 => Hwp3Parser.parse(data),
-        FileFormat::LegacyHwpml => Err(ParseError::UnsupportedFormat {
-            code: UNSUPPORTED_HWPML_CODE,
-            format: detect_legacy_hwpml_format_name(data),
-            hint: UNSUPPORTED_HWPML_HINT,
+        FileFormat::Hwp => HwpParser.parse(data).map(without_hml_metadata),
+        FileFormat::Hwpx => HwpxParser.parse(data).map(without_hml_metadata),
+        FileFormat::Hwp3 => Hwp3Parser.parse(data).map(without_hml_metadata),
+        FileFormat::Hml => {
+            let result = hml::parse_hml(data).map_err(ParseError::from)?;
+            Ok(ParsedDocument {
+                document: result.document,
+                hml_metadata: Some(HmlImportMetadata {
+                    hwpml_version: result.metadata.hwpml_version,
+                    sub_version: result.metadata.sub_version,
+                    style: result.metadata.style,
+                    encoding: result.metadata.encoding,
+                    resource_count: result.metadata.resource_count,
+                    warnings: result.warnings,
+                    preserved_fragments: result.preserved_fragments,
+                }),
+            })
+        }
+        FileFormat::DrmProtected => Err(ParseError::UnsupportedFormat {
+            code: DRM_PROTECTED_CODE,
+            format: drm_format_name(data),
+            hint: DRM_PROTECTED_HINT,
+        }),
+        FileFormat::Empty => Err(ParseError::UnsupportedFormat {
+            code: EMPTY_FILE_CODE,
+            format: "빈 파일",
+            hint: EMPTY_FILE_HINT,
         }),
         FileFormat::Unknown => Err(ParseError::UnsupportedFormat {
             code: UNSUPPORTED_FILE_FORMAT_CODE,
             format: "알 수 없는 파일 형식",
             hint: SUPPORTED_FORMATS_HINT,
         }),
+    }
+}
+
+fn without_hml_metadata(document: Document) -> ParsedDocument {
+    ParsedDocument {
+        document,
+        hml_metadata: None,
+    }
+}
+
+/// 포맷 자동 감지 후 공통 IR만 반환하는 호환 진입점.
+pub fn parse_document(data: &[u8]) -> Result<Document, ParseError> {
+    parse_document_with_metadata(data).map(|parsed| parsed.document)
+}
+
+/// DRM 벤더 시그니처로 사람이 읽을 이름을 고른다 (Issue #1982).
+fn drm_format_name(data: &[u8]) -> &'static str {
+    if data.starts_with(FASOO_DRM_SIG) {
+        "DRM 보호 문서 (Fasoo)"
+    } else if data.starts_with(SCDSA_SIG) {
+        "DRM 보호 문서 (SoftCamp SCDSA)"
+    } else {
+        "DRM 보호 문서"
     }
 }
 
@@ -1060,10 +1204,24 @@ fn detect_image_format(data: &[u8]) -> PreviewImageFormat {
 /// 이미 별도로 파싱되므로 제외한다.
 fn collect_extra_streams(
     cfb: &mut cfb_reader::CfbReader,
-    _bin_data_list: &[crate::model::bin_data::BinData],
+    bin_data_list: &[crate::model::bin_data::BinData],
+    bin_data_content: &[BinDataContent],
 ) -> Vec<(String, Vec<u8>)> {
     let all_streams = cfb.list_streams();
     let mut extra = Vec::new();
+
+    // [Task #1554] 직렬화기(`cfb_writer`)가 `bin_data_content` 로부터 재생성할
+    // /BinData 스트림 경로 집합. 직렬화기와 동일한 명명 규칙(`find_bin_data_info_with_compress`)
+    // 을 미러링하여 계산한다. 이 집합에 들어가지 않는 /BinData 스트림은 대응 BinData
+    // 레코드가 없는 "고아 스트림"(예: img-start-001 의 20개 BIN, interview.hwp 의 BIN0001)
+    // 이며, 그대로 두면 저장 시 통째 드롭된다. extra_streams 로 원본 바이트를 보존한다.
+    let emitted_bin_paths: std::collections::HashSet<String> = bin_data_content
+        .iter()
+        .map(|c| {
+            let (storage_id, ext) = serialized_bin_name(bin_data_list, c);
+            format!("/BinData/BIN{:04X}.{}", storage_id, ext)
+        })
+        .collect();
 
     for path in &all_streams {
         // 이미 파싱된 스트림은 제외
@@ -1071,10 +1229,14 @@ fn collect_extra_streams(
             || path == "/DocInfo"
             || path.starts_with("/BodyText/")
             || path.starts_with("/ViewText/")
-            || path.starts_with("/BinData/")
             || path == "/PrvImage"
             || path == "/PrvText"
         {
+            continue;
+        }
+
+        // /BinData 는 직렬화기가 재생성하는 스트림만 제외하고, 고아 스트림은 보존
+        if path.starts_with("/BinData/") && emitted_bin_paths.contains(path) {
             continue;
         }
 
@@ -1085,6 +1247,25 @@ fn collect_extra_streams(
     }
 
     extra
+}
+
+/// 직렬화기가 `BinDataContent` 에 대해 생성할 스트림 이름의 (storage_id, ext) 계산.
+///
+/// `cfb_writer::find_bin_data_info_with_compress` 의 명명 규칙(매칭 레코드 우선,
+/// 없으면 content 자체값)을 미러링한다. extra_streams 의 고아 /BinData 판별 전용.
+fn serialized_bin_name<'a>(
+    bin_data_list: &'a [crate::model::bin_data::BinData],
+    content: &'a BinDataContent,
+) -> (u16, &'a str) {
+    use crate::model::bin_data::BinDataType;
+    for bd in bin_data_list {
+        if matches!(bd.data_type, BinDataType::Embedding | BinDataType::Storage)
+            && bd.storage_id == content.id
+        {
+            return (bd.storage_id, bd.extension.as_deref().unwrap_or("dat"));
+        }
+    }
+    (content.id, &content.extension)
 }
 
 /// BinData 스토리지에서 이미지 데이터 로드
@@ -1154,6 +1335,51 @@ fn load_bin_data_content(
 mod tests {
     use super::*;
 
+    /// [#1880 v2] HWP3-origin 비율 휴리스틱 대상 문서(문단>50, 저-스타일 비율)
+    /// 를 합성해, HWPX-변환본 마커(is_hwpx_variant) 유무에 따라 margin_bottom
+    /// 보정(-1600)이 갈리는지 확인한다. 마커 있으면 보정 오발동 금지.
+    fn hwp3_ratio_suspect_doc() -> Document {
+        let mut doc = Document::default();
+        doc.doc_info
+            .para_shapes
+            .push(crate::model::style::ParaShape::default()); // ps_ratio = 1/60
+        doc.doc_info
+            .char_shapes
+            .push(crate::model::style::CharShape::default()); // cs_ratio = 1/60
+        let mut section = crate::model::document::Section::default();
+        section.section_def.page_def.margin_bottom = 4252;
+        for _ in 0..60 {
+            section
+                .paragraphs
+                .push(crate::model::paragraph::Paragraph::default());
+        }
+        doc.sections.push(section);
+        doc
+    }
+
+    #[test]
+    fn issue1880v2_hwp3_fixup_applies_to_native() {
+        let mut doc = hwp3_ratio_suspect_doc();
+        assert!(!doc.is_hwpx_variant);
+        apply_hwp3_origin_fixup(&mut doc);
+        assert_eq!(
+            doc.sections[0].section_def.page_def.margin_bottom,
+            4252 - 1600,
+            "native HWP5 의심본은 종전대로 margin_bottom 보정"
+        );
+    }
+
+    #[test]
+    fn issue1880v2_hwp3_fixup_skipped_for_hwpx_variant() {
+        let mut doc = hwp3_ratio_suspect_doc();
+        doc.is_hwpx_variant = true;
+        apply_hwp3_origin_fixup(&mut doc);
+        assert_eq!(
+            doc.sections[0].section_def.page_def.margin_bottom, 4252,
+            "rhwp HWPX→HWP 변환본(마커)은 HWP3-origin 보정 오발동 금지 (#1880 v2, 2959953)"
+        );
+    }
+
     #[test]
     fn test_parse_hwp_too_small() {
         let result = parse_hwp(&[0u8; 10]);
@@ -1208,7 +1434,33 @@ mod tests {
     #[test]
     fn test_detect_format_too_short() {
         assert_eq!(detect_format(&[0x50, 0x4B]), FileFormat::Unknown);
-        assert_eq!(detect_format(&[]), FileFormat::Unknown);
+    }
+
+    #[test]
+    fn issue1982_detect_empty_file() {
+        assert_eq!(detect_format(&[]), FileFormat::Empty);
+        let err = parse_document(&[]).unwrap_err();
+        assert!(
+            matches!(&err, ParseError::UnsupportedFormat { code, .. } if *code == EMPTY_FILE_CODE),
+            "empty file → EMPTY_FILE: {err}"
+        );
+    }
+
+    #[test]
+    fn issue1982_detect_drm_containers() {
+        // Fasoo DRM
+        let fasoo = b"\x9b DRMONE  This Document is encrypted and protected by Fasoo DRM";
+        assert_eq!(detect_format(fasoo), FileFormat::DrmProtected);
+        // SoftCamp SCDSA
+        let scdsa = b"SCDSA002\x00\x00\xd0\x04";
+        assert_eq!(detect_format(scdsa), FileFormat::DrmProtected);
+        let err = parse_document(fasoo).unwrap_err();
+        assert!(
+            matches!(&err, ParseError::UnsupportedFormat { code, .. } if *code == DRM_PROTECTED_CODE),
+            "DRM → DRM_PROTECTED: {err}"
+        );
+        assert_eq!(drm_format_name(fasoo), "DRM 보호 문서 (Fasoo)");
+        assert_eq!(drm_format_name(scdsa), "DRM 보호 문서 (SoftCamp SCDSA)");
     }
 
     #[test]
@@ -1236,13 +1488,13 @@ mod tests {
     fn test_detect_format_legacy_hwpml_21() {
         let hwpml = br#"<?xml version="1.0" encoding="UTF-8"?>
 <HWPML Version="2.1"></HWPML>"#;
-        assert_eq!(detect_format(hwpml), FileFormat::LegacyHwpml);
+        assert_eq!(detect_format(hwpml), FileFormat::Hml);
     }
 
     #[test]
-    fn test_detect_format_legacy_hwpml_with_bom_and_space() {
+    fn test_detect_format_rejects_lowercase_generic_xml_root() {
         let hwpml = b"\xEF\xBB\xBF  \n<?xml version='1.0'?><hwpml version='2.1'></hwpml>";
-        assert_eq!(detect_format(hwpml), FileFormat::LegacyHwpml);
+        assert_eq!(detect_format(hwpml), FileFormat::Unknown);
     }
 
     #[test]
@@ -1260,21 +1512,34 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_document_legacy_hwpml_returns_unsupported_code() {
+    fn test_parse_document_reports_unsupported_hwpml_version() {
         let hwpml = br#"<?xml version="1.0" encoding="UTF-8"?>
 <HWPML Version="2.1"></HWPML>"#;
         let err = parse_document(hwpml).unwrap_err();
         match err {
-            ParseError::UnsupportedFormat { code, format, hint } => {
-                assert_eq!(code, "UNSUPPORTED_HWPML");
-                assert_eq!(format, "HWPML 2.1");
-                assert!(
-                    hint.contains("HWP 5.0"),
-                    "hint must explain support: {hint}"
-                );
+            ParseError::HmlError(hml::HmlError::UnsupportedVersion(version)) => {
+                assert_eq!(version, "2.1");
             }
-            other => panic!("expected UnsupportedFormat, got {other:?}"),
+            other => panic!("expected HML unsupported version, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn test_parse_document_with_metadata_preserves_hml_import_diagnostics() {
+        let parsed =
+            parse_document_with_metadata(include_bytes!("../../samples/hml/formatting_table.hml"))
+                .expect("real HML fixture should parse");
+        let metadata = parsed
+            .hml_metadata
+            .expect("HML import metadata should be retained");
+
+        assert_eq!(metadata.hwpml_version.as_deref(), Some("2.91"));
+        assert_eq!(metadata.encoding, hml::HmlEncoding::Utf8);
+        assert_eq!(metadata.resource_count, 0);
+        assert!(metadata
+            .warnings
+            .iter()
+            .any(|warning| warning.xml_path == "/HWPML/TAIL/SCRIPTCODE"));
     }
 
     #[test]
