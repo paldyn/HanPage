@@ -63,6 +63,20 @@
   정합 확인).
 - 검증: `cargo test --test issue_2097_band_fill`
 
+## 75544_pii_bunseok.hwpx (실문서 — protected 블록 밴드 필 핀)
+
+- 출처: hwpdocs 코퍼스 `opinion_downloads/개인정보보호위원회/75544_(규제영향분석서)
+  개인정보 보호법 시행령 일부개정령(안).hwpx` (입법예고 공개문서, 원본 그대로 복사, 159KB).
+- 동계열 확장 실결함 문서: RowBreak 표의 rowspan 블록이 내부 hard-break 도
+  행합-초과도 없어 **protected** 로 분류(rbrb=false)되면, plain 컷이 진행분을
+  내도(fully=false) `allow_block_split` 이 쪽-초과(page-larger) 블록만 허용해
+  기각 → 통이월. 75544 rows 8..11: block_h 420.0px > 쪽 2 잔여 79.2px 통이월로
+  하단 방치, 하류 만석 전파 끝에 마지막 행 조각 20.3px 가 쪽 4 를 단독 생성
+  (67쪽). 한글 PDF/COM 실측은 쪽 2 하단에 rows 8..9 수용(밴드 필) 후 표를 쪽 3
+  에서 종료, **66쪽**. 수정(기각 경계 전체로 오프셋 컷 재시도 확장) 후 67→**66쪽**,
+  PI↔페이지 630문단 전수 한글 COM 일치 (커밋 사본 기준 COM PageCount 66 재확증).
+- 검증: `cargo test --test issue_2097_band_fill`
+
 ## 3080901_pii_ledger.hwp (실문서 — 중간-쪽 RowBreak 한글 정합 권위 검증)
 - 출처: hwpdocs 코퍼스 `admrul_downloads/지식재산처/3080901_[별지 2] 개인정보의
   목적 외 이용 및 제3자 제공 대장(지식재산처 개인정보보호 세부지침).hwp`

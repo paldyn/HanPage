@@ -23,6 +23,10 @@ const PINS: &[(&str, u32)] = &[
     ("samples/task2097/21217935_simsa_jipyo.hwp", 8),
     // 동계열 (22→21쪽). debug/release 동일 (21 = 한글 COM 실측).
     ("samples/task2097/18095317_eogu_geumji.hwp", 21),
+    // protected 블록(내부 hard-break 없음, rbrb=false) 밴드 필 (67→66쪽).
+    // rows 8..11 block_h 420.0 > 잔여 79.2 통이월로 마지막 조각 20.3px 가
+    // 쪽 4 를 생성하던 형상 — 한글 PDF p2 는 rows 8..9 수용 실측.
+    ("samples/task2097/75544_pii_bunseok.hwpx", 66),
 ];
 
 #[test]

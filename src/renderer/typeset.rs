@@ -13741,8 +13741,13 @@ impl TypesetEngine {
                 // 한글은 이 경계에서 행 오프셋 기준 밴드 컷으로 쪽을 채운다
                 // (한글 PDF p2 만충 + p3 상단 셀 내용 중간 재개 실측). hard-break
                 // 없는 쪽 하단 경계 한정으로 오프셋 컷을 재시도한다.
+                // 내부 hard-break 없는 protected 블록(rbrb=false)도 plain 컷이
+                // 기각되는 같은 경계에서 한글은 밴드를 채운다 (75544 rows 8..11:
+                // block_h 420.0 > 잔여 79.2 통이월로 쪽 하단 방치 -> +1쪽, 한글
+                // PDF p2 는 rows 8..9 수용 실측) — fully 오판 여부와 무관하게
+                // 기각 경계 전체로 오프셋 재시도를 확장한다.
                 let mut band_fill = None;
-                if res.fully_consumed
+                if (res.fully_consumed || !allow_block_split)
                     && mt.allows_row_break_split()
                     && can_intra_split
                     && !rowbreak_use_row_offsets
