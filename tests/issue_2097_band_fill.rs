@@ -27,6 +27,10 @@ const PINS: &[(&str, u32)] = &[
     // rows 8..11 block_h 420.0 > 잔여 79.2 통이월로 마지막 조각 20.3px 가
     // 쪽 4 를 생성하던 형상 — 한글 PDF p2 는 rows 8..9 수용 실측.
     ("samples/task2097/75544_pii_bunseok.hwpx", 66),
+    // 쪽나눔=None 표의 fresh-쪽 초과 통째 배치 (6→2쪽). 선언=실측 1005px >
+    // 본문 933.5px 인 표 2건을 한글은 각 1쪽 통째 + 하단 오버플로로 렌더
+    // (한글 PDF 실측) — rhwp 는 각 3조각(헤더/본체/꼬리 sliver)으로 분할했다.
+    ("samples/task2097/3023771_wichokjang.hwpx", 2),
 ];
 
 #[test]

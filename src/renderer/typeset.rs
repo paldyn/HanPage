@@ -14857,6 +14857,40 @@ impl TypesetEngine {
             return;
         }
 
+        // [#2097] 쪽나눔=None 표는 fresh 쪽보다 커도 행 분할하지 않는다 — 한글은
+        // 통째 배치 후 본문 아래(꼬리말·하단 여백)로 오버플로한다 (3023771 위촉장:
+        // 선언=실측 1005px > 본문 933.5px 인 4x2/3x1 표 2건, 한글 PDF 각 1쪽 통째
+        // + 하단 오버플로 실측 — rhwp 는 3조각 분할로 2→6쪽). 오버플로가 본문 하단
+        // 아래 물리 슬랙(용지 경계)을 넘는 극단 형상은 미관측이라 기존 분할 폴백을
+        // 유지한다(보수 가드). 판정은 host 스페이싱을 뺀 순수 표 높이 — 스페이싱
+        // 포함 판정은 fresh 쪽에 들어가는 표(1220000-201800008: 표 920.8px ≤ 본문
+        // 933.5px, 스페이싱 포함 934.4px)를 쪽-초과로 오판해 기존 분할(2쪽)을
+        // 통째+후행 문단 밀림(3쪽)으로 회귀시킨다.
+        let below_body_slack =
+            (st.layout.page_height - (st.layout.body_area.y + st.layout.body_area.height)).max(0.0);
+        let table_only_height = (table_total - host_spacing_total).max(0.0);
+        if matches!(table.page_break, crate::model::table::TablePageBreak::None)
+            && table_only_height > st.base_available_height()
+            && table_only_height <= st.base_available_height() + below_body_slack
+        {
+            if !st.current_items.is_empty() {
+                st.advance_column_or_new_page();
+            }
+            self.place_table_with_text(
+                st,
+                para_idx,
+                ctrl_idx,
+                para,
+                table,
+                fmt,
+                para_start_height,
+                table_total,
+                is_first_placed,
+                is_last_placed,
+            );
+            return;
+        }
+
         let row_count = mt.row_heights.len();
         let cs = mt.cell_spacing;
         let can_intra_split = !mt.cells.is_empty();
