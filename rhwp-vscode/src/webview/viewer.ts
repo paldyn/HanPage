@@ -236,8 +236,9 @@ const clampZoom = (z: number): number => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z
  * 쪽 크기가 서로 다른 문서(가로/세로 혼합)에서 스크롤 중 배율이 요동치지 않도록
  * 현재 쪽이 아니라 문서 전체의 최대 폭·최대 높이를 기준으로 삼는다.
  *
- * availW/availH 를 넘기면 그 값을 쓴다. ResizeObserver 는 스크롤바를 제외한
- * contentRect 를 주므로, 스크롤바 출현으로 인한 배율 진동을 피하려면 그 값을 넘겨야 한다.
+ * availW/availH 는 컨테이너의 **content-box** 크기(padding·스크롤바 제외)다.
+ * ResizeObserver 의 contentRect 가 정확히 이 값이므로 그대로 넘길 수 있다.
+ * 생략하면 clientWidth/clientHeight 에서 padding 을 빼서 같은 기준을 만든다.
  */
 function computeFitZoom(mode: "fitWidth" | "fitPage", availW?: number, availH?: number): number {
   if (pageInfos.length === 0) return currentZoom;
@@ -250,16 +251,18 @@ function computeFitZoom(mode: "fitWidth" | "fitPage", availW?: number, availH?: 
   }
   if (maxW <= 0 || maxH <= 0) return currentZoom;
 
+  // 배치된 콘텐츠의 원본 크기 (1쪽 = 쪽 하나, 2쪽 = 두 쪽 + gap)
   const pagesPerRow = viewMode === "double" ? 2 : 1;
-  const contentW = maxW * pagesPerRow + ROW_GAP * (pagesPerRow - 1);
+  const docW = maxW * pagesPerRow + ROW_GAP * (pagesPerRow - 1);
 
-  const w = (availW ?? scrollContainer.clientWidth) - SIDE_MARGIN * 2;
-  const h = (availH ?? scrollContainer.clientHeight) - CONTENT_PADDING * 2;
-  if (w <= 0 || h <= 0) return currentZoom;
+  // 가용 뷰포트 (content-box). #scroll-container 의 padding 은 세로에만 있다 (12px 0).
+  const viewW = (availW ?? scrollContainer.clientWidth) - SIDE_MARGIN * 2;
+  const viewH = availH ?? scrollContainer.clientHeight - CONTENT_PADDING * 2;
+  if (viewW <= 0 || viewH <= 0) return currentZoom;
 
-  const fitW = w / contentW;
+  const fitW = viewW / docW;
   if (mode === "fitWidth") return clampZoom(fitW);
-  return clampZoom(Math.min(fitW, h / maxH));
+  return clampZoom(Math.min(fitW, viewH / maxH));
 }
 
 /**
@@ -313,6 +316,42 @@ function applyZoomMode(mode: ZoomMode, nextViewMode: "single" | "double", zoom?:
   if (layoutChanged) scrollToPage(keepPage);
   updateStatusBar();
 }
+
+// ── 뷰포트 크기 변화 대응 ──
+//
+// 창/에디터 패널 리사이즈, 사이드바 접기·펼치기로 뷰포트가 바뀌면 맞춤 배율을 다시 계산한다.
+// 수동 배율일 때는 크기 변화와 무관하게 고정한다.
+
+/** 새 배율이 현재와 이 비율 미만으로 다르면 무시한다. 스크롤바 출현으로 인한 진동 방지. */
+const FIT_HYSTERESIS = 0.01;
+
+let resizeRaf = 0;
+
+const zoomResizeObserver = new ResizeObserver((entries) => {
+  if (zoomMode === "manual" || pageInfos.length === 0) return;
+
+  // ResizeObserver 의 contentRect 는 스크롤바를 제외한 크기다.
+  // clientWidth 를 쓰면 배율↑ → 스크롤바 출현 → 폭↓ → 배율↓ 진동이 생길 수 있다.
+  const rect = entries[entries.length - 1].contentRect;
+  const availW = rect.width;
+  const availH = rect.height;
+
+  if (resizeRaf) cancelAnimationFrame(resizeRaf);
+  resizeRaf = requestAnimationFrame(() => {
+    resizeRaf = 0;
+    if (zoomMode === "manual") return;
+
+    const next = computeFitZoom(zoomMode, availW, availH);
+    if (Math.abs(next - currentZoom) / currentZoom < FIT_HYSTERESIS) return;
+
+    const keepPage = currentPage;
+    setZoom(next);
+    scrollToPage(keepPage);
+    updateStatusBar();
+  });
+});
+
+zoomResizeObserver.observe(scrollContainer);
 
 stbZoomOut.addEventListener("click", () => setManualZoom(currentZoom - ZOOM_STEP));
 stbZoomIn.addEventListener("click", () => setManualZoom(currentZoom + ZOOM_STEP));
