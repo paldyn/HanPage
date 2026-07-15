@@ -32,6 +32,24 @@ import {
   type SaveDocumentResult,
   type FileSystemWindowLike,
 } from '@/command/file-system-access';
+import { showToast } from '@/ui/toast';
+import { clearRecentDocs, listRecentDocs, removeRecentDoc } from '@/recent/recent-store';
+
+/** 최근 문서 핸들의 읽기 권한을 확인/요청한다. 최종 'granted' 여부 반환. */
+async function ensureReadPermission(handle: FileSystemFileHandleLike): Promise<boolean> {
+  try {
+    if (typeof handle.queryPermission === 'function') {
+      if ((await handle.queryPermission({ mode: 'read' })) === 'granted') return true;
+    }
+    if (typeof handle.requestPermission === 'function') {
+      return (await handle.requestPermission({ mode: 'read' })) === 'granted';
+    }
+    // 권한 API 미지원 브라우저 → getFile() 시도로 위임(여기선 통과).
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** [Task #833] 사용자 명시 cancel 에러 검출.
  * - AbortError: showSaveFilePicker / showOpenFilePicker 다이얼로그 취소
@@ -345,6 +363,54 @@ export const fileCommands: CommandDef[] = [
         console.error('[file:open] 열기 실패:', msg);
         alert(`파일 열기에 실패했습니다:\n${msg}`);
       }
+    },
+  },
+  {
+    // 최근 문서 재열기 — 저장된 핸들 권한 재확인 후 로드. params.id로 레코드 지정.
+    id: 'file:open-recent',
+    label: '최근 문서 열기',
+    async execute(services, params) {
+      const id = typeof params?.id === 'string' ? params.id : undefined;
+      if (!id) return;
+      try {
+        const recents = await listRecentDocs();
+        const entry = recents.find((r) => r.id === id);
+        if (!entry) {
+          showToast({ message: '최근 문서 정보를 찾을 수 없습니다.', durationMs: 2500 });
+          return;
+        }
+
+        if (!(await ensureReadPermission(entry.handle))) {
+          showToast({ message: '파일 접근 권한이 없어 열 수 없습니다.', durationMs: 3000 });
+          return;
+        }
+
+        const { bytes, name } = await readFileFromHandle(entry.handle);
+        services.eventBus.emit('open-document-bytes', {
+          bytes,
+          fileName: name,
+          fileHandle: entry.handle,
+        });
+      } catch (err) {
+        // 파일 이동/삭제 등으로 접근 실패 → 목록에서 제거.
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[file:open-recent] 재열기 실패:', msg);
+        await removeRecentDoc(id);
+        showToast({
+          message: '파일을 찾을 수 없어 최근 목록에서 제거했습니다.',
+          durationMs: 3500,
+        });
+      }
+    },
+  },
+  {
+    // 최근 문서 목록 전체 삭제.
+    id: 'file:clear-recent',
+    label: '최근 문서 목록 지우기',
+    async execute() {
+      if (!confirm('최근 문서 목록을 모두 지우시겠습니까?')) return;
+      await clearRecentDocs();
+      showToast({ message: '최근 문서 목록을 지웠습니다.', durationMs: 2200 });
     },
   },
   {
