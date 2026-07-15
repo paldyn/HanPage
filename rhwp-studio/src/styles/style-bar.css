@@ -37,8 +37,8 @@
 
 .sb-combo:focus { border-color: var(--color-focus-border); }
 
-#style-name { width: 60px; }
-.sb-font-lang { width: 44px; font-size: var(--font-size-sm); }
+#style-name { width: 78px; }
+.sb-font-lang { width: 58px; font-size: var(--font-size-sm); }
 .sb-font { width: 110px; }
 
 /* 한컴형 글꼴 범주 메뉴 */
@@ -440,7 +440,7 @@
 }
 
 .sb-ls-select {
-  width: 56px;
+  width: 70px;
   height: 22px;
   font-size: var(--font-size-sm);
   border: 1px solid var(--ui-border-light);
