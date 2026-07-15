@@ -40,7 +40,11 @@ pub fn draw_svg_fragment(
     height: f32,
     sampling: ImageSampling,
 ) -> bool {
-    let Some(png) = rasterize_svg_fragment_to_png(svg_fragment, width, height) else {
+    // [Issue #2292] RawSvg 조각은 페이지 절대 좌표로 방출된다(SVG 백엔드
+    // 직접 삽입·web_canvas 와 동일 계약). viewBox 원점에 조각의 페이지
+    // 위치(x, y)를 넘겨 bbox 창만 래스터한다 — (0,0) 가정 시 창 밖 콘텐츠
+    // 전부 클리핑 + bbox 재배치 이중 오프셋으로 차트가 잘렸다.
+    let Some(png) = rasterize_svg_fragment_to_png(svg_fragment, x, y, width, height) else {
         return false;
     };
     draw_image_bytes(
@@ -331,9 +335,17 @@ pub fn draw_image_bytes(
     canvas.restore();
 }
 
-fn rasterize_svg_fragment_to_png(svg_fragment: &str, width: f32, height: f32) -> Option<Vec<u8>> {
+fn rasterize_svg_fragment_to_png(
+    svg_fragment: &str,
+    src_x: f32,
+    src_y: f32,
+    width: f32,
+    height: f32,
+) -> Option<Vec<u8>> {
     if svg_fragment.is_empty()
         || svg_fragment.len() > MAX_SVG_FRAGMENT_BYTES
+        || !src_x.is_finite()
+        || !src_y.is_finite()
         || !width.is_finite()
         || !height.is_finite()
         || width <= 0.0
@@ -350,8 +362,10 @@ fn rasterize_svg_fragment_to_png(svg_fragment: &str, width: f32, height: f32) ->
         return None;
     }
 
+    // [Issue #2292] 조각은 페이지 절대 좌표 — viewBox 를 조각의 페이지 좌표
+    // 창(src_x, src_y 원점)으로 지정해 bbox 영역만 (0,0) 래스터로 사상한다.
     let svg = format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width:.2}\" height=\"{height:.2}\" viewBox=\"0 0 {width:.2} {height:.2}\">{svg_fragment}</svg>"
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width:.2}\" height=\"{height:.2}\" viewBox=\"{src_x:.2} {src_y:.2} {width:.2} {height:.2}\">{svg_fragment}</svg>"
     );
     let options = svg_parse_options();
     let tree = usvg::Tree::from_str(&svg, &options).ok()?;
