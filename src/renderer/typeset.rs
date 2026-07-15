@@ -13727,26 +13727,7 @@ impl TypesetEngine {
                         (b_start..b_end).map(|x| cut_row_h[x]).sum::<f64>()
                             + cs * block_size.saturating_sub(1) as f64
                     } else if rowbreak_use_row_offsets {
-                        // [#2287] 연속분(start_cut)의 per-row 합산은 row_span==1
-                        // 셀만 집계해, 걸친 rowspan 셀의 잔여 유닛이 0 으로
-                        // 평가된다 — 블록이 즉시 "fits" 로 종료되어 선언 잔여가
-                        // 통째로 증발(교육부 연결맵 47×9: 잔여 1904px → 표마다
-                        // 누적, 표 밀집 문서 -40~-64쪽 + 렌더 y=3026 오버플로).
-                        // 콘텐츠 잔여(rowspan 셀 포함)와 max 로 하한을 잡는다.
-                        // start_cut 없는 첫 조각(#1486 경로)은 불변.
-                        let frag_h = block_fragment_height(b_end, blk_start_cut, &[]);
-                        if blk_start_cut.is_empty() {
-                            frag_h
-                        } else {
-                            frag_h.max(layout_engine.row_block_content_height(
-                                table,
-                                b_start,
-                                b_end,
-                                blk_start_cut,
-                                &[],
-                                styles,
-                            ))
-                        }
+                        block_fragment_height(b_end, blk_start_cut, &[])
                     } else {
                         layout_engine.row_block_content_height(
                             table,
@@ -13895,22 +13876,7 @@ impl TypesetEngine {
                     split_end_limit = cut_res.consumed_height;
                     split_block_start = Some(b_start);
                     let split_total = if use_offsets {
-                        // [#2287] 위 block_h 와 동일 — 연속분에서 rowspan 셀의
-                        // 가시 밴드가 row_span==1 필터로 0 평가되는 붕괴 방지.
-                        let frag_total =
-                            block_fragment_height(end_row, blk_start_cut, &cut_res.end_cut);
-                        if blk_start_cut.is_empty() {
-                            frag_total
-                        } else {
-                            frag_total.max(layout_engine.row_block_content_height(
-                                table,
-                                b_start,
-                                b_end,
-                                blk_start_cut,
-                                &cut_res.end_cut,
-                                styles,
-                            ))
-                        }
+                        block_fragment_height(end_row, blk_start_cut, &cut_res.end_cut)
                     } else {
                         layout_engine.row_block_content_height(
                             table,
