@@ -2194,73 +2194,18 @@ impl LayoutEngine {
         styles: &ResolvedStyleSet,
         preserve_cell_padding: bool,
     ) -> (f64, f64) {
-        if preserve_cell_padding {
-            return (pad_left, pad_right);
-        }
-
-        // [Task #617] 다중 줄(2 줄 이상) 단락이 line_segs 로 분배 완료된 경우,
-        // HWP 가 가용 폭에 맞춰 자간을 분배하고 줄바꿈을 확정한 상태이므로
-        // 자연 폭 추정으로 다시 깎으면 오버 페인팅. 단일 줄 셀(좁은 수치 셀
-        // 등에서 오버플로우 가능성 있음) 은 종전 휴리스틱으로 보호한다.
-        let any_multiline_distributed = paragraphs.iter().any(|p| p.line_segs.len() >= 2);
-        if any_multiline_distributed {
-            return (pad_left, pad_right);
-        }
-
-        let mut max_line_w = 0.0f64;
-        for comp in composed_paras {
-            for line in &comp.lines {
-                let mut w = 0.0;
-                for run in &line.runs {
-                    let mut ts = resolved_to_text_style(styles, run.char_style_id, run.lang_index);
-                    if run.char_overlap.is_some() {
-                        let fs = if ts.font_size > 0.0 {
-                            ts.font_size
-                        } else {
-                            12.0
-                        };
-                        let chars: Vec<char> = run.text.chars().collect();
-                        w += fs
-                            * crate::renderer::composer::char_overlap_advance_units(&chars) as f64;
-                        continue;
-                    }
-                    // 자연 폭 측정: 음수 자간을 제거하여 글리프가 서로 겹치지 않는 최소 폭을 얻음
-                    if ts.letter_spacing < 0.0 {
-                        ts.letter_spacing = 0.0;
-                    }
-                    // [Task #555] PUA 옛한글 변환 후 자모 시퀀스 폭 사용.
-                    // (estimate_text_width 는 ts.ratio 를 자체 반영함.)
-                    w += estimate_text_width(effective_text_for_metrics(run), &ts);
-                }
-                if w > max_line_w {
-                    max_line_w = w;
-                }
-            }
-        }
-        let available = (cell_w - pad_left - pad_right).max(0.0);
-        // Task #347: estimate_text_width는 영어 본문(Times New Roman 등) 자연 폭을
-        // 5~15%까지 과대 추정할 수 있어, HWP가 이미 줄바꿈한 본문에서도
-        // padding 축소가 잘못 트리거됨. 15% 이내 초과는 정상으로 보고 미축소.
-        let overflow_threshold = available * 1.15;
-        if max_line_w <= overflow_threshold || cell_w <= 2.0 {
-            return (pad_left, pad_right);
-        }
-        let min_pad = 1.0;
-        let total_pad = pad_left + pad_right;
-        let max_reducible = (total_pad - 2.0 * min_pad).max(0.0);
-        if max_reducible <= 0.0 {
-            return (pad_left, pad_right);
-        }
-        let deficit = max_line_w - available;
-        let reduction = deficit.min(max_reducible);
-        let new_total = total_pad - reduction;
-        let new_left = if total_pad > 0.0 {
-            pad_left * new_total / total_pad
-        } else {
-            new_total / 2.0
-        };
-        let new_right = new_total - new_left;
-        (new_left, new_right)
+        // [#2279 axis B] 규칙 본체는 composer::shrunk_cell_horizontal_padding 로 이동 —
+        // cut(cell_units)/mt(HeightMeasurer) 측정과 단일 출처 공유 (규칙이 갈리면
+        // 측정 줄수와 실제 렌더 줄수가 어긋난다).
+        crate::renderer::composer::shrunk_cell_horizontal_padding(
+            pad_left,
+            pad_right,
+            cell_w,
+            composed_paras,
+            paragraphs,
+            styles,
+            preserve_cell_padding,
+        )
     }
 
     /// 셀 배경 렌더링 (fill_color + pattern + gradient)

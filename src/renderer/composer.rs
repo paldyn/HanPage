@@ -1561,6 +1561,104 @@ pub fn recompose_for_cell_width(
             }
         }
     }
+    // [#2279 진단] 측정/렌더 경로별 재래핑 폭·줄수 대조 — 동작 불변.
+    if let Ok(pat) = std::env::var("RHWP_DIAG_RECOMP") {
+        if para.text.contains(&pat) {
+            eprintln!(
+                "DIAG_RECOMP width={:.2} first={:.2} cont={:.2} lines={} text={:?}",
+                cell_inner_width_px,
+                first_width_px,
+                cont_width_px,
+                composed.lines.len(),
+                para.text.chars().take(20).collect::<String>(),
+            );
+        }
+    }
+}
+
+/// [#2279 axis B] 셀 텍스트 오버플로 시 좌우 패딩 축소 — 렌더/측정 공용 코어.
+///
+/// 렌더(`layout_table_cells`)는 단일줄 오버플로 셀의 좌우 패딩을 축소한 뒤
+/// `recompose_for_cell_width` 로 재래핑한다. 측정(cut `cell_units` / mt
+/// `HeightMeasurer`)이 원 패딩 폭(더 좁음)으로 래핑하면 같은 문단이
+/// 렌더 4줄/측정 5줄로 갈라져 행높이가 과대해진다 (86712 pi=172 산식 셀
+/// 106.5px vs 한글 86.3px, #2237 axis B). 규칙 본체를 단일 출처로 공유한다.
+/// 의미는 종전 `LayoutEngine::shrink_cell_padding_for_overflow` 와 동일.
+pub(crate) fn shrunk_cell_horizontal_padding(
+    pad_left: f64,
+    pad_right: f64,
+    cell_w: f64,
+    composed_paras: &[ComposedParagraph],
+    paragraphs: &[Paragraph],
+    styles: &ResolvedStyleSet,
+    preserve_cell_padding: bool,
+) -> (f64, f64) {
+    if preserve_cell_padding {
+        return (pad_left, pad_right);
+    }
+
+    // [Task #617] 다중 줄(2 줄 이상) 단락이 line_segs 로 분배 완료된 경우,
+    // HWP 가 가용 폭에 맞춰 자간을 분배하고 줄바꿈을 확정한 상태이므로
+    // 자연 폭 추정으로 다시 깎으면 오버 페인팅. 단일 줄 셀(좁은 수치 셀
+    // 등에서 오버플로우 가능성 있음) 은 종전 휴리스틱으로 보호한다.
+    let any_multiline_distributed = paragraphs.iter().any(|p| p.line_segs.len() >= 2);
+    if any_multiline_distributed {
+        return (pad_left, pad_right);
+    }
+
+    let mut max_line_w = 0.0f64;
+    for comp in composed_paras {
+        for line in &comp.lines {
+            let mut w = 0.0;
+            for run in &line.runs {
+                let mut ts = resolved_to_text_style(styles, run.char_style_id, run.lang_index);
+                if run.char_overlap.is_some() {
+                    let fs = if ts.font_size > 0.0 {
+                        ts.font_size
+                    } else {
+                        12.0
+                    };
+                    let chars: Vec<char> = run.text.chars().collect();
+                    w += fs * char_overlap_advance_units(&chars) as f64;
+                    continue;
+                }
+                // 자연 폭 측정: 음수 자간을 제거하여 글리프가 서로 겹치지 않는 최소 폭을 얻음
+                if ts.letter_spacing < 0.0 {
+                    ts.letter_spacing = 0.0;
+                }
+                // [Task #555] PUA 옛한글 변환 후 자모 시퀀스 폭 사용.
+                // (estimate_text_width 는 ts.ratio 를 자체 반영함.)
+                w += estimate_text_width(effective_text_for_metrics(run), &ts);
+            }
+            if w > max_line_w {
+                max_line_w = w;
+            }
+        }
+    }
+    let available = (cell_w - pad_left - pad_right).max(0.0);
+    // Task #347: estimate_text_width는 영어 본문(Times New Roman 등) 자연 폭을
+    // 5~15%까지 과대 추정할 수 있어, HWP가 이미 줄바꿈한 본문에서도
+    // padding 축소가 잘못 트리거됨. 15% 이내 초과는 정상으로 보고 미축소.
+    let overflow_threshold = available * 1.15;
+    if max_line_w <= overflow_threshold || cell_w <= 2.0 {
+        return (pad_left, pad_right);
+    }
+    let min_pad = 1.0;
+    let total_pad = pad_left + pad_right;
+    let max_reducible = (total_pad - 2.0 * min_pad).max(0.0);
+    if max_reducible <= 0.0 {
+        return (pad_left, pad_right);
+    }
+    let deficit = max_line_w - available;
+    let reduction = deficit.min(max_reducible);
+    let new_total = total_pad - reduction;
+    let new_left = if total_pad > 0.0 {
+        pad_left * new_total / total_pad
+    } else {
+        new_total / 2.0
+    };
+    let new_right = new_total - new_left;
+    (new_left, new_right)
 }
 
 fn is_hwp3_hwp5_missing_lineseg_legacy_bullet(

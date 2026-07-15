@@ -14499,6 +14499,25 @@ impl TypesetEngine {
                 // 같은 문서를 1쪽/2쪽으로 다르게 레이아웃(PDF 포함) — 권위 판정은
                 // warm PDF 로 통일(#2138 stage1).
                 let uncertain_anchor_margin = if anchor_vpos <= 0 { 62.0 } else { 0.0 };
+                // [#2279 진단] footer 흡수/분할 판정 변수 분해 — 동작 불변.
+                if std::env::var("RHWP_DIAG_SCAN").is_ok() {
+                    eprintln!(
+                        "DIAG_SCAN FOOTER pi={} anchor_vpos={} cur_h={:.2} target_y={:.2} sync_h={:.2} \
+                         block_h={:.2} v_off={:.2} avail={:.2} avail_after={:.2} slack_code={:.2} margin={:.1} consumed={:.2}",
+                        para_idx,
+                        anchor_vpos,
+                        st.current_height,
+                        target_y,
+                        sync_h,
+                        block_height,
+                        v_off,
+                        available,
+                        avail_after,
+                        avail_after - sync_h,
+                        uncertain_anchor_margin,
+                        st.bottom_fixed_consumed_flow,
+                    );
+                }
                 if sync_h + uncertain_anchor_margin <= avail_after {
                     // 현재 쪽 하단에 배치 — 본문 흐름은 vpos 동기 위치까지만 전진.
                     st.current_height = sync_h;
