@@ -1,8 +1,8 @@
 # Task M100 #2125 GitHub 게시 초안
 
-- 작성일: 2026-07-13
-- 상태: 게시 전 작업지시자 승인 대기
-- 원칙: 이 문서는 local draft다. 승인 전 push, PR/issue 생성, comment, issue body 편집을 수행하지 않는다.
+- 작성일: 2026-07-13, 최신 통합 갱신 2026-07-15
+- 상태: PR #2254 Ready, 최신 `devel` 로컬 통합·재검증 완료, commit/push 및 GitHub 갱신 승인 대기
+- 원칙: 이 문서는 local draft다. 승인 전 commit/push, PR/issue comment와 body 편집을 수행하지 않는다.
 
 ## 1. 권장 게시 순서
 
@@ -18,6 +18,9 @@
 10. 작업지시자 승인 후 #2125 close
 11. #2022 Phase A 체크와 다음 Phase B 재평가 상태 갱신
 12. 별도 승인 후 legacy `/web`, Safari build reliability 후속 이슈 생성
+
+PR #2254가 이미 생성된 현재는 1~6을 완료했다. 아래 10절의 최신 `devel` 통합 결과를 PR 본문에
+반영하고 진행 코멘트로 게시한 뒤 CI와 review를 다시 받는다.
 
 ## 2. PR 제목 초안
 
@@ -90,9 +93,10 @@ build/install은 release gate로 유지하고, 이 PR의 source compile과 resou
 maintainer의 최신 복잡도 교훈을 반영해 Max CC뿐 아니라 Total CC, Top 20 합, CC>25 합·개수,
 CC>100 합·개수와 stable function diff를 함께 비교했습니다.
 
-동일 `upstream/devel@e750e02f` 대비 #2125의 reported functions, Total CC, Top 20, CC>25,
-CC>100, Max CC와 stable function diff는 모두 0-delta입니다. #2124 공식 snapshot 대비 누적 변화는 이후
-upstream 전체 변경에서 발생했으며 이 PR에 귀속하지 않았고, 공식 snapshot artifact도 변경하지 않았습니다.
+최초 `upstream/devel@e750e02f`, 최신 통합 `upstream/devel@37f5d64d` 대비 #2125의 reported functions,
+Total CC, Top 20, CC>25, CC>100, Max CC와 stable function diff는 모두 0-delta입니다. #2124 공식
+snapshot 대비 누적 변화는 이후 upstream 전체 변경에서 발생했으며 이 PR에 귀속하지 않았고, 공식
+snapshot artifact도 변경하지 않았습니다.
 
 ## 최근 upstream font 작업
 
@@ -321,7 +325,72 @@ font canonical path 변경과 무관한 기존 build reliability 결함이므로
 - CI 또는 재현 가능한 local test 근거 기록
 ```
 
-## 11. 게시 전 치환 항목
+## 11. PR #2254 최신 devel 통합 갱신 초안
+
+### 11.1 PR 본문 변경 초안
+
+기존 `## 검증` 목록의 Studio 항목은 다음처럼 갱신한다.
+
+```md
+- Studio: 최초 unit 230 PASS, 최신 `devel@37f5d64d` 통합 270 PASS, production build, CanvasKit font coverage, browser flow PASS
+```
+
+기존 `## Metrics`의 동일 upstream 문단은 다음으로 교체한다.
+
+```md
+최초 `upstream/devel@e750e02f`와 최신 통합 `upstream/devel@37f5d64d` 각각에 대해 #2125의
+reported functions, Total CC, Top 20, CC>25, CC>100, Max CC와 stable function diff는 모두
+0-delta입니다. 최신 기준선과 merge 결과는 동일 metrics script·package lock으로 비교했습니다.
+#2124 공식 snapshot 대비 functions +131, Total CC +463 등 누적 변화는 이후 upstream 전체 변경에서
+발생했으며 이 PR에 귀속하지 않았고, 공식 snapshot artifact도 변경하지 않았습니다.
+```
+
+`## 최근 upstream font 작업` 뒤에 다음 절을 추가한다.
+
+```md
+## 최신 devel 통합 검증
+
+`upstream/devel@37f5d64d`를 로컬 merge했습니다. 충돌은 `mydocs/orders/20260713.md` 1건뿐이었고,
+#2125 진행 상태와 upstream의 #2253/#2195 기록을 함께 보존했습니다. 제품 코드와 font binary 충돌은
+없었습니다.
+
+- fresh Docker WASM release + `wasm-opt`: PASS
+- WASM binding/editor embed 3, `@rhwp/editor` 15, service worker 88, Studio unit 270 PASS
+- Studio production build, Chrome/Firefox build, VS Code compile: PASS
+- browser text flow와 embed transport E2E: PASS
+- Chrome/Firefox/Safari font 36개, VS Code 11개 exact parity: PASS
+- unsigned Xcode build와 최종 `.appex` font 36개 parity: PASS
+- 최신 기준선 대비 frontend complexity 전 항목 및 stable function diff: 0-delta
+
+fresh `rhwp_bg.wasm`은 6,842,044 bytes이며 SHA-256은
+`b23ac7491ba71a8f994b6834a23c4c284c7b193c5034c1fa5a1f917a831bc9f4`입니다. signed Safari build는
+로컬 team certificate 부재로 기존 release gate에 남깁니다.
+```
+
+### 11.2 PR 진행 코멘트 초안
+
+```md
+## 최신 devel 통합 및 재검증 완료
+
+`upstream/devel@37f5d64d`를 로컬 merge하고 전체 frontend/font gate를 다시 실행했습니다.
+
+| 항목 | 결과 |
+|------|------|
+| conflict | `mydocs/orders/20260713.md` 1건 해소, 양쪽 진행 기록 보존 |
+| fresh WASM | release + `wasm-opt` PASS, 6,842,044 bytes |
+| package tests | binding/embed 3, editor 15, service worker 88, Studio 270 PASS |
+| builds | Studio, Chrome, Firefox, VS Code PASS |
+| browser E2E | text flow와 embed transport PASS |
+| font parity | Chrome/Firefox/Safari 36개, VS Code 11개 PASS |
+| Safari | unsigned Xcode build와 최종 `.appex` 36개 parity PASS |
+| metrics | 최신 기준선 대비 Total CC, Top 20, CC>25/100, Max, stable function diff 전부 0-delta |
+
+동일 metrics script·lockfile을 사용했고, #2124 공식 snapshot 이후 누적 변화(functions +131,
+Total CC +463)는 최신 upstream 변경으로 분리했습니다. merge commit과 검증 문서를 push한 뒤 CI 결과를
+다시 확인하겠습니다.
+```
+
+## 12. 게시 전 치환 항목
 
 - `#PR_NUMBER`: 생성된 PR 번호
 - `MERGE_SHA`: 실제 merge commit
