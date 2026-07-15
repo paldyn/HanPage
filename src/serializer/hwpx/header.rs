@@ -1546,7 +1546,7 @@ mod tests {
         let mut doc = Document::default();
         doc.bin_data_content.push(BinDataContent {
             id: 2,
-            data: vec![0, 1, 2],
+            data: vec![0, 1, 2].into(),
             extension: "ttf".to_string(),
         });
         doc.doc_info.font_faces = vec![Vec::new(); 7];

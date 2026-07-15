@@ -466,52 +466,53 @@ impl DocumentCore {
             clip_enabled: self.clip_enabled,
             debug_overlay: self.debug_overlay,
         };
-        let resolve_embedded_font = |id: Option<u16>| {
-            let id = id?;
-            self.document
-                .bin_data_content
-                .iter()
-                .find(|content| content.id == id && !content.data.is_empty())
-                .map(|content| content.data.as_slice())
-        };
-        let resolved_font_faces = self
-            .document
-            .doc_info
-            .font_faces
-            .iter()
-            .map(|fonts| {
-                fonts
+        self.with_page_tree_cached(page_num, |tree| {
+            let mut used_font_slots = Vec::new();
+            let mut nodes = vec![&tree.root];
+            while let Some(node) = nodes.pop() {
+                if !node.visible {
+                    continue;
+                }
+                nodes.extend(node.children.iter());
+                let crate::renderer::render_tree::RenderNodeType::TextRun(run) = &node.node_type
+                else {
+                    continue;
+                };
+                let mut characters = run.text.chars();
+                let (Some(character), None, Some(char_shape_id)) =
+                    (characters.next(), characters.next(), run.char_shape_id)
+                else {
+                    continue;
+                };
+                let language_index =
+                    crate::renderer::style_resolver::detect_lang_category(character);
+                let slot = (char_shape_id, language_index);
+                if !used_font_slots.contains(&slot) {
+                    used_font_slots.push(slot);
+                }
+            }
+
+            let load_font_bytes = |id: u16| {
+                self.document
+                    .bin_data_content
                     .iter()
-                    .map(|font| {
-                        let primary = font
-                            .is_embedded
-                            .then(|| resolve_embedded_font(font.resolved_bin_data_id))
-                            .flatten()
-                            .and_then(|bytes| {
-                                resolve_embedded_font_face_index(bytes, &font.name, None)
-                                    .map(|face_index| (bytes, None, face_index))
-                            });
-                        let substitute = font
-                            .subst_font
-                            .as_ref()
-                            .filter(|substitute| substitute.is_embedded)
-                            .and_then(|substitute| {
-                                let bytes = resolve_embedded_font(substitute.resolved_bin_data_id)?;
-                                let face_index = resolve_embedded_font_face_index(
-                                    bytes,
-                                    substitute.face.as_str(),
-                                    None,
-                                )?;
-                                Some((bytes, Some(substitute.face.as_str()), face_index))
-                            });
-                        primary.or(substitute)
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-        let mut embedded_fonts = Vec::new();
-        for (char_shape_id, char_shape) in self.document.doc_info.char_shapes.iter().enumerate() {
-            for (language_index, font_id) in char_shape.font_ids.iter().copied().enumerate() {
+                    .find(|content| content.id == id)
+                    .map(|content| content.data.load())
+                    .unwrap_or_default()
+            };
+            let mut font_bytes_by_id = std::collections::HashMap::<u16, Vec<u8>>::new();
+            let mut resolved_fonts = Vec::new();
+            for (char_shape_id, language_index) in used_font_slots {
+                let Some(font_id) = self
+                    .document
+                    .doc_info
+                    .char_shapes
+                    .get(char_shape_id as usize)
+                    .and_then(|shape| shape.font_ids.get(language_index))
+                    .copied()
+                else {
+                    continue;
+                };
                 let Some(font) = self
                     .document
                     .doc_info
@@ -521,24 +522,75 @@ impl DocumentCore {
                 else {
                     continue;
                 };
-                let Some((bytes, alternate_family, face_index)) = resolved_font_faces
-                    .get(language_index)
-                    .and_then(|fonts| fonts.get(font_id as usize))
-                    .and_then(|resolved| *resolved)
-                else {
-                    continue;
-                };
-                embedded_fonts.push(EmbeddedFontFace {
-                    char_shape_id: char_shape_id as u32,
-                    language_index,
-                    family: font.name.as_str(),
-                    alternate_family,
-                    bytes,
-                    face_index,
-                });
+
+                let mut resolved = None;
+                if font.is_embedded {
+                    if let Some(bin_data_id) = font.resolved_bin_data_id {
+                        let bytes = font_bytes_by_id
+                            .entry(bin_data_id)
+                            .or_insert_with(|| load_font_bytes(bin_data_id));
+                        if !bytes.is_empty() {
+                            resolved = resolve_embedded_font_face_index(bytes, &font.name, None)
+                                .map(|face_index| (bin_data_id, None, face_index));
+                        }
+                    }
+                }
+                if resolved.is_none() {
+                    if let Some(substitute) = font
+                        .subst_font
+                        .as_ref()
+                        .filter(|substitute| substitute.is_embedded)
+                    {
+                        if let Some(bin_data_id) = substitute.resolved_bin_data_id {
+                            let bytes = font_bytes_by_id
+                                .entry(bin_data_id)
+                                .or_insert_with(|| load_font_bytes(bin_data_id));
+                            if !bytes.is_empty() {
+                                resolved = resolve_embedded_font_face_index(
+                                    bytes,
+                                    substitute.face.as_str(),
+                                    None,
+                                )
+                                .map(|face_index| {
+                                    (bin_data_id, Some(substitute.face.as_str()), face_index)
+                                });
+                            }
+                        }
+                    }
+                }
+                if let Some((bin_data_id, alternate_family, face_index)) = resolved {
+                    resolved_fonts.push((
+                        char_shape_id,
+                        language_index,
+                        font.name.as_str(),
+                        alternate_family,
+                        bin_data_id,
+                        face_index,
+                    ));
+                }
             }
-        }
-        self.with_page_tree_cached(page_num, |tree| {
+            let embedded_fonts = resolved_fonts
+                .iter()
+                .filter_map(
+                    |&(
+                        char_shape_id,
+                        language_index,
+                        family,
+                        alternate_family,
+                        bin_data_id,
+                        face_index,
+                    )| {
+                        Some(EmbeddedFontFace {
+                            char_shape_id,
+                            language_index,
+                            family,
+                            alternate_family,
+                            bytes: font_bytes_by_id.get(&bin_data_id)?.as_slice(),
+                            face_index,
+                        })
+                    },
+                )
+                .collect::<Vec<_>>();
             let mut builder = LayerBuilder::new(profile).with_output_options(output_options);
             Ok(builder.build_with_embedded_fonts(tree, &embedded_fonts))
         })
@@ -4992,6 +5044,7 @@ mod tests {
 
     #[test]
     fn normal_page_layer_export_selects_verified_embedded_bitmap_glyph_sidecar() {
+        use crate::model::bin_data::{BinDataBytes, BinDataResolver};
         use crate::model::document::{Document, Section, SectionDef};
         use crate::model::page::PageDef;
         use crate::model::paragraph::{CharShapeRef, LineSeg, Paragraph};
@@ -4999,6 +5052,15 @@ mod tests {
         use crate::renderer::canvaskit_policy::{
             analyze_canvaskit_replay_plan, CanvasKitReplayMode,
         };
+
+        #[derive(Debug)]
+        struct UnexpectedFontResolver;
+
+        impl BinDataResolver for UnexpectedFontResolver {
+            fn resolve(&self, key: &str) -> Vec<u8> {
+                panic!("unused embedded font must remain lazy: {key}")
+            }
+        }
 
         let mut document = Document::default();
         document.doc_info.font_faces = vec![Vec::new(); 7];
@@ -5008,6 +5070,14 @@ mod tests {
             is_embedded: true,
             bin_item_id_ref: "font-smoke".to_string(),
             resolved_bin_data_id: Some(1),
+            ..Default::default()
+        });
+        document.doc_info.font_faces[0].push(Font {
+            name: "Unused embedded font".to_string(),
+            alt_type: 1,
+            is_embedded: true,
+            bin_item_id_ref: "font-unused".to_string(),
+            resolved_bin_data_id: Some(2),
             ..Default::default()
         });
         document.doc_info.char_shapes.push(CharShape {
@@ -5022,7 +5092,16 @@ mod tests {
         document.bin_data_content.push(BinDataContent {
             id: 1,
             data: include_bytes!("../../../tests/fixtures/fonts/RHWPBitmapSvgGlyphSmoke.ttf")
-                .to_vec(),
+                .to_vec()
+                .into(),
+            extension: "ttf".to_string(),
+        });
+        document.bin_data_content.push(BinDataContent {
+            id: 2,
+            data: BinDataBytes::Lazy {
+                resolver: std::sync::Arc::new(UnexpectedFontResolver),
+                key: "font-unused".to_string(),
+            },
             extension: "ttf".to_string(),
         });
         document.sections.push(Section {
