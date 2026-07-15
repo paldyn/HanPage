@@ -919,15 +919,9 @@ async function loadBytes(
   await updateLoadProgress(45, '자동 저장 준비 중...');
   forgetConvertedHmlSaveHandle(fileHandle);
   wasm.currentFileHandle = fileHandle;
-  await autosaveManager.beginDocument(
-    { fileName: wasm.fileName, sourceFormat: wasm.getSourceFormat() },
-    { discardPreviousDraft: true },
-  );
-  await updateLoadProgress(50, '문서 초기화 중...');
-  const elapsed = performance.now() - startTime;
-  await initializeDocument(docInfo, `${fileName} — ${docInfo.pageCount}페이지 (${elapsed.toFixed(1)}ms)`);
 
-  // 최근 문서 기록 — 재열기용 핸들이 있을 때만(드롭/input/복구는 핸들 없음 → 제외).
+  // 최근 문서 기록 — 문서 로드 성공 직후, 폰트/모달 등 블로킹 UI 단계 이전에 기록한다.
+  // 재열기용 핸들이 있을 때만(드롭/input/복구는 핸들 없음 → 제외).
   if (fileHandle) {
     void addRecentDoc({
       fileName: wasm.fileName,
@@ -935,6 +929,14 @@ async function loadBytes(
       handle: fileHandle,
     }).catch((err) => console.warn('[recent] 최근 문서 기록 실패:', err));
   }
+
+  await autosaveManager.beginDocument(
+    { fileName: wasm.fileName, sourceFormat: wasm.getSourceFormat() },
+    { discardPreviousDraft: true },
+  );
+  await updateLoadProgress(50, '문서 초기화 중...');
+  const elapsed = performance.now() - startTime;
+  await initializeDocument(docInfo, `${fileName} — ${docInfo.pageCount}페이지 (${elapsed.toFixed(1)}ms)`);
 }
 
 /** 파일 메뉴 "최근 문서" 서브패널을 최신 목록으로 다시 렌더한다(메뉴 open 시 호출). */
