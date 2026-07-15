@@ -404,6 +404,11 @@ struct TypesetState {
     /// [Task #1082] 현재 단에서 마지막으로 배치된 본문 FullParagraph 의 bottom vpos (HU,
     /// 섹션 절대값). 미주 vpos-delta 누적의 첫 항목 base 시드용. 단 advance 시 None.
     prev_body_bottom_vpos: Option<i32>,
+    /// [#2279] 현재 단의 flow 과소 누계 (px) — 문단 place 시 flow_advance_height 가
+    /// spacing_after/trailing ls 를 트림한 차액(total_height − advance)의 합.
+    /// 렌더러(layout)와 한글은 이 성분을 가산하므로, footer(발신명의) fit 판정의
+    /// 렌더-정합 좌표 복원용. 단 advance 시 0.
+    flow_underrun: f64,
     /// 현재 단 인덱스
     current_column: u16,
     /// 단 수
@@ -1722,6 +1727,7 @@ impl TypesetState {
             current_start_height: 0.0,
             current_endnote_flow: false,
             prev_body_bottom_vpos: None,
+            flow_underrun: 0.0,
             current_column: 0,
             col_count,
             layout,
@@ -1891,6 +1897,8 @@ impl TypesetState {
         }
         // [Task #1082] 단 flush 시 본문 last bottom vpos 리셋(미주 vpos-delta 시드 정합).
         self.prev_body_bottom_vpos = None;
+        // [#2279] flow 과소 누계도 단 단위 — 리셋.
+        self.flow_underrun = 0.0;
     }
 
     /// [Task #1745] 흡수된 어울림 문단 기록 — 다쪽 분할 표는 첫 fragment column 에 소급.
@@ -11472,8 +11480,9 @@ impl TypesetEngine {
             //   - 다단 (col_count > 1): height_for_fit (exam_eng 8p 정상 단 채움 복원)
             // 다단에서는 layout 이 vpos 기반으로 항목을 단별로 stacking 하므로
             // typeset 누적 시 trailing_ls 인플레이션이 단을 조기 종료시킴.
-            st.current_height +=
-                fmt.flow_advance_height(para, st.col_count, trim_spacing_before_for_flow);
+            let advance = fmt.flow_advance_height(para, st.col_count, trim_spacing_before_for_flow);
+            st.current_height += advance;
+            st.flow_underrun += (fmt.total_height - advance).max(0.0);
             if let Some(v) = body_bottom_vpos {
                 st.prev_body_bottom_vpos = Some(v);
             }
@@ -11520,8 +11529,10 @@ impl TypesetEngine {
                 st.current_items.push(PageItem::FullParagraph {
                     para_index: para_idx,
                 });
-                st.current_height +=
+                let advance =
                     fmt.flow_advance_height(para, st.col_count, trim_spacing_before_for_flow);
+                st.current_height += advance;
+                st.flow_underrun += (fmt.total_height - advance).max(0.0);
                 if let Some(v) = body_bottom_vpos {
                     st.prev_body_bottom_vpos = Some(v);
                 }
@@ -11628,8 +11639,9 @@ impl TypesetEngine {
             //   - 다단 (col_count > 1): height_for_fit (exam_eng 8p 정상 단 채움 복원)
             // 다단에서는 layout 이 vpos 기반으로 항목을 단별로 stacking 하므로
             // typeset 누적 시 trailing_ls 인플레이션이 단을 조기 종료시킴.
-            st.current_height +=
-                fmt.flow_advance_height(para, st.col_count, trim_spacing_before_for_flow);
+            let advance = fmt.flow_advance_height(para, st.col_count, trim_spacing_before_for_flow);
+            st.current_height += advance;
+            st.flow_underrun += (fmt.total_height - advance).max(0.0);
             if let Some(v) = body_bottom_vpos {
                 st.prev_body_bottom_vpos = Some(v);
             }
@@ -13664,7 +13676,26 @@ impl TypesetEngine {
                         (b_start..b_end).map(|x| cut_row_h[x]).sum::<f64>()
                             + cs * block_size.saturating_sub(1) as f64
                     } else if rowbreak_use_row_offsets {
-                        block_fragment_height(b_end, blk_start_cut, &[])
+                        // [#2287] 연속분(start_cut)의 per-row 합산은 row_span==1
+                        // 셀만 집계해, 걸친 rowspan 셀의 잔여 유닛이 0 으로
+                        // 평가된다 — 블록이 즉시 "fits" 로 종료되어 선언 잔여가
+                        // 통째로 증발(교육부 연결맵 47×9: 잔여 1904px → 표마다
+                        // 누적, 표 밀집 문서 -40~-64쪽 + 렌더 y=3026 오버플로).
+                        // 콘텐츠 잔여(rowspan 셀 포함)와 max 로 하한을 잡는다.
+                        // start_cut 없는 첫 조각(#1486 경로)은 불변.
+                        let frag_h = block_fragment_height(b_end, blk_start_cut, &[]);
+                        if blk_start_cut.is_empty() {
+                            frag_h
+                        } else {
+                            frag_h.max(layout_engine.row_block_content_height(
+                                table,
+                                b_start,
+                                b_end,
+                                blk_start_cut,
+                                &[],
+                                styles,
+                            ))
+                        }
                     } else {
                         layout_engine.row_block_content_height(
                             table,
@@ -13813,7 +13844,22 @@ impl TypesetEngine {
                     split_end_limit = cut_res.consumed_height;
                     split_block_start = Some(b_start);
                     let split_total = if use_offsets {
-                        block_fragment_height(end_row, blk_start_cut, &cut_res.end_cut)
+                        // [#2287] 위 block_h 와 동일 — 연속분에서 rowspan 셀의
+                        // 가시 밴드가 row_span==1 필터로 0 평가되는 붕괴 방지.
+                        let frag_total =
+                            block_fragment_height(end_row, blk_start_cut, &cut_res.end_cut);
+                        if blk_start_cut.is_empty() {
+                            frag_total
+                        } else {
+                            frag_total.max(layout_engine.row_block_content_height(
+                                table,
+                                b_start,
+                                b_end,
+                                blk_start_cut,
+                                &cut_res.end_cut,
+                                styles,
+                            ))
+                        }
                     } else {
                         layout_engine.row_block_content_height(
                             table,
@@ -14502,10 +14548,12 @@ impl TypesetEngine {
                 // warm PDF 로 통일(#2138 stage1).
                 let uncertain_anchor_margin = if anchor_vpos <= 0 { 62.0 } else { 0.0 };
                 // [#2279 진단] footer 흡수/분할 판정 변수 분해 — 동작 불변.
+                // underrun = 이 단의 문단 place 가 트림한 (total_height − advance) 누계
+                // (렌더/한글 좌표와의 발산 중 문단-sa 성분; 표 place 성분은 미포함).
                 if std::env::var("RHWP_DIAG_SCAN").is_ok() {
                     eprintln!(
                         "DIAG_SCAN FOOTER pi={} anchor_vpos={} cur_h={:.2} target_y={:.2} sync_h={:.2} \
-                         block_h={:.2} v_off={:.2} avail={:.2} avail_after={:.2} slack_code={:.2} margin={:.1} consumed={:.2}",
+                         block_h={:.2} v_off={:.2} avail={:.2} avail_after={:.2} slack_code={:.2} margin={:.1} underrun={:.2}",
                         para_idx,
                         anchor_vpos,
                         st.current_height,
@@ -14517,7 +14565,7 @@ impl TypesetEngine {
                         avail_after,
                         avail_after - sync_h,
                         uncertain_anchor_margin,
-                        st.bottom_fixed_consumed_flow,
+                        st.flow_underrun,
                     );
                 }
                 if sync_h + uncertain_anchor_margin <= avail_after {
