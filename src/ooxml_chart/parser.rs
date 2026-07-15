@@ -233,6 +233,18 @@ fn handle_start(e: &quick_xml::events::BytesStart, chart: &mut OoxmlChart, st: &
             st.cur_plot_ax_ids.clear();
             st.cur_plot_series_start = chart.series.len();
         }
+        b"line3DChart" => {
+            // 코퍼스 27종에 없음 — 방어적 라우팅(placeholder 방지, C1a bar3D/pie3D
+            // 선례). 입체 표현은 C2b(#2278), 여기서는 2D 라인 근사 + is_3d(축 정책)만.
+            // lineChart와 동일하게 콤보의 주 타입은 덮지 않음. (C2a #2277 stage5)
+            if chart.chart_type == OoxmlChartType::Unknown {
+                chart.chart_type = OoxmlChartType::Line;
+            }
+            chart.is_3d = true;
+            st.cur_plot_type = Some(OoxmlChartType::Line);
+            st.cur_plot_ax_ids.clear();
+            st.cur_plot_series_start = chart.series.len();
+        }
         b"hiLowLines" => {
             // stock 고저선. lineChart에도 올 수 있는 요소라 Stock 게이트. (C2a #2277)
             if st.cur_plot_type == Some(OoxmlChartType::Stock) {
@@ -496,7 +508,7 @@ fn handle_end(name: &[u8], chart: &mut OoxmlChart, st: &mut ParseState) {
             }
         }
         b"barChart" | b"lineChart" | b"pieChart" | b"bar3DChart" | b"pie3DChart"
-        | b"ofPieChart" | b"scatterChart" | b"stockChart" => {
+        | b"ofPieChart" | b"scatterChart" | b"stockChart" | b"line3DChart" => {
             // plot 종료 — 이 plot에 속한 시리즈에 axIds 복사
             let start = st.cur_plot_series_start;
             for ser in chart.series.iter_mut().skip(start) {
@@ -714,6 +726,28 @@ mod tests {
         assert_eq!(c.series[0].name, "시가");
         assert_eq!(c.series[0].marker_symbol, SeriesMarker::None);
         assert_eq!(c.series[3].marker_symbol, SeriesMarker::Auto);
+    }
+
+    #[test]
+    fn test_parse_line3d_routing() {
+        // line3DChart — 코퍼스 27종에 없음. 방어 라우팅(placeholder 방지, C1a
+        // bar3D/pie3D 선례): Line + is_3d(축 정책). 입체 표현은 C2b·2D 근사.
+        let xml = br#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea><c:line3DChart><c:grouping val="stacked"/><c:ser><c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>3</c:v></c:pt><c:pt idx="1"><c:v>4</c:v></c:pt></c:numCache></c:numRef></c:val></c:ser><c:axId val="A1"/></c:line3DChart></c:plotArea></c:chart></c:chartSpace>"#;
+        let c = parse_chart_xml(xml).expect("parse OK");
+        assert_eq!(c.chart_type, OoxmlChartType::Line);
+        assert!(c.is_3d);
+        assert_eq!(c.series.len(), 1);
+        assert_eq!(c.series[0].series_type, OoxmlChartType::Line);
+        assert_eq!(
+            c.line_grouping,
+            BarGrouping::Stacked,
+            "line3D의 grouping도 line_grouping 채택"
+        );
+        assert_eq!(
+            c.series[0].axis_ids,
+            vec!["A1".to_string()],
+            "plot 종료 시 axId 복사"
+        );
     }
 
     #[test]

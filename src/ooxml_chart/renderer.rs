@@ -448,7 +448,17 @@ fn render_bars(
         let (mn, mx) = raw_value_bounds(chart.series.iter());
         nice_axis_no_headroom(mn, mx, HORIZONTAL_AXIS_TICKS)
     } else {
-        value_range(chart, ticks)
+        let (mn, mx, st) = value_range(chart, ticks);
+        // 특이케이스 실측(C1c v2 기록 → #2277 stage5): 가로막대 1카테고리 미니차트는
+        // 축 범위 유지·step 절반 (4.3 → 0~5 step 0.5, 라벨 11개). 기존 가로축 앵커
+        // (12.3→2 / 5.0→1 / 2.6→0.5)와 단일 규칙 불성립 — 단일 샘플 근거라
+        // 가로·1카테고리(·이 분기 자체로 비누적·비3D)로 좁게 게이트. 세로 1카테고리는
+        // 미실측이라 불변.
+        if horizontal && cat_count == 1 {
+            (mn, mx, st / 2.0)
+        } else {
+            (mn, mx, st)
+        }
     };
 
     svg.push_str(&format!(
@@ -2311,6 +2321,33 @@ mod tests {
             rect_y("#6183d7") > rect_y("#b0b0b0"),
             "계열1(파랑)이 슬롯 맨 아래 (y가 계열3(회색)보다 커야)"
         );
+    }
+
+    // --- C2a (#2277) stage5: 특이케이스 1카테고리 미니차트 0.5축 ---
+
+    #[test]
+    fn test_hbar_single_category_half_step() {
+        // 특이케이스 실측(C1c v2 기록 → #2277 반영): 가로막대 1카테고리 미니차트는
+        // 축 범위 유지·step 절반 (4.3 → 0~5 step 0.5, 라벨 11개). 단일 샘플 근거라
+        // 가로·1카테고리·비누적·비3D로 좁게 게이트 — 코퍼스 나머지 27종(전부
+        // 4카테고리) 무영향.
+        let mut c = named3(OoxmlChartType::Bar, BarGrouping::Clustered);
+        c.series.truncate(1);
+        c.series[0].values = vec![4.3];
+        c.categories = vec!["항목 1".into()];
+        let svg = render_chart_svg(&c, 0.0, 0.0, 400.0, 300.0);
+        for want in [">0.5<", ">4.5<", ">5<"] {
+            assert!(svg.contains(want), "미니차트 0.5 step 라벨 {want} 없음");
+        }
+        // 다카테고리 무회귀 핀: step 1 유지
+        let svg4 = render_chart_svg(
+            &named3(OoxmlChartType::Bar, BarGrouping::Clustered),
+            0.0,
+            0.0,
+            400.0,
+            300.0,
+        );
+        assert!(!svg4.contains(">0.5<"), "다카테고리는 step 절반 미적용");
     }
 
     // --- C2a (#2277) stage4: 범례 스와치 글리프 (SwatchKind) ---
