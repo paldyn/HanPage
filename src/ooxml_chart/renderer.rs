@@ -540,8 +540,12 @@ fn render_bars(
                 };
                 let color = series_color(ser, si);
                 if horizontal {
-                    let cy =
-                        py + cat_slot(ci) + (cat_span - bar_span_total) / 2.0 + bar_w * si as f64;
+                    // 슬롯 내 세로 배치: 계열1이 맨 아래 (정답지 실측 — 위→아래 =
+                    // 계열3→1, 범례 역순과 시각 일치. #2277 stage3)
+                    let cy = py
+                        + cat_slot(ci)
+                        + (cat_span - bar_span_total) / 2.0
+                        + bar_w * (ser_count - 1 - si) as f64;
                     let bw = pw * t;
                     svg.push_str(&format!(
                         "<rect x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" fill=\"{}\"/>\n",
@@ -1301,7 +1305,35 @@ fn render_category_labels(
 
 // ---------------- Legend ----------------
 
-/// 범례 항목 목록 `(라벨, 색상, 시리즈 타입)`. pie는 카테고리별, 그 외는 시리즈별.
+/// 범례 항목 역순 여부 — 정답지 PDF 28종 전수 실측 규칙 (#2277 stage3 보고서 표, 예외 0).
+///
+/// 한컴은 계열이 플롯에서 **세로 방향으로 배열되는 차트**의 우측 세로 범례를 시각적
+/// 상→하 순서와 일치시키기 위해 역순으로 나열한다 (C1c의 "관찰 상충"은 이 규칙):
+/// - 세로 값축 누적(막대·라인 stacked/percentStacked): 스택 맨 위 = 마지막 계열
+/// - 가로막대 묶음(clustered): 슬롯 맨 위 = 마지막 계열 (슬롯 배치 반전과 세트)
+///
+/// 3D는 2D와 동일 규칙(실측 4종 일치). pie(카테고리 범례)/scatter/stock/콤보/이중축
+/// = 정순. 하단 가로 범례는 코퍼스 미실측(전 샘플 legendPos=r) — 현행 정순 유지.
+fn legend_order_reversed(chart: &OoxmlChart) -> bool {
+    if chart.legend_pos != LegendPos::Right || chart.is_combo() || chart.has_secondary_axis {
+        return false;
+    }
+    match chart.chart_type {
+        OoxmlChartType::Column => matches!(
+            chart.grouping,
+            BarGrouping::Stacked | BarGrouping::PercentStacked
+        ),
+        OoxmlChartType::Bar => chart.grouping == BarGrouping::Clustered,
+        OoxmlChartType::Line => matches!(
+            chart.line_grouping,
+            BarGrouping::Stacked | BarGrouping::PercentStacked
+        ),
+        _ => false,
+    }
+}
+
+/// 범례 항목 목록 `(라벨, 색상, 시리즈 타입)`. pie는 카테고리별, 그 외는 시리즈별
+/// (색 매핑 후 `legend_order_reversed`면 역순 나열).
 fn legend_items(chart: &OoxmlChart) -> Vec<(String, u32, OoxmlChartType)> {
     match chart.chart_type {
         OoxmlChartType::Pie => {
@@ -1324,20 +1356,26 @@ fn legend_items(chart: &OoxmlChart) -> Vec<(String, u32, OoxmlChartType)> {
                 })
                 .unwrap_or_default()
         }
-        _ => chart
-            .series
-            .iter()
-            .enumerate()
-            .map(|(i, s)| {
-                let label = if s.name.is_empty() {
-                    format!("시리즈 {}", i + 1)
-                } else {
-                    s.name.clone()
-                };
-                let color = s.color.unwrap_or_else(|| palette(i));
-                (label, color, s.series_type)
-            })
-            .collect(),
+        _ => {
+            let mut items: Vec<(String, u32, OoxmlChartType)> = chart
+                .series
+                .iter()
+                .enumerate()
+                .map(|(i, s)| {
+                    let label = if s.name.is_empty() {
+                        format!("시리즈 {}", i + 1)
+                    } else {
+                        s.name.clone()
+                    };
+                    let color = s.color.unwrap_or_else(|| palette(i));
+                    (label, color, s.series_type)
+                })
+                .collect();
+            if legend_order_reversed(chart) {
+                items.reverse();
+            }
+            items
+        }
     }
 }
 
@@ -2084,6 +2122,120 @@ mod tests {
         assert_eq!(svg.matches("hwp-stock-hilow").count(), 0);
         assert!(!data_line_paths(&svg).is_empty(), "라인 폴백으로 렌더");
         assert!(!svg.contains("hwp-ooxml-chart-fallback"));
+    }
+
+    // --- C2a (#2277) stage3: 범례 순서 규칙 (정답지 28종 전수 실측 — 예외 0) ---
+
+    /// 이름 있는 3계열 차트 (범례 순서 검증용). 우측 범례 = 코퍼스 전 샘플 legendPos=r.
+    fn named3(chart_type: OoxmlChartType, grouping: BarGrouping) -> OoxmlChart {
+        let ser = |i: usize| OoxmlSeries {
+            name: format!("계열 {}", i + 1),
+            values: vec![4.3, 2.5, 3.5, 4.5],
+            series_type: chart_type,
+            ..Default::default()
+        };
+        let mut c = OoxmlChart {
+            chart_type,
+            legend_pos: LegendPos::Right,
+            series: vec![ser(0), ser(1), ser(2)],
+            categories: vec!["a".into(), "b".into(), "c".into(), "d".into()],
+            ..Default::default()
+        };
+        match chart_type {
+            OoxmlChartType::Line => c.line_grouping = grouping,
+            _ => c.grouping = grouping,
+        }
+        c
+    }
+
+    fn first_legend_label(chart: &OoxmlChart) -> String {
+        legend_items(chart)
+            .first()
+            .map(|(l, _, _)| l.clone())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn test_legend_order_rule_table() {
+        use BarGrouping::*;
+        use OoxmlChartType::*;
+        // 역순 = (세로 값축 && 누적/백프로) || (가로막대 && 묶음) — 실측 28종 예외 0
+        let cases: &[(OoxmlChartType, BarGrouping, bool)] = &[
+            (Column, Stacked, true),
+            (Column, PercentStacked, true),
+            (Column, Clustered, false),
+            (Bar, Clustered, true),
+            (Bar, Stacked, false),
+            (Bar, PercentStacked, false),
+            (Line, Stacked, true),
+            (Line, PercentStacked, true),
+            (Line, Clustered, false), // standard 라인
+        ];
+        for &(t, g, reversed) in cases {
+            let expect = if reversed { "계열 3" } else { "계열 1" };
+            assert_eq!(
+                first_legend_label(&named3(t, g)),
+                expect,
+                "{:?}/{:?} → 역순={}",
+                t,
+                g,
+                reversed
+            );
+        }
+    }
+
+    #[test]
+    fn test_legend_order_3d_same_as_2d() {
+        // 실측: 3D누적세로·3D묶은가로=역순, 3D묶은세로·3D누적가로=정순 — 2D와 동일 규칙
+        let mut c = named3(OoxmlChartType::Column, BarGrouping::Stacked);
+        c.is_3d = true;
+        assert_eq!(first_legend_label(&c), "계열 3", "3D 누적세로 역순");
+        let mut c = named3(OoxmlChartType::Bar, BarGrouping::Clustered);
+        c.is_3d = true;
+        assert_eq!(first_legend_label(&c), "계열 3", "3D 묶은가로 역순");
+    }
+
+    #[test]
+    fn test_legend_order_forward_for_stock_and_bottom_legend() {
+        // stock = 정순 (실측: 고가→저가→종가)
+        let mut c = stock_chart(3);
+        c.legend_pos = LegendPos::Right;
+        assert_eq!(first_legend_label(&c), "고가");
+        // 하단 가로 범례는 코퍼스 미실측 — 역순 규칙 미적용 (현행 정순 유지)
+        let mut c2 = named3(OoxmlChartType::Column, BarGrouping::Stacked);
+        c2.legend_pos = LegendPos::Bottom;
+        assert_eq!(first_legend_label(&c2), "계열 1");
+    }
+
+    #[test]
+    fn test_legend_order_combo_forward() {
+        // 콤보(막대+라인)는 정순 고정 — 역순 규칙에서 명시 제외
+        let mut c = named3(OoxmlChartType::Column, BarGrouping::Stacked);
+        c.series[2].series_type = OoxmlChartType::Line;
+        assert_eq!(first_legend_label(&c), "계열 1");
+    }
+
+    #[test]
+    fn test_hbar_clustered_slot_series1_at_bottom() {
+        // 묶은가로 실측: 슬롯 내 위→아래 = 계열3→2→1 (계열1이 맨 아래 = y 최대).
+        // 범례 역순과 세트로 시각 일치 (#2277 stage3).
+        let c = named3(OoxmlChartType::Bar, BarGrouping::Clustered);
+        let svg = render_chart_svg(&c, 0.0, 0.0, 400.0, 300.0);
+        let rect_y = |color: &str| -> f64 {
+            let tag = svg
+                .split("<rect ")
+                .skip(1)
+                .map(|ch| &ch[..ch.find("/>").unwrap_or(ch.len())])
+                .find(|t| t.contains(&format!("fill=\"{}\"", color)))
+                .unwrap_or_else(|| panic!("{color} 막대 없음"));
+            let p = tag.find("y=\"").unwrap() + 3;
+            let e = tag[p..].find('"').unwrap();
+            tag[p..p + e].parse().unwrap()
+        };
+        assert!(
+            rect_y("#6183d7") > rect_y("#b0b0b0"),
+            "계열1(파랑)이 슬롯 맨 아래 (y가 계열3(회색)보다 커야)"
+        );
     }
 
     #[test]
