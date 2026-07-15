@@ -1918,7 +1918,16 @@ impl LayoutEngine {
                 None
             };
             let comp_ref = recomposed.as_ref().unwrap_or(comp);
-            let end_line_adjusted = end_line.min(comp_ref.lines.len()).max(start_line);
+            // [#2279] 전체-문단 요청(start=0, end=원본 줄수 이상)은 재래핑 후 줄수로
+            // 확장한다. 종전에는 재래핑이 줄수를 늘린 문단(45자 폴백 3줄 → 실폭 4줄,
+            // 86712 pi=22)에서 원본 줄수로 클램프되어 마지막 줄이 렌더에서 소실됐다
+            // (측정 4줄 fit vs 렌더 3줄 — maintainer PR #2284 리뷰 p10 픽셀 하락과
+            // 정합). 분할(partial) 요청의 라인 범위는 종전 클램프 유지.
+            let end_line_adjusted = if start_line == 0 && end_line >= comp.lines.len() {
+                comp_ref.lines.len()
+            } else {
+                end_line.min(comp_ref.lines.len()).max(start_line)
+            };
             return self.layout_composed_paragraph(
                 tree,
                 col_node,

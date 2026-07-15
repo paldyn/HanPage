@@ -19,6 +19,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+
+def default_exe() -> str:
+    """플랫폼별 debug 바이너리 기본 경로 (Windows/macOS/Linux)."""
+    name = "rhwp.exe" if os.name == "nt" else "rhwp"
+    return str(Path("target") / "debug" / name)
+
+
 sys.stdout.reconfigure(encoding="utf-8")
 
 FOOTER = re.compile(
@@ -32,7 +39,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cohort", default="tools/task2279/footer_cohort.tsv")
     ap.add_argument("--flip", default="tools/task2279/flip_results_20260715.tsv")
-    ap.add_argument("--exe", default=r"target\debug\rhwp.exe")
+    ap.add_argument("--exe", default=default_exe())
     a = ap.parse_args()
 
     paths = {}
