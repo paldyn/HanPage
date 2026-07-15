@@ -52,3 +52,43 @@ python tools/pdf_normalize_compare.py --emit x.pdf > x.norm   # 게이트용 정
 
 검증: 86712(7폰트·65쪽)·75544 각각 2회 실행 raw diff 2.4~2.57MB → **정규형 바이트 동일**.
 서로 다른 문서는 정규형 상이(회귀 검출) 확인.
+
+## 근본 정정 채택 (2026-07-15, #2269 (a)안 승인)
+
+업스트림 기여 시도 결과 **typst/svg2pdf 는 2026-07-10 아카이브**되어 PR 개설이 불가
+("This project is not maintained anymore", 공식 대체: krilla/krilla-svg). master 에도
+해당 비결정 코드는 미수정으로 남아 있어, 작업지시자 승인 하에 **벤더 패치**를 채택했다.
+
+### 패치 브랜치
+
+**planet6897/svg2pdf `determinism-0.13`** (커밋 2caeb0a, v0.13.0 태그 기반 2지점 수정):
+
+| 지점 | 수정 | 결정화 대상 |
+|---|---|---|
+| `util/context.rs` `write_global_objects` | 폰트를 `Font.reference` 정렬 후 반복 | `write_font` 내부 부가 객체 4개/폰트(CID·descriptor·cmap·data)의 채번 + 방출순서 |
+| `util/resources.rs` `finish()` | 딕셔너리 항목을 reference 정렬 후 방출 | `/Font` 등 리소스 딕셔너리 항목순서 |
+
+규명 보완: `Font.reference` 와 `/foN` 이름은 문서 순회 순서(`fill_fonts`/glyph 순회)라
+**원래 결정적**이다. 비결정의 실체는 (1) write 시점 부가 객체 채번·방출순서
+(2) 리소스 딕셔너리 항목순서 2지점이며, 따라서 위 표의 reference 정렬(폰트 ID 정렬이
+아니라)이 자연스러운 정준 순서다.
+
+### rhwp 적용
+
+`Cargo.toml` 에 `[patch.crates-io]` 로 포크 브랜치를 지정 (Cargo.lock 이 정확한 rev 고정):
+
+```toml
+[patch.crates-io]
+svg2pdf = { git = "https://github.com/planet6897/svg2pdf", branch = "determinism-0.13" }
+```
+
+### 검증 (upstream/devel 640d04f7 + 패치)
+
+- 86712(7폰트·65쪽)·75544: 각 2회 실행 **바이트 동일** (기존 raw diff 2.4~2.57MB → 0)
+- 같은 소스 무패치↔패치 출력: `pdf_normalize_compare.py` **정규형 동일** (순서/채번만 변경, 시각·구조 불변)
+- 별도 컴파일 2회의 산출물도 바이트 동일 (빌드 재현성)
+
+### 유지보수 노트
+
+- `pdf_normalize_compare.py` 게이트는 이중 안전망으로 유지한다.
+- **krilla-svg 마이그레이션 시 이 패치는 제거**한다 (svg2pdf 계열 EOL — 장기 축은 별도 이슈).
