@@ -18,6 +18,10 @@ const layerTypesPath = path.join(studioRoot, 'src/core/types.ts');
 const textIrV2DocPath = path.join(repoRoot, 'docs/text-ir-v2.md');
 const canvaskitParityPlanDocPath = path.join(repoRoot, 'docs/canvaskit-parity-implementation.md');
 const rendererBaselinePath = path.join(studioRoot, 'e2e/renderer-baseline.mjs');
+const rendererBaselineNativeDiffPath = path.join(
+  studioRoot,
+  'e2e/renderer-baseline-native-diff.mjs',
+);
 const rendererBaselineDriverPath = path.join(repoRoot, 'scripts/renderer_baseline.py');
 const rendererBaselineManifestPath = path.join(repoRoot, 'scripts/renderer_baseline_manifest.json');
 const helpersPath = path.join(studioRoot, 'e2e/helpers.mjs');
@@ -27,6 +31,10 @@ const renderBackendPath = path.join(studioRoot, 'src/view/render-backend.ts');
 const pageRendererPath = path.join(studioRoot, 'src/view/page-renderer.ts');
 const canvasViewPath = path.join(studioRoot, 'src/view/canvas-view.ts');
 const renderDiffWorkflowPath = path.join(repoRoot, '.github/workflows/render-diff.yml');
+const fullRendererSweepWorkflowPath = path.join(
+  repoRoot,
+  '.github/workflows/full-renderer-sweep.yml',
+);
 
 const canvaskitSource = fs.readFileSync(canvaskitPath, 'utf8');
 const canvaskitDiagnosticsSource = fs.readFileSync(canvaskitDiagnosticsPath, 'utf8');
@@ -34,6 +42,7 @@ const layerTypesSource = fs.readFileSync(layerTypesPath, 'utf8');
 const textIrV2DocSource = fs.readFileSync(textIrV2DocPath, 'utf8');
 const canvaskitParityPlanDocSource = fs.readFileSync(canvaskitParityPlanDocPath, 'utf8');
 const rendererBaselineSource = fs.readFileSync(rendererBaselinePath, 'utf8');
+const rendererBaselineNativeDiffSource = fs.readFileSync(rendererBaselineNativeDiffPath, 'utf8');
 const rendererBaselineDriverSource = fs.readFileSync(rendererBaselineDriverPath, 'utf8');
 const rendererBaselineManifest = JSON.parse(fs.readFileSync(rendererBaselineManifestPath, 'utf8'));
 const helpersSource = fs.readFileSync(helpersPath, 'utf8');
@@ -43,6 +52,7 @@ const renderBackendSource = fs.readFileSync(renderBackendPath, 'utf8');
 const pageRendererSource = fs.readFileSync(pageRendererPath, 'utf8');
 const canvasViewSource = fs.readFileSync(canvasViewPath, 'utf8');
 const renderDiffWorkflowSource = fs.readFileSync(renderDiffWorkflowPath, 'utf8');
+const fullRendererSweepWorkflowSource = fs.readFileSync(fullRendererSweepWorkflowPath, 'utf8');
 const normalizedCanvaskitParityPlanDocSource = canvaskitParityPlanDocSource.replace(/\s+/g, ' ');
 
 function extractBlockBody(source, signatureIndex, blockName) {
@@ -1279,6 +1289,47 @@ assert.deepEqual(
   ['font-batang-hancom', 'font-native-bitmap', 'image-crop', 'paragraph-line-basic', 'table-core'],
   'CanvasKit readiness gate should cover paragraph/table/image/font and font-native resources',
 );
+assert.equal(rendererBaselineManifest.schemaVersion, 1, 'renderer baseline manifest schema must be explicit');
+assert.ok(
+  rendererBaselineManifest.samples.length >= 120,
+  'renderer baseline manifest must keep the refreshed cross-backend corpus',
+);
+for (const sample of rendererBaselineManifest.samples) {
+  assert.ok(
+    Array.isArray(sample.diagnosticAxes)
+      && sample.diagnosticAxes.length > 0
+      && new Set(sample.diagnosticAxes).size === sample.diagnosticAxes.length,
+    `renderer baseline sample ${sample.id} must declare unique diagnostic axes`,
+  );
+  assert.ok(
+    sample.baselineTier === 'representative' || sample.baselineTier === 'extended',
+    `renderer baseline sample ${sample.id} must declare its corpus tier`,
+  );
+  assert.ok(
+    Number.isInteger(sample.page ?? 0) && (sample.page ?? 0) >= 0,
+    `renderer baseline sample ${sample.id} must declare a valid page`,
+  );
+}
+assert.equal(
+  rendererBaselineManifest.samples.filter((sample) => sample.baselineTier === 'representative').length,
+  21,
+  'the default renderer baseline tier must remain bounded',
+);
+for (const sampleId of [
+  'chart-line-markers-hwp',
+  'chart-line-markers-hwpx',
+  'chart-stock-hwp',
+  'chart-stock-hwpx',
+  'table-cell-image-clip-page-1',
+  'missing-picture-profile',
+  'local-font-nanumsquare-bold',
+  'malformed-lineseg-reflow',
+]) {
+  assert.ok(
+    rendererBaselineManifest.samples.some((sample) => sample.id === sampleId),
+    `renderer baseline manifest must keep recent regression sample ${sampleId}`,
+  );
+}
 assert.equal(
   rendererBaselineManifest.samples.some((sample) => Number(sample.page) > 0),
   true,
@@ -1297,6 +1348,8 @@ assert(
     && rendererBaselineSource.includes('pageRenderer?.cancelAll?.()')
     && rendererBaselineSource.includes('BASELINE_CAPTURE_CONTAINER_SELECTOR')
     && rendererBaselineSource.includes('canvas2dRenderer?.domImageCache')
+    && rendererBaselineSource.includes("container.querySelectorAll('img')")
+    && rendererBaselineSource.includes("typeof image.decode === 'function'")
     && rendererBaselineSource.includes('localTypefacePendingCount')
     && rendererBaselineSource.includes('selectedPageRenderMs')
     && rendererBaselineDriverSource.includes('averageSelectedPageRenderMs')
@@ -1305,7 +1358,8 @@ assert(
   'browser baseline must settle resources and capture the requested page at intrinsic scale',
 );
 assert(
-  rendererBaselineSource.includes('getCanvasKitReplayPlan?.(targetPageIndex, mode)')
+  rendererBaselineSource.includes('getCanvasKitReplayPlan?.(')
+    && rendererBaselineSource.includes('targetProfile,')
     && rendererBaselineSource.includes("code: 'replayPlanUnavailable'")
     && rendererBaselineSource.includes("code: 'replayPlanEmpty'")
     && rendererBaselineSource.includes("code: 'replayPlanContractMismatch'")
@@ -1313,6 +1367,8 @@ assert(
     && rendererBaselineSource.includes("code: 'runtimeRenderIncomplete'")
     && rendererBaselineSource.includes("code: 'runtimeRenderError'")
     && rendererBaselineSource.includes("code: 'runtimeUnexpectedUnsupportedOps'")
+    && rendererBaselineSource.includes("code: 'runtimeBackendMismatch'")
+    && rendererBaselineSource.includes("code: 'runtimeProfileMismatch'")
     && rendererBaselineSource.includes('contractGateAndReportInventory')
     && rendererBaselineSource.includes('planReasonCounts')
     && rendererBaselineSource.includes('planFeatureCounts'),
@@ -1324,6 +1380,44 @@ assert(
     && rendererBaselineDriverSource.includes('expectedUnsupportedOpCounts')
     && rendererBaselineDriverSource.includes('unexpectedUnsupportedOpCounts'),
   'renderer baseline report must preserve replay-plan and runtime diagnostic inventories',
+);
+assert(
+  rendererBaselineSource.includes("createHash('sha256')")
+    && rendererBaselineSource.includes('comparisonIdentity')
+    && rendererBaselineSource.includes("status: 'identityMismatch'")
+    && rendererBaselineSource.includes('summaryByDiagnosticAxis')
+    && rendererBaselineDriverSource.includes('documentDigest')
+    && rendererBaselineDriverSource.includes('comparisonIdentity')
+    && rendererBaselineDriverSource.includes('Diagnostic Axis Summary')
+    && rendererBaselineSource.includes('fs.realpathSync(samplePath)')
+    && rendererBaselineSource.includes('baseline sample page must be a non-negative integer')
+    && rendererBaselineNativeDiffSource.includes("status: 'identityMismatch'")
+    && rendererBaselineNativeDiffSource.includes('summaryByDiagnosticAxis'),
+  'cross-backend comparisons must bind document/page/profile provenance and diagnostic axes',
+);
+assert(
+  rendererBaselineDriverSource.includes('--include-pdf')
+    && rendererBaselineDriverSource.includes('"export-pdf"')
+    && rendererBaselineDriverSource.includes('"--profile"')
+    && rendererBaselineDriverSource.includes('"backend": "pdf"')
+    && rendererBaselineDriverSource.includes('PDF baseline export did not create a non-empty artifact')
+    && fullRendererSweepWorkflowSource.includes('--include-pdf'),
+  'full renderer baseline must collect verified print-profile PDF artifacts',
+);
+assert.ok(
+  renderDiffWorkflowSource.includes('node --check e2e/renderer-baseline-native-diff.mjs')
+    && renderDiffWorkflowSource.includes(
+      'node e2e/renderer-baseline-native-diff.mjs --self-test',
+    ),
+  'Render Diff preflight must syntax-check and self-test the native parity comparator',
+);
+assert.ok(
+  rendererBaselineDriverSource.includes('--scope')
+    && rendererBaselineSource.includes("scope: 'representative'")
+    && fullRendererSweepWorkflowSource.includes('corpus:')
+    && fullRendererSweepWorkflowSource.includes('--scope ${{ inputs.corpus }}')
+    && fullRendererSweepWorkflowSource.includes('--scope representative'),
+  'the default workflow must bound the corpus while retaining an explicit full sweep',
 );
 requireSnippet(
   rendererBaselineSource,

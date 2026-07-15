@@ -15,6 +15,7 @@ function parseArgs() {
     browser: '',
     output: '',
     profiles: '',
+    selfTest: false,
   };
 
   for (const arg of process.argv.slice(2)) {
@@ -34,12 +35,26 @@ function parseArgs() {
       options.profiles = arg.slice('--profiles='.length);
       continue;
     }
+    if (arg === '--self-test') {
+      options.selfTest = true;
+    }
   }
 
+  if (options.selfTest) return options;
   if (!options.native) throw new Error('missing --native=/abs/path/native-results.json');
   if (!options.browser) throw new Error('missing --browser=/abs/path/browser-baseline-report.json');
   if (!options.output) throw new Error('missing --output=/abs/path/native-canvaskit-parity-report.json');
   return options;
+}
+
+function comparisonIdentityMismatches(nativeIdentity, canvaskitIdentity) {
+  const mismatches = [];
+  for (const field of ['schemaVersion', 'sampleId', 'documentDigest', 'page', 'profile']) {
+    if (nativeIdentity?.[field] !== canvaskitIdentity?.[field]) mismatches.push(field);
+  }
+  if (nativeIdentity?.backend !== 'native-skia') mismatches.push('nativeBackend');
+  if (canvaskitIdentity?.backend !== 'canvaskit-default') mismatches.push('canvaskitBackend');
+  return [...new Set(mismatches)].sort();
 }
 
 function resolveRepoPath(value, rootDir) {
@@ -47,13 +62,17 @@ function resolveRepoPath(value, rootDir) {
   return path.isAbsolute(value) ? value : path.resolve(rootDir, value);
 }
 
-function firstNativeSkiaPng(nativeResults, sampleId, profile, rootDir) {
+function nativeSkiaResult(nativeResults, sampleId, profile, rootDir) {
   const sample = nativeResults.find((entry) => entry.sampleId === sampleId);
   const backend = sample?.backends?.find((entry) => (
     entry.backend === 'native-skia' && entry.profile === profile
   ));
   const pngPath = backend?.files?.find((file) => file.endsWith('.png'));
-  return resolveRepoPath(pngPath, rootDir);
+  return {
+    sample,
+    backend,
+    path: resolveRepoPath(pngPath, rootDir),
+  };
 }
 
 function canvaskitDefaultResult(browserResults, sampleId, profile, rootDir) {
@@ -134,6 +153,7 @@ function emptySummary(keyField, keyValue) {
     failed: 0,
     missing: 0,
     errors: 0,
+    identityMismatches: 0,
     worstSelectedDiffRatio: 0,
     worstMaxChannelDelta: 0,
   };
@@ -147,6 +167,10 @@ function addComparisonToSummary(summary, item) {
   }
   if (item.status === 'error') {
     summary.errors += 1;
+    return;
+  }
+  if (item.status === 'identityMismatch') {
+    summary.identityMismatches += 1;
     return;
   }
   if (item.status !== 'compared') {
@@ -191,6 +215,8 @@ function worstComparisons(comparisons, limit = 10) {
     .map((item) => ({
       sampleId: item.sampleId,
       category: item.category ?? null,
+      diagnosticAxes: item.diagnosticAxes ?? [],
+      page: item.page ?? null,
       profile: item.profile,
       canvaskitSurface: item.canvaskitSurface ?? null,
       passed: !!item.diff?.passed,
@@ -209,14 +235,40 @@ function worstComparisons(comparisons, limit = 10) {
 }
 
 const options = parseArgs();
+if (options.selfTest) {
+  const common = {
+    schemaVersion: 1,
+    sampleId: 'sample',
+    documentDigest: `sha256:${'0'.repeat(64)}`,
+    page: 0,
+    profile: 'screen',
+  };
+  const matching = comparisonIdentityMismatches(
+    { ...common, backend: 'native-skia' },
+    { ...common, backend: 'canvaskit-default' },
+  );
+  const mismatching = comparisonIdentityMismatches(
+    { ...common, backend: 'native-skia' },
+    { ...common, documentDigest: `sha256:${'1'.repeat(64)}`, backend: 'canvaskit-default' },
+  );
+  if (matching.length !== 0 || mismatching.join(',') !== 'documentDigest') {
+    throw new Error('native/canvaskit comparison identity self-test failed');
+  }
+  console.log('native/canvaskit comparison identity self-test passed');
+  process.exit(0);
+}
 const rootDir = path.resolve(new URL('../..', import.meta.url).pathname);
 const nativeResults = JSON.parse(fs.readFileSync(options.native, 'utf8'));
 const browserReport = JSON.parse(fs.readFileSync(options.browser, 'utf8'));
 const browserResults = browserReport.results ?? [];
 const browserCategoryBySample = new Map();
+const browserAxesBySample = new Map();
 for (const entry of browserResults) {
   if (entry.sampleId && entry.category && !browserCategoryBySample.has(entry.sampleId)) {
     browserCategoryBySample.set(entry.sampleId, entry.category);
+  }
+  if (entry.sampleId && Array.isArray(entry.diagnosticAxes) && !browserAxesBySample.has(entry.sampleId)) {
+    browserAxesBySample.set(entry.sampleId, entry.diagnosticAxes);
   }
 }
 const profiles = options.profiles
@@ -231,15 +283,28 @@ const sampleIds = [...new Set([
 const comparisons = [];
 for (const sampleId of sampleIds) {
   for (const profile of profiles) {
-    const nativePath = firstNativeSkiaPng(nativeResults, sampleId, profile, rootDir);
+    const native = nativeSkiaResult(nativeResults, sampleId, profile, rootDir);
+    const nativePath = native.path;
     const canvaskit = canvaskitDefaultResult(browserResults, sampleId, profile, rootDir);
     const canvaskitPath = canvaskit.path;
     const canvaskitSurface = canvaskit.entry?.canvaskitSurface ?? browserReport.canvaskitSurface ?? null;
-    const category = canvaskit.entry?.category ?? browserCategoryBySample.get(sampleId) ?? null;
+    const category = canvaskit.entry?.category
+      ?? native.sample?.category
+      ?? browserCategoryBySample.get(sampleId)
+      ?? null;
+    const diagnosticAxes = canvaskit.entry?.diagnosticAxes
+      ?? native.sample?.diagnosticAxes
+      ?? browserAxesBySample.get(sampleId)
+      ?? [];
+    const page = canvaskit.entry?.page ?? native.sample?.page ?? null;
+    const documentDigest = canvaskit.entry?.documentDigest ?? native.sample?.documentDigest ?? null;
     if (!nativePath || !canvaskitPath) {
       comparisons.push({
         sampleId,
         category,
+        diagnosticAxes,
+        documentDigest,
+        page,
         profile,
         canvaskitSurface,
         status: 'missing',
@@ -249,10 +314,35 @@ for (const sampleId of sampleIds) {
       continue;
     }
 
+    const nativeIdentity = native.backend?.comparisonIdentity ?? null;
+    const canvaskitIdentity = canvaskit.entry?.comparisonIdentity ?? null;
+    const identityMismatches = comparisonIdentityMismatches(nativeIdentity, canvaskitIdentity);
+    if (identityMismatches.length > 0) {
+      comparisons.push({
+        sampleId,
+        category,
+        diagnosticAxes,
+        documentDigest,
+        page,
+        profile,
+        canvaskitSurface,
+        status: 'identityMismatch',
+        identityMismatches,
+        nativeIdentity,
+        canvaskitIdentity,
+        nativePath,
+        canvaskitPath,
+      });
+      continue;
+    }
+
     try {
       comparisons.push({
         sampleId,
         category,
+        diagnosticAxes,
+        documentDigest,
+        page,
         profile,
         canvaskitSurface,
         status: 'compared',
@@ -264,6 +354,9 @@ for (const sampleId of sampleIds) {
       comparisons.push({
         sampleId,
         category,
+        diagnosticAxes,
+        documentDigest,
+        page,
         profile,
         canvaskitSurface,
         status: 'error',
@@ -280,10 +373,25 @@ const passed = compared.filter((item) => item.diff?.passed).length;
 const failed = compared.length - passed;
 const missing = comparisons.filter((item) => item.status === 'missing').length;
 const errors = comparisons.filter((item) => item.status === 'error').length;
+const identityMismatches = comparisons.filter((item) => item.status === 'identityMismatch').length;
 const summaryByProfile = summarizeBy(comparisons, 'profile');
 const summaryBySample = summarizeBy(comparisons, 'sampleId');
 const summaryByCategory = summarizeBy(comparisons, 'category');
 const summaryByCanvasKitSurface = summarizeBy(comparisons, 'canvaskitSurface');
+const diagnosticAxisSummaries = new Map();
+for (const item of comparisons) {
+  for (const diagnosticAxis of item.diagnosticAxes ?? []) {
+    if (!diagnosticAxisSummaries.has(diagnosticAxis)) {
+      diagnosticAxisSummaries.set(
+        diagnosticAxis,
+        emptySummary('diagnosticAxis', diagnosticAxis),
+      );
+    }
+    addComparisonToSummary(diagnosticAxisSummaries.get(diagnosticAxis), item);
+  }
+}
+const summaryByDiagnosticAxis = [...diagnosticAxisSummaries.values()]
+  .sort((left, right) => left.diagnosticAxis.localeCompare(right.diagnosticAxis));
 const worst = worstComparisons(comparisons);
 
 fs.mkdirSync(path.dirname(options.output), { recursive: true });
@@ -306,10 +414,12 @@ fs.writeFileSync(
         failed,
         missing,
         errors,
+        identityMismatches,
       },
       summaryByProfile,
       summaryBySample,
       summaryByCategory,
+      summaryByDiagnosticAxis,
       summaryByCanvasKitSurface,
       worstComparisons: worst,
       comparisons,
