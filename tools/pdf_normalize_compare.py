@@ -104,6 +104,16 @@ def normalize(data: bytes) -> bytes:
     return b"".join(parts)
 
 
+def _read(path: str) -> bytes:
+    """입력 파일 읽기 — 부재/접근불가 시 traceback 없이 인자 오류(exit 2)로 종료."""
+    try:
+        with open(path, "rb") as f:
+            return f.read()
+    except OSError as e:
+        print(f"입력 파일을 열 수 없음: {path} ({e.strerror})", file=sys.stderr)
+        raise SystemExit(2)
+
+
 def main() -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -116,13 +126,13 @@ def main() -> int:
         if len(args) != 1:
             print("사용: pdf_normalize_compare.py --emit a.pdf", file=sys.stderr)
             return 2
-        sys.stdout.buffer.write(normalize(open(args[0], "rb").read()))
+        sys.stdout.buffer.write(normalize(_read(args[0])))
         return 0
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
-    a = normalize(open(args[0], "rb").read())
-    b = normalize(open(args[1], "rb").read())
+    a = normalize(_read(args[0]))
+    b = normalize(_read(args[1]))
     if a == b:
         print(f"정규화 동일 — 채번만 비결정(시각/구조 불변). len={len(a)}")
         return 0
