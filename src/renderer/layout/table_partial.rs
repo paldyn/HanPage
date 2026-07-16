@@ -1555,6 +1555,16 @@ impl LayoutEngine {
                         .filter(|c| c.row as usize == r && c.row_span == 1)
                         .collect();
                     rcells.sort_by_key(|c| c.col);
+                    // [#2287/PR #2290 P1] 컷 블록 안의 rs=1 셀 없는 걸침-전용 행은
+                    // 원본(resolve) 높이가 그대로 남아 rowspan 셀 bbox 가 컷과
+                    // 무관하게 원본 크기(교육부 47×9 r3=2107px → 셀 2354.6px)로
+                    // 유지됐다 — valign 이 콘텐츠를 셀 중앙(페이지 밖 y≈1259)으로
+                    // 밀어 tail overflow 로 관측(리뷰 p26/p30). 컷 블록의 행높이는
+                    // 아래 블록-합 보정이 권위이므로 여기서는 0 으로 둔다.
+                    if rcells.is_empty() {
+                        row_heights[r] = 0.0;
+                        continue;
+                    }
                     let mut per_start: Vec<usize> = Vec::with_capacity(rcells.len());
                     let mut per_end: Vec<usize> = Vec::with_capacity(rcells.len());
                     let mut has_visible_range = false;
@@ -1584,15 +1594,24 @@ impl LayoutEngine {
                         per_start.push(su);
                         per_end.push(eu);
                     }
+                    // [#2287/PR #2290 P1] 컷 블록(in_start/in_end) 안 행은 rs=1
+                    // 셀 컷이 "전체 소비"(su=0, eu=len)여도 whole-row 경로의 선언
+                    // 셀높이 max 를 타면 안 된다 — 블록 분할 중 행높이는 콘텐츠
+                    // 기반이어야 하고, rowspan 가시분은 아래 블록-합 보정이 채운다
+                    // (교육부 r3: rs=1 셀 2개 전체 소비 17.1px 인데 선언 max 로
+                    // 2107.1 유지 → 셀 bbox 2354.6 → valign 이 페이지 밖으로).
                     let h = if !has_visible_range {
                         0.0
-                    } else if has_row_cut {
+                    } else if has_row_cut || in_start || in_end {
                         self.row_cut_content_height(table, r, &per_start, &per_end, styles)
                     } else {
                         self.row_cut_content_height(table, r, &[], &[], styles)
                     };
                     if h > 0.0 {
                         row_heights[r] = h;
+                    } else if has_row_cut {
+                        // 컷 범위가 이 행에서 비가시(전부 다른 조각 소속)면 0.
+                        row_heights[r] = 0.0;
                     }
                 } else {
                     let su: &[usize] = if r == start_row { start_cut } else { &[] };
@@ -1611,6 +1630,52 @@ impl LayoutEngine {
                     let h = self.row_cut_content_height(table, r, su, eu, styles);
                     if h > 0.0 {
                         row_heights[r] = h;
+                    }
+                }
+            }
+            // [#2287/PR #2290 P1] 블록-합 보정: 컷 블록에 걸친 rowspan 셀의 컷
+            // 가시 높이(su..eu 유닛 합 + pad)가 rs=1 기반 행높이 합보다 크면
+            // 블록 마지막 행에 차액을 가산한다 — rowspan 셀 bbox 가 컷 가시
+            // 높이와 정합해야 클립/valign 이 컷 의미대로 동작한다 (typeset 의
+            // consumed_height 와 동일 좌표계).
+            if is_block_split {
+                let mut blocks: Vec<(usize, usize)> = Vec::new();
+                for b in [start_block, end_block].into_iter().flatten() {
+                    if !blocks.contains(&b) {
+                        blocks.push(b);
+                    }
+                }
+                for (bs, be) in blocks {
+                    let mut target = 0.0f64;
+                    for c in table.cells.iter().filter(|c| {
+                        c.row_span > 1 && (c.row as usize) >= bs && (c.row as usize) < be
+                    }) {
+                        let su = if start_block == Some((bs, be)) {
+                            block_cut_index(table, bs, be, c)
+                                .and_then(|i| start_cut.get(i).copied())
+                                .unwrap_or(0)
+                        } else {
+                            0
+                        };
+                        let eu = if end_block == Some((bs, be)) {
+                            block_cut_index(table, bs, be, c)
+                                .and_then(|i| end_cut.get(i).copied())
+                                .unwrap_or(usize::MAX)
+                        } else {
+                            usize::MAX
+                        };
+                        target = target.max(self.cell_cut_visible_height(c, table, styles, su, eu));
+                    }
+                    if target <= 0.0 {
+                        continue;
+                    }
+                    let cur: f64 = (bs..be.min(row_count))
+                        .map(|r| row_heights.get(r).copied().unwrap_or(0.0))
+                        .sum();
+                    if target > cur + 0.5 {
+                        if let Some(last) = (bs..be.min(row_count)).next_back() {
+                            row_heights[last] += target - cur;
+                        }
                     }
                 }
             }

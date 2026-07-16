@@ -13895,15 +13895,24 @@ impl TypesetEngine {
                     split_end_limit = cut_res.consumed_height;
                     split_block_start = Some(b_start);
                     let split_total = if use_offsets {
-                        // [#2287] 위 block_h 와 동일 — 연속분에서 rowspan 셀의
-                        // 가시 밴드가 row_span==1 필터로 0 평가되는 **완전 증발**
-                        // 만 컷 워크 consumed_height(가시 밴드 권위)로 보정.
+                        // [#2287] 오프셋(밴드) 컷의 페이지 소비 권위는 컷 워크의
+                        // consumed_height(예산 내 가시 밴드)다. per-row 합산
+                        // (block_fragment_height)은 rowspan 걸침 셀의 유닛을 행
+                        // 단위로 배분하지 못해 양방향으로 발산한다:
+                        // - 연속분(start_cut)에서 row_span==1 필터로 **0 평가**
+                        //   (완전 증발 — 표 밀집 -40~-64쪽의 결함 1), 또는
+                        // - 첫 조각에서 걸침 셀 유닛 전량이 계상되어 **블록 전체로
+                        //   과대** (교육부 47×9 r2..4: frag 2354.6 vs 컷 450.7 —
+                        //   p25 가 2396px 로 만재되어 p26 sliver + p30 tail
+                        //   overflow, PR #2290 P1 리뷰).
+                        // frag_total 은 렌더 조각 표시용 참고값으로만 두고, 소비는
+                        // 컷 워크와 발산할 때 consumed_height 로 정정한다.
                         let frag_total =
                             block_fragment_height(end_row, blk_start_cut, &cut_res.end_cut);
-                        if blk_start_cut.is_empty() || frag_total > 0.5 {
+                        if (frag_total - cut_res.consumed_height).abs() <= 0.5 {
                             frag_total
                         } else {
-                            frag_total.max(cut_res.consumed_height)
+                            cut_res.consumed_height
                         }
                     } else {
                         layout_engine.row_block_content_height(
