@@ -29,3 +29,11 @@
 
 **approve → merge 수용 권고.** DIRTY 는 scripts 1줄 충돌 — maintainer
 edit 로 직접 해소 후 CI green 확인, merge.
+
+---
+
+## 처리 완결 (2026-07-16)
+
+- 충돌 해소: package.json scripts 양쪽 보존(e2e:undo + e2e:undo-object-selection)
+  — maintainer edit 로 fork push (LFS locksverify 우회 필요). 해소 후 298/0.
+- CI green → CLEAN merge (12:04 UTC). 감사 코멘트(undo 연작 인정) 게시.
