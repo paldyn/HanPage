@@ -1,14 +1,21 @@
 /**
  * 최근 열람 문서 저장소.
  *
- * 파일 메뉴 "최근 문서" 목록의 영속 저장을 담당한다. 브라우저·열기 경로에 무관하게
- * 모든 열기에서 등록·재열기가 가능하도록 **문서 바이트**를 IndexedDB에 저장한다.
- * File System Access 핸들이 있으면 함께 저장하여 재열기 시 라이브 파일을 우선 사용하고,
- * 없거나 접근 실패 시 저장된 바이트로 연다.
+ * 파일 메뉴 "최근 문서" 목록의 영속 저장을 담당한다. Issue #2285 범위대로
+ * **`FileSystemFileHandle` + 메타(파일명/형식/시각)만** IndexedDB에 저장한다 —
+ * 문서 바이트는 보관하지 않는다. 따라서 핸들이 없는 열기 경로(드롭,
+ * `input[type=file]`)는 재열기가 불가능하므로 목록에 기록하지 않는다
+ * (`addRecentDoc`이 no-op). 재열기는 저장된 핸들의 권한 재확인 후 라이브
+ * 파일(`getFile()`)로만 수행한다.
  *
- * 자동 백업(`rhwpStudioAutosave`)·비교 이력(`rhwpStudioDocHistory`)과 섞지 않기 위해
- * 별도 IndexedDB(`rhwpStudioRecent`)를 사용한다. IndexedDB를 쓸 수 없는 테스트/제한
- * 환경에서는 메모리 저장소로 폴백한다.
+ * 동일 문서 판정은 `isSameEntry`가 권위다. 브라우저/환경 제약으로 판정이
+ * 불가능할 때만 파일명 비교로 폴백하며, 이 폴백은 서로 다른 경로의 같은 이름
+ * 문서를 병합할 수 있는 근사임을 전제한다(핸들이 항상 저장되므로 재열기
+ * 자체는 각 항목의 실제 파일을 따른다).
+ *
+ * 자동 백업(`rhwpStudioAutosave`)·비교 이력(`rhwpStudioDocHistory`)과 섞지 않기
+ * 위해 별도 IndexedDB(`rhwpStudioRecent`)를 사용한다. IndexedDB를 쓸 수 없는
+ * 테스트/제한 환경에서는 메모리 저장소로 폴백한다.
  */
 
 import type { FileSystemFileHandleLike } from '@/command/file-system-access';
@@ -27,22 +34,17 @@ export interface RecentDoc {
   sourceFormat: string;
   /** 마지막으로 연 시각 (epoch ms) */
   openedAt: number;
-  /** 재열기용 문서 바이트 (열기 시점 스냅샷) */
-  bytes: Uint8Array;
-  /** 재열기 시 라이브 파일 우선 접근용 핸들 (있을 때만) */
-  handle?: FileSystemFileHandleLike;
+  /** 재열기용 파일 핸들 — 항상 존재 (핸들 없는 열기는 기록하지 않음) */
+  handle: FileSystemFileHandleLike;
 }
 
 /** addRecentDoc 입력 (id/openedAt는 내부 생성) */
 export interface RecentDocInput {
   fileName: string;
   sourceFormat: string;
-  bytes: Uint8Array;
+  /** 핸들이 없으면(null/undefined) 기록하지 않는다 (#2285 범위). */
   handle?: FileSystemFileHandleLike | null;
 }
-
-/** IndexedDB 저장 행 — 바이트는 ArrayBuffer로 보관 */
-type RecentRow = Omit<RecentDoc, 'bytes'> & { bytes: ArrayBuffer };
 
 const memory = new Map<string, RecentDoc>();
 
@@ -52,20 +54,6 @@ function idbAvailable(): boolean {
 
 function createRecentId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `recent_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
-  return copy.buffer as ArrayBuffer;
-}
-
-function rowToDoc(row: RecentRow): RecentDoc {
-  return { ...row, bytes: new Uint8Array(row.bytes ?? new ArrayBuffer(0)) };
-}
-
-function docToRow(doc: RecentDoc): RecentRow {
-  return { ...doc, bytes: bytesToArrayBuffer(doc.bytes) };
 }
 
 function openDb(): Promise<IDBDatabase | null> {
@@ -93,16 +81,16 @@ async function withDb<T>(fn: (db: IDBDatabase) => Promise<T>, fallback: () => Pr
   }
 }
 
-function getAllRows(db: IDBDatabase): Promise<RecentRow[]> {
+function getAllRows(db: IDBDatabase): Promise<RecentDoc[]> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readonly');
     const req = tx.objectStore(STORE).getAll();
-    req.onsuccess = () => resolve((req.result as RecentRow[]) ?? []);
+    req.onsuccess = () => resolve((req.result as RecentDoc[]) ?? []);
     req.onerror = () => reject(req.error);
   });
 }
 
-function putRow(db: IDBDatabase, row: RecentRow): Promise<void> {
+function putRow(db: IDBDatabase, row: RecentDoc): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
     tx.objectStore(STORE).put(row);
@@ -120,22 +108,10 @@ function deleteRow(db: IDBDatabase, id: string): Promise<void> {
   });
 }
 
-/** 핸들 포함 저장을 시도하되, 핸들이 clone 불가(DataCloneError)면 핸들 없이 저장한다. */
-async function putRowResilient(db: IDBDatabase, row: RecentRow): Promise<void> {
-  try {
-    await putRow(db, row);
-  } catch (err) {
-    if (row.handle) {
-      const { handle, ...rest } = row;
-      void handle;
-      await putRow(db, rest as RecentRow);
-      return;
-    }
-    throw err;
-  }
-}
-
-/** 동일 파일 판정: 두 핸들이 모두 있으면 isSameEntry, 아니면 파일명 비교. */
+/**
+ * 동일 파일 판정 — `isSameEntry`가 권위. 환경 제약으로 판정이 불가능하면
+ * 파일명 비교 폴백(근사 — 모듈 주석 참조).
+ */
 async function isSameFile(a: RecentDocInput, existing: RecentDoc): Promise<boolean> {
   const ha = a.handle;
   const hb = existing.handle;
@@ -155,27 +131,35 @@ function sortAndTrim(rows: RecentDoc[]): RecentDoc[] {
 }
 
 /**
- * 최근 문서를 추가한다. 동일 파일이 이미 있으면 제거 후 맨 앞에 다시 넣고,
- * 최대 {@link MAX_RECENT}개를 유지한다. 모든 열기 경로에서 호출된다(핸들 유무 무관).
+ * 최근 문서를 추가한다. 핸들이 없으면 아무 것도 하지 않는다(#2285 범위 —
+ * 재열기 불가 항목은 목록에 남기지 않음). 동일 파일이 이미 있으면 제거 후
+ * 맨 앞에 다시 넣고, 최대 {@link MAX_RECENT}개를 유지한다.
+ * 핸들이 structured clone 불가(DataCloneError 등)한 환경이면 저장을 포기한다 —
+ * 핸들 없는 행을 남기지 않는다.
  */
 export async function addRecentDoc(input: RecentDocInput): Promise<void> {
+  if (!input.handle) return;
   const entry: RecentDoc = {
     id: createRecentId(),
     fileName: input.fileName,
     sourceFormat: input.sourceFormat,
     openedAt: Date.now(),
-    bytes: new Uint8Array(input.bytes),
-    ...(input.handle ? { handle: input.handle } : {}),
+    handle: input.handle,
   };
 
   await withDb(
     async (db) => {
-      const rows = (await getAllRows(db)).map(rowToDoc);
+      const rows = await getAllRows(db);
       for (const row of rows) {
         if (await isSameFile(input, row)) await deleteRow(db, row.id);
       }
-      await putRowResilient(db, docToRow(entry));
-      const after = sortAndTrim((await getAllRows(db)).map(rowToDoc));
+      try {
+        await putRow(db, entry);
+      } catch {
+        // 핸들 직렬화 불가 환경 — 기록 포기 (바이트/메타-only 행을 남기지 않음).
+        return;
+      }
+      const after = sortAndTrim(await getAllRows(db));
       const keep = new Set(after.map((r) => r.id));
       for (const row of await getAllRows(db)) {
         if (!keep.has(row.id)) await deleteRow(db, row.id);
@@ -197,8 +181,8 @@ export async function addRecentDoc(input: RecentDocInput): Promise<void> {
 /** 최근 문서 목록(최신순). */
 export async function listRecentDocs(): Promise<RecentDoc[]> {
   return withDb(
-    async (db) => sortAndTrim((await getAllRows(db)).map(rowToDoc)),
-    async () => sortAndTrim([...memory.values()].map((d) => ({ ...d, bytes: new Uint8Array(d.bytes) }))),
+    async (db) => sortAndTrim(await getAllRows(db)),
+    async () => sortAndTrim([...memory.values()]),
   );
 }
 

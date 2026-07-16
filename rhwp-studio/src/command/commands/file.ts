@@ -33,7 +33,8 @@ import {
   type FileSystemWindowLike,
 } from '@/command/file-system-access';
 import { showToast } from '@/ui/toast';
-import { clearRecentDocs, listRecentDocs } from '@/recent/recent-store';
+import { clearRecentDocs, listRecentDocs, removeRecentDoc } from '@/recent/recent-store';
+import { openRecentEntry } from '@/recent/recent-open';
 
 /** 최근 문서 핸들의 읽기 권한을 확인/요청한다. 최종 'granted' 여부 반환. */
 async function ensureReadPermission(handle: FileSystemFileHandleLike): Promise<boolean> {
@@ -366,7 +367,10 @@ export const fileCommands: CommandDef[] = [
     },
   },
   {
-    // 최근 문서 재열기 — 저장된 핸들 권한 재확인 후 로드. params.id로 레코드 지정.
+    // 최근 문서 재열기 — 저장된 핸들 권한 재확인 후 라이브 파일 로드. params.id로 레코드 지정.
+    // #2285 범위: 바이트 스냅샷 폴백 없음. 권한 거부는 항목 유지(다음에 다시 시도 가능),
+    // 파일 이동/삭제(getFile 실패)는 항목 제거 + 안내. 결과 규칙은
+    // recent-open.ts(openRecentEntry) — 테스트 가능한 순수 로직으로 분리.
     id: 'file:open-recent',
     label: '최근 문서 열기',
     async execute(services, params) {
@@ -379,29 +383,12 @@ export const fileCommands: CommandDef[] = [
         return;
       }
 
-      // 1) 라이브 파일 우선 — 핸들이 있고 권한/접근 가능하면 디스크 최신본을 연다.
-      if (entry.handle) {
-        try {
-          if (await ensureReadPermission(entry.handle)) {
-            const { bytes, name } = await readFileFromHandle(entry.handle);
-            services.eventBus.emit('open-document-bytes', {
-              bytes,
-              fileName: name,
-              fileHandle: entry.handle,
-            });
-            return;
-          }
-        } catch (err) {
-          // 파일 이동/삭제·권한 거부 → 저장된 바이트로 폴백.
-          console.warn('[file:open-recent] 라이브 파일 접근 실패, 저장본으로 엶:', err);
-        }
-      }
-
-      // 2) 저장된 바이트로 열기(핸들 없거나 라이브 접근 실패). 저장 연속성 위해 핸들은 유지하지 않음.
-      services.eventBus.emit('open-document-bytes', {
-        bytes: entry.bytes,
-        fileName: entry.fileName,
-        fileHandle: null,
+      await openRecentEntry(entry, {
+        ensurePermission: ensureReadPermission,
+        readFile: readFileFromHandle,
+        remove: removeRecentDoc,
+        toast: (message, durationMs) => showToast({ message, durationMs }),
+        emitOpen: (payload) => services.eventBus.emit('open-document-bytes', payload),
       });
     },
   },
