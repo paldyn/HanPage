@@ -1411,8 +1411,12 @@ assert(
     && rendererBaselineSource.includes('fs.realpathSync(samplePath)')
     && rendererBaselineSource.includes('baseline sample page must be a non-negative integer')
     && rendererBaselineNativeDiffSource.includes("status: 'identityMismatch'")
+    && rendererBaselineNativeDiffSource.includes("createHash('sha256')")
+    && rendererBaselineNativeDiffSource.includes('nativeArtifactSha256')
+    && rendererBaselineNativeDiffSource.includes('nativeArtifactSizeBytes')
+    && rendererBaselineDriverSource.includes('native Skia ({profile}) baseline export did not create a non-empty artifact')
     && rendererBaselineNativeDiffSource.includes('summaryByDiagnosticAxis'),
-  'cross-backend comparisons must bind document/page/profile provenance and diagnostic axes',
+  'cross-backend comparisons must bind document/page/profile/artifact provenance and diagnostic axes',
 );
 assert(
   rendererBaselineDriverSource.includes('--include-pdf')

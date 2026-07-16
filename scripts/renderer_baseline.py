@@ -359,6 +359,19 @@ def capture_native_sample(
         ],
         ROOT,
     )
+    legacy_files = collect_files(legacy_dir, ".svg")
+    if len(legacy_files) != 1:
+        raise SystemExit(
+            "legacy SVG baseline export must create exactly one artifact: "
+            + ", ".join(legacy_files)
+        )
+    legacy_path = Path(legacy_files[0])
+    if not legacy_path.is_absolute():
+        legacy_path = ROOT / legacy_path
+    if not legacy_path.is_file() or legacy_path.stat().st_size == 0:
+        raise SystemExit(
+            f"legacy SVG baseline export did not create a non-empty artifact: {legacy_path}"
+        )
     outputs.append(
         {
             "backend": "legacy-svg",
@@ -372,7 +385,11 @@ def capture_native_sample(
                 "backend": "legacy-svg",
                 "surface": None,
             },
-            "files": collect_files(legacy_dir, ".svg"),
+            "artifact": {
+                "sha256": hashlib.sha256(legacy_path.read_bytes()).hexdigest(),
+                "sizeBytes": legacy_path.stat().st_size,
+            },
+            "files": legacy_files,
         }
     )
 
@@ -448,6 +465,20 @@ def capture_native_sample(
             ],
             ROOT,
         )
+        layer_files = collect_files(layer_dir, ".svg")
+        if len(layer_files) != 1:
+            raise SystemExit(
+                f"layer SVG ({profile}) baseline export must create exactly one artifact: "
+                + ", ".join(layer_files)
+            )
+        layer_path = Path(layer_files[0])
+        if not layer_path.is_absolute():
+            layer_path = ROOT / layer_path
+        if not layer_path.is_file() or layer_path.stat().st_size == 0:
+            raise SystemExit(
+                f"layer SVG ({profile}) baseline export did not create a non-empty artifact: "
+                f"{layer_path}"
+            )
         outputs.append(
             {
                 "backend": "layer-svg",
@@ -461,7 +492,11 @@ def capture_native_sample(
                     "backend": "layer-svg",
                     "surface": None,
                 },
-                "files": collect_files(layer_dir, ".svg"),
+                "artifact": {
+                    "sha256": hashlib.sha256(layer_path.read_bytes()).hexdigest(),
+                    "sizeBytes": layer_path.stat().st_size,
+                },
+                "files": layer_files,
             }
         )
 
@@ -490,6 +525,20 @@ def capture_native_sample(
             ],
             ROOT,
         )
+        skia_files = collect_files(skia_dir, ".png")
+        if len(skia_files) != 1:
+            raise SystemExit(
+                f"native Skia ({profile}) baseline export must create exactly one artifact: "
+                + ", ".join(skia_files)
+            )
+        skia_path = Path(skia_files[0])
+        if not skia_path.is_absolute():
+            skia_path = ROOT / skia_path
+        if not skia_path.is_file() or skia_path.stat().st_size == 0:
+            raise SystemExit(
+                f"native Skia ({profile}) baseline export did not create a non-empty artifact: "
+                f"{skia_path}"
+            )
         outputs.append(
             {
                 "backend": "native-skia",
@@ -503,7 +552,11 @@ def capture_native_sample(
                     "backend": "native-skia",
                     "surface": "raster",
                 },
-                "files": collect_files(skia_dir, ".png"),
+                "artifact": {
+                    "sha256": hashlib.sha256(skia_path.read_bytes()).hexdigest(),
+                    "sizeBytes": skia_path.stat().st_size,
+                },
+                "files": skia_files,
             }
         )
 

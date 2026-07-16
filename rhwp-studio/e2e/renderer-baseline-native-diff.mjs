@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -47,13 +48,38 @@ function parseArgs() {
   return options;
 }
 
-function comparisonIdentityMismatches(nativeIdentity, canvaskitIdentity) {
+function comparisonIdentityMismatches(
+  nativeIdentity,
+  canvaskitIdentity,
+  nativeArtifact,
+  canvaskitArtifact,
+  nativeBuffer,
+  canvaskitBuffer,
+) {
   const mismatches = [];
   for (const field of ['schemaVersion', 'sampleId', 'documentDigest', 'page', 'profile']) {
     if (nativeIdentity?.[field] !== canvaskitIdentity?.[field]) mismatches.push(field);
   }
   if (nativeIdentity?.backend !== 'native-skia') mismatches.push('nativeBackend');
   if (canvaskitIdentity?.backend !== 'canvaskit-default') mismatches.push('canvaskitBackend');
+
+  for (const [prefix, artifact, buffer] of [
+    ['native', nativeArtifact, nativeBuffer],
+    ['canvaskit', canvaskitArtifact, canvaskitBuffer],
+  ]) {
+    if (
+      !artifact
+      || !/^[0-9a-f]{64}$/.test(artifact.sha256 ?? '')
+      || !Number.isSafeInteger(artifact.sizeBytes)
+      || artifact.sizeBytes <= 0
+    ) {
+      mismatches.push(`${prefix}Artifact`);
+      continue;
+    }
+    const actualSha256 = createHash('sha256').update(buffer).digest('hex');
+    if (artifact.sha256 !== actualSha256) mismatches.push(`${prefix}ArtifactSha256`);
+    if (artifact.sizeBytes !== buffer.byteLength) mismatches.push(`${prefix}ArtifactSizeBytes`);
+  }
   return [...new Set(mismatches)].sort();
 }
 
@@ -87,9 +113,9 @@ function canvaskitDefaultResult(browserResults, sampleId, profile, rootDir) {
   };
 }
 
-async function comparePair(nativePath, canvaskitPath) {
-  let nativeBuffer = fs.readFileSync(nativePath);
-  let canvaskitBuffer = fs.readFileSync(canvaskitPath);
+async function comparePair(nativeArtifactBuffer, canvaskitArtifactBuffer) {
+  let nativeBuffer = nativeArtifactBuffer;
+  let canvaskitBuffer = canvaskitArtifactBuffer;
   const nativeImage = PNG.sync.read(nativeBuffer);
   const canvaskitImage = PNG.sync.read(canvaskitBuffer);
   let sizeNormalization = null;
@@ -243,18 +269,57 @@ if (options.selfTest) {
     page: 0,
     profile: 'screen',
   };
+  const nativeBuffer = Buffer.from('native baseline');
+  const canvaskitBuffer = Buffer.from('canvaskit baseline');
+  const nativeArtifact = {
+    sha256: createHash('sha256').update(nativeBuffer).digest('hex'),
+    sizeBytes: nativeBuffer.byteLength,
+  };
+  const canvaskitArtifact = {
+    sha256: createHash('sha256').update(canvaskitBuffer).digest('hex'),
+    sizeBytes: canvaskitBuffer.byteLength,
+  };
   const matching = comparisonIdentityMismatches(
     { ...common, backend: 'native-skia' },
     { ...common, backend: 'canvaskit-default' },
+    nativeArtifact,
+    canvaskitArtifact,
+    nativeBuffer,
+    canvaskitBuffer,
   );
   const mismatching = comparisonIdentityMismatches(
     { ...common, backend: 'native-skia' },
     { ...common, documentDigest: `sha256:${'1'.repeat(64)}`, backend: 'canvaskit-default' },
+    nativeArtifact,
+    canvaskitArtifact,
+    nativeBuffer,
+    canvaskitBuffer,
   );
-  if (matching.length !== 0 || mismatching.join(',') !== 'documentDigest') {
-    throw new Error('native/canvaskit comparison identity self-test failed');
+  const staleArtifact = comparisonIdentityMismatches(
+    { ...common, backend: 'native-skia' },
+    { ...common, backend: 'canvaskit-default' },
+    { ...nativeArtifact, sha256: '1'.repeat(64) },
+    canvaskitArtifact,
+    nativeBuffer,
+    canvaskitBuffer,
+  );
+  const wrongArtifactSize = comparisonIdentityMismatches(
+    { ...common, backend: 'native-skia' },
+    { ...common, backend: 'canvaskit-default' },
+    { ...nativeArtifact, sizeBytes: nativeArtifact.sizeBytes + 1 },
+    canvaskitArtifact,
+    nativeBuffer,
+    canvaskitBuffer,
+  );
+  if (
+    matching.length !== 0
+    || mismatching.join(',') !== 'documentDigest'
+    || staleArtifact.join(',') !== 'nativeArtifactSha256'
+    || wrongArtifactSize.join(',') !== 'nativeArtifactSizeBytes'
+  ) {
+    throw new Error('native/canvaskit comparison provenance self-test failed');
   }
-  console.log('native/canvaskit comparison identity self-test passed');
+  console.log('native/canvaskit comparison provenance self-test passed');
   process.exit(0);
 }
 const rootDir = path.resolve(new URL('../..', import.meta.url).pathname);
@@ -314,29 +379,41 @@ for (const sampleId of sampleIds) {
       continue;
     }
 
-    const nativeIdentity = native.backend?.comparisonIdentity ?? null;
-    const canvaskitIdentity = canvaskit.entry?.comparisonIdentity ?? null;
-    const identityMismatches = comparisonIdentityMismatches(nativeIdentity, canvaskitIdentity);
-    if (identityMismatches.length > 0) {
-      comparisons.push({
-        sampleId,
-        category,
-        diagnosticAxes,
-        documentDigest,
-        page,
-        profile,
-        canvaskitSurface,
-        status: 'identityMismatch',
-        identityMismatches,
+    try {
+      const nativeIdentity = native.backend?.comparisonIdentity ?? null;
+      const canvaskitIdentity = canvaskit.entry?.comparisonIdentity ?? null;
+      const nativeArtifact = native.backend?.artifact ?? null;
+      const canvaskitArtifact = canvaskit.entry?.artifact ?? null;
+      const nativeBuffer = fs.readFileSync(nativePath);
+      const canvaskitBuffer = fs.readFileSync(canvaskitPath);
+      const identityMismatches = comparisonIdentityMismatches(
         nativeIdentity,
         canvaskitIdentity,
-        nativePath,
-        canvaskitPath,
-      });
-      continue;
-    }
-
-    try {
+        nativeArtifact,
+        canvaskitArtifact,
+        nativeBuffer,
+        canvaskitBuffer,
+      );
+      if (identityMismatches.length > 0) {
+        comparisons.push({
+          sampleId,
+          category,
+          diagnosticAxes,
+          documentDigest,
+          page,
+          profile,
+          canvaskitSurface,
+          status: 'identityMismatch',
+          identityMismatches,
+          nativeIdentity,
+          canvaskitIdentity,
+          nativeArtifact,
+          canvaskitArtifact,
+          nativePath,
+          canvaskitPath,
+        });
+        continue;
+      }
       comparisons.push({
         sampleId,
         category,
@@ -348,7 +425,7 @@ for (const sampleId of sampleIds) {
         status: 'compared',
         nativePath,
         canvaskitPath,
-        diff: await comparePair(nativePath, canvaskitPath),
+        diff: await comparePair(nativeBuffer, canvaskitBuffer),
       });
     } catch (error) {
       comparisons.push({
