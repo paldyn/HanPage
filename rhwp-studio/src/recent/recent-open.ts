@@ -22,17 +22,33 @@ export interface OpenRecentDeps {
     fileName: string;
     fileHandle: FileSystemFileHandleLike;
   }) => void;
+  /**
+   * 메타-only 항목(핸들 없음) 재열기 요청 — 파일 선택 대화상자를 다시 연다.
+   * 미주입 시 안내 토스트만 띄운다.
+   */
+  requestReopen?: () => void;
 }
 
-export type OpenRecentResult = 'opened' | 'permission-denied' | 'removed';
+export type OpenRecentResult = 'opened' | 'permission-denied' | 'removed' | 'needs-pick';
 
 export async function openRecentEntry(
   entry: RecentDoc,
   deps: OpenRecentDeps,
 ): Promise<OpenRecentResult> {
+  // 메타-only 항목: 라이브 핸들이 없어 자동 재열기 불가 → 파일 다시 선택 유도.
+  if (!entry.handle) {
+    deps.toast(
+      `"${entry.fileName}"은(는) 핸들 없이 열려 자동 재열기가 불가합니다. 파일을 다시 선택하세요.`,
+      4000,
+    );
+    deps.requestReopen?.();
+    return 'needs-pick';
+  }
+
+  const handle = entry.handle;
   let granted = false;
   try {
-    granted = await deps.ensurePermission(entry.handle);
+    granted = await deps.ensurePermission(handle);
   } catch {
     granted = false;
   }
@@ -42,8 +58,8 @@ export async function openRecentEntry(
   }
 
   try {
-    const { bytes, name } = await deps.readFile(entry.handle);
-    deps.emitOpen({ bytes, fileName: name, fileHandle: entry.handle });
+    const { bytes, name } = await deps.readFile(handle);
+    deps.emitOpen({ bytes, fileName: name, fileHandle: handle });
     return 'opened';
   } catch (err) {
     // 파일 이동/삭제 — 재열기 영구 불가 항목은 목록에서 제거한다.

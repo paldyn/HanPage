@@ -34,15 +34,22 @@ export interface RecentDoc {
   sourceFormat: string;
   /** 마지막으로 연 시각 (epoch ms) */
   openedAt: number;
-  /** 재열기용 파일 핸들 — 항상 존재 (핸들 없는 열기는 기록하지 않음) */
-  handle: FileSystemFileHandleLike;
+  /**
+   * 재열기용 파일 핸들. File System Access 로 연 경우에만 존재한다.
+   * 드롭/`input[type=file]`/URL 로드 등 핸들이 없는 경로는 메타-only 로 기록되며
+   * (`handle` 미존재), 이 경우 자동 재열기는 불가하고 목록/이력 표시에만 쓰인다.
+   */
+  handle?: FileSystemFileHandleLike;
 }
 
 /** addRecentDoc 입력 (id/openedAt는 내부 생성) */
 export interface RecentDocInput {
   fileName: string;
   sourceFormat: string;
-  /** 핸들이 없으면(null/undefined) 기록하지 않는다 (#2285 범위). */
+  /**
+   * 재열기용 핸들. 없으면(null/undefined) 메타-only 로 기록한다 — 파일명/형식/시각만
+   * 남기며 자동 재열기는 불가하다. 핸들이 있으면 라이브 파일 재열기가 가능하다.
+   */
   handle?: FileSystemFileHandleLike | null;
 }
 
@@ -131,20 +138,20 @@ function sortAndTrim(rows: RecentDoc[]): RecentDoc[] {
 }
 
 /**
- * 최근 문서를 추가한다. 핸들이 없으면 아무 것도 하지 않는다(#2285 범위 —
- * 재열기 불가 항목은 목록에 남기지 않음). 동일 파일이 이미 있으면 제거 후
- * 맨 앞에 다시 넣고, 최대 {@link MAX_RECENT}개를 유지한다.
- * 핸들이 structured clone 불가(DataCloneError 등)한 환경이면 저장을 포기한다 —
- * 핸들 없는 행을 남기지 않는다.
+ * 최근 문서를 추가한다. 핸들이 있으면 라이브 재열기용으로 함께 저장하고, 없으면
+ * 메타-only(파일명/형식/시각)로 기록한다 — 드롭/`input`/URL 등 핸들 없는 열기도
+ * 목록에 남긴다. 동일 파일이 이미 있으면 제거 후 맨 앞에 다시 넣고, 최대
+ * {@link MAX_RECENT}개를 유지한다.
+ * 핸들이 structured clone 불가(DataCloneError 등)한 환경이면 핸들을 떼고 메타-only
+ * 로 재시도한다 — 기록 자체는 남긴다.
  */
 export async function addRecentDoc(input: RecentDocInput): Promise<void> {
-  if (!input.handle) return;
   const entry: RecentDoc = {
     id: createRecentId(),
     fileName: input.fileName,
     sourceFormat: input.sourceFormat,
     openedAt: Date.now(),
-    handle: input.handle,
+    ...(input.handle ? { handle: input.handle } : {}),
   };
 
   await withDb(
@@ -156,8 +163,13 @@ export async function addRecentDoc(input: RecentDocInput): Promise<void> {
       try {
         await putRow(db, entry);
       } catch {
-        // 핸들 직렬화 불가 환경 — 기록 포기 (바이트/메타-only 행을 남기지 않음).
-        return;
+        // 핸들 직렬화 불가 환경 — 핸들을 떼고 메타-only 로 재시도(기록은 유지).
+        try {
+          const { handle: _drop, ...metaOnly } = entry;
+          await putRow(db, metaOnly);
+        } catch {
+          return;
+        }
       }
       const after = sortAndTrim(await getAllRows(db));
       const keep = new Set(after.map((r) => r.id));

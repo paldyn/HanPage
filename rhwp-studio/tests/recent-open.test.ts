@@ -82,3 +82,15 @@ test('성공 시 라이브 파일 bytes와 핸들로 open 이벤트를 낸다', 
   assert.equal(calls.removed.length, 0);
   assert.equal(calls.toasts.length, 0);
 });
+
+test('메타-only 항목(핸들 없음)은 파일 재선택을 유도한다', async () => {
+  let reopenCalled = 0;
+  const { deps, calls } = makeDeps({ requestReopen: () => { reopenCalled++; } });
+  const metaEntry: RecentDoc = { id: 'm1', fileName: '드롭.hwp', sourceFormat: 'hwp', openedAt: 1 };
+  const result = await openRecentEntry(metaEntry, deps);
+  assert.equal(result, 'needs-pick');
+  assert.equal(reopenCalled, 1, '파일 재선택 대화상자를 연다');
+  assert.equal(calls.opened.length, 0, '핸들이 없으므로 자동 open 이벤트는 없다');
+  assert.equal(calls.removed.length, 0, '메타-only 항목은 제거하지 않는다');
+  assert.match(calls.toasts[0] ?? '', /다시 선택/);
+});

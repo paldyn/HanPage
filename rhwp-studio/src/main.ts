@@ -927,9 +927,10 @@ async function loadBytes(
   wasm.currentFileHandle = fileHandle;
 
   // 최근 문서 기록 — 문서 로드 성공 직후, 폰트/모달 등 블로킹 UI 단계 이전에 기록한다.
-  // #2285 범위: FileSystemFileHandle 이 있는 열기만 기록한다(핸들 없는 드롭/input 은
-  // 재열기 불가 → 목록 제외). 자동저장 복구본은 options.skipRecent 로 제외.
-  if (!options.skipRecent && fileHandle) {
+  // 핸들이 있으면 라이브 재열기용으로 함께 기록하고, 없으면(드롭/input/URL 로드)
+  // 메타-only 로 기록한다 — 목록에는 남기되 자동 재열기는 핸들 있는 항목만 가능하다.
+  // 자동저장 복구본은 options.skipRecent 로 제외.
+  if (!options.skipRecent) {
     void addRecentDoc({
       fileName: wasm.fileName,
       sourceFormat: wasm.getSourceFormat(),

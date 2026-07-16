@@ -10,8 +10,8 @@ import {
 import type { FileSystemFileHandleLike } from '../src/command/file-system-access.ts';
 
 /**
- * PR #2286 리뷰 회귀 테스트 (#2285 범위 고정):
- * - 핸들-only 저장 (핸들 없는 열기는 목록 제외, 바이트 미보관)
+ * PR #2286 리뷰 회귀 테스트 (#2285 범위 + 메타-only 확장):
+ * - 핸들 있으면 라이브 재열기용 저장, 없으면 메타-only 기록 (바이트 미보관)
  * - 동일 파일 판정은 isSameEntry 권위 (같은 파일명·다른 파일 공존)
  * - 최대 8개 상한, 목록 지우기
  * node 환경(IndexedDB 없음)이라 메모리 폴백 경로를 검증한다 — 스토어 로직은
@@ -31,11 +31,26 @@ function makeHandle(key: string): FileSystemFileHandleLike {
   return self as unknown as FileSystemFileHandleLike;
 }
 
-test('핸들 없는 열기는 최근 목록에 기록되지 않는다 (#2285 범위)', async () => {
+test('핸들 없는 열기는 메타-only 로 기록된다 (드롭/input/URL)', async () => {
   await clearRecentDocs();
   await addRecentDoc({ fileName: '드롭.hwp', sourceFormat: 'hwp' });
   await addRecentDoc({ fileName: '인풋.hwpx', sourceFormat: 'hwpx', handle: null });
-  assert.equal((await listRecentDocs()).length, 0);
+  const docs = await listRecentDocs();
+  assert.equal(docs.length, 2, '핸들 없는 열기도 목록에 남는다');
+  for (const d of docs) {
+    assert.equal(d.handle, undefined, '메타-only 항목은 핸들을 갖지 않는다');
+    assert.ok(!('bytes' in d), '바이트 스냅샷을 보관하면 안 된다');
+  }
+  assert.deepEqual(docs.map((d) => d.fileName).sort(), ['드롭.hwp', '인풋.hwpx']);
+});
+
+test('같은 파일명은 핸들 유무와 무관하게 파일명 폴백으로 최신화된다 (메타-only)', async () => {
+  await clearRecentDocs();
+  await addRecentDoc({ fileName: 'dup.hwp', sourceFormat: 'hwp' });
+  await new Promise((r) => setTimeout(r, 5));
+  await addRecentDoc({ fileName: 'dup.hwp', sourceFormat: 'hwp' });
+  const docs = await listRecentDocs();
+  assert.equal(docs.length, 1, '핸들 없는 동명 문서는 파일명 비교로 중복 제거');
 });
 
 test('저장 항목은 핸들+메타만 보관하고 바이트를 갖지 않는다', async () => {
