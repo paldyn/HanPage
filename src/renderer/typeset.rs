@@ -14563,7 +14563,12 @@ impl TypesetEngine {
                 // 기지 한계). 부수 발견: 한글 자체가 fresh-open/warm-open 에 따라
                 // 같은 문서를 1쪽/2쪽으로 다르게 레이아웃(PDF 포함) — 권위 판정은
                 // warm PDF 로 통일(#2138 stage1).
-                let uncertain_anchor_margin = if anchor_vpos <= 0 { 62.0 } else { 0.0 };
+                // [#2279 성분②] 재구성 사다리의 host 줄박스 정합으로 본문 흐름
+                // 좌표가 om_bottom(~11.4px)만큼 전진 — 압축-사다리 좌표계 기준이던
+                // 62px 를 같은 폭만큼 하향(50). 코호트 재판정: 분할 정답 최대 슬랙
+                // 42.5(36395825) < 50 < 흡수 정답 최소 슬랙 56.4(36376848) 로
+                // 62 시절의 기지 한계(저슬랙 흡수 2건) 외 오분류 없음.
+                let uncertain_anchor_margin = if anchor_vpos <= 0 { 50.0 } else { 0.0 };
                 // [#2279 진단] footer 흡수/분할 판정 변수 분해 — 동작 불변.
                 // underrun = 이 단의 문단 place 가 트림한 (total_height − advance) 누계
                 // (렌더/한글 좌표와의 발산 중 문단-sa 성분; 표 place 성분은 미포함).
