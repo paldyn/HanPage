@@ -24643,9 +24643,20 @@ fn issue2214_scoped_cache_coherence_preserves_transient_pagination() {
         let initial_cuts = issue2214_target_cuts(&doc);
         issue2214_assert_cut_continuity(label, "initial", &initial_cuts);
 
+        // #2195 이후에도 44번째 입력은 target paragraph의 상대 flow advance를 바꾼다.
+        // 다만 선언 셀 높이가 증가분을 흡수해 full pagination의 cut/bounds는 불변이다.
+        // render_normalized warm tree는 flush 전에도 매 mutation을 즉시 반영해야 한다.
         for inserted in 0..44 {
-            doc.insert_text_in_cell_native_deferred_pagination(0, 0, 2, 2, 5, 130 + inserted, "1")
+            let raw = doc
+                .insert_text_in_cell_native_deferred_pagination(0, 0, 2, 2, 5, 130 + inserted, "1")
                 .expect("deferred sequential insert");
+            let result: Value = serde_json::from_str(&raw).expect("edit result json");
+            assert_eq!(
+                result["cellFlowChanged"].as_bool(),
+                Some(inserted == 43),
+                "{label}: input {} flow signal",
+                inserted + 1
+            );
         }
         let transient_cuts = issue2214_target_cuts(&doc);
         issue2214_assert_cut_continuity(label, "transient", &transient_cuts);
@@ -24696,12 +24707,12 @@ fn issue2214_scoped_cache_coherence_preserves_transient_pagination() {
         assert_eq!(flushed_cut.start_cut, Vec::<usize>::new());
         assert_eq!(
             flushed_cut.end_cut,
-            vec![38],
+            vec![37],
             "{label}: flushed page-zero cut"
         );
-        assert_ne!(
+        assert_eq!(
             transient_cut, flushed_cut,
-            "{label}: explicit pagination should update cut"
+            "{label}: #2195 declared height must absorb the first-page advance"
         );
         let changed_pages = transient_cuts
             .iter()
@@ -24719,14 +24730,10 @@ fn issue2214_scoped_cache_coherence_preserves_transient_pagination() {
             flushed_cuts.len(),
             "{label}: page fingerprint count"
         );
-        assert!(
-            changed_pages.contains(&0),
-            "{label}: flow-boundary flush must update target page fingerprint"
-        );
         assert_eq!(
             changed_pages,
-            (0..doc.page_count() as usize).collect::<Vec<_>>(),
-            "{label}: flow-boundary flush must update all target-table page fingerprints"
+            (2..doc.page_count() as usize).collect::<Vec<_>>(),
+            "{label}: flush must realign downstream continuation cuts"
         );
         let transient_rect_json: Value =
             serde_json::from_str(&transient_rect).expect("transient rect json");
@@ -24739,10 +24746,10 @@ fn issue2214_scoped_cache_coherence_preserves_transient_pagination() {
                 "{label}: transient cursor field {key} must equal flush oracle"
             );
         }
-        assert_ne!(
+        assert_eq!(
             transient_rect_json.get("cellBounds"),
             flushed_rect_json.get("cellBounds"),
-            "{label}: transient control must preserve deferred cell bounds"
+            "{label}: absorbed flow boundary must preserve cell bounds"
         );
         let transient_bounds_h = transient_rect_json["cellBounds"]["h"]
             .as_f64()
@@ -24755,7 +24762,7 @@ fn issue2214_scoped_cache_coherence_preserves_transient_pagination() {
             "{label}: transient bounds h={transient_bounds_h}"
         );
         assert!(
-            (flushed_bounds_h - 971.5).abs() <= 0.2,
+            (flushed_bounds_h - 945.9).abs() <= 0.2,
             "{label}: flushed bounds h={flushed_bounds_h}"
         );
         assert_eq!(doc.page_count(), 115, "{label}: page count");

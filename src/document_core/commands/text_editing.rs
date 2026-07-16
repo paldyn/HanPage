@@ -823,22 +823,26 @@ impl DocumentCore {
             None,
         );
 
-        let cell_para_after = self
-            .get_cell_paragraph_ref(
-                section_idx,
-                parent_para_idx,
-                control_idx,
-                cell_idx,
-                cell_para_idx,
+        let (flow_advance_after, local_contribution_after, cell_para_after) = {
+            let cell_para_after = self
+                .get_cell_paragraph_ref(
+                    section_idx,
+                    parent_para_idx,
+                    control_idx,
+                    cell_idx,
+                    cell_para_idx,
+                )
+                .ok_or_else(|| {
+                    HwpError::RenderError("삽입 뒤 셀 문단을 다시 찾을 수 없습니다".to_string())
+                })?;
+            (
+                relative_paragraph_flow_advance(cell_para_after),
+                crate::renderer::layout::LayoutEngine::paragraph_contributes_to_table_nested_text_flag(
+                    cell_para_after,
+                ),
+                cell_para_after.clone(),
             )
-            .ok_or_else(|| {
-                HwpError::RenderError("삽입 뒤 셀 문단을 다시 찾을 수 없습니다".to_string())
-            })?;
-        let flow_advance_after = relative_paragraph_flow_advance(cell_para_after);
-        let local_contribution_after =
-            crate::renderer::layout::LayoutEngine::paragraph_contributes_to_table_nested_text_flag(
-                cell_para_after,
-            );
+        };
         let cell_flow_changed = flow_advance_before != flow_advance_after;
 
         // Table의 일반 cell만 pointer-key layout cache의 owner다. 표 캡션 sentinel과
@@ -858,6 +862,22 @@ impl DocumentCore {
             }
         }
 
+        // [#2214/#2195] paginate 시 생성된 render_normalized는 원본 IR의 파생
+        // 복사본이다. deferred edit은 pagination을 실행하지 않으므로 원본만 바꾸면
+        // page tree가 편집 전 복사본을 계속 읽는다. 편집된 cell paragraph만 같은
+        // normalized path에 반영하고 그 복사본의 pointer-key cache도 국소 제거한다.
+        if !paginate_immediately {
+            self.refresh_render_normalized_cell_paragraph_after_edit(
+                section_idx,
+                parent_para_idx,
+                control_idx,
+                cell_idx,
+                cell_para_idx,
+                cell_para_after,
+                local_contribution_before,
+                local_contribution_after,
+            );
+        }
         // raw 스트림 무효화, 재페이지네이션 (셀 편집 → composed 불변, section dirty만 설정)
         self.document.sections[section_idx].raw_stream = None;
         self.mark_section_dirty(section_idx);
