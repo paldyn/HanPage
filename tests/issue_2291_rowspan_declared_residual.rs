@@ -25,7 +25,12 @@ fn core() -> DocumentCore {
 }
 
 /// (row, col) 셀 노드의 bbox 높이. 여러 쪽에 걸친 문서라 페이지 범위를 훑는다.
-fn find_cell_height(core: &DocumentCore, pages: std::ops::Range<u32>, row: u32, col: u32) -> Option<f64> {
+fn find_cell_height(
+    core: &DocumentCore,
+    pages: std::ops::Range<u32>,
+    row: u32,
+    col: u32,
+) -> Option<f64> {
     for page in pages {
         let tree = core.build_page_render_tree(page).ok()?;
         if let Some(h) = find_cell_in(&tree.root, row, col) {
