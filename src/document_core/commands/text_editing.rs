@@ -487,6 +487,10 @@ impl DocumentCore {
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             para_idx,
+            None,
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
         self.recompose_paragraph(section_idx, para_idx);
         self.paginate_if_needed();
@@ -505,6 +509,10 @@ impl DocumentCore {
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 para_idx,
+                None,
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             self.recompose_paragraph(section_idx, para_idx);
             self.paginate_if_needed();
@@ -597,6 +605,10 @@ impl DocumentCore {
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             para_idx,
+            None,
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
         self.recompose_paragraph(section_idx, para_idx);
         self.paginate_if_needed();
@@ -615,6 +627,10 @@ impl DocumentCore {
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 para_idx,
+                None,
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             self.recompose_paragraph(section_idx, para_idx);
             self.paginate_if_needed();
@@ -1258,6 +1274,10 @@ impl DocumentCore {
                     crate::renderer::composer::recalculate_section_vpos(
                         &mut self.document.sections[section_idx].paragraphs,
                         start_para,
+                        None,
+                        &self.styles,
+                        self.dpi,
+                        self.document.is_hwp3_variant,
                     );
                 }
                 // 변경 문단만 재구성
@@ -1298,6 +1318,10 @@ impl DocumentCore {
                 crate::renderer::composer::recalculate_section_vpos(
                     &mut self.document.sections[section_idx].paragraphs,
                     start_para,
+                    None,
+                    &self.styles,
+                    self.dpi,
+                    self.document.is_hwp3_variant,
                 );
                 // 병합된 문단 재구성
                 self.recompose_paragraph(section_idx, start_para);
@@ -1432,6 +1456,10 @@ impl DocumentCore {
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 para_idx,
+                Some(new_para_idx),
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             self.insert_composed_paragraph(section_idx, new_para_idx);
             self.paginate_if_needed();
@@ -1450,6 +1478,10 @@ impl DocumentCore {
                 crate::renderer::composer::recalculate_section_vpos(
                     &mut self.document.sections[section_idx].paragraphs,
                     para_idx,
+                    Some(new_para_idx),
+                    &self.styles,
+                    self.dpi,
+                    self.document.is_hwp3_variant,
                 );
                 self.recompose_paragraph(section_idx, new_para_idx);
                 self.paginate_if_needed();
@@ -1498,6 +1530,10 @@ impl DocumentCore {
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 para_idx,
+                Some(new_para_idx),
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             self.insert_composed_paragraph(section_idx, new_para_idx);
             self.paginate_if_needed();
@@ -1546,6 +1582,10 @@ impl DocumentCore {
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             para_idx,
+            Some(new_para_idx),
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
         self.recompose_paragraph(section_idx, para_idx);
         self.insert_composed_paragraph(section_idx, new_para_idx);
@@ -1566,6 +1606,10 @@ impl DocumentCore {
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 para_idx,
+                Some(new_para_idx),
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             self.recompose_paragraph(section_idx, para_idx);
             self.recompose_paragraph(section_idx, new_para_idx);
@@ -1637,6 +1681,10 @@ impl DocumentCore {
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             new_para_idx,
+            Some(new_para_idx),
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
 
         // 전체 구역 재구성 + 재페이지네이션
@@ -1701,6 +1749,10 @@ impl DocumentCore {
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             new_para_idx,
+            Some(new_para_idx),
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
 
         self.recompose_section(section_idx);
@@ -1844,6 +1896,10 @@ impl DocumentCore {
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 prev_idx,
+                None,
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             self.remove_composed_paragraph(section_idx, para_idx);
             self.recompose_paragraph(section_idx, prev_idx);
@@ -1870,6 +1926,10 @@ impl DocumentCore {
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             prev_idx,
+            None,
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
         self.remove_composed_paragraph(section_idx, para_idx);
         self.recompose_paragraph(section_idx, prev_idx);
@@ -1889,6 +1949,10 @@ impl DocumentCore {
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 prev_idx,
+                None,
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             self.recompose_paragraph(section_idx, prev_idx);
             self.paginate_if_needed();
@@ -1954,6 +2018,10 @@ impl DocumentCore {
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             reflow_idx,
+            None,
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
         if reflow_idx < self.document.sections[section_idx].paragraphs.len() {
             self.recompose_paragraph(section_idx, reflow_idx);
@@ -1976,6 +2044,10 @@ impl DocumentCore {
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 reflow_idx,
+                None,
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             if reflow_idx < self.document.sections[section_idx].paragraphs.len() {
                 self.recompose_paragraph(section_idx, reflow_idx);
@@ -2040,6 +2112,10 @@ impl DocumentCore {
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             reflow_target,
+            Some(para_idx),
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
         self.insert_composed_paragraph(section_idx, para_idx);
         self.paginate_if_needed();
@@ -2058,6 +2134,10 @@ impl DocumentCore {
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 reflow_target,
+                Some(para_idx),
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             self.recompose_paragraph(section_idx, para_idx);
             self.paginate_if_needed();

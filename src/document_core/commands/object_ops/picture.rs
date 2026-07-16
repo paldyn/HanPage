@@ -547,6 +547,10 @@ impl DocumentCore {
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 parent_para_idx,
+                None,
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
         }
         // 캡션 생성/삭제 시 AutoNumber 재할당. 생성 path 는 문단 placeholder 도 보강한다.

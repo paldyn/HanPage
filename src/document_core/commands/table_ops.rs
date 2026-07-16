@@ -2643,6 +2643,10 @@ impl DocumentCore {
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             parent_para_idx,
+            None,
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
         self.recompose_section(section_idx);
         self.paginate_if_needed();
