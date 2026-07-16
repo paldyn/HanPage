@@ -11139,6 +11139,18 @@ impl TypesetEngine {
                     pairs.push(metric);
                 }
             }
+            // [#2287] 저장 LINE_SEG 없는 빈 anchor 문단의 TAC 그림/도형 —
+            // composed lines 가 비어 문단 플로우가 0 으로 붕괴하는 것을
+            // 개체 폭 greedy wrap 줄 메트릭 합성으로 방지.
+            if pairs.is_empty() {
+                if let Some(metrics) = crate::renderer::tac_object_stack_line_metrics(
+                    para,
+                    self.dpi,
+                    line_available_width_px(0),
+                ) {
+                    pairs.extend(metrics);
+                }
+            }
             pairs.into_iter().unzip()
         } else if !para.line_segs.is_empty() {
             para.line_segs
@@ -12545,8 +12557,21 @@ impl TypesetEngine {
                         && signed_hwpunit(t.common.vertical_offset) < 0
             )
         });
-        let should_sort_para_float_tables =
-            !para_has_non_whitespace_text(para) && !has_negative_para_float;
+        // [#2287 후속/1.hwpx p58] 문단 내부 저장 vpos 리셋(ls[k] vpos<=0, 직전
+        // vpos>5000)이 있는 host 는 컨트롤이 서로 다른 쪽의 저장 줄에 앉는
+        // 구조 — v_off 오름차순 정렬(#986/#1088)이 저장 줄 순서를 뒤집으면
+        // (1.hwpx pi=322: TAC(v_off 0)가 자리차지(v_off 1768) 앞으로) 리셋
+        // 경계 배치가 무너져 두 표가 같은 쪽에 겹친다. #1639 음수-혼재와
+        // 동일하게 정렬을 끄고 배열(저장) 순서를 보존한다.
+        let has_mid_para_vpos_reset = para.line_segs.windows(2).any(|w| {
+            (w[0].tag | w[1].tag) & crate::model::paragraph::LineSeg::TAG_IMPLEMENTATION_PROPERTY
+                == 0
+                && w[1].vertical_pos <= 0
+                && w[0].vertical_pos > 5000
+        });
+        let should_sort_para_float_tables = !para_has_non_whitespace_text(para)
+            && !has_negative_para_float
+            && !has_mid_para_vpos_reset;
         let float_table_voffset = |ctrl: &Control| -> i32 {
             match ctrl {
                 Control::Table(t)
@@ -12588,6 +12613,37 @@ impl TypesetEngine {
             let ctrl = &para.controls[ctrl_idx];
             match ctrl {
                 Control::Table(table) => {
+                    // [#2287 후속/1.hwpx p58] 문단 **내부** 저장 vpos 리셋 경계:
+                    // 한 문단에 표 여러 개가 서로 다른 저장 줄(ls)에 앉고, TAC 표의
+                    // 소속 줄 ls[k](k>=1)가 쪽 리셋(vpos<=0, 직전 줄 vpos>5000 —
+                    // #1920 임계 동일)이면 한글은 그 표를 **다음 쪽 상단**에 둔다.
+                    // 기존 vpos-reset 처리는 문단 간(next_para first)만 다뤄, 이
+                    // 형상(1.hwpx pi=322: ls[0] 23676 자리차지 표 + ls[1] vpos=0
+                    // TAC 표 917px)에서 두 표가 같은 쪽 같은 y 대역에 겹쳐 렌더되고
+                    // (PMR-004/PM-005) 후속 조각이 페이지 밖(+865.8px)으로 밀렸다.
+                    // TAC 표의 소속 줄 판정은 place_table_with_text 의 표 줄 매칭
+                    // (lh ≈ 표높이+outer margins)과 동일식.
+                    if order_pos > 0 && table.common.treat_as_char && !st.current_items.is_empty() {
+                        let tbl_line_h = hwpunit_to_px(
+                            table.common.height as i32
+                                + table.outer_margin_top as i32
+                                + table.outer_margin_bottom as i32,
+                            self.dpi,
+                        );
+                        let reset_line = para.line_segs.windows(2).any(|w| {
+                            let stored = (w[0].tag | w[1].tag)
+                                & crate::model::paragraph::LineSeg::TAG_IMPLEMENTATION_PROPERTY
+                                == 0;
+                            stored
+                                && w[1].vertical_pos <= 0
+                                && w[0].vertical_pos > 5000
+                                && (hwpunit_to_px(w[1].line_height, self.dpi) - tbl_line_h).abs()
+                                    < 2.0
+                        });
+                        if reset_line {
+                            st.advance_column_or_new_page();
+                        }
+                    }
                     // [Issue #703] 글앞으로 / 글뒤로 표는 Shape처럼 취급 — 본문 흐름 공간 차지 없음.
                     // pagination/engine.rs:976-981 와 동일 시멘틱: 데코레이션 표는 절대 좌표로 배치되며
                     // current_height 누적에 영향을 주지 않는다.
@@ -13424,6 +13480,20 @@ impl TypesetEngine {
         let om_bot = hwpunit_to_px(table.outer_margin_bottom as i32, self.dpi);
         let table_line_h = hwpunit_to_px(table.common.height as i32, self.dpi) + om_top + om_bot;
 
+        // [#2287 후속/1.hwpx p58] text_height(th) 매칭 우선 — 한컴은 문단의
+        // 모든 줄에 최대 줄높이를 lh 로 저장하는 관례가 있어(1.hwpx pi=322:
+        // 텍스트 줄 ls[0] lh=69085/th=1300, 표 줄 ls[1] lh=th=69085), lh 만으로
+        // 는 텍스트 줄이 먼저 오매칭되어 917px TAC 표의 소비가 17.3px 로
+        // 붕괴(fmt.line_heights[0] 채택)했다. th 가 표 높이와 일치하는 줄이
+        // 있으면 그 줄이 표 줄의 확정 증거이고, 없으면 종전 lh 매칭 유지.
+        let th_match = para.line_segs.iter().enumerate().find_map(|(idx, seg)| {
+            let th = hwpunit_to_px(seg.text_height, self.dpi);
+            ((th - table_line_h).abs() < 1.0).then_some(idx)
+        });
+        if th_match.is_some() {
+            return th_match;
+        }
+
         para.line_segs.iter().enumerate().find_map(|(idx, seg)| {
             let line_h = hwpunit_to_px(seg.line_height, self.dpi);
             if (line_h - table_line_h).abs() < 1.0 {
@@ -13727,7 +13797,28 @@ impl TypesetEngine {
                         (b_start..b_end).map(|x| cut_row_h[x]).sum::<f64>()
                             + cs * block_size.saturating_sub(1) as f64
                     } else if rowbreak_use_row_offsets {
-                        block_fragment_height(b_end, blk_start_cut, &[])
+                        // [#2287] 연속분(start_cut)의 per-row 합산은 row_span==1
+                        // 셀만 집계해, 걸친 rowspan 셀의 잔여 유닛이 0 으로
+                        // 평가된다 — 블록이 즉시 "fits" 로 종료되어 선언 잔여가
+                        // 통째로 증발(교육부 연결맵 47×9: 잔여 1904px → 표마다
+                        // 누적, 표 밀집 문서 -40~-64쪽 + 렌더 y=3026 오버플로).
+                        // spacer-트림 잔여(rowspan 셀 포함, 컷 워크 의미론 미러)로
+                        // 하한을 잡는다. per-row 합산이 유의한 높이를 주는 부분
+                        // 계상 사례(59043 병리 표: 음수 패딩 + 측정/렌더 발산,
+                        // #2237 계열)는 기존 동작 보존 — **완전 증발(=0)** 만 보정.
+                        // start_cut 없는 첫 조각(#1486)은 불변.
+                        let frag_h = block_fragment_height(b_end, blk_start_cut, &[]);
+                        if blk_start_cut.is_empty() || frag_h > 0.5 {
+                            frag_h
+                        } else {
+                            frag_h.max(layout_engine.row_block_cut_remaining_height(
+                                table,
+                                b_start,
+                                b_end,
+                                blk_start_cut,
+                                styles,
+                            ))
+                        }
                     } else {
                         layout_engine.row_block_content_height(
                             table,
@@ -13876,7 +13967,25 @@ impl TypesetEngine {
                     split_end_limit = cut_res.consumed_height;
                     split_block_start = Some(b_start);
                     let split_total = if use_offsets {
-                        block_fragment_height(end_row, blk_start_cut, &cut_res.end_cut)
+                        // [#2287] 오프셋(밴드) 컷의 페이지 소비 권위는 컷 워크의
+                        // consumed_height(예산 내 가시 밴드)다. per-row 합산
+                        // (block_fragment_height)은 rowspan 걸침 셀의 유닛을 행
+                        // 단위로 배분하지 못해 양방향으로 발산한다:
+                        // - 연속분(start_cut)에서 row_span==1 필터로 **0 평가**
+                        //   (완전 증발 — 표 밀집 -40~-64쪽의 결함 1), 또는
+                        // - 첫 조각에서 걸침 셀 유닛 전량이 계상되어 **블록 전체로
+                        //   과대** (교육부 47×9 r2..4: frag 2354.6 vs 컷 450.7 —
+                        //   p25 가 2396px 로 만재되어 p26 sliver + p30 tail
+                        //   overflow, PR #2290 P1 리뷰).
+                        // frag_total 은 렌더 조각 표시용 참고값으로만 두고, 소비는
+                        // 컷 워크와 발산할 때 consumed_height 로 정정한다.
+                        let frag_total =
+                            block_fragment_height(end_row, blk_start_cut, &cut_res.end_cut);
+                        if (frag_total - cut_res.consumed_height).abs() <= 0.5 {
+                            frag_total
+                        } else {
+                            cut_res.consumed_height
+                        }
                     } else {
                         layout_engine.row_block_content_height(
                             table,
