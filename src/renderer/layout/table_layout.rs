@@ -6568,9 +6568,21 @@ impl LayoutEngine {
             let allow_force_progress = row_offset <= 0.5;
             let mut j = start;
             let mut h = 0.0f64;
+            // [#2287/PR #2290 P1] 연속 조각(start>0)이 시작 직후(start+1) 저장
+            // hard-break 를 만나면, start 유닛은 직전 조각의 orphan-rewind 가
+            // 이월시킨 고아다 — 여기서 hard 를 쪽 경계로 존중하면 고아 혼자
+            // 한 쪽(교육부 47×9 p26: 유닛 1개 17.3px sliver)이 되어 rewind 의
+            // 의도(고아 방지)와 정반대가 된다. 극소 소비(h ≤ 한 줄급) 한정으로
+            // 그 hard 는 이미 소비된 경계로 보고 통과한다.
+            const REWIND_ORPHAN_CONT_PX: f64 = 48.0;
             while j < units.len() {
                 let u = &units[j];
                 if j > start && u.hard_break_before {
+                    if start > 0 && j == start + 1 && h <= REWIND_ORPHAN_CONT_PX {
+                        h += u.height;
+                        j += 1;
+                        continue;
+                    }
                     Self::rewind_rowbreak_orphan_before_hard_break(
                         table,
                         &units,
@@ -6816,6 +6828,84 @@ impl LayoutEngine {
                 .unwrap_or(units.len())
                 .clamp(su, units.len());
             let content: f64 = units[su..eu].iter().map(|u| u.height).sum();
+            let (_, _, pad_top, pad_bottom) = self.resolve_cell_padding(cell, table);
+            let h = content + pad_top + pad_bottom;
+            // [#2287 진단] start_cut 적용 잔여 평가 분해 — 동작 불변.
+            if std::env::var("RHWP_DIAG_BLKH").is_ok() && !start_cut.is_empty() {
+                eprintln!(
+                    "DIAG_BLKH cell[{}] r={} c={} units={} su={} eu={} content={:.1} h={:.1}",
+                    i,
+                    cell.row,
+                    cell.col,
+                    units.len(),
+                    su,
+                    eu,
+                    content,
+                    h
+                );
+            }
+            if h > max_h {
+                max_h = h;
+            }
+        }
+        max_h
+    }
+
+    /// [#2287] start_cut 이후 블록 잔여 콘텐츠 높이 — `advance_row_block_cut` 의
+    /// spacer 소비 의미론(컷 재개 지점의 선두/후미 empty-spacer run 은 무높이
+    /// 소비)을 미러한 잔여 평가. `row_block_content_height` 는 spacer 꼬리를
+    /// 전량 합산해 잔여를 과대평가한다 (59043 규제영향분석서 41→44쪽 회귀 실측).
+    /// [#2287/PR #2290 P1] 셀의 컷 범위(su..eu) 유닛 가시 높이 + 상하 패딩.
+    /// 블록-합 보정(table_partial)에서 rowspan 셀 bbox 를 컷과 정합시키는 데 쓴다.
+    pub(crate) fn cell_cut_visible_height(
+        &self,
+        cell: &crate::model::table::Cell,
+        table: &crate::model::table::Table,
+        styles: &ResolvedStyleSet,
+        start_unit: usize,
+        end_unit: usize,
+    ) -> f64 {
+        let units = self.cell_units(cell, table, styles);
+        let su = start_unit.min(units.len());
+        let eu = end_unit.clamp(su, units.len());
+        let content: f64 = units[su..eu].iter().map(|u| u.height).sum();
+        if content <= 0.0 {
+            return 0.0;
+        }
+        let (_, _, pad_top, pad_bottom) = self.resolve_cell_padding(cell, table);
+        content + pad_top + pad_bottom
+    }
+
+    pub(crate) fn row_block_cut_remaining_height(
+        &self,
+        table: &crate::model::table::Table,
+        b_start: usize,
+        b_end: usize,
+        start_cut: &[usize],
+        styles: &ResolvedStyleSet,
+    ) -> f64 {
+        let mut cells = Self::row_block_cells(table, b_start, b_end);
+        cells.sort_by_key(|c| (c.row, c.col));
+        let mut max_h = 0.0f64;
+        for (i, cell) in cells.iter().enumerate() {
+            let units = self.cell_units(cell, table, styles);
+            let su = start_cut.get(i).copied().unwrap_or(0).min(units.len());
+            if su >= units.len() {
+                continue;
+            }
+            let (mut lo, mut hi) = (su, units.len());
+            if su > 0 {
+                while lo < hi && units[lo].empty_spacer && !units[lo].hard_break_before {
+                    lo += 1;
+                }
+                while hi > lo && units[hi - 1].empty_spacer && !units[hi - 1].hard_break_before {
+                    hi -= 1;
+                }
+            }
+            let content: f64 = units[lo..hi].iter().map(|u| u.height).sum();
+            if content <= 0.0 {
+                continue;
+            }
             let (_, _, pad_top, pad_bottom) = self.resolve_cell_padding(cell, table);
             let h = content + pad_top + pad_bottom;
             if h > max_h {
