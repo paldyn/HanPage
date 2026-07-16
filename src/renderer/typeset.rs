@@ -12949,7 +12949,16 @@ impl TypesetEngine {
         }
 
         // TAC 표 높이 보정 (Paginator engine.rs:123-179 동일)
-        if has_tac && fmt.total_height > 0.0 && st.pages.len() == page_count_before {
+        // [#2319] 저장 lineseg 없는(기계생성) 문단은 스킵 — cap 의 두 축(tac_seg_total
+        // 의 seg.lh, fallback 의 fmt.total_height)이 모두 lineseg/컴포즈에 표 높이가
+        // 반영돼 있음을 전제한다. lineseg 없는 텍스트-host 문단에서는 fmt 가 표를
+        // 모르므로 cap 이 측정 높이(예: 858px)를 텍스트 줄합(34.7px)으로 되감아
+        // 서식 문서 과소분할을 만든다 (20544835 r15 재검증 −1 계열).
+        if has_tac
+            && fmt.total_height > 0.0
+            && !para.line_segs.is_empty()
+            && st.pages.len() == page_count_before
+        {
             let height_added = st.current_height - height_before;
             // tac_seg_total 계산: 각 TAC 표의 max(seg.lh, 실측높이) + ls/2
             let mut tac_seg_total = 0.0;
@@ -13160,6 +13169,16 @@ impl TypesetEngine {
             fmt.height_for_fit
         } else {
             ft.total_height
+        };
+        // [#2319] 저장 lineseg 없는(기계생성) 문단은 fresh 컴포즈가 tac 표 높이를
+        // 줄에 반영하지 못해, 위 fmt 기반 분기가 텍스트 줄높이(예: 17.3px)를
+        // 858px 표의 높이로 채택한다 — 서식 문서 과소분할(−1쪽 계열 26건, r15
+        // 재검증). 측정 높이보다 작으면 측정 높이로 보정한다. 저장 lineseg 보유
+        // 문서는 불변 (#2237 측정-저장 발산 축과 격리).
+        let table_height = if para.line_segs.is_empty() && table_height + 0.5 < ft.total_height {
+            ft.total_height
+        } else {
+            table_height
         };
 
         // TAC 표는 분할하지 않고 통째로 배치
