@@ -1510,6 +1510,25 @@ fn para_controls_only_topbottom_floats(para: &Paragraph) -> bool {
         })
 }
 
+/// [#2137] 단일 줄의 treat_as_char TopAndBottom 그림/도형만 가진 문단.
+/// 한컴은 이런 소형 개체 줄을 쪽 하단 여백으로 스필해 현재 쪽에 유지한다
+/// (156637323 pi=19 실측). 저장 page-last 증거와 결합해서만 신뢰한다 —
+/// 대형 박스는 저장 vpos 가 다음 쪽을 인코딩해 bounds 검사에서 자연 배제
+/// (#1027-E2 push 정합 유지).
+fn para_controls_only_tac_topbottom_objects(para: &Paragraph) -> bool {
+    use crate::model::shape::TextWrap;
+    !para.controls.is_empty()
+        && para.controls.iter().all(|c| match c {
+            Control::Picture(p) => {
+                p.common.treat_as_char && matches!(p.common.text_wrap, TextWrap::TopAndBottom)
+            }
+            Control::Shape(s) => {
+                s.common().treat_as_char && matches!(s.common().text_wrap, TextWrap::TopAndBottom)
+            }
+            _ => false,
+        })
+}
+
 fn paragraph_saved_vpos_reset_starts_new_page_after(
     current_para: &Paragraph,
     next_para: &Paragraph,
@@ -11495,7 +11514,9 @@ impl TypesetEngine {
             && fmt.line_heights.len() == 1
             // [#2137] 비-TAC 자리차지(TopAndBottom) float 만 가진 앵커도 저장
             // page-last 증거가 있으면 신뢰 — 개체는 하단 여백 스필(한컴 정합).
-            && (para.controls.is_empty() || para_controls_only_topbottom_floats(para))
+            && (para.controls.is_empty()
+                || para_controls_only_topbottom_floats(para)
+                || para_controls_only_tac_topbottom_objects(para))
             && !st.current_items.is_empty()
             // [Task #1749] 저장 flow 가 이 줄을 페이지 마지막으로 인코딩한 경우에만
             // bounds 신뢰 — 누적좌표 문서의 쪽 경계 overfill 차단.
@@ -11506,7 +11527,18 @@ impl TypesetEngine {
             && current_page_vpos_base
                 .and_then(|base| single_line_visible_bounds_px(para, base, self.dpi))
                 .is_some_and(|bounds| {
-                    saved_bounds_fit_at_flow_tail(bounds, st.current_height, st.available_height())
+                    // [#2137] tac TopAndBottom 소형 개체 줄은 한컴이 하단 여백으로
+                    // 스필해 현재 쪽에 유지한다 (156637323 pi=19: 저장 vpos+lh
+                    // 956.6 > 본문 933.6 인데 한글 1쪽). 저장 page-last 증거가
+                    // 있을 때만 발동하므로 스필 허용폭은 하단 여백 급(40px)로 한정.
+                    let spill = if para_controls_only_tac_topbottom_objects(para) {
+                        40.0
+                    } else {
+                        0.0
+                    };
+                    let (top, bottom) = bounds;
+                    top + 16.0 >= st.current_height
+                        && bottom <= st.available_height() + 0.5 + spill
                 });
         let saved_list_tail_body_vpos_fits = forced_page_break_line.is_none()
             && st.col_count == 1
