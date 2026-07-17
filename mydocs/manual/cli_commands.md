@@ -15,6 +15,18 @@ rhwp --version     # 버전
 공통 옵션(다수 export 명령):
 - `-o, --output <폴더>` — 출력 폴더 (기본 `output/`)
 - `-p, --page <번호>` — 특정 페이지만 (0부터). 생략 시 전체
+- `--profile <프로필>` — 출력 프로필: `screen` | `print` | `high-quality` | `fast-preview`
+  (export-svg / export-png / export-pdf 지원, #2297)
+
+**프로필 의미론** — 편집 시각 요소(#2225 그림 미지정 placeholder 등)의 표시 여부를 가른다:
+
+| 프로필 | 편집 시각 요소 | 용도 |
+|--------|---------------|------|
+| `screen`, `fast-preview` | **표시** — 그림 미지정 placeholder 를 점선 테두리+아이콘으로 렌더 | 편집기/미리보기 등가 |
+| `print`, `high-quality` | **억제** — 한컴 인쇄 동작과 동일하게 미출력 | 인쇄 등가 산출물 |
+
+> 한컴은 그림 미지정 placeholder 를 편집기에서만 표시하고 인쇄(및 인쇄 등가
+> 출력)에서는 미출력한다 — rhwp 의 인쇄 등가 프로필이 이 계약을 따른다.
 
 ---
 
@@ -33,12 +45,18 @@ HWP/HWPX → SVG.
 - `--embed-fonts` — 폰트 서브셋 임베딩(사용 글자만 base64)
 - `--embed-fonts=full` — 폰트 전체 임베딩
 - `--font-path <경로>` — 폰트 탐색 경로(여러 번 지정 가능)
+- `--profile <프로필>` — layer 출력 프로필(공통 옵션 참조). 생략 시 기존
+  (legacy) 경로 — 인쇄 등가 억제 동작.
+  **제약**: `--font-style`/`--embed-fonts` 와 함께 사용할 수 없다(오류 종료).
 
 ### `export-png <파일> [옵션]` *(native-skia feature 필요)*
 HWP/HWPX → PNG(Skia raster, AI 파이프라인/VLM 연동). 상세: [export_png_command.md](export_png_command.md)
 - `-o`, `-p`, `--font-path` (공통/폰트)
 - `--scale <배율>` (기본 1.0), `--dpi <값>`(pHYs 메타 + scale 자동), `--max-dimension <픽셀>`(longest edge)
 - `--vlm-target <프리셋>` — claude / gpt4v-low / gpt4v-high(gpt4v) / gemini / qwen-vl(qwen) / llava
+- `--profile <프로필>` — 출력 프로필. **기본 `high-quality`(인쇄 등가)** —
+  그림 미지정 placeholder 는 억제된다. 편집기식 표시가 필요하면
+  `--profile screen` 을 명시한다 (#2297, #2225 계약).
 
 ### `export-pdf <파일> [옵션]`
 HWP/HWPX → PDF (svg2pdf + pdf-writer).
@@ -49,6 +67,12 @@ HWP/HWPX → PDF (svg2pdf + pdf-writer).
 - `--fallback-sans <family>` — PDF sans-serif generic fallback family
 - `--fallback-mono <family>` — PDF monospace generic fallback family
 - `--equation-font <family>` — PDF 수식 SVG의 우선 font-family
+- `--text-as-paths` — 텍스트를 폰트 임베드 대신 path 로 변환 (#2266).
+  폰트 서브셋 경로를 건너뛰어 **메모리를 크게 절감**(실측 예: 124→78 MB)
+  하는 대신 **PDF 의 텍스트 선택·검색 기능을 잃는다** (시각 출력 동일,
+  파일 크기는 증가). 저메모리 환경(Quick Look 등)용 옵트아웃.
+- `--profile <프로필>` — layer 출력 프로필(공통 옵션 참조). 생략 시 기존
+  (legacy) 경로.
 - `<파일>`, `<경로>`, `<family>`는 자리표시자이며 실제 입력에는 꺾쇠괄호를 쓰지 않는다.
 - 공백이 없는 값은 그대로 입력한다. 예: `--font-path ./ttfs`
 - 공백이 있는 경로/폰트명은 큰따옴표를 권장한다. 예:
