@@ -28,16 +28,23 @@ fn recalculate_cell_paragraph_vpos(
     // RowBreak 거대 셀은 후속 문단 vpos를 뒤로 되돌려 다음 조각의 로컬 원점을
     // 표현하기도 한다. 그 경계까지 선형 편집 결과를 연결하되, 경계 이후 저장
     // 좌표는 페이지 분할 신호이므로 이동하지 않는다.
+    // [Task #2299] 합성 seg(TAG_IMPLEMENTATION_PROPERTY, #1811)의 vpos=0 은 배치 전
+    // placeholder 이지 분할 신호가 아니다 — 섹션 recalc 와 동일하게 정지 대상에서
+    // 제외한다 (로드가 합성한 중간-셀 문단에서 가짜 정지 → 꼬리 미갱신 방지).
     let stop_para = paragraphs
         .windows(2)
         .enumerate()
         .skip(start_para)
         .find_map(|(idx, pair)| {
             let previous = pair[0].line_segs.first()?.vertical_pos;
-            let current = pair[1].line_segs.first()?.vertical_pos;
+            let current_seg = pair[1].line_segs.first()?;
+            let current = current_seg.vertical_pos;
+            let is_synthetic = current_seg.tag
+                & crate::model::paragraph::LineSeg::TAG_IMPLEMENTATION_PROPERTY
+                != 0;
             let reset_para = idx + 1;
             let is_inserted_paragraph = ignore_reset_at == Some(reset_para);
-            (current < previous && !is_inserted_paragraph).then_some(reset_para)
+            (current < previous && !is_inserted_paragraph && !is_synthetic).then_some(reset_para)
         })
         .unwrap_or(paragraphs.len());
 
@@ -494,10 +501,19 @@ impl DocumentCore {
             .and_then(|m| m.get(para_idx))
             .copied()
             .unwrap_or(0);
+        // [Task #2299] 리셋 판별용 — reflow 이전 저장 흐름 end 캡처.
+        let stored_end_for_reset = crate::renderer::composer::paragraph_flow_end(
+            &self.document.sections[section_idx].paragraphs[para_idx],
+        );
         self.reflow_paragraph(section_idx, para_idx);
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             para_idx,
+            None,
+            stored_end_for_reset,
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
         self.recompose_paragraph(section_idx, para_idx);
         self.paginate_if_needed();
@@ -512,10 +528,19 @@ impl DocumentCore {
             if new_col == old_col {
                 break;
             }
+            // [Task #2299] 리셋 판별용 — reflow 이전 저장 흐름 end 캡처.
+            let stored_end_for_reset = crate::renderer::composer::paragraph_flow_end(
+                &self.document.sections[section_idx].paragraphs[para_idx],
+            );
             self.reflow_paragraph(section_idx, para_idx);
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 para_idx,
+                None,
+                stored_end_for_reset,
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             self.recompose_paragraph(section_idx, para_idx);
             self.paginate_if_needed();
@@ -604,10 +629,19 @@ impl DocumentCore {
             .and_then(|m| m.get(para_idx))
             .copied()
             .unwrap_or(0);
+        // [Task #2299] 리셋 판별용 — reflow 이전 저장 흐름 end 캡처.
+        let stored_end_for_reset = crate::renderer::composer::paragraph_flow_end(
+            &self.document.sections[section_idx].paragraphs[para_idx],
+        );
         self.reflow_paragraph(section_idx, para_idx);
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             para_idx,
+            None,
+            stored_end_for_reset,
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
         self.recompose_paragraph(section_idx, para_idx);
         self.paginate_if_needed();
@@ -622,10 +656,19 @@ impl DocumentCore {
             if new_col == old_col {
                 break;
             }
+            // [Task #2299] 리셋 판별용 — reflow 이전 저장 흐름 end 캡처.
+            let stored_end_for_reset = crate::renderer::composer::paragraph_flow_end(
+                &self.document.sections[section_idx].paragraphs[para_idx],
+            );
             self.reflow_paragraph(section_idx, para_idx);
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 para_idx,
+                None,
+                stored_end_for_reset,
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             self.recompose_paragraph(section_idx, para_idx);
             self.paginate_if_needed();
@@ -1346,10 +1389,19 @@ impl DocumentCore {
                 if count > 0 {
                     self.document.sections[section_idx].paragraphs[start_para]
                         .delete_text_at(start_offset, count);
+                    // [Task #2299] 리셋 판별용 — reflow 이전 저장 흐름 end 캡처.
+                    let stored_end_for_reset = crate::renderer::composer::paragraph_flow_end(
+                        &self.document.sections[section_idx].paragraphs[start_para],
+                    );
                     self.reflow_paragraph(section_idx, start_para);
                     crate::renderer::composer::recalculate_section_vpos(
                         &mut self.document.sections[section_idx].paragraphs,
                         start_para,
+                        None,
+                        stored_end_for_reset,
+                        &self.styles,
+                        self.dpi,
+                        self.document.is_hwp3_variant,
                     );
                 }
                 // 변경 문단만 재구성
@@ -1386,10 +1438,19 @@ impl DocumentCore {
                     self.remove_composed_paragraph(section_idx, start_para + 1);
                     self.document.sections[section_idx].paragraphs[start_para].merge_from(&next);
                 }
+                // [Task #2299] 리셋 판별용 — reflow 이전 저장 흐름 end 캡처.
+                let stored_end_for_reset = crate::renderer::composer::paragraph_flow_end(
+                    &self.document.sections[section_idx].paragraphs[start_para],
+                );
                 self.reflow_paragraph(section_idx, start_para);
                 crate::renderer::composer::recalculate_section_vpos(
                     &mut self.document.sections[section_idx].paragraphs,
                     start_para,
+                    None,
+                    stored_end_for_reset,
+                    &self.styles,
+                    self.dpi,
+                    self.document.is_hwp3_variant,
                 );
                 // 병합된 문단 재구성
                 self.recompose_paragraph(section_idx, start_para);
@@ -1524,6 +1585,11 @@ impl DocumentCore {
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 para_idx,
+                Some(new_para_idx..new_para_idx + 1),
+                None,
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             self.insert_composed_paragraph(section_idx, new_para_idx);
             self.paginate_if_needed();
@@ -1542,6 +1608,11 @@ impl DocumentCore {
                 crate::renderer::composer::recalculate_section_vpos(
                     &mut self.document.sections[section_idx].paragraphs,
                     para_idx,
+                    Some(new_para_idx..new_para_idx + 1),
+                    None,
+                    &self.styles,
+                    self.dpi,
+                    self.document.is_hwp3_variant,
                 );
                 self.recompose_paragraph(section_idx, new_para_idx);
                 self.paginate_if_needed();
@@ -1567,9 +1638,27 @@ impl DocumentCore {
         if let Some(chain) = square_ole_enter_chain {
             self.document.sections[section_idx].raw_stream = None;
             let new_para_idx = para_idx + 1;
-            let next_vpos = next_line_vpos_after_para_for_enter(
-                &self.document.sections[section_idx].paragraphs[para_idx],
-            );
+            // [Task #2299] 판정 기준을 실제 배치 기준과 일치시킨다: vpos 재계산이
+            // 신규 문단을 anchor end + 문단 여백 gap 에 배치하므로, gap 을 빼고
+            // 판정하면 wrap 영역 바깥(bottom_vpos 이하)에 wrap-줄 폭 문단이 놓인다.
+            let anchor = &self.document.sections[section_idx].paragraphs[para_idx];
+            // 신규 문단은 anchor 서식을 상속하므로(gap = anchor.after + anchor.before)
+            // hwp3 변환은 spacing_before 성분에만 적용한다 — recalc 의 boundary_gap
+            // 과 동일 산식.
+            let enter_gap = {
+                let (after, before) = self
+                    .styles
+                    .para_styles
+                    .get(anchor.para_shape_id as usize)
+                    .map(|style| (style.spacing_after, style.spacing_before))
+                    .unwrap_or((0.0, 0.0));
+                let before = crate::renderer::hwp3_variant_flow_spacing_before(
+                    before,
+                    self.document.is_hwp3_variant,
+                );
+                crate::renderer::px_to_hwpunit(after + before, self.dpi)
+            };
+            let next_vpos = next_line_vpos_after_para_for_enter(anchor).saturating_add(enter_gap);
             let keep_wrap_zone = next_vpos < chain.bottom_vpos;
             let new_para = if keep_wrap_zone {
                 empty_paragraph_after_square_wrap_anchor(
@@ -1590,6 +1679,11 @@ impl DocumentCore {
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 para_idx,
+                Some(new_para_idx..new_para_idx + 1),
+                None,
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             self.insert_composed_paragraph(section_idx, new_para_idx);
             self.paginate_if_needed();
@@ -1633,11 +1727,20 @@ impl DocumentCore {
             .and_then(|m| m.get(para_idx))
             .copied()
             .unwrap_or(0);
+        // [Task #2299] 리셋 판별용 — reflow 이전 저장 흐름 end 캡처.
+        let stored_end_for_reset = crate::renderer::composer::paragraph_flow_end(
+            &self.document.sections[section_idx].paragraphs[para_idx],
+        );
         self.reflow_paragraph(section_idx, para_idx);
         self.reflow_paragraph(section_idx, new_para_idx);
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             para_idx,
+            Some(new_para_idx..new_para_idx + 1),
+            stored_end_for_reset,
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
         self.recompose_paragraph(section_idx, para_idx);
         self.insert_composed_paragraph(section_idx, new_para_idx);
@@ -1653,11 +1756,20 @@ impl DocumentCore {
             if new_col1 == old_col1 {
                 break;
             }
+            // [Task #2299] 리셋 판별용 — reflow 이전 저장 흐름 end 캡처.
+            let stored_end_for_reset = crate::renderer::composer::paragraph_flow_end(
+                &self.document.sections[section_idx].paragraphs[para_idx],
+            );
             self.reflow_paragraph(section_idx, para_idx);
             self.reflow_paragraph(section_idx, new_para_idx);
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 para_idx,
+                Some(new_para_idx..new_para_idx + 1),
+                stored_end_for_reset,
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             self.recompose_paragraph(section_idx, para_idx);
             self.recompose_paragraph(section_idx, new_para_idx);
@@ -1723,12 +1835,21 @@ impl DocumentCore {
 
         // 분할된 두 문단 리플로우
         self.reflow_paragraph(section_idx, para_idx);
+        // [Task #2299] 리셋 판별용 — reflow 이전 저장 흐름 end 캡처.
+        let stored_end_for_reset = crate::renderer::composer::paragraph_flow_end(
+            &self.document.sections[section_idx].paragraphs[new_para_idx],
+        );
         self.reflow_paragraph(section_idx, new_para_idx);
 
         // 삽입 지점부터 구역 끝까지 vpos 재계산 (페이지 재배치에 필요)
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             new_para_idx,
+            Some(new_para_idx..new_para_idx + 1),
+            stored_end_for_reset,
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
 
         // 전체 구역 재구성 + 재페이지네이션
@@ -1788,11 +1909,20 @@ impl DocumentCore {
 
         // 분할된 두 문단 리플로우
         self.reflow_paragraph(section_idx, para_idx);
+        // [Task #2299] 리셋 판별용 — reflow 이전 저장 흐름 end 캡처.
+        let stored_end_for_reset = crate::renderer::composer::paragraph_flow_end(
+            &self.document.sections[section_idx].paragraphs[new_para_idx],
+        );
         self.reflow_paragraph(section_idx, new_para_idx);
 
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             new_para_idx,
+            Some(new_para_idx..new_para_idx + 1),
+            stored_end_for_reset,
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
 
         self.recompose_section(section_idx);
@@ -1936,6 +2066,11 @@ impl DocumentCore {
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 prev_idx,
+                None,
+                None,
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             self.remove_composed_paragraph(section_idx, para_idx);
             self.recompose_paragraph(section_idx, prev_idx);
@@ -1958,10 +2093,19 @@ impl DocumentCore {
             .and_then(|m| m.get(prev_idx))
             .copied()
             .unwrap_or(0);
+        // [Task #2299] 리셋 판별용 — reflow 이전 저장 흐름 end 캡처.
+        let stored_end_for_reset = crate::renderer::composer::paragraph_flow_end(
+            &self.document.sections[section_idx].paragraphs[prev_idx],
+        );
         self.reflow_paragraph(section_idx, prev_idx);
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             prev_idx,
+            None,
+            stored_end_for_reset,
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
         self.remove_composed_paragraph(section_idx, para_idx);
         self.recompose_paragraph(section_idx, prev_idx);
@@ -1977,10 +2121,19 @@ impl DocumentCore {
             if new_col == old_col {
                 break;
             }
+            // [Task #2299] 리셋 판별용 — reflow 이전 저장 흐름 end 캡처.
+            let stored_end_for_reset = crate::renderer::composer::paragraph_flow_end(
+                &self.document.sections[section_idx].paragraphs[prev_idx],
+            );
             self.reflow_paragraph(section_idx, prev_idx);
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 prev_idx,
+                None,
+                stored_end_for_reset,
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             self.recompose_paragraph(section_idx, prev_idx);
             self.paginate_if_needed();
@@ -2040,12 +2193,22 @@ impl DocumentCore {
             .copied()
             .unwrap_or(0);
         self.remove_composed_paragraph(section_idx, para_idx);
+        // [Task #2299] 리셋 판별용 — reflow 이전 저장 흐름 end 캡처.
+        let stored_end_for_reset = self.document.sections[section_idx]
+            .paragraphs
+            .get(reflow_idx)
+            .and_then(crate::renderer::composer::paragraph_flow_end);
         if reflow_idx < self.document.sections[section_idx].paragraphs.len() {
             self.reflow_paragraph(section_idx, reflow_idx);
         }
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             reflow_idx,
+            None,
+            stored_end_for_reset,
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
         if reflow_idx < self.document.sections[section_idx].paragraphs.len() {
             self.recompose_paragraph(section_idx, reflow_idx);
@@ -2062,12 +2225,22 @@ impl DocumentCore {
             if new_col == old_col {
                 break;
             }
+            // [Task #2299] 리셋 판별용 — reflow 이전 저장 흐름 end 캡처.
+            let stored_end_for_reset = self.document.sections[section_idx]
+                .paragraphs
+                .get(reflow_idx)
+                .and_then(crate::renderer::composer::paragraph_flow_end);
             if reflow_idx < self.document.sections[section_idx].paragraphs.len() {
                 self.reflow_paragraph(section_idx, reflow_idx);
             }
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 reflow_idx,
+                None,
+                stored_end_for_reset,
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             if reflow_idx < self.document.sections[section_idx].paragraphs.len() {
                 self.recompose_paragraph(section_idx, reflow_idx);
@@ -2132,6 +2305,11 @@ impl DocumentCore {
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             reflow_target,
+            Some(para_idx..para_idx + 1),
+            None,
+            &self.styles,
+            self.dpi,
+            self.document.is_hwp3_variant,
         );
         self.insert_composed_paragraph(section_idx, para_idx);
         self.paginate_if_needed();
@@ -2150,6 +2328,11 @@ impl DocumentCore {
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 reflow_target,
+                Some(para_idx..para_idx + 1),
+                None,
+                &self.styles,
+                self.dpi,
+                self.document.is_hwp3_variant,
             );
             self.recompose_paragraph(section_idx, para_idx);
             self.paginate_if_needed();
