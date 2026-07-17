@@ -12522,6 +12522,40 @@ impl TypesetEngine {
             false
         };
 
+        // [#2311] 단일 TAC 표가 후행 줄(ctrl 1:1 lineseg, vpos==0 저장 리셋)에 있고
+        // 선행 줄이 전부 TAC 그림/도형이면, 표는 아래 #1152 intra-para reset 가드가
+        // 자체적으로 새 쪽 이동한다. 이때 pre-flush 를 문단 전체 높이로 판정하면
+        // 잔여 공간에 들어가는 선행 전면 그림까지 통째로 밀려 한글 대비 +1쪽씩
+        // 벌어진다 (10k r15 156744475: 붙임 포스터+차기 붙임 헤더 표 문단 ×2 →
+        // rhwp 5쪽 vs 한글 3쪽, 저장 ls[0] vpos=5435 는 같은 쪽 배치를 명시).
+        // 리셋 이전 줄들의 높이만 fit 기준으로 삼는다.
+        let pre_reset_height_for_fit = if has_tac
+            && tac_count == 1
+            && first_line_tac_height.is_none()
+            && para.text.is_empty()
+            && para.line_segs.len() == para.controls.len()
+        {
+            para.controls
+                .iter()
+                .position(|c| {
+                    matches!(c, Control::Table(t) if self.is_effective_tac_table(para, t, &fmt))
+                })
+                .filter(|&ti| {
+                    ti > 0
+                        && ti <= fmt.line_heights.len()
+                        && para.line_segs.get(ti).map(|s| s.vertical_pos) == Some(0)
+                        && para.controls[..ti].iter().all(|c| match c {
+                            Control::Picture(p) => p.common.treat_as_char,
+                            Control::Shape(s) => s.common().treat_as_char,
+                            _ => false,
+                        })
+                })
+                .map(|ti| (0..ti).map(|li| fmt.line_advance(li)).sum::<f64>())
+        } else {
+            None
+        };
+        let height_for_fit = pre_reset_height_for_fit.unwrap_or(height_for_fit);
+
         // 넘치면 flush (단일 TAC 표만)
         if st.current_height + height_for_fit > st.available_height()
             && !st.current_items.is_empty()
@@ -13111,8 +13145,7 @@ impl TypesetEngine {
         // 새 페이지 상단부터" 라고 명시한 신호. fit 검사는 표 크기가 잔여 영역에
         // 들어가면 통과시키지만 명시 신호를 존중하려면 fit 이전에 advance.
         // 케이스: 2022년 국립국어원 업무계획.hwp pi=586 ci=1 (별첨 박스).
-        if !st.current_items.is_empty()
-            && ctrl_idx > 0
+        let intra_para_reset = ctrl_idx > 0
             && para.text.is_empty()
             && para.line_segs.len() == para.controls.len()
             && para
@@ -13120,8 +13153,8 @@ impl TypesetEngine {
                 .get(ctrl_idx)
                 .map(|s| s.vertical_pos)
                 .unwrap_or(-1)
-                == 0
-        {
+                == 0;
+        if intra_para_reset && !st.current_items.is_empty() {
             st.advance_column_or_new_page();
         }
 
@@ -13163,6 +13196,14 @@ impl TypesetEngine {
             // 분리된 문서에서, 표 자체는 남은 영역에 들어가는데도 spacing 때문에
             // 표가 다음 페이지로 밀린다(2025 donations HWPX pi=25).
             fmt.line_heights[0]
+        } else if intra_para_reset && ctrl_idx < fmt.line_heights.len() {
+            // [#2311] intra-para reset(저장 vpos==0)으로 새 쪽에 온 표는 자신의
+            // 줄(ctrl 1:1 lineseg)부터만 계상한다. 문단 전체 height_for_fit 을
+            // 쓰면 이전 쪽에 남은 선행 줄(전면 tac 그림 등)의 높이가 새 쪽에
+            // 유령 계상되어 후속 문단을 한 쪽 더 밀어낸다 (156744475 4쪽→3쪽).
+            (ctrl_idx..fmt.line_heights.len())
+                .map(|li| fmt.line_advance(li))
+                .sum::<f64>()
         } else if fmt.total_height > 0.0 {
             // 단일 TAC: 호스트 문단의 height_for_fit 사용
             fmt.height_for_fit
