@@ -6577,6 +6577,20 @@ impl LayoutEngine {
         let mut hit_hard_break = false;
         let mut fully_consumed = true;
         let mut consumed_height = 0.0f64;
+        // [#2291] plain 블록 walk(advance_row_block_cut)와 동일한 relaxed_hard_break
+        // 의미론 — 한글 2022 는 재개방 시 저장 vpos-reset(원저작 쪽나눔 흔적)을
+        // 무시하고 fresh 재배치로 쪽을 만충한다(연결맵 p26 = 81줄 실측, #2291).
+        // 종전 이 walk 는 hard-break 에서 무조건 정지해 예산 잔여(≤52px)를 버리고
+        // 조각 경계가 한글과 어긋났다.
+        const HARD_BREAK_REMAINING_TOLERANCE_PX: f64 = 32.0;
+        let block_has_top_and_bottom_flow = cells
+            .iter()
+            .any(|cell| self.cell_has_top_and_bottom_non_inline_flow(cell));
+        let relaxed_hard_break = matches!(
+            table.page_break,
+            crate::model::table::TablePageBreak::RowBreak
+        ) && (table.col_count <= 2 || table.row_count > 5)
+            && !block_has_top_and_bottom_flow;
         for (i, cell) in cells.iter().enumerate() {
             let units = self.cell_units(cell, table, styles);
             let start = start_cut.get(i).copied().unwrap_or(0).min(units.len());
@@ -6597,9 +6611,21 @@ impl LayoutEngine {
             // 의도(고아 방지)와 정반대가 된다. 극소 소비(h ≤ 한 줄급) 한정으로
             // 그 hard 는 이미 소비된 경계로 보고 통과한다.
             const REWIND_ORPHAN_CONT_PX: f64 = 48.0;
+            // [#2291] relaxed 통과는 거대 셀(원저작 쪽나눔 흔적이 촘촘한 다문단
+            // 셀)에 한정한다 — 소형 셀의 저장 hard-break 는 실제 행/조각 경계라
+            // 통과시키면 조각이 비대해져 밴드 컷이 어긋난다 (21217935 8→9쪽
+            // 회귀 실측). 연결맵 결함 셀은 유닛 37~123개.
+            const GIANT_CELL_RELAXED_MIN_UNITS: usize = 24;
+            let cell_relaxed = relaxed_hard_break && units.len() >= GIANT_CELL_RELAXED_MIN_UNITS;
             while j < units.len() {
                 let u = &units[j];
-                if j > start && u.hard_break_before {
+                if j > start
+                    && u.hard_break_before
+                    && (!cell_relaxed
+                        || (!u.empty_spacer
+                            && (h + u.height > cell_budget
+                                || cell_budget - h <= HARD_BREAK_REMAINING_TOLERANCE_PX)))
+                {
                     if start > 0 && j == start + 1 && h <= REWIND_ORPHAN_CONT_PX {
                         h += u.height;
                         j += 1;
