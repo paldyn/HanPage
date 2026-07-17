@@ -1042,7 +1042,15 @@ impl DocumentCore {
             // 의 vpos 연속성이 깨짐. paginator 의 vpos_h 기반 current_height 조정이
             // 잘못된 값으로 적용되어 페이지가 과다 분할되는 회귀의 원인.
             if let Some(start) = min_reflowed_idx {
-                crate::renderer::composer::recalculate_section_vpos(&mut section.paragraphs, start);
+                crate::renderer::composer::recalculate_section_vpos(
+                    &mut section.paragraphs,
+                    start,
+                    None,
+                    None,
+                    &self.styles,
+                    self.dpi,
+                    self.document.is_hwp3_variant,
+                );
             }
         }
 
