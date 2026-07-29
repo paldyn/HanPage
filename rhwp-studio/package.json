@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@types/chrome": "^0.2.2",
-    "cross-env": "^7.0.3",
+    "cross-env": "^10.1.0",
     "puppeteer-core": "^25.3.0",
     "typescript": "^7.0.2",
     "vite": "^8.1.4",
