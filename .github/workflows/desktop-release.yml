@@ -110,7 +110,7 @@ jobs:
 
       # --- Tauri 번들 (beforeBuildCommand = build:frontend = copy-wasm + studio build:desktop) ---
       - name: Build & bundle (tauri-action)
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # [Task #26] updater 서명용 개인키·비번(시크릿). createUpdaterArtifacts=true 와
