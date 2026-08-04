@@ -60,7 +60,8 @@ import {
 import { calculateFitPageZoom, calculateFitWidthZoom } from '@/view/zoom-fit';
 import { installEmbedRuntime } from '@/embed/runtime';
 import type { EmbedRendererRuntimeRequestV1 } from '@/embed/rpc-router';
-import { initDesktopBridge } from '@/core/desktop-bridge';
+import { initDesktopBridge, MENU_CHECK_UPDATE } from '@/core/desktop-bridge';
+import { handleManualUpdateCheck, installUpdateNotice } from '@/ui/update-notice';
 
 const wasm = new WasmBridge();
 const eventBus = new EventBus();
@@ -492,8 +493,17 @@ async function initialize(): Promise<void> {
     initDesktopBridge({
       openDocument: (bytes, fileName) =>
         eventBus.emit('open-document-bytes', { bytes, fileName, fileHandle: null }),
-      dispatchCommand: (id) => dispatcher.dispatch(id),
+      dispatchCommand: (id) => {
+        // [#59] "업데이트 확인"은 스튜디오 커맨드가 아니라 업데이트 안내가 처리한다.
+        if (id === MENU_CHECK_UPDATE) {
+          void handleManualUpdateCheck();
+          return;
+        }
+        dispatcher.dispatch(id);
+      },
     });
+    // [#59] 새 버전을 조용히 받아둔 뒤 준비되면 비침습 토스트로 알린다(데스크톱 전용).
+    installUpdateNotice();
     void loadFromUrlParam();
     void offerAutosaveRecoveryIfIdle();
     installPwaFileHandling(window as FileHandlingWindowLike, {

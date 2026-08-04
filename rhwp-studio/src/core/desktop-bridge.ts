@@ -26,6 +26,10 @@ interface TauriGlobal {
 /** 네이티브(Rust)↔웹 이벤트 이름. `src-tauri/src/lib.rs` 의 EVT_* 와 일치해야 한다. */
 const EVT_MENU = 'hanpage://menu';
 const EVT_DOCS_READY = 'hanpage://documents-ready';
+const EVT_UPDATE_READY = 'hanpage://update-ready';
+
+/** [#59] 네이티브 메뉴의 "업데이트 확인" 항목 id. 스튜디오 커맨드가 아니라 브리지가 처리한다. */
+export const MENU_CHECK_UPDATE = 'app:check-update';
 
 /** Tauri 웹뷰 여부. 데스크톱 런타임에서만 `__TAURI_INTERNALS__` 가 주입된다. */
 export function isDesktopRuntime(): boolean {
@@ -151,6 +155,71 @@ export function initDesktopBridge(deps?: DesktopBridgeDeps): void {
       deps.dispatchCommand(e.payload);
     });
   }
+}
+
+// ─── 업데이트 (#59) ────────────────────────────────────────────────────────
+/**
+ * 업데이트 상태. Rust `UpdateState` 와 1:1 (serde tag = "state").
+ * 새 버전은 사용자가 묻기 전에 조용히 내려받으므로, 웹뷰가 볼 상태는 대개
+ * `downloading`(진행 중) 또는 `ready`(적용 대기) 다.
+ */
+export type DesktopUpdateStatus =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'downloading'; downloaded: number; total: number | null }
+  | { state: 'ready'; version: string }
+  | { state: 'upToDate'; version: string }
+  | { state: 'error'; message: string };
+
+export interface DesktopUpdateReady {
+  version: string;
+  currentVersion: string;
+  notes: string | null;
+}
+
+/** 현재 업데이트 상태 조회. 브라우저에선 null. */
+export async function getUpdateStatus(): Promise<DesktopUpdateStatus | null> {
+  const invoke = tauriInvoke();
+  if (!invoke) return null;
+  try {
+    return await invoke<DesktopUpdateStatus>('cmd_update_status');
+  } catch {
+    return null;
+  }
+}
+
+/** 수동 확인 시작(진행 중이면 네이티브가 무시). 브라우저에선 no-op. */
+export async function checkUpdate(): Promise<void> {
+  const invoke = tauriInvoke();
+  if (!invoke) return;
+  try {
+    await invoke('cmd_update_check');
+  } catch (e) {
+    console.warn('[desktop-bridge] 업데이트 확인 실패:', e);
+  }
+}
+
+/**
+ * 받아둔 업데이트를 즉시 설치한다(이미 내려받혀 있어 대기 시간이 없다).
+ * macOS 는 설치 후 앱이 재시작되고, Windows 는 설치 프로그램이 실행되며 앱이 종료된다.
+ * 따라서 성공 시 이 Promise 는 대개 resolve 되지 않는다.
+ */
+export async function applyUpdate(): Promise<{ ok: boolean; message?: string }> {
+  const invoke = tauriInvoke();
+  if (!invoke) return { ok: false, message: '데스크톱 앱에서만 사용할 수 있습니다.' };
+  try {
+    await invoke('cmd_update_apply');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** 업데이트 준비 완료 알림 구독. 브라우저에선 no-op. */
+export function onUpdateReady(cb: (info: DesktopUpdateReady) => void): void {
+  const listen = tauriListen();
+  if (!listen) return;
+  void listen<DesktopUpdateReady>(EVT_UPDATE_READY, (e) => cb(e.payload));
 }
 
 export function getDesktopOpenHandler(): DesktopOpenHandler | null {
