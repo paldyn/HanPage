@@ -1,7 +1,7 @@
 {
   "name": "hanpage-desktop",
   "private": true,
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "HanPage desktop app — Tauri shell around rhwp-studio (HWP/HWPX viewer/editor)",
   "license": "MIT",
   "type": "module",

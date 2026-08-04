@@ -39,6 +39,7 @@ const RECENT_MAX: usize = 10;
 /// 웹뷰로 보내는 이벤트 이름.
 const EVT_MENU: &str = "hanpage://menu"; // 메뉴 액션 → 스튜디오 커맨드 id
 const EVT_DOCS_READY: &str = "hanpage://documents-ready"; // 펜딩 문서 도착 신호
+const EVT_UPDATE_READY: &str = "hanpage://update-ready"; // 새 버전 내려받기 완료(적용 대기)
 
 /// 열기 dialog/파일 연결로 읽은 문서. `data` 는 파일 바이트(JSON 배열 직렬화).
 #[derive(Serialize)]
@@ -65,6 +66,38 @@ enum SaveOutcome {
 /// 예전 구현은 `try_state()` 가 `None` 이면 문서를 조용히 버려서, 더블클릭으로 연 문서가
 /// 영영 열리지 않았다. 전역 큐는 프로그램 시작 시점부터 존재하므로 순서와 무관하다.
 static PENDING_DOCUMENTS: LazyLock<Mutex<Vec<OpenedFile>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+
+/// [#59] 백그라운드로 미리 내려받아 둔 업데이트(설치 대기).
+///
+/// Claude 데스크톱 앱 방식: 새 버전을 발견하면 **묻지 않고 조용히 받아둔 뒤**, 완료 시점에
+/// 비침습 토스트로 한 번만 알린다. 사용자가 '지금 다시 시작'을 누르면 이미 받아둔 바이트로
+/// 즉시 설치하므로 기다림이 없다(기존 구현은 승인 후 40MB 를 받느라 수 초간 정지했다).
+/// '나중에'를 눌러도 바이트를 버리지 않아 다음 클릭도 즉시 적용된다.
+#[cfg(desktop)]
+static READY_UPDATE: LazyLock<Mutex<Option<ReadyUpdate>>> = LazyLock::new(|| Mutex::new(None));
+
+/// 진행 상태(수동 확인 시 안내용). 다운로드는 평소 UI 를 띄우지 않는다.
+#[cfg(desktop)]
+static UPDATE_STATE: LazyLock<Mutex<UpdateState>> = LazyLock::new(|| Mutex::new(UpdateState::Idle));
+
+#[cfg(desktop)]
+struct ReadyUpdate {
+    update: tauri_plugin_updater::Update,
+    bytes: Vec<u8>,
+}
+
+#[cfg(desktop)]
+#[derive(Clone, Serialize)]
+#[serde(tag = "state", rename_all = "camelCase")]
+enum UpdateState {
+    Idle,
+    Checking,
+    /// 조용한 백그라운드 다운로드 진행 중. total 은 Content-Length 부재 시 None(불확정).
+    Downloading { downloaded: u64, total: Option<u64> },
+    Ready { version: String },
+    UpToDate { version: String },
+    Error { message: String },
+}
 
 /// 최근 문서 메뉴 항목. 네이티브 메뉴(macOS) 표시 전용.
 #[cfg(target_os = "macos")]
@@ -306,67 +339,148 @@ fn cmd_take_pending_documents() -> Vec<OpenedFile> {
         .unwrap_or_default()
 }
 
-/// [Task #26] 업데이트 확인·설치 (desktop 전용).
-/// - `manual=false`(시작 시): 새 버전이면 알림, 최신/오류는 조용히(로그만).
-/// - `manual=true`(메뉴): 최신·오류도 대화상자로 안내.
+/// [Task #26 · #59] 업데이트 확인 → **조용한 백그라운드 다운로드** (desktop 전용).
+///
+/// 사용자에게 묻지 않고 먼저 받아둔다. 완료 시 `EVT_UPDATE_READY` 를 emit 하면 웹뷰가
+/// 비침습 토스트로 알리고, '지금 다시 시작' 클릭 시 `cmd_update_apply` 가 즉시 설치한다.
+/// 최신·오류는 조용히 상태만 갱신한다(수동 확인 시 그 상태를 그대로 안내).
 #[cfg(desktop)]
-async fn check_update(app: tauri::AppHandle, manual: bool) {
-    use tauri_plugin_dialog::MessageDialogButtons;
+async fn check_update(app: tauri::AppHandle) {
     use tauri_plugin_updater::UpdaterExt;
+
+    // 이미 받아둔 업데이트가 있으면 다시 받지 않는다('나중에' 이후 재확인 대비).
+    if READY_UPDATE.lock().map(|g| g.is_some()).unwrap_or(false) {
+        return;
+    }
+    set_update_state(UpdateState::Checking);
 
     let updater = match app.updater() {
         Ok(u) => u,
         Err(e) => {
             eprintln!("[updater] 초기화 실패: {e}");
+            set_update_state(UpdateState::Error { message: e.to_string() });
             return;
         }
     };
-    match updater.check().await {
-        Ok(Some(update)) => {
-            let ver = update.version.clone();
-            let app2 = app.clone();
-            app.dialog()
-                .message(format!(
-                    "새 버전 {ver} 이(가) 있습니다.\n지금 설치하면 내려받은 뒤 자동으로 다시 시작됩니다."
-                ))
-                .title("업데이트 있음")
-                .buttons(MessageDialogButtons::OkCancelCustom(
-                    "지금 설치".to_string(),
-                    "나중에".to_string(),
-                ))
-                .show(move |install| {
-                    if !install {
-                        return;
-                    }
-                    tauri::async_runtime::spawn(async move {
-                        match update.download_and_install(|_, _| {}, || {}).await {
-                            Ok(_) => app2.restart(),
-                            Err(e) => {
-                                app2.dialog()
-                                    .message(format!("업데이트 설치에 실패했습니다: {e}"))
-                                    .title("업데이트")
-                                    .show(|_| {});
-                            }
-                        }
-                    });
-                });
-        }
+
+    let update = match updater.check().await {
+        Ok(Some(u)) => u,
         Ok(None) => {
-            if manual {
-                app.dialog()
-                    .message("이미 최신 버전입니다.")
-                    .title("업데이트")
-                    .show(|_| {});
-            }
+            set_update_state(UpdateState::UpToDate {
+                version: app.package_info().version.to_string(),
+            });
+            return;
         }
         Err(e) => {
             eprintln!("[updater] 확인 실패: {e}");
-            if manual {
-                app.dialog()
-                    .message(format!("업데이트 확인에 실패했습니다: {e}"))
-                    .title("업데이트")
-                    .show(|_| {});
+            set_update_state(UpdateState::Error { message: e.to_string() });
+            return;
+        }
+    };
+
+    let version = update.version.clone();
+    let current_version = update.current_version.clone();
+    let notes = update.body.clone();
+
+    // 진행률 콜백은 청크 단위(누적 아님)라 여기서 누산한다. 평소엔 UI 를 띄우지 않지만,
+    // 사용자가 메뉴로 확인할 때 "내려받는 중"을 정확히 답하기 위해 상태로 남긴다.
+    let mut downloaded: u64 = 0;
+    set_update_state(UpdateState::Downloading { downloaded: 0, total: None });
+    let bytes = match update
+        .download(
+            |chunk, total| {
+                downloaded += chunk as u64;
+                set_update_state(UpdateState::Downloading { downloaded, total });
+            },
+            || {},
+        )
+        .await
+    {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("[updater] 다운로드 실패: {e}");
+            set_update_state(UpdateState::Error { message: e.to_string() });
+            return;
+        }
+    };
+
+    if let Ok(mut slot) = READY_UPDATE.lock() {
+        *slot = Some(ReadyUpdate { update, bytes });
+    }
+    set_update_state(UpdateState::Ready { version: version.clone() });
+
+    // 웹뷰가 아직 없으면 emit 이 실패해도 무방하다 — 웹뷰는 초기화 시
+    // `cmd_update_status` 로 현재 상태를 직접 조회한다(펜딩 문서와 동일한 유실 방지).
+    let _ = app.emit(
+        EVT_UPDATE_READY,
+        UpdateReadyPayload { version, current_version, notes },
+    );
+}
+
+/// 업데이트 준비 완료 알림 payload.
+#[cfg(desktop)]
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateReadyPayload {
+    version: String,
+    current_version: String,
+    notes: Option<String>,
+}
+
+#[cfg(desktop)]
+fn set_update_state(next: UpdateState) {
+    if let Ok(mut s) = UPDATE_STATE.lock() {
+        *s = next;
+    }
+}
+
+/// 현재 업데이트 상태(웹뷰 초기화·수동 확인 시 조회).
+#[cfg(desktop)]
+#[tauri::command]
+fn cmd_update_status() -> UpdateState {
+    UPDATE_STATE
+        .lock()
+        .map(|s| s.clone())
+        .unwrap_or(UpdateState::Idle)
+}
+
+/// 수동 확인(메뉴) — 이미 받아둔 게 없으면 확인/다운로드를 다시 시작한다.
+#[cfg(desktop)]
+#[tauri::command]
+fn cmd_update_check(app: tauri::AppHandle) {
+    let busy = matches!(
+        UPDATE_STATE.lock().map(|s| s.clone()).unwrap_or(UpdateState::Idle),
+        UpdateState::Checking | UpdateState::Downloading { .. }
+    );
+    if busy {
+        return; // 진행 중이면 중복 확인하지 않는다(상태는 프런트가 조회해 안내).
+    }
+    tauri::async_runtime::spawn(check_update(app));
+}
+
+/// 받아둔 바이트로 즉시 설치한다. macOS 는 설치 후 재시작, Windows 는 설치 프로그램이
+/// 실행되며 현재 프로세스가 종료되므로 이 함수는 반환하지 않는다.
+#[cfg(desktop)]
+#[tauri::command]
+fn cmd_update_apply(app: tauri::AppHandle) -> Result<(), String> {
+    let ready = READY_UPDATE
+        .lock()
+        .map_err(|e| e.to_string())?
+        .take()
+        .ok_or_else(|| "받아둔 업데이트가 없습니다.".to_string())?;
+
+    match ready.update.install(&ready.bytes) {
+        Ok(()) => {
+            app.restart(); // macOS 경로. Windows 는 install 내부에서 프로세스가 종료된다.
+        }
+        Err(e) => {
+            // 실패 시 바이트를 되돌려 재시도 가능하게 둔다.
+            if let Ok(mut slot) = READY_UPDATE.lock() {
+                *slot = Some(ready);
             }
+            let msg = e.to_string();
+            set_update_state(UpdateState::Error { message: msg.clone() });
+            return Err(msg);
         }
     }
 }
@@ -410,7 +524,7 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 let h = app.handle().clone();
-                tauri::async_runtime::spawn(check_update(h, false));
+                tauri::async_runtime::spawn(check_update(h));
             }
             // 네이티브 메뉴는 macOS 시스템 메뉴바 전용. Win/Linux 는 창 내부에 그려져
             // 웹 UI 메뉴(#menu-bar)와 중복되므로 부착하지 않는다(이슈 #7).
@@ -429,12 +543,9 @@ pub fn run() {
                     open_path(app, PathBuf::from(path));
                 }
             } else if id == "app:check-update" {
-                // [Task #26] 메뉴 수동 확인 — 최신/오류도 안내(manual=true).
-                #[cfg(desktop)]
-                {
-                    let h = app.clone();
-                    tauri::async_runtime::spawn(check_update(h, true));
-                }
+                // [#59] 메뉴 수동 확인 → 웹뷰와 동일 흐름. 확인/다운로드는 조용히 진행하고
+                // 안내(내려받는 중·준비됨·최신·오류)는 웹뷰 토스트가 담당한다.
+                let _ = app.emit(EVT_MENU, id.to_string());
             } else {
                 // 사용자 정의 항목 id = rhwp-studio 커맨드 id → 웹뷰 브리지가 dispatch.
                 let _ = app.emit(EVT_MENU, id.to_string());
@@ -443,7 +554,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             cmd_open_document,
             cmd_save_document,
-            cmd_take_pending_documents
+            cmd_take_pending_documents,
+            cmd_update_status,
+            cmd_update_check,
+            cmd_update_apply
         ])
         .build(tauri::generate_context!())
         .expect("error while building HanPage desktop application")
