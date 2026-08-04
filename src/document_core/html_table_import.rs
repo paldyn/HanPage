@@ -756,6 +756,7 @@ impl DocumentCore {
             diagonal: DiagonalLine::default(),
             center_line: CenterLine::None,
             fill,
+            three_d: false,
         };
 
         // 기존 BorderFill에서 동일한 항목 검색
@@ -816,6 +817,7 @@ impl DocumentCore {
                 diagonal: DiagonalLine::default(),
                 center_line: CenterLine::None,
                 fill: Fill::default(),
+                three_d: false,
             });
         bf.raw_data = None;
 
@@ -933,7 +935,8 @@ impl DocumentCore {
             // 외부 URL 이미지는 처리하지 않음 — 텍스트로 대체
             let mut para = Paragraph::default();
             para.text = "[이미지]".to_string();
-            para.char_count = para.text.encode_utf16().count() as u32;
+            // [#3494] char_count 는 문단 종결자를 포함한다 (model/paragraph.rs:1042).
+            para.char_count = para.text.encode_utf16().count() as u32 + 1;
             para.char_offsets = para
                 .text
                 .chars()
@@ -970,16 +973,17 @@ impl DocumentCore {
         // (insert_picture_native 와 동일 규칙, 기존 storage id 충돌 방지)
         let new_bin_id = (self.document.bin_data_content.len() + 1) as u16;
         let storage_id = self.document.next_bin_data_storage_id();
+        let extension = detect_clipboard_image_mime(&decoded)
+            .split('/')
+            .nth(1)
+            .unwrap_or("png")
+            .to_string();
         self.document
             .bin_data_content
             .push(crate::model::bin_data::BinDataContent {
                 id: storage_id,
-                data: decoded.clone(),
-                extension: detect_clipboard_image_mime(&decoded)
-                    .split('/')
-                    .nth(1)
-                    .unwrap_or("png")
-                    .to_string(),
+                data: crate::model::bin_data::BinDataBytes::from_shared(decoded),
+                extension,
             });
 
         // width/height 추출
@@ -993,7 +997,8 @@ impl DocumentCore {
         // Picture Control 생성 (placeholder로 텍스트 표현)
         let mut para = Paragraph::default();
         para.text = "[이미지]".to_string();
-        para.char_count = para.text.encode_utf16().count() as u32;
+        // [#3494] char_count 는 문단 종결자를 포함한다 (model/paragraph.rs:1042).
+        para.char_count = para.text.encode_utf16().count() as u32 + 1;
         para.char_offsets = para
             .text
             .chars()

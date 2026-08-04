@@ -39,8 +39,14 @@ pub fn draw_svg_fragment(
     width: f32,
     height: f32,
     sampling: ImageSampling,
+    raster_scale: f32,
 ) -> bool {
-    let Some(png) = rasterize_svg_fragment_to_png(svg_fragment, width, height) else {
+    // [Issue #2292] RawSvg 조각은 페이지 절대 좌표로 방출된다(SVG 백엔드
+    // 직접 삽입·web_canvas 와 동일 계약). viewBox 원점에 조각의 페이지
+    // 위치(x, y)를 넘겨 bbox 창만 래스터한다 — (0,0) 가정 시 창 밖 콘텐츠
+    // 전부 클리핑 + bbox 재배치 이중 오프셋으로 차트가 잘렸다.
+    let Some(png) = rasterize_svg_fragment_to_png(svg_fragment, x, y, width, height, raster_scale)
+    else {
         return false;
     };
     draw_image_bytes(
@@ -53,10 +59,12 @@ pub fn draw_svg_fragment(
         Some(ImageFillMode::FitToSize),
         None,
         None,
+        None,
         ImageEffect::RealPic,
+        0,
+        0,
         sampling,
-    );
-    true
+    )
 }
 
 pub fn draw_image_bytes(
@@ -69,9 +77,12 @@ pub fn draw_image_bytes(
     fill_mode: Option<ImageFillMode>,
     original_size: Option<(f64, f64)>,
     crop: Option<(i32, i32, i32, i32)>,
+    crop_reference_size: Option<(u32, u32)>,
     effect: ImageEffect,
+    brightness: i8,
+    contrast: i8,
     sampling: ImageSampling,
-) {
+) -> bool {
     let is_valid_destination_rect = |x: f32, y: f32, width: f32, height: f32| {
         x.is_finite()
             && y.is_finite()
@@ -100,6 +111,20 @@ pub fn draw_image_bytes(
         ImageEffect::GrayScale => Some(grayscale_filter(1.0, 0.0)),
         ImageEffect::BlackWhite => Some(grayscale_filter(255.0, -127.5)),
         ImageEffect::Pattern8x8 => Some(grayscale_filter(1.0, 0.0)),
+    };
+    let brightness_contrast_filter = |brightness: i8, contrast: i8| {
+        let brightness = brightness.clamp(-100, 100) as f32 / 100.0;
+        let slope = (100.0 + contrast.clamp(-100, 100) as f32) / 100.0;
+        // Skia color-matrix의 translation 열은 0..255 색상 범위를 쓴다.
+        // SVG filter의 정규화된 intercept와 동일한 색조가 되도록 변환한다.
+        let intercept = ((0.5 - 0.5 * slope) + brightness) * 255.0;
+        color_filters::matrix_row_major(
+            &[
+                slope, 0.0, 0.0, 0.0, intercept, 0.0, slope, 0.0, 0.0, intercept, 0.0, 0.0, slope,
+                0.0, intercept, 0.0, 0.0, 0.0, 1.0, 0.0,
+            ],
+            None,
+        )
     };
     let resolve_image_placement = |fill_mode: ImageFillMode,
                                    x: f32,
@@ -145,8 +170,18 @@ pub fn draw_image_bytes(
     };
 
     if !is_valid_destination_rect(x, y, width, height) {
-        return;
+        return false;
     }
+    // [#3460] HWPX BinData 는 SVG 를 그대로 담는다(`<hc:img>` → `Format="svg"`). skia 디코더는
+    // SVG 를 읽지 못해 종전에는 회색 자리표시자만 남았다. 같은 모듈의 resvg 로 목적지 크기에
+    // 맞춰 먼저 래스터화하면 이후 크롭·채움·효과 경로를 그대로 탈 수 있다.
+    let svg_raster = if crate::renderer::svg_fragment::is_svg_prefix(bytes) {
+        rasterize_svg_document_to_png(bytes, width, height, canvas_raster_scale(canvas))
+    } else {
+        None
+    };
+    let bytes = svg_raster.as_deref().unwrap_or(bytes);
+
     let normalized_bytes = if detect_image_mime_type(bytes) == "image/jpeg" {
         grayscale_jpeg_bytes_to_png_bytes(bytes)
     } else {
@@ -156,32 +191,39 @@ pub fn draw_image_bytes(
 
     let Some(image) = Image::from_encoded(Data::new_copy(encoded_bytes)) else {
         draw_missing_image_placeholder(x, y, width, height);
-        return;
+        return false;
     };
 
     let dst = Rect::from_xywh(x, y, width, height);
     let mut paint = Paint::default();
     paint.set_anti_alias(true);
-    if let Some(color_filter) = image_effect_filter(effect) {
+    let effect_filter = image_effect_filter(effect);
+    let adjustment_filter = (brightness != 0 || contrast != 0)
+        .then(|| brightness_contrast_filter(brightness, contrast));
+    let color_filter = match (effect_filter, adjustment_filter) {
+        (Some(effect), Some(adjustment)) => color_filters::compose(adjustment, effect),
+        (Some(effect), None) => Some(effect),
+        (None, Some(adjustment)) => Some(adjustment),
+        (None, None) => None,
+    };
+    if let Some(color_filter) = color_filter {
         paint.set_color_filter(color_filter);
     }
 
     let mode = fill_mode.unwrap_or(ImageFillMode::FitToSize);
     let decoded_width = image.width() as f32;
     let decoded_height = image.height() as f32;
-    let crop_src = crop.and_then(|(left, top, right, bottom)| {
+    let crop_src = crop.and_then(|crop_rect| {
         if decoded_width <= 0.0 || decoded_height <= 0.0 {
             return None;
         }
-        let scale_x = right as f32 / decoded_width;
-        let scale_y = bottom as f32 / decoded_height;
-        if scale_x <= 0.0 || scale_y <= 0.0 {
-            return None;
-        }
-        let src_x = left as f32 / scale_x;
-        let src_y = top as f32 / scale_y;
-        let src_w = (right - left) as f32 / scale_x;
-        let src_h = (bottom - top) as f32 / scale_y;
+        let (src_x, src_y, src_w, src_h) = crate::renderer::svg::compute_image_crop_src(
+            crop_rect,
+            crop_reference_size,
+            decoded_width as f64,
+            decoded_height as f64,
+        );
+        let (src_x, src_y, src_w, src_h) = (src_x as f32, src_y as f32, src_w as f32, src_h as f32);
         let is_cropped = src_x > 0.5
             || src_y > 0.5
             || (src_w - decoded_width).abs() > 1.0
@@ -213,9 +255,12 @@ pub fn draw_image_bytes(
         }
     };
 
-    if matches!(mode, ImageFillMode::FitToSize | ImageFillMode::None) {
+    if matches!(
+        mode,
+        ImageFillMode::FitToSize | ImageFillMode::Total | ImageFillMode::None
+    ) {
         draw_image_rect(crop_src, dst);
-        return;
+        return true;
     }
 
     let image_width = original_size
@@ -226,7 +271,7 @@ pub fn draw_image_bytes(
         .unwrap_or_else(|| image.height() as f32);
     if !is_valid_image_size(image_width, image_height) {
         draw_missing_image_placeholder(x, y, width, height);
-        return;
+        return false;
     }
 
     canvas.save();
@@ -289,7 +334,7 @@ pub fn draw_image_bytes(
             && draw_tiled_shader(dst, x, y)
         {
             canvas.restore();
-            return;
+            return true;
         }
         if matches!(
             mode,
@@ -302,7 +347,7 @@ pub fn draw_image_bytes(
             };
             if draw_tiled_shader(Rect::from_xywh(x, tile_y, width, image_height), x, tile_y) {
                 canvas.restore();
-                return;
+                return true;
             }
         }
         if matches!(
@@ -316,9 +361,11 @@ pub fn draw_image_bytes(
             };
             if draw_tiled_shader(Rect::from_xywh(tile_x, y, image_width, height), tile_x, y) {
                 canvas.restore();
-                return;
+                return true;
             }
         }
+        canvas.restore();
+        return false;
     } else {
         let (image_x, image_y) =
             resolve_image_placement(mode, x, y, width, height, image_width, image_height);
@@ -329,20 +376,43 @@ pub fn draw_image_bytes(
     }
 
     canvas.restore();
+    true
 }
 
-fn rasterize_svg_fragment_to_png(svg_fragment: &str, width: f32, height: f32) -> Option<Vec<u8>> {
-    if svg_fragment.is_empty()
-        || svg_fragment.len() > MAX_SVG_FRAGMENT_BYTES
+/// [#3460] 캔버스 변환에서 래스터 배율을 얻는다 (확대 출력에서 SVG 가 뭉개지지 않게).
+fn canvas_raster_scale(canvas: &skia_safe::Canvas) -> f32 {
+    let matrix = canvas.local_to_device_as_3x3();
+    let scale = matrix.scale_x().abs().max(matrix.scale_y().abs());
+    if scale.is_finite() && scale > 0.0 {
+        scale.clamp(1.0, 4.0)
+    } else {
+        1.0
+    }
+}
+
+/// [#3460] 완결된 SVG 문서(BinData 그림)를 목적지 크기에 맞춰 PNG 로 래스터화한다.
+///
+/// 조각(fragment) 경로와 달리 원본이 자체 `viewBox`/크기를 가진 문서이므로, 트리 크기를
+/// 목적지 픽셀 크기로 맞추는 스케일 변환만 적용한다.
+fn rasterize_svg_document_to_png(
+    bytes: &[u8],
+    width: f32,
+    height: f32,
+    raster_scale: f32,
+) -> Option<Vec<u8>> {
+    if bytes.is_empty()
+        || bytes.len() > MAX_SVG_FRAGMENT_BYTES
         || !width.is_finite()
         || !height.is_finite()
+        || !raster_scale.is_finite()
         || width <= 0.0
         || height <= 0.0
+        || raster_scale <= 0.0
     {
         return None;
     }
-    let raster_width = width.ceil() as u64;
-    let raster_height = height.ceil() as u64;
+    let raster_width = (width * raster_scale).ceil().max(1.0) as u64;
+    let raster_height = (height * raster_scale).ceil().max(1.0) as u64;
     if raster_width
         .checked_mul(raster_height)
         .is_none_or(|pixels| pixels > MAX_SVG_RASTER_PIXELS)
@@ -350,8 +420,58 @@ fn rasterize_svg_fragment_to_png(svg_fragment: &str, width: f32, height: f32) ->
         return None;
     }
 
+    let options = svg_parse_options();
+    let tree = usvg::Tree::from_data(bytes, &options).ok()?;
+    let size = tree.size();
+    if !(size.width() > 0.0 && size.height() > 0.0) {
+        return None;
+    }
+
+    let mut pixmap = tiny_skia::Pixmap::new(raster_width as u32, raster_height as u32)?;
+    let transform = tiny_skia::Transform::from_scale(
+        raster_width as f32 / size.width(),
+        raster_height as f32 / size.height(),
+    );
+    resvg::render(&tree, transform, &mut pixmap.as_mut());
+    pixmap.encode_png().ok()
+}
+
+fn rasterize_svg_fragment_to_png(
+    svg_fragment: &str,
+    src_x: f32,
+    src_y: f32,
+    width: f32,
+    height: f32,
+    raster_scale: f32,
+) -> Option<Vec<u8>> {
+    if svg_fragment.is_empty()
+        || svg_fragment.len() > MAX_SVG_FRAGMENT_BYTES
+        || !src_x.is_finite()
+        || !src_y.is_finite()
+        || !width.is_finite()
+        || !height.is_finite()
+        || !raster_scale.is_finite()
+        || width <= 0.0
+        || height <= 0.0
+        || raster_scale <= 0.0
+    {
+        return None;
+    }
+    let output_width = width * raster_scale;
+    let output_height = height * raster_scale;
+    let raster_width = output_width.ceil() as u64;
+    let raster_height = output_height.ceil() as u64;
+    if raster_width
+        .checked_mul(raster_height)
+        .is_none_or(|pixels| pixels > MAX_SVG_RASTER_PIXELS)
+    {
+        return None;
+    }
+
+    // [Issue #2292] 조각은 페이지 절대 좌표 — viewBox 를 조각의 페이지 좌표
+    // 창(src_x, src_y 원점)으로 지정해 bbox 영역만 (0,0) 래스터로 사상한다.
     let svg = format!(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width:.2}\" height=\"{height:.2}\" viewBox=\"0 0 {width:.2} {height:.2}\">{svg_fragment}</svg>"
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{output_width:.2}\" height=\"{output_height:.2}\" viewBox=\"{src_x:.2} {src_y:.2} {width:.2} {height:.2}\">{svg_fragment}</svg>"
     );
     let options = svg_parse_options();
     let tree = usvg::Tree::from_str(&svg, &options).ok()?;
@@ -382,12 +502,85 @@ fn svg_fontdb() -> Arc<usvg::fontdb::Database> {
 
     SVG_FONTDB
         .get_or_init(|| {
+            // [Issue #2293] PDF 경로(renderer/pdf.rs::create_fontdb)와 동일
+            // 규약: 시스템 폰트 + 프로젝트 ttfs/(재귀) + WSL 윈도우 폰트.
+            // 종전에는 시스템 폰트만 로드하고 generic 폴백을 존재 확인 없이
+            // 하드 고정("Noto Sans CJK KR")해, 해당 폰트가 없는 환경에서
+            // resvg 가 조각의 텍스트를 통째로 드롭했다.
             let mut fontdb = usvg::fontdb::Database::new();
             fontdb.load_system_fonts();
-            fontdb.set_sans_serif_family("Noto Sans CJK KR");
-            fontdb.set_serif_family("Noto Serif CJK KR");
-            fontdb.set_monospace_family("D2Coding");
+            // [#2864] 조달 순서는 renderer::font_paths 가 단일 정의한다.
+            // ttfs/opensource 번들이 최후 폴백으로 남아 한국어 드롭을 막는다(#2293).
+            crate::renderer::font_paths::load_into_fontdb(&mut fontdb, &[]);
+
+            // generic 폴백은 실존하는 첫 후보로 (매칭 실패 = 텍스트 드롭 방지).
+            let sans = first_existing_family(
+                &fontdb,
+                &[
+                    "Noto Sans CJK KR",
+                    "Noto Sans KR",
+                    "함초롬돋움",
+                    "HCR Dotum",
+                    "맑은 고딕",
+                    "Malgun Gothic",
+                    "NanumGothic",
+                    "나눔고딕",
+                    "DejaVu Sans",
+                ],
+            );
+            // [작업지시자 권고] 폴백은 한국어 가용 폰트를 우선한다 — 스타일
+            // (serif/mono) 정합보다 한글이 보이는 것이 우선이므로, 라틴 전용
+            // 최후 폴백(DejaVu) 앞에 한국어 sans 를 둔다. 저장소 체크아웃에는
+            // ttfs/opensource/NotoSansKR 이 항상 있어 한국어 폴백이 보장된다.
+            let serif = first_existing_family(
+                &fontdb,
+                &[
+                    "Noto Serif CJK KR",
+                    "Noto Serif KR",
+                    "함초롬바탕",
+                    "HCR Batang",
+                    "바탕",
+                    "Batang",
+                    "NanumMyeongjo",
+                    "나눔명조",
+                    "Noto Sans KR",
+                    "DejaVu Serif",
+                ],
+            );
+            let mono = first_existing_family(
+                &fontdb,
+                &[
+                    "D2Coding",
+                    "D2Coding ligature",
+                    "Noto Sans KR",
+                    "DejaVu Sans Mono",
+                ],
+            );
+            if let Some(f) = sans {
+                fontdb.set_sans_serif_family(f);
+            }
+            if let Some(f) = serif {
+                fontdb.set_serif_family(f);
+            }
+            if let Some(f) = mono {
+                fontdb.set_monospace_family(f);
+            }
             Arc::new(fontdb)
         })
         .clone()
+}
+
+/// [Issue #2293] fontdb 에 실존하는 첫 패밀리 — 후보가 전부 없으면 None
+/// (usvg 기본 generic 매핑 유지, 폴백 지정으로 오히려 드롭되는 것을 방지).
+fn first_existing_family(fontdb: &usvg::fontdb::Database, candidates: &[&str]) -> Option<String> {
+    let mut families = std::collections::HashSet::new();
+    for face in fontdb.faces() {
+        for (name, _) in &face.families {
+            families.insert(name.clone());
+        }
+    }
+    candidates
+        .iter()
+        .find(|c| families.contains(**c))
+        .map(|c| c.to_string())
 }

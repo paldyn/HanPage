@@ -20,8 +20,8 @@ use quick_xml::Writer;
 
 use crate::model::shape::{
     CommonObjAttr, DrawingObjAttr, HorzAlign, HorzRelTo, LineShape, ObjectNumberingType,
-    OleDrawingAspect, OleShape, RectangleShape, ShapeComponentAttr, TextBox, TextFlow, TextWrap,
-    VertAlign, VertRelTo,
+    OleDrawingAspect, OleShape, RectangleShape, ShapeComponentAttr, SizeCriterion, TextBox,
+    TextFlow, TextWrap, VertAlign, VertRelTo,
 };
 use crate::model::style::{Fill, FillType, ImageFillMode, ShapeBorderLine, SolidFill};
 use crate::model::ColorRef;
@@ -70,7 +70,8 @@ pub fn write_rect<W: Write>(
             ("numberingType", numbering_type_str(c.numbering_type)),
             ("textWrap", tw),
             ("textFlow", tf),
-            ("lock", "0"),
+            // [#2840] lock(개체 잠금) — 파서가 읽기 시작했으므로 IR 값을 방출한다.
+            ("lock", bool01(c.locked)),
             ("dropcapstyle", "None"),
             ("href", ""),
             ("groupLevel", &group_level),
@@ -172,7 +173,8 @@ pub fn write_line<W: Write>(
         ("numberingType", numbering_type_str(c.numbering_type)),
         ("textWrap", text_wrap_str(c.text_wrap)),
         ("textFlow", text_flow_str(c.text_flow)),
-        ("lock", "0"),
+        // [#2840] lock(개체 잠금) — IR 보존 값 방출.
+        ("lock", bool01(c.locked)),
         ("dropcapstyle", "None"),
         ("href", ""),
         ("groupLevel", &group_level),
@@ -191,8 +193,10 @@ pub fn write_line<W: Write>(
     write_fill_brush(w, &line.drawing.fill, ctx)?;
     write_shadow(w, &line.drawing)?;
 
-    // 좌표 — hp:startPt/hp:endPt 자식 (파서가 읽는 유일 경로). connectLine 은
-    // subjectIDRef/subjectIdx(연결 개체) 포함.
+    // 좌표 — startPt/endPt 자식 (파서가 읽는 유일 경로. 프리픽스 무관 로컬명
+    // 매칭). 네임스페이스는 요소별로 다르다: hp:line 의 자식은 hc: (XSD LineType
+    // — hp: 로 쓰면 한컴오피스가 문서를 거부한다), hp:connectLine 의 자식은
+    // hp: (ConnectPointType 로컬 요소, subjectIDRef/subjectIdx 포함).
     let (sub_start_ref, sub_start_idx, sub_end_ref, sub_end_idx) = line
         .connector
         .as_ref()
@@ -231,8 +235,8 @@ pub fn write_line<W: Write>(
             ],
         )?;
     } else {
-        empty_tag(w, "hp:startPt", &[("x", &sx), ("y", &sy)])?;
-        empty_tag(w, "hp:endPt", &[("x", &ex), ("y", &ey)])?;
+        empty_tag(w, "hc:startPt", &[("x", &sx), ("y", &sy)])?;
+        empty_tag(w, "hc:endPt", &[("x", &ex), ("y", &ey)])?;
     }
 
     // connectLine 제어점 (꺾인/곡선 커넥터의 경로).
@@ -291,7 +295,8 @@ pub fn write_container_open<W: Write>(
             ("numberingType", numbering_type_str(common.numbering_type)),
             ("textWrap", tw),
             ("textFlow", tf),
-            ("lock", "0"),
+            // [#2840] lock(개체 잠금) — IR 보존 값 방출.
+            ("lock", bool01(common.locked)),
             ("dropcapstyle", "None"),
             ("href", ""),
             ("groupLevel", "0"),
@@ -347,8 +352,14 @@ pub(crate) fn write_ole<W: Write>(
     let tw = text_wrap_str(c.text_wrap);
     let tf = text_flow_str(c.text_flow);
     // owned 으로 변환해 ctx 불변 borrow 를 즉시 해제(이후 write_caption 의 &mut 사용).
-    let bidref = ctx
-        .resolve_bin_id(ole.bin_data_id as u16)
+    // [버그] ole.bin_data_id 는 HWP5 바이너리 상 4바이트(u32) 필드지만 BinData 테이블은
+    // u16 ID 로 관리된다. 종전에는 `as u16` 로 상위 비트를 자른 뒤 조회해, 65536 이상인
+    // (잘못된/조작된) 값이 하위 16비트가 같은 다른 BinData 항목을 가리키는 오참조를
+    // 일으킬 수 있었다. try_from 으로 범위를 벗어나면 미등록으로 취급해 빈 참조로
+    // 남긴다(기존 "미등록 id → 빈 문자열" 처리와 동일한 안전한 폴백).
+    let bidref = u16::try_from(ole.bin_data_id)
+        .ok()
+        .and_then(|id| ctx.resolve_bin_id(id))
         .unwrap_or("")
         .to_string();
     let draw_aspect = match ole.drawing_aspect {
@@ -357,6 +368,8 @@ pub(crate) fn write_ole<W: Write>(
         OleDrawingAspect::DocPrint => "DOCPRINT",
         OleDrawingAspect::Content => "CONTENT",
     };
+    // [#2931] 개체 잠금(lock) — IR(common.locked)을 보존(종전 "0" 하드코딩 제거).
+    let lock = if c.locked { "1" } else { "0" };
 
     start_tag_attrs(
         w,
@@ -367,7 +380,8 @@ pub(crate) fn write_ole<W: Write>(
             ("numberingType", numbering_type_str(c.numbering_type)),
             ("textWrap", tw),
             ("textFlow", tf),
-            ("lock", "0"),
+            // [#2840] lock(개체 잠금) — IR 보존 값 방출.
+            ("lock", bool01(c.locked)),
             ("dropcapstyle", "None"),
             ("href", ""),
             ("groupLevel", "0"),
@@ -396,6 +410,83 @@ pub(crate) fn write_ole<W: Write>(
     write_shape_comment(w, c)?;
 
     end_tag(w, "hp:ole")?;
+    Ok(())
+}
+
+// =====================================================================
+// <hp:chart> — HWPX OOXML 차트 원형 재방출 (#3546)
+// 파서는 hp:chart 를 OLE 모델(bin_data_id=60000+N)로 변환한다. 종전 저장은
+// 이를 일반 OLE 로 방출해 hp:chart → hp:ole 치환·Chart/chartN.xml →
+// BinData/image6000N.ooxml_chart 이동이 일어났고, 한컴오피스가 차트 XML 을
+// OLE 복합문서로 해석했다. chart_id_ref 표식이 있으면 원형 구조로 되쓴다.
+// =====================================================================
+pub(crate) fn write_ole_or_chart<W: Write>(
+    w: &mut Writer<W>,
+    ole: &OleShape,
+    ctx: &mut SerializeContext,
+) -> Result<(), SerializeError> {
+    match ole.chart_id_ref.as_deref() {
+        Some(chart_id_ref) => write_chart_switch(w, ole, chart_id_ref, ctx),
+        None => write_ole(w, ole, ctx),
+    }
+}
+
+/// hp:chart 재방출 — 원본이 <hp:switch> 래핑(fallback OLE 보유)이었으면 같은
+/// 구조로, bare <hp:chart> 였으면 같은 형태로 되쓴다.
+const OOXML_CHART_REQUIRED_NS: &str = "http://www.hancom.co.kr/hwpml/2016/ooxmlchart";
+
+fn write_chart_switch<W: Write>(
+    w: &mut Writer<W>,
+    ole: &OleShape,
+    chart_id_ref: &str,
+    ctx: &mut SerializeContext,
+) -> Result<(), SerializeError> {
+    match &ole.chart_switch_fallback {
+        Some(fallback) => {
+            start_tag(w, "hp:switch")?;
+            start_tag_attrs(
+                w,
+                "hp:case",
+                &[("hp:required-namespace", OOXML_CHART_REQUIRED_NS)],
+            )?;
+            write_chart_element(w, ole, chart_id_ref)?;
+            end_tag(w, "hp:case")?;
+            start_tag(w, "hp:default")?;
+            write_ole(w, fallback, ctx)?;
+            end_tag(w, "hp:default")?;
+            end_tag(w, "hp:switch")?;
+            Ok(())
+        }
+        None => write_chart_element(w, ole, chart_id_ref),
+    }
+}
+
+fn write_chart_element<W: Write>(
+    w: &mut Writer<W>,
+    ole: &OleShape,
+    chart_id_ref: &str,
+) -> Result<(), SerializeError> {
+    let c = &ole.common;
+    let id_str = c.instance_id.to_string();
+    let z_order = c.z_order.to_string();
+    start_tag_attrs(
+        w,
+        "hp:chart",
+        &[
+            ("id", &id_str),
+            ("zOrder", &z_order),
+            ("numberingType", numbering_type_str(c.numbering_type)),
+            ("textWrap", text_wrap_str(c.text_wrap)),
+            ("textFlow", text_flow_str(c.text_flow)),
+            ("lock", bool01(c.locked)),
+            ("dropcapstyle", "None"),
+            ("chartIDRef", chart_id_ref),
+        ],
+    )?;
+    write_sz(w, c)?;
+    write_pos(w, c)?;
+    write_out_margin(w, c)?;
+    end_tag(w, "hp:chart")?;
     Ok(())
 }
 
@@ -518,8 +609,13 @@ fn write_offset<W: Write>(
     w: &mut Writer<W>,
     sa: &ShapeComponentAttr,
 ) -> Result<(), SerializeError> {
-    let x = sa.offset_x.to_string();
-    let y = sa.offset_y.to_string();
+    // [#3544] hp:offset x/y 는 OWPML XSD 상 unsigned. 한컴 산출물은 음수 오프셋을
+    // u32 wraparound 십진수로 기록하고(예: -2429 → "4294964867"), 파서도
+    // `parse_u32 as i32` 로 같은 관례를 복호한다. IR 은 레이아웃 계산을 위해
+    // signed 가 정당하므로 값은 두고, XML 경계에서만 부호화를 복원한다 —
+    // signed 그대로 문자열화하면 `y="-2"` 류 스키마 위반이 된다.
+    let x = (sa.offset_x as u32).to_string();
+    let y = (sa.offset_y as u32).to_string();
     empty_tag(w, "hp:offset", &[("x", &x), ("y", &y)])
 }
 
@@ -664,7 +760,7 @@ fn write_matrix<W: Write>(
 // =====================================================================
 
 /// `<hp:lineShape>` — `parse_line_shape_attr` 의 역매핑.
-/// headStyle/tailStyle/alpha 는 파서 미적재 → "NORMAL"/"0" 고정 방출.
+/// alpha 는 파서 미적재 → "0" 고정 방출. headStyle/tailStyle 은 bit 10~21 에서 복원한다(#2956).
 pub(crate) fn write_line_shape<W: Write>(
     w: &mut Writer<W>,
     bl: &ShapeBorderLine,
@@ -694,8 +790,12 @@ pub(crate) fn write_line_shape<W: Write>(
         2 => "SQUARE",
         _ => "ROUND",
     };
-    let headfill = bool01(bl.attr & 0x8000_0000 != 0);
-    let tailfill = bool01(bl.attr & 0x4000_0000 != 0);
+    let head_fill_b = bl.attr & 0x8000_0000 != 0;
+    let tail_fill_b = bl.attr & 0x4000_0000 != 0;
+    let headfill = bool01(head_fill_b);
+    let tailfill = bool01(tail_fill_b);
+    let head_style = arrow_style_str((bl.attr >> 10) & 0x3F, head_fill_b);
+    let tail_style = arrow_style_str((bl.attr >> 16) & 0x3F, tail_fill_b);
     let head_sz = arrow_size_str((bl.attr >> 22) & 0x0F);
     let tail_sz = arrow_size_str((bl.attr >> 26) & 0x0F);
     let outline = match bl.outline_style {
@@ -711,8 +811,8 @@ pub(crate) fn write_line_shape<W: Write>(
             ("width", &width),
             ("style", style),
             ("endCap", end_cap),
-            ("headStyle", "NORMAL"),
-            ("tailStyle", "NORMAL"),
+            ("headStyle", head_style),
+            ("tailStyle", tail_style),
             ("headfill", headfill),
             ("tailfill", tailfill),
             ("headSz", head_sz),
@@ -723,17 +823,37 @@ pub(crate) fn write_line_shape<W: Write>(
     )
 }
 
+/// HWP5 화살표 모양 값(hwplib LineArrowShape, `arrow_type_from_hwp` 참조) →
+/// OWPML Core `ArrowType` 역매핑. fill 은 채움 여부(bit 30/31)다.
+fn arrow_style_str(v: u32, fill: bool) -> &'static str {
+    match v {
+        1 => "ARROW",
+        2 => "SPEAR",
+        3 => "CONCAVE_ARROW",
+        4 if fill => "FILLED_DIAMOND",
+        4 => "EMPTY_DIAMOND",
+        5 if fill => "FILLED_CIRCLE",
+        5 => "EMPTY_CIRCLE",
+        6 if fill => "FILLED_BOX",
+        6 => "EMPTY_BOX",
+        _ => "NORMAL",
+    }
+}
+
 /// `parse_line_shape_attr::arrow_size` 의 역매핑 (0~8).
 fn arrow_size_str(v: u32) -> &'static str {
+    // OWPML Core 스키마 hc:ArrowSize 정본 리터럴은 *_LARGE (Core XML schema.xml:407).
+    // "*_BIG" 는 스펙에 없는 비실재 토큰 — 파서는 하위호환을 위해 관용 수용하지만
+    // (src/parser/hwpx/section.rs 의 parse_line_shape_attr), 직렬화는 정본만 방출한다.
     match v {
         1 => "SMALL_MEDIUM",
-        2 => "SMALL_BIG",
+        2 => "SMALL_LARGE",
         3 => "MEDIUM_SMALL",
         4 => "MEDIUM_MEDIUM",
-        5 => "MEDIUM_BIG",
-        6 => "BIG_SMALL",
-        7 => "BIG_MEDIUM",
-        8 => "BIG_BIG",
+        5 => "MEDIUM_LARGE",
+        6 => "LARGE_SMALL",
+        7 => "LARGE_MEDIUM",
+        8 => "LARGE_LARGE",
         _ => "SMALL_SMALL",
     }
 }
@@ -836,10 +956,21 @@ pub(crate) fn write_fill_brush<W: Write>(
         }
         FillType::Image => {
             let img = fill.image.clone().unwrap_or_default();
+            // [#2943] parse_shape_fill_brush(section.rs)는 12종 mode 를 모두 개별
+            // ImageFillMode 로 적재하는데, 종전엔 여기서 3종만 구분하고 나머지 7종
+            // (TileHorzTop/Bottom, TileVertLeft/Right, CenterTop/Bottom, LeftTop)이
+            // 전부 "TILE"로 붕괴해 저장 시 실제 배치가 유실됐다.
             let mode = match img.fill_mode {
+                ImageFillMode::TileHorzTop => "TILE_HORZ_TOP",
+                ImageFillMode::TileHorzBottom => "TILE_HORZ_BOTTOM",
+                ImageFillMode::TileVertLeft => "TILE_VERT_LEFT",
+                ImageFillMode::TileVertRight => "TILE_VERT_RIGHT",
                 ImageFillMode::FitToSize => "FIT",
                 ImageFillMode::Total => "TOTAL",
                 ImageFillMode::Center => "CENTER",
+                ImageFillMode::CenterTop => "CENTER_TOP",
+                ImageFillMode::CenterBottom => "CENTER_BOTTOM",
+                ImageFillMode::LeftTop => "TOP_LEFT_ALIGN",
                 _ => "TILE",
             };
             start_tag(w, "hc:fillBrush")?;
@@ -895,7 +1026,10 @@ fn hatch_style_str(pattern_type: i32) -> &'static str {
         3 => "BACK_SLASH",
         4 => "SLASH",
         5 => "CROSS",
-        _ => "CROSS_DIAGONAL",
+        6 => "CROSS_DIAGONAL",
+        // 계약(1~6) 밖의 값은 무늬 정보가 없다는 뜻이므로 임의의 무늬로
+        // 둔갑시키지 않고 가장 무난한 HORIZONTAL 로 방출한다.
+        _ => "HORIZONTAL",
     }
 }
 
@@ -978,17 +1112,50 @@ pub(super) fn write_shape_comment<W: Write>(
 fn write_sz<W: Write>(w: &mut Writer<W>, c: &CommonObjAttr) -> Result<(), SerializeError> {
     let width = c.width.to_string();
     let height = c.height.to_string();
+    // [#2712] widthRelTo/heightRelTo/protect 는 IR 을 보존한다. 종전 "ABSOLUTE"/"0"
+    // 하드코딩은 파서가 이미 읽어 둔 값(section.rs:2901/2904/2907, OLE 는 5967)을 저장 때
+    // 버려, 단/쪽/문단에 맞춘 도형이 절대값으로 굳고 "크기 고정"이 풀렸다. 실제 한글 산출
+    // 파일 samples/hwpx/143E433F503322BD33.hwpx 의 hp:rect·hp:ole 이 protect="1" 인데
+    // 종전 방출은 이를 "0" 으로 되썼다. 이웃 write_pos 는 이미 모든 필드를 통과시키고,
+    // 같은 hp:sz 를 다루는 form.rs:183-188 도 3속성 모두 보존한다. 표는 #2697/#2701 에서
+    // 같은 결함을 같은 방식으로 정리했다.
     empty_tag(
         w,
         "hp:sz",
         &[
             ("width", &width),
-            ("widthRelTo", "ABSOLUTE"),
+            ("widthRelTo", size_criterion_str(c.width_criterion)),
             ("height", &height),
-            ("heightRelTo", "ABSOLUTE"),
-            ("protect", "0"),
+            ("heightRelTo", height_criterion_str(c.height_criterion)),
+            ("protect", bool01(c.size_protect)),
         ],
     )
+}
+
+/// 너비 기준 → HWPX `widthRelTo`. 파서 `parse_size_criterion(_, true)` 의 정확한 역이다
+/// (`parser/hwpx/section.rs:1844`, 호출부 `:2901`). 너비는 HWP5 attr bit 15-17 로 3비트라
+/// 5값 전부를 담는다(`model/shape.rs:83`).
+pub(super) fn size_criterion_str(c: SizeCriterion) -> &'static str {
+    match c {
+        SizeCriterion::Paper => "PAPER",
+        SizeCriterion::Page => "PAGE",
+        SizeCriterion::Column => "COLUMN",
+        SizeCriterion::Para => "PARA",
+        SizeCriterion::Absolute => "ABSOLUTE",
+    }
+}
+
+/// 높이 기준 → HWPX `heightRelTo`. 파서는 높이를
+/// `parse_size_criterion(_, allow_column_para = false)` 로 읽으므로(`section.rs:2904`)
+/// 치역이 `{PAPER, PAGE, ABSOLUTE}` 3값뿐이다. 방출도 같은 3값으로 접어야 왕복이 정확한
+/// 역이 된다. HWP5 측 `height_criterion_to_bits`(`common_obj_attr_writer.rs:160`)와 모델
+/// 주석(`model/shape.rs:85`, bit 18-19)도 동일하게 접는다.
+pub(super) fn height_criterion_str(c: SizeCriterion) -> &'static str {
+    match c {
+        SizeCriterion::Paper => "PAPER",
+        SizeCriterion::Page => "PAGE",
+        SizeCriterion::Column | SizeCriterion::Para | SizeCriterion::Absolute => "ABSOLUTE",
+    }
 }
 
 fn write_pos<W: Write>(w: &mut Writer<W>, c: &CommonObjAttr) -> Result<(), SerializeError> {
@@ -1001,7 +1168,9 @@ fn write_pos<W: Write>(w: &mut Writer<W>, c: &CommonObjAttr) -> Result<(), Seria
         "hp:pos",
         &[
             ("treatAsChar", treat),
-            ("affectLSpacing", "0"),
+            // [#2784] affectLSpacing 은 IR(affect_line_spacing)을 보존한다. 종전 "0"
+            // 하드코딩은 "줄 간격에 영향" 켜진 도형이 저장 시 1→0 으로 드롭됐다.
+            ("affectLSpacing", bool01(c.affect_line_spacing)),
             ("flowWithText", bool01(c.flow_with_text)),
             ("allowOverlap", bool01(c.allow_overlap)),
             ("holdAnchorAndSO", hold),
@@ -1050,6 +1219,18 @@ pub(crate) fn numbering_type_str(n: ObjectNumberingType) -> &'static str {
         ObjectNumberingType::Table => "TABLE",
         ObjectNumberingType::Equation => "EQUATION",
         ObjectNumberingType::None => "NONE",
+    }
+}
+
+/// `dropcapstyle` 방출 문자열. OWPML Core 스키마 `DropCapStyleType`
+/// (None/DoubleLine/TripleLine/Margin) 그대로 왕복한다.
+pub(crate) fn drop_cap_style_str(s: crate::model::shape::DropCapStyle) -> &'static str {
+    use crate::model::shape::DropCapStyle;
+    match s {
+        DropCapStyle::None => "None",
+        DropCapStyle::DoubleLine => "DoubleLine",
+        DropCapStyle::TripleLine => "TripleLine",
+        DropCapStyle::Margin => "Margin",
     }
 }
 
@@ -1157,6 +1338,30 @@ mod tests {
         xml[i..].split('"').next().unwrap().to_string()
     }
 
+    /// #2943: imgBrush mode 는 12종 중 3종만 구분하면 나머지 7종
+    /// (TileHorzTop 등)이 저장 시 전부 TILE 로 붕괴한다. 각 모드가 자기 고유의
+    /// mode 문자열로 방출돼야 한다.
+    #[test]
+    fn task2943_img_brush_mode_roundtrip_not_collapsed_to_tile() {
+        use crate::model::style::{Fill, FillType, ImageFill, ImageFillMode};
+        let mut w: Writer<Vec<u8>> = Writer::new(Vec::new());
+        let ctx = SerializeContext::collect_from_document(&Default::default());
+        let fill = Fill {
+            fill_type: FillType::Image,
+            image: Some(ImageFill {
+                fill_mode: ImageFillMode::TileHorzTop,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        write_fill_brush(&mut w, &fill, &ctx).expect("write_fill_brush");
+        let xml = String::from_utf8(w.into_inner()).unwrap();
+        assert!(
+            xml.contains("mode=\"TILE_HORZ_TOP\""),
+            "TileHorzTop 이 TILE 로 붕괴함: {xml}"
+        );
+    }
+
     /// #1531: 선 없음(style code 0) 도형 외곽선이 라운드트립에서 SOLID(사각형 박스)로
     /// 살아나면 안 된다. endCap(bit 6~9)이 함께 설정돼도 NONE 이 보존돼야 한다.
     #[test]
@@ -1166,6 +1371,37 @@ mod tests {
         assert_eq!(line_shape_style(2), "DASH"); // 2 = DASH (회귀 방지)
         let none_with_flat_end_cap = 1 << 6;
         assert_eq!(line_shape_style(none_with_flat_end_cap), "NONE");
+    }
+
+    /// #2956: attr 에 파싱된 화살표 끝 모양(bit 16~21, 채움 bit 30)이 저장 시
+    /// "NORMAL" 로 하드코딩되지 않고 보존돼야 한다.
+    #[test]
+    fn task2956_line_shape_arrow_style_preserved() {
+        use crate::model::style::ShapeBorderLine;
+        // tail = FILLED_DIAMOND(4) + tail_fill(bit30)
+        let attr = (4u32 << 16) | (1 << 30);
+        let bl = ShapeBorderLine {
+            attr,
+            ..Default::default()
+        };
+        let mut w: Writer<Vec<u8>> = Writer::new(Vec::new());
+        write_line_shape(&mut w, &bl).expect("write_line_shape");
+        let xml = String::from_utf8(w.into_inner()).unwrap();
+        assert!(
+            xml.contains("tailStyle=\"FILLED_DIAMOND\""),
+            "화살표 끝 모양이 소실됨: {xml}"
+        );
+    }
+
+    /// #3022: hc:ArrowSize 의 스펙 리터럴은 `*_LARGE` 이다(Core XML schema.xml:407).
+    /// headSz/tailSz 방출이 스펙에 없는 `*_BIG` 표기로 나가면 안 된다.
+    #[test]
+    fn task3022_arrow_size_uses_spec_large_literal() {
+        assert_eq!(arrow_size_str(2), "SMALL_LARGE");
+        assert_eq!(arrow_size_str(5), "MEDIUM_LARGE");
+        assert_eq!(arrow_size_str(6), "LARGE_SMALL");
+        assert_eq!(arrow_size_str(7), "LARGE_MEDIUM");
+        assert_eq!(arrow_size_str(8), "LARGE_LARGE");
     }
 
     /// #1588: 선 도형 설명(shapeComment)이 저장 시 방출돼야 한다.
@@ -1260,18 +1496,20 @@ mod tests {
 
     #[test]
     fn line_emits_start_end_attrs() {
-        // [Issue #1943] 좌표는 hp:startPt/hp:endPt 자식으로 방출한다 (파서가 읽는
+        // [Issue #1943] 좌표는 startPt/endPt 자식으로 방출한다 (파서가 읽는
         // 유일 경로). 종전 startX/Y attr 은 파서가 무시하는 dead 출력이었다.
+        // hp:line 의 자식 네임스페이스는 hc: 다 (XSD LineType — hp: 로 쓰면
+        // 한컴오피스가 문서를 거부한다).
         let mut line = LineShape::default();
         line.start = Point { x: 100, y: 200 };
         line.end = Point { x: 300, y: 400 };
         let xml = serialize_line(&line);
         assert!(
-            xml.contains(r#"<hp:startPt x="100" y="200""#),
+            xml.contains(r#"<hc:startPt x="100" y="200""#),
             "startPt 자식 방출: {xml}"
         );
         assert!(
-            xml.contains(r#"<hp:endPt x="300" y="400""#),
+            xml.contains(r#"<hc:endPt x="300" y="400""#),
             "endPt 자식 방출: {xml}"
         );
         // 컴포넌트 블록·lineShape 보존 (#1943 (B)).
@@ -1345,7 +1583,7 @@ mod tests {
         doc.bin_data_content
             .push(crate::model::bin_data::BinDataContent {
                 id: 1,
-                data: vec![0u8; 4],
+                data: vec![0u8; 4].into(),
                 extension: "png".to_string(),
             });
         let mut ctx = SerializeContext::collect_from_document(&doc);
@@ -1385,6 +1623,21 @@ mod tests {
             xml.contains(r#"textDirection="VERTICAL""#) && !xml.contains("VERTICALALL"),
             "VERTICAL (ALL 아님) 보존: {}",
             xml
+        );
+    }
+
+    /// [Issue #3544] hp:offset x/y 는 OWPML XSD 상 unsigned — 음수 IR 오프셋은
+    /// 한컴 관례대로 u32 wraparound 십진수로 방출해야 한다 (파서 `parse_u32 as
+    /// i32` 복호의 역함수). signed 그대로 문자열화하면 `y="-2"` 류 스키마 위반.
+    #[test]
+    fn issue3544_negative_offset_emitted_as_u32_wraparound() {
+        let mut rect = RectangleShape::default();
+        rect.drawing.shape_attr.offset_x = -8974;
+        rect.drawing.shape_attr.offset_y = -2;
+        let xml = serialize_rect(&rect);
+        assert!(
+            xml.contains(r#"<hp:offset x="4294958322" y="4294967294"/>"#),
+            "음수 오프셋은 u32 wraparound 십진수로 방출되어야 한다: {xml}"
         );
     }
 
@@ -1597,5 +1850,165 @@ mod tests {
         assert!(!xml.contains("<hp:caption"), "캡션 부재 시 미방출: {}", xml);
         let xml = serialize_line(&LineShape::default());
         assert!(!xml.contains("<hp:caption"), "캡션 부재 시 미방출: {}", xml);
+    }
+
+    // ---------- #2712: 도형 hp:sz 크기 기준·크기 보호 라운드트립 ----------
+
+    /// 도형을 한 문단짜리 `<hs:sec>` 으로 감싸 다시 파싱한다(IR 수준 역검증용).
+    fn reparse_shape_common(fragment: &str) -> crate::model::shape::CommonObjAttr {
+        let xml = format!(
+            concat!(
+                r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+                r#"<hs:sec xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph""#,
+                r#" xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section">"#,
+                r#"<hp:p id="0" paraPrIDRef="0" styleIDRef="0">"#,
+                r#"<hp:run charPrIDRef="0">{}<hp:t/></hp:run></hp:p></hs:sec>"#
+            ),
+            fragment
+        );
+        let section = crate::parser::hwpx::section::parse_hwpx_section(&xml)
+            .expect("파싱 가능한 도형 조각이어야 함");
+        match &section.paragraphs[0].controls[0] {
+            crate::model::control::Control::Shape(s) => s.common().clone(),
+            other => panic!("도형 컨트롤이어야 함: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn task2712_shape_sz_criteria_and_protect_emitted_from_ir() {
+        // [#2712] hp:sz 의 widthRelTo/heightRelTo/protect 는 IR 을 보존해야 한다.
+        // 종전 "ABSOLUTE"/"ABSOLUTE"/"0" 하드코딩은 파서가 이미 읽어 둔 값
+        // (section.rs:2901/2904/2907)을 저장 때 버렸다. RED.
+        let mut rect = RectangleShape::default();
+        rect.common.width_criterion = SizeCriterion::Column;
+        rect.common.height_criterion = SizeCriterion::Paper;
+        rect.common.size_protect = true;
+        let xml = serialize_rect(&rect);
+        assert!(
+            xml.contains(r#"widthRelTo="COLUMN""#),
+            "widthRelTo 가 IR(Column)로 방출돼야 함(종전 ABSOLUTE 하드코딩): {xml}"
+        );
+        assert!(
+            xml.contains(r#"heightRelTo="PAPER""#),
+            "heightRelTo 가 IR(Paper)로 방출돼야 함(종전 ABSOLUTE 하드코딩): {xml}"
+        );
+        assert!(
+            xml.contains(r#"protect="1""#),
+            "protect 가 IR(size_protect=true)로 방출돼야 함(종전 0 하드코딩): {xml}"
+        );
+
+        // IR 수준 역검증 — 되읽었을 때 값이 그대로 복원돼야 한다.
+        let back = reparse_shape_common(&xml);
+        assert_eq!(back.width_criterion, SizeCriterion::Column);
+        assert_eq!(back.height_criterion, SizeCriterion::Paper);
+        assert!(back.size_protect);
+    }
+
+    #[test]
+    fn task2712_line_sz_criteria_and_protect_emitted_from_ir() {
+        // write_sz 는 rect/line/container/ole 이 공유하므로 선 도형에서도 확인한다.
+        let mut line = LineShape::default();
+        line.common.width_criterion = SizeCriterion::Page;
+        line.common.size_protect = true;
+        let xml = serialize_line(&line);
+        assert!(xml.contains(r#"widthRelTo="PAGE""#), "{xml}");
+        assert!(xml.contains(r#"protect="1""#), "{xml}");
+    }
+
+    #[test]
+    fn task2712_height_criterion_is_exact_inverse_of_parser() {
+        // 파서는 높이를 parse_size_criterion(_, allow_column_para=false) 로 읽어
+        // 치역이 {PAPER, PAGE, ABSOLUTE} 3값뿐이다(section.rs:2904). 방출도 같은 3값으로
+        // 접어야 왕복이 정확한 역이 된다. Column/Para 를 그대로 내보내면 되읽을 때
+        // Absolute 로 떨어져 왕복이 깨진다.
+        assert_eq!(height_criterion_str(SizeCriterion::Paper), "PAPER");
+        assert_eq!(height_criterion_str(SizeCriterion::Page), "PAGE");
+        assert_eq!(height_criterion_str(SizeCriterion::Absolute), "ABSOLUTE");
+        assert_eq!(height_criterion_str(SizeCriterion::Column), "ABSOLUTE");
+        assert_eq!(height_criterion_str(SizeCriterion::Para), "ABSOLUTE");
+
+        // 너비는 5값 전부를 담는다(bit 15-17).
+        assert_eq!(size_criterion_str(SizeCriterion::Paper), "PAPER");
+        assert_eq!(size_criterion_str(SizeCriterion::Page), "PAGE");
+        assert_eq!(size_criterion_str(SizeCriterion::Column), "COLUMN");
+        assert_eq!(size_criterion_str(SizeCriterion::Para), "PARA");
+        assert_eq!(size_criterion_str(SizeCriterion::Absolute), "ABSOLUTE");
+
+        // 높이에 Column 을 넣어도 방출은 ABSOLUTE 로 접히고, 되읽어도 Absolute 다.
+        let mut rect = RectangleShape::default();
+        rect.common.height_criterion = SizeCriterion::Column;
+        let xml = serialize_rect(&rect);
+        assert!(xml.contains(r#"heightRelTo="ABSOLUTE""#), "{xml}");
+        assert_eq!(
+            reparse_shape_common(&xml).height_criterion,
+            SizeCriterion::Absolute
+        );
+    }
+
+    #[test]
+    fn task2712_shape_sz_defaults_unchanged() {
+        // 기본 IR(Absolute/Absolute/false)은 종전 출력과 동일해야 한다(무변화 보장).
+        // 실측상 samples/hwpx 의 hp:rect 309개·hp:pic 188개가 모두 이 조합이다.
+        let xml = serialize_rect(&RectangleShape::default());
+        assert!(xml.contains(r#"widthRelTo="ABSOLUTE""#), "{xml}");
+        assert!(xml.contains(r#"heightRelTo="ABSOLUTE""#), "{xml}");
+        assert!(xml.contains(r#"protect="0""#), "{xml}");
+    }
+
+    #[test]
+    fn task_m100_hatch_style_str_covers_all_six() {
+        // 계약(1~6) 값 6개를 모두 명시적으로 매핑하는지 확인한다.
+        // 이전에는 6이 catch-all(_) 분기에 얹혀 있어, 계약 밖의 값(예: 손상된
+        // 원본의 pattern_type=99)도 CROSS_DIAGONAL 로 둔갑했다.
+        assert_eq!(hatch_style_str(1), "HORIZONTAL");
+        assert_eq!(hatch_style_str(2), "VERTICAL");
+        assert_eq!(hatch_style_str(3), "BACK_SLASH");
+        assert_eq!(hatch_style_str(4), "SLASH");
+        assert_eq!(hatch_style_str(5), "CROSS");
+        assert_eq!(hatch_style_str(6), "CROSS_DIAGONAL");
+        assert_eq!(hatch_style_str(99), "HORIZONTAL");
+    }
+
+    /// [버그] OLE 의 `bin_data_id` 는 HWP5 바이너리상 u32 필드다. 종전 코드는
+    /// `as u16` 로 상위 비트를 잘라 조회했기 때문에, 65536 이상인 id가 하위 16비트가
+    /// 같은 *다른* BinData 항목(예: id=5)을 잘못 가리킬 수 있었다. 이 값이 등록된
+    /// BinData 범위(u16)를 벗어나면 그 어떤 항목도 가리키지 않고 빈 참조로 남아야
+    /// 한다(오참조 방지).
+    #[test]
+    fn ole_bin_data_id_beyond_u16_does_not_alias_truncated_entry() {
+        use crate::model::bin_data::{BinData, BinDataContent, BinDataType};
+        use crate::model::document::Document;
+
+        let mut doc = Document::default();
+        // 하위 16비트가 0x10005 와 같은(=5) 정상 BinData 항목을 등록해 둔다.
+        doc.bin_data_content.push(BinDataContent {
+            id: 5,
+            data: vec![0, 1, 2].into(),
+            extension: "png".to_string(),
+        });
+        doc.doc_info.bin_data_list.push(BinData {
+            data_type: BinDataType::Embedding,
+            storage_id: 5,
+            extension: Some("png".to_string()),
+            ..Default::default()
+        });
+        let mut ctx = SerializeContext::collect_from_document(&doc);
+        // 등록 확인: id=5 는 정상적으로 조회돼야 한다.
+        assert_eq!(ctx.resolve_bin_id(5), Some("image5"));
+
+        let ole = OleShape {
+            bin_data_id: 0x1_0005, // truncate 시 5 가 되는 값(범위 밖)
+            drawing_aspect: OleDrawingAspect::Content,
+            ..Default::default()
+        };
+
+        let mut w: Writer<Vec<u8>> = Writer::new(Vec::new());
+        write_ole(&mut w, &ole, &mut ctx).expect("write_ole");
+        let xml = String::from_utf8(w.into_inner()).unwrap();
+
+        assert!(
+            !xml.contains(r#"binaryItemIDRef="image5""#),
+            "u32 bin_data_id 가 u16 로 잘려 무관한 image5 를 오참조함: {xml}"
+        );
     }
 }

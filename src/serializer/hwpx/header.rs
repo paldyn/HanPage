@@ -25,7 +25,7 @@ use crate::model::ColorRef;
 
 use super::canonical_defaults::FONTFACE_LANG_NAMES;
 use super::context::SerializeContext;
-use super::utils::{empty_tag, end_tag, start_tag_attrs, write_xml_decl};
+use super::utils::{empty_tag, end_tag, start_tag_attrs, text, write_xml_decl};
 use super::SerializeError;
 
 /// `header.xml` 바이트 생성. Stage 1 진입점.
@@ -77,7 +77,7 @@ pub fn write_header(doc: &Document, ctx: &SerializeContext) -> Result<Vec<u8>, S
 
     // <hh:refList>: 모든 리소스 테이블을 감싸는 컨테이너
     super::utils::start_tag(&mut w, "hh:refList")?;
-    write_fontfaces(&mut w, &doc.doc_info)?;
+    write_fontfaces(&mut w, &doc.doc_info, ctx)?;
     write_border_fills(&mut w, &doc.doc_info, ctx)?;
     write_char_properties(&mut w, &doc.doc_info, ctx)?;
     write_tab_properties(&mut w, &doc.doc_info)?;
@@ -85,6 +85,15 @@ pub fn write_header(doc: &Document, ctx: &SerializeContext) -> Result<Vec<u8>, S
     write_bullets(&mut w, &doc.doc_info)?;
     write_para_properties(&mut w, &doc.doc_info, ctx)?;
     write_styles(&mut w, &doc.doc_info, ctx)?;
+    // memoProperties(메모 모양 정의: 테두리/색상)는 refList 마지막 자식으로,
+    // parse_memo_shape가 만드는 extra_records(HWPTAG_MEMO_SHAPE, hwpx→hwp5
+    // 변환 전용)는 여기서 쓰이지 않는다. 원본 verbatim splice로 hwpx→hwpx
+    // 라운드트립 시 memoPr 소실을 막는다(#3xxx).
+    if let Some(memo_properties) = &doc.doc_info.memo_properties_xml {
+        w.get_mut()
+            .write_all(memo_properties.as_bytes())
+            .map_err(|e| SerializeError::XmlError(format!("memoProperties splice: {e}")))?;
+    }
     end_tag(&mut w, "hh:refList")?;
 
     // 문서 설정 tail: 원본 HWPX 가 있으면 그대로 splice(compatibleDocument/
@@ -130,7 +139,11 @@ fn write_begin_num<W: Write>(
 // =====================================================================
 // <hh:fontfaces> — 7 언어 그룹
 // =====================================================================
-fn write_fontfaces<W: Write>(w: &mut Writer<W>, doc_info: &DocInfo) -> Result<(), SerializeError> {
+fn write_fontfaces<W: Write>(
+    w: &mut Writer<W>,
+    doc_info: &DocInfo,
+    ctx: &SerializeContext,
+) -> Result<(), SerializeError> {
     // IR의 font_faces는 항상 7개 언어 그룹을 유지한다고 기대하나,
     // 비어있거나 크기가 다를 수 있으므로 안전하게 처리.
     let groups: Vec<&Vec<Font>> = (0..7)
@@ -162,26 +175,35 @@ fn write_fontfaces<W: Write>(w: &mut Writer<W>, doc_info: &DocInfo) -> Result<()
         )?;
         for (id, font) in fonts.iter().enumerate() {
             let id_str = id.to_string();
-            let font_attrs = [
+            let binary_item_id_ref = resolve_font_binary_item_id_ref(
+                ctx,
+                font.resolved_bin_data_id,
+                &font.bin_item_id_ref,
+                &font.name,
+            )?;
+            let mut font_attrs = vec![
                 ("id", id_str.as_str()),
                 ("face", font.name.as_str()),
                 ("type", font_type_str(font.alt_type)),
-                ("isEmbedded", "0"),
+                ("isEmbedded", if font.is_embedded { "1" } else { "0" }),
             ];
+            if !binary_item_id_ref.is_empty() {
+                font_attrs.push(("binaryItemIDRef", binary_item_id_ref.as_str()));
+            }
             // substFont(대체 글꼴)·typeInfo(파나포스 10바이트)가 IR에 있으면
             // 자식으로 복원한다. 원본 순서는 substFont → typeInfo. 둘 다 없으면
             // 종전대로 self-closing.
             if font.subst_font.is_some() || font.type_info.is_some() {
-                start_tag_attrs(w, "hh:font", &font_attrs)?;
+                start_tag_attrs(w, "hh:font", font_attrs.as_slice())?;
                 if let Some(sf) = &font.subst_font {
-                    write_subst_font(w, sf)?;
+                    write_subst_font(w, sf, ctx)?;
                 }
                 if let Some(ti) = &font.type_info {
                     write_font_type_info(w, ti)?;
                 }
                 end_tag(w, "hh:font")?;
             } else {
-                empty_tag(w, "hh:font", &font_attrs)?;
+                empty_tag(w, "hh:font", font_attrs.as_slice())?;
             }
         }
         end_tag(w, "hh:fontface")?;
@@ -191,6 +213,25 @@ fn write_fontfaces<W: Write>(w: &mut Writer<W>, doc_info: &DocInfo) -> Result<()
 }
 
 static EMPTY_FONT_VEC: Vec<Font> = Vec::new();
+
+fn resolve_font_binary_item_id_ref(
+    ctx: &SerializeContext,
+    resolved_bin_data_id: Option<u16>,
+    original_ref: &str,
+    font_name: &str,
+) -> Result<String, SerializeError> {
+    match resolved_bin_data_id {
+        Some(bin_data_id) => ctx
+            .resolve_bin_id(bin_data_id)
+            .map(str::to_string)
+            .ok_or_else(|| {
+                SerializeError::XmlError(format!(
+                    "embedded font `{font_name}` references missing BinData id {bin_data_id}"
+                ))
+            }),
+        None => Ok(original_ref.to_string()),
+    }
+}
 
 fn font_type_str(alt_type: u8) -> &'static str {
     match alt_type {
@@ -237,7 +278,17 @@ fn write_font_type_info<W: Write>(w: &mut Writer<W>, ti: &[u8; 10]) -> Result<()
 /// `parse_subst_font` 의 역함수. 4개 속성을 원본 순서(face·type·isEmbedded·
 /// binaryItemIDRef)로 복원한다. `binaryItemIDRef` 는 비임베드 시에도 빈 문자열로
 /// 항상 출력한다(한컴 원본과 동일).
-fn write_subst_font<W: Write>(w: &mut Writer<W>, sf: &SubstFont) -> Result<(), SerializeError> {
+fn write_subst_font<W: Write>(
+    w: &mut Writer<W>,
+    sf: &SubstFont,
+    ctx: &SerializeContext,
+) -> Result<(), SerializeError> {
+    let binary_item_id_ref = resolve_font_binary_item_id_ref(
+        ctx,
+        sf.resolved_bin_data_id,
+        &sf.bin_item_id_ref,
+        &sf.face,
+    )?;
     empty_tag(
         w,
         "hh:substFont",
@@ -245,7 +296,7 @@ fn write_subst_font<W: Write>(w: &mut Writer<W>, sf: &SubstFont) -> Result<(), S
             ("face", &sf.face),
             ("type", font_type_str(sf.font_type)),
             ("isEmbedded", if sf.is_embedded { "1" } else { "0" }),
-            ("binaryItemIDRef", &sf.bin_item_id_ref),
+            ("binaryItemIDRef", binary_item_id_ref.as_str()),
         ],
     )
 }
@@ -297,6 +348,10 @@ fn write_border_fill<W: Write>(
     ctx: &SerializeContext,
 ) -> Result<(), SerializeError> {
     let attr = effective_border_fill_attr(bf);
+    // [#2965] 표 24 bit0=3D 효과, bit1=그림자 효과 — 파서가 attr 에 보존하는
+    // 실값을 read_border_fill 이 되돌리지 않고 상수로 방출하던 결함 수정.
+    let three_d = bool01(attr & 1 != 0);
+    let shadow = bool01(attr & (1 << 1) != 0);
 
     // 속성 순서 (BorderFillType.cpp:64-68): id, threeD, shadow, centerLine, breakCellSeparateLine
     start_tag_attrs(
@@ -304,8 +359,8 @@ fn write_border_fill<W: Write>(
         "hh:borderFill",
         &[
             ("id", &(id + 1).to_string()), // HWPX 관찰: id는 1-based
-            ("threeD", "0"),
-            ("shadow", "0"),
+            ("threeD", three_d),
+            ("shadow", shadow),
             ("centerLine", center_line_type(bf)),
             ("breakCellSeparateLine", "0"),
         ],
@@ -360,6 +415,21 @@ fn write_diag_line<W: Write>(
             ("isCounter", is_counter),
         ],
     )
+}
+
+// [#2947] parser 측 parse_numbering_format_code() (표 43) 의 역매핑.
+fn numbering_format_str(code: u8) -> &'static str {
+    match code {
+        1 => "CIRCLED_DIGIT",
+        2 => "ROMAN_CAPITAL",
+        3 => "ROMAN_SMALL",
+        4 => "LATIN_CAPITAL",
+        5 => "LATIN_SMALL",
+        8 => "HANGUL_SYLLABLE",
+        12 => "HANGUL_NUMBER",
+        13 => "HANJA_NUMBER",
+        _ => "DIGIT",
+    }
 }
 
 fn diagonal_shape_type(code: u8) -> &'static str {
@@ -608,14 +678,7 @@ fn write_char_pr<W: Write>(
         w,
         "hh:shadow",
         &[
-            (
-                "type",
-                if cs.shadow_type == 0 {
-                    "NONE"
-                } else {
-                    "CONTINUOUS"
-                },
-            ),
+            ("type", shadow_type_str(cs.shadow_type)),
             ("color", &color_hex(cs.shadow_color)),
             ("offsetX", &cs.shadow_offset_x.to_string()),
             ("offsetY", &cs.shadow_offset_y.to_string()),
@@ -714,12 +777,31 @@ fn line_shape_str(s: u8) -> &'static str {
     }
 }
 
+// [#2695] 외곽선 8종. IR outline_type 은 HWP5 attr bits 8-10(3비트)을 그대로 담으므로
+// 0~7 전부를 방출해야 한다. 4~7 을 NONE 으로 떨구면 외곽선이 소멸한다.
 fn outline_type_str(t: u8) -> &'static str {
     match t {
         0 => "NONE",
         1 => "SOLID",
         2 => "DASH",
         3 => "DOT",
+        4 => "DASH_DOT",
+        5 => "DASH_DOT_DOT",
+        6 => "LONG_DASH",
+        7 => "CIRCLE",
+        _ => "NONE",
+    }
+}
+
+// [#2695] 그림자 3종. IR shadow_type 은 HWP5 attr bits 11-12(2비트).
+// 1=비연속(DROP), 2=연속(CONTINUOUS). 3은 예약값(미정의).
+// [#3038] 종전엔 예약값 3이 `_ => "CONTINUOUS"`로 떨어져 그림자 없음이 그림자
+// 있음으로 둔갑했다. 계약(0~2) 밖의 값은 안전한 기본값(NONE)으로 방출한다.
+fn shadow_type_str(t: u8) -> &'static str {
+    match t {
+        0 => "NONE",
+        1 => "DROP",
+        2 => "CONTINUOUS",
         _ => "NONE",
     }
 }
@@ -759,18 +841,70 @@ fn write_tab_pr<W: Write>(w: &mut Writer<W>, id: u16, td: &TabDef) -> Result<(),
     } else {
         start_tag_attrs(w, "hh:tabPr", &attrs_ref)?;
         for tab in &td.tabs {
-            empty_tag(
-                w,
-                "hh:tabItem",
-                &[
-                    ("pos", &tab.position.to_string()),
-                    ("type", tab_type_str(tab.tab_type)),
-                    ("leader", tab_leader_str(tab.fill_type)),
-                ],
-            )?;
+            write_tab_item_switch(w, tab)?;
         }
         end_tag(w, "hh:tabPr")?;
     }
+    Ok(())
+}
+
+/// tabItem 을 한컴 원본과 동일하게 `<hp:switch>`(case/default) 구조로 쓴다 (#3551).
+///
+/// `parse_tab_def` 의 정확한 역. 파서는 HwpUnitChar `case` 값을 ×2 하여 IR 에
+/// 적재하므로(`stored = case × 2`, parser/hwpx/header.rs:1789), 역으로:
+///   - `case`(HwpUnitChar) 값 = 저장값 / 2, `unit="HWPUNIT"` 동반
+///   - `default` 값 = 저장값 그대로
+///
+/// 종전엔 switch 없이 `hh:tabItem` 만 방출해 한컴 원본의 구조가 소실됐다
+/// (실측: 서울시 공개 서식 4건에서 tabItem 이 정확히 절반). 같은 파일의
+/// `write_para_margin_switch` 와 동형이다.
+///
+/// 홀수 저장값은 `case` 로 정확히 표현할 수 없으므로(`101/2 = 50`), 파서가
+/// `default != case × 2` 일 때 `default` 원값을 채택해 되살린다 — #3368 이
+/// paraPr 여백에서 지적한 것과 같은 계약이다.
+fn write_tab_item_switch<W: Write>(
+    w: &mut Writer<W>,
+    tab: &crate::model::style::TabItem,
+) -> Result<(), SerializeError> {
+    super::utils::start_tag(w, "hp:switch")?;
+
+    start_tag_attrs(
+        w,
+        "hp:case",
+        &[(
+            "hp:required-namespace",
+            "http://www.hancom.co.kr/hwpml/2016/HwpUnitChar",
+        )],
+    )?;
+    write_tab_item(w, tab, true)?;
+    end_tag(w, "hp:case")?;
+
+    super::utils::start_tag(w, "hp:default")?;
+    write_tab_item(w, tab, false)?;
+    end_tag(w, "hp:default")?;
+
+    end_tag(w, "hp:switch")?;
+    Ok(())
+}
+
+/// `<hh:tabItem>` 한 개. `half=true` 면 HwpUnitChar case 용으로 저장값의 절반과
+/// `unit="HWPUNIT"` 를 쓴다.
+fn write_tab_item<W: Write>(
+    w: &mut Writer<W>,
+    tab: &crate::model::style::TabItem,
+    half: bool,
+) -> Result<(), SerializeError> {
+    let pos = if half { tab.position / 2 } else { tab.position };
+    let pos = pos.to_string();
+    let mut attrs: Vec<(&str, &str)> = vec![
+        ("pos", pos.as_str()),
+        ("type", tab_type_str(tab.tab_type)),
+        ("leader", tab_leader_str(tab.fill_type)),
+    ];
+    if half {
+        attrs.push(("unit", "HWPUNIT"));
+    }
+    empty_tag(w, "hh:tabItem", &attrs)?;
     Ok(())
 }
 
@@ -795,6 +929,14 @@ fn tab_leader_str(f: u8) -> &'static str {
         6 => "LONG_DASH",
         7 => "CIRCLE",
         8 => "DOUBLE_SLIM",
+        // OWPML LineType3 스펙 리터럴(Core XML schema.xml 335~349행)로 방출한다.
+        // 종전엔 THIN_THICK/THICK_THIN/TRIM 이라는 비표준 이름을 썼는데, rhwp
+        // 자기 자신은 다시 읽을 수 있어도(파서가 두 이름을 모두 허용) 한/글 등
+        // 스펙을 따르는 다른 구현체에는 정의되지 않은 값이라 상호운용에 문제가
+        // 있었다(#2857). 파서는 하위호환을 위해 옛 이름도 계속 받는다.
+        9 => "SLIM_THICK",
+        10 => "THICK_SLIM",
+        11 => "SLIM_THICK_SLIM",
         _ => "NONE",
     }
 }
@@ -850,23 +992,35 @@ fn write_numbering<W: Write>(
         let level_s = (level + 1).to_string();
         let start_s = start.to_string();
         let wa = h.width_adjust.to_string();
-        empty_tag(
-            w,
-            "hh:paraHead",
-            &[
-                ("start", &start_s),
-                ("level", &level_s),
-                ("align", "LEFT"),
-                ("useInstWidth", "1"),
-                ("autoIndent", "1"),
-                ("widthAdjust", &wa),
-                ("textOffsetType", "PERCENT"),
-                ("textOffset", "50"),
-                ("numFormat", "DIGIT"),
-                ("charPrIDRef", &u32::MAX.to_string()),
-                ("checkable", "0"),
-            ],
-        )?;
+        // [#2947] h.number_format 을 무시하고 "DIGIT" 로 고정 방출하면 HWP5 경유
+        // 저장 시 로마자/한글/원문자 등 문단 번호 형식이 전부 아라비아 숫자로 뒤바뀐다.
+        let num_format = numbering_format_str(h.number_format);
+        let text_offset_s = h.text_distance.to_string();
+        let char_pr_id_ref_s = h.char_shape_id.to_string();
+        let attrs = [
+            ("start", start_s.as_str()),
+            ("level", level_s.as_str()),
+            ("align", "LEFT"),
+            ("useInstWidth", "1"),
+            ("autoIndent", "1"),
+            ("widthAdjust", wa.as_str()),
+            ("textOffsetType", "PERCENT"),
+            ("textOffset", text_offset_s.as_str()),
+            ("numFormat", num_format),
+            ("charPrIDRef", char_pr_id_ref_s.as_str()),
+            ("checkable", "0"),
+        ];
+        // [#3838] 번호 형식 문자열은 `hh:paraHead` 의 **텍스트 내용**이다("^1." 등).
+        // 자기닫힘으로 내보내면 형식이 사라져 문단 번호가 아예 렌더되지 않는다.
+        // 한컴 원본 실측: paraHead 232개 중 172개가 내용을 갖는다.
+        let format_str = n.level_formats.get(idx).map(String::as_str).unwrap_or("");
+        if format_str.is_empty() {
+            empty_tag(w, "hh:paraHead", &attrs)?;
+        } else {
+            start_tag_attrs(w, "hh:paraHead", &attrs)?;
+            text(w, format_str)?;
+            end_tag(w, "hh:paraHead")?;
+        }
     }
     end_tag(w, "hh:numbering")?;
     Ok(())
@@ -903,28 +1057,42 @@ fn write_bullet<W: Write>(
     let id_s = (id + 1).to_string(); // 관찰: 1-based, ParaShape.numbering_id 참조와 정합
     let char_s = b.bullet_char.to_string();
     let use_image = if b.image_bullet > 0 { "1" } else { "0" };
-    start_tag_attrs(
-        w,
-        "hh:bullet",
-        &[("id", &id_s), ("char", &char_s), ("useImage", use_image)],
-    )?;
-    // paraHead 뼈대 (파서는 무시하나 OWPML 유효성/한컴 호환 위해 방출).
-    empty_tag(
-        w,
-        "hh:paraHead",
-        &[
-            ("level", "0"),
-            ("align", "LEFT"),
-            ("useInstWidth", "0"),
-            ("autoIndent", "1"),
-            ("widthAdjust", &b.width_adjust.to_string()),
-            ("textOffsetType", "PERCENT"),
-            ("textOffset", "50"),
-            ("numFormat", "DIGIT"),
-            ("charPrIDRef", &u32::MAX.to_string()),
-            ("checkable", "0"),
-        ],
-    )?;
+    // [#3028] checkedChar(체크 글머리표 문자) — 값이 있을 때만 방출한다.
+    let has_checked_char = b.check_bullet_char != '\0';
+    let checked_char_s = b.check_bullet_char.to_string();
+    let mut attrs: Vec<(&str, &str)> = vec![("id", &id_s), ("char", &char_s)];
+    if has_checked_char {
+        attrs.push(("checkedChar", &checked_char_s));
+    }
+    attrs.push(("useImage", use_image));
+    start_tag_attrs(w, "hh:bullet", &attrs)?;
+    // 원본 HWPX paraHead 구간이 있으면(=이 파일에서 파싱된 bullet) 그대로 splice 해
+    // align/useInstWidth/autoIndent/textOffsetType/checkable 등 Bullet 필드로 표현
+    // 못하는 속성까지 무손실 복원(numbering.raw_para_heads 와 동일 패턴, #2790).
+    // 없으면(HWP5 경로 등) widthAdjust/textOffset/charPrIDRef 만 필드값으로 채운
+    // 뼈대로 폴백 — checkable 은 checkedChar 유무를 따른다(#3028).
+    if let Some(raw) = &b.raw_para_head {
+        w.get_mut()
+            .write_all(raw.as_bytes())
+            .map_err(|e| SerializeError::XmlError(format!("bullet paraHead splice: {e}")))?;
+    } else {
+        empty_tag(
+            w,
+            "hh:paraHead",
+            &[
+                ("level", "0"),
+                ("align", "LEFT"),
+                ("useInstWidth", "0"),
+                ("autoIndent", "1"),
+                ("widthAdjust", &b.width_adjust.to_string()),
+                ("textOffsetType", "PERCENT"),
+                ("textOffset", &b.text_distance.to_string()),
+                ("numFormat", "DIGIT"),
+                ("charPrIDRef", &b.char_shape_id.to_string()),
+                ("checkable", if has_checked_char { "1" } else { "0" }),
+            ],
+        )?;
+    }
     end_tag(w, "hh:bullet")?;
     Ok(())
 }
@@ -1234,8 +1402,10 @@ fn write_style<W: Write>(w: &mut Writer<W>, id: u16, st: &Style) -> Result<(), S
             ("paraPrIDRef", &st.para_shape_id.to_string()),
             ("charPrIDRef", &st.char_shape_id.to_string()),
             ("nextStyleIDRef", &st.next_style_id.to_string()),
-            ("langID", "1042"),
-            ("lockForm", "0"),
+            // 파서가 Style.lang_id 로 읽는 값을 그대로 되돌린다. 종전 "1042"
+            // 하드코딩은 비한국어 langID(예: 1033)를 왕복마다 1042 로 바꿨다.
+            ("langID", &st.lang_id.to_string()),
+            ("lockForm", bool01(st.lock_form)),
         ],
     )
 }
@@ -1278,6 +1448,51 @@ use super::utils::start_tag;
 mod tests {
     use super::*;
     use crate::parser::hwpx::parse_hwpx;
+
+    #[test]
+    fn write_style_emits_ir_lang_id() {
+        // 파서가 읽은 Style.lang_id 가 그대로 방출돼야 한다.
+        // 종전엔 "1042" 하드코딩으로 비한국어 langID 가 왕복마다 뭉개졌다.
+        let st = Style {
+            lang_id: 1033,
+            ..Default::default()
+        };
+        let mut w: Writer<Vec<u8>> = Writer::new(Vec::new());
+        write_style(&mut w, 0, &st).expect("write_style");
+        let xml = String::from_utf8(w.into_inner()).unwrap();
+        assert!(
+            xml.contains(r#"langID="1033""#),
+            "Style.lang_id 가 방출돼야 함: {xml}"
+        );
+    }
+
+    #[test]
+    fn write_style_emits_ir_lock_form() {
+        // [Task #2839] 파서가 읽은 Style.lock_form 이 그대로 방출돼야 한다.
+        // 종전엔 "0" 하드코딩으로 lockForm="1" 스타일이 왕복마다 잠금 해제로 뭉개졌다.
+        let st = Style {
+            lock_form: true,
+            ..Default::default()
+        };
+        let mut w: Writer<Vec<u8>> = Writer::new(Vec::new());
+        write_style(&mut w, 0, &st).expect("write_style");
+        let xml = String::from_utf8(w.into_inner()).unwrap();
+        assert!(
+            xml.contains(r#"lockForm="1""#),
+            "Style.lock_form 이 방출돼야 함: {xml}"
+        );
+    }
+
+    #[test]
+    fn task_m100_shadow_type_str_reserved_value_maps_to_none() {
+        // [#3038] 계약(0~2) 밖의 예약값(3)은 CONTINUOUS 로 둔갑하지 않고
+        // 안전한 기본값 NONE 으로 방출돼야 한다.
+        assert_eq!(shadow_type_str(0), "NONE");
+        assert_eq!(shadow_type_str(1), "DROP");
+        assert_eq!(shadow_type_str(2), "CONTINUOUS");
+        assert_eq!(shadow_type_str(3), "NONE");
+        assert_eq!(shadow_type_str(99), "NONE");
+    }
 
     #[test]
     fn write_header_runs_on_empty_document() {
@@ -1328,6 +1543,34 @@ mod tests {
         assert!(
             !xml.contains(r#"version="1.2""#),
             "하드코딩 1.2 가 남아있으면 안 됨"
+        );
+    }
+
+    #[test]
+    fn write_header_preserves_memo_properties_roundtrip() {
+        // aift.hwpx 실물 헤더에는 refList 마지막 자식으로
+        // <hh:memoProperties itemCnt="1"><hh:memoPr .../></hh:memoProperties>
+        // 가 있다. parse_memo_shape()가 만드는 extra_records(HWPTAG_MEMO_SHAPE)는
+        // hwpx→hwp5 변환 전용이라 write_header가 참조하지 않으므로, splice
+        // 보존이 없으면 hwpx→hwpx 라운드트립에서 memoPr(메모 모양: 테두리/색상)이
+        // 통째로 사라진다.
+        let bytes = include_bytes!("../../../samples/hwpx/aift.hwpx");
+        let doc = parse_hwpx(bytes).expect("parse aift.hwpx");
+        assert!(
+            doc.doc_info.memo_properties_xml.is_some(),
+            "파서가 memoProperties 원문을 보존해야 함"
+        );
+        let ctx = SerializeContext::collect_from_document(&doc);
+        let header_xml =
+            String::from_utf8(write_header(&doc, &ctx).expect("write header")).unwrap();
+        assert!(
+            header_xml.contains("<hh:memoProperties"),
+            "재직렬화된 header.xml에 memoProperties가 있어야 함: {header_xml}"
+        );
+        assert!(
+            header_xml.contains(r#"lineType="SOLID""#)
+                && header_xml.contains(r##"fillColor="#CBFF99""##),
+            "memoPr 원본 속성(lineType/fillColor 등)이 그대로 보존돼야 함: {header_xml}"
         );
     }
 
@@ -1417,9 +1660,10 @@ mod tests {
             font_type: 1,
             is_embedded: false,
             bin_item_id_ref: String::new(),
+            resolved_bin_data_id: None,
         };
         let mut writer = Writer::new(Vec::new());
-        write_subst_font(&mut writer, &sf).expect("write substFont");
+        write_subst_font(&mut writer, &sf, &SerializeContext::default()).expect("write substFont");
         let xml = String::from_utf8(writer.into_inner()).unwrap();
         assert_eq!(
             xml,
@@ -1442,11 +1686,13 @@ mod tests {
                 font_type: 1,
                 is_embedded: false,
                 bin_item_id_ref: String::new(),
+                resolved_bin_data_id: None,
             }),
             ..Default::default()
         });
         let mut writer = Writer::new(Vec::new());
-        write_fontfaces(&mut writer, &doc_info).expect("write fontfaces");
+        write_fontfaces(&mut writer, &doc_info, &SerializeContext::default())
+            .expect("write fontfaces");
         let xml = String::from_utf8(writer.into_inner()).unwrap();
         let sub = xml.find("<hh:substFont ").expect("substFont present");
         let ti = xml.find("<hh:typeInfo ").expect("typeInfo present");
@@ -1476,7 +1722,8 @@ mod tests {
             ..Default::default()
         });
         let mut writer = Writer::new(Vec::new());
-        write_fontfaces(&mut writer, &doc_info).expect("write fontfaces");
+        write_fontfaces(&mut writer, &doc_info, &SerializeContext::default())
+            .expect("write fontfaces");
         let xml = String::from_utf8(writer.into_inner()).unwrap();
         // typeInfo 없는 글꼴은 self-closing 유지.
         assert!(
@@ -1491,6 +1738,58 @@ mod tests {
             "typeInfo 있는 글꼴은 자식 복원: {xml}"
         );
         assert_eq!(xml.matches("<hh:typeInfo ").count(), 1);
+    }
+
+    #[test]
+    fn embedded_font_references_use_the_serialized_manifest_id() {
+        use crate::model::bin_data::BinDataContent;
+
+        let mut doc = Document::default();
+        doc.bin_data_content.push(BinDataContent {
+            id: 2,
+            data: vec![0, 1, 2].into(),
+            extension: "ttf".to_string(),
+        });
+        doc.doc_info.font_faces = vec![Vec::new(); 7];
+        doc.doc_info.font_faces[0].push(Font {
+            name: "Embedded Face".to_string(),
+            is_embedded: true,
+            bin_item_id_ref: "font-resource-alpha".to_string(),
+            resolved_bin_data_id: Some(2),
+            subst_font: Some(SubstFont {
+                face: "Embedded Substitute".to_string(),
+                font_type: 1,
+                is_embedded: true,
+                bin_item_id_ref: "font-resource-beta".to_string(),
+                resolved_bin_data_id: Some(2),
+            }),
+            ..Default::default()
+        });
+
+        let ctx = SerializeContext::collect_from_document(&doc);
+        assert_eq!(ctx.resolve_bin_id(2), Some("image2"));
+        let xml = String::from_utf8(write_header(&doc, &ctx).unwrap()).unwrap();
+        assert_eq!(xml.matches(r#"binaryItemIDRef="image2""#).count(), 2);
+        assert!(!xml.contains("font-resource-alpha"));
+        assert!(!xml.contains("font-resource-beta"));
+    }
+
+    #[test]
+    fn embedded_font_reference_to_missing_bin_data_is_an_error() {
+        let mut doc = Document::default();
+        doc.doc_info.font_faces = vec![Vec::new(); 7];
+        doc.doc_info.font_faces[0].push(Font {
+            name: "Missing Embedded Face".to_string(),
+            is_embedded: true,
+            bin_item_id_ref: "stale-font-ref".to_string(),
+            resolved_bin_data_id: Some(9),
+            ..Default::default()
+        });
+
+        let ctx = SerializeContext::collect_from_document(&doc);
+        let error = write_header(&doc, &ctx).expect_err("dangling font reference must fail");
+        assert!(error.to_string().contains("missing BinData id 9"));
+        assert!(!error.to_string().contains("stale-font-ref"));
     }
 
     #[test]
@@ -1540,6 +1839,29 @@ mod tests {
         assert!(
             xml.contains(r#"<hh:backSlash type="CENTER_BELOW" Crooked="0" isCounter="0"/>"#),
             "backSlash 방향 비트가 CENTER_BELOW로 보존되어야 함: {xml}"
+        );
+    }
+
+    #[test]
+    fn write_border_fill_preserves_three_d_and_shadow_bits() {
+        // [#2965] bf.attr bit0=3D, bit1=그림자. 종전엔 threeD/shadow 가 항상
+        // "0" 으로 하드코딩되어 파서가 보존한 값이 왕복에서 소실됐다.
+        let mut bf = BorderFill::default();
+        bf.attr = 0b11; // bit0(3D)=1, bit1(shadow)=1
+
+        let mut writer = Writer::new(Vec::new());
+        write_border_fill(
+            &mut writer,
+            0,
+            &bf,
+            &SerializeContext::collect_from_document(&Default::default()),
+        )
+        .expect("write borderFill");
+        let xml = String::from_utf8(writer.into_inner()).unwrap();
+
+        assert!(
+            xml.contains(r#"threeD="1""#) && xml.contains(r#"shadow="1""#),
+            "attr bit0/bit1 이 threeD/shadow 로 방출돼야 함: {xml}"
         );
     }
 
@@ -1684,6 +2006,43 @@ mod tests {
     }
 
     #[test]
+    fn write_tab_pr_emits_tab_item_switch_case_default() {
+        // [#3551] tabItem 은 한컴 원본과 동일하게 <hp:switch>(case=저장값/2 +
+        // unit="HWPUNIT", default=저장값) 로 나가야 한다. 종전엔 switch 없이
+        // hh:tabItem 만 방출해 실물 문서에서 tabItem 이 정확히 절반이 됐다.
+        use crate::model::style::{TabDef, TabItem};
+
+        let mut td = TabDef::default();
+        td.tabs = vec![TabItem {
+            position: 3288,
+            tab_type: 0,
+            fill_type: 0,
+        }];
+
+        let mut writer = Writer::new(Vec::new());
+        write_tab_pr(&mut writer, 2, &td).expect("write tabPr");
+        let xml = String::from_utf8(writer.into_inner()).unwrap();
+
+        assert!(
+            xml.contains(
+                r#"<hp:case hp:required-namespace="http://www.hancom.co.kr/hwpml/2016/HwpUnitChar"><hh:tabItem pos="1644" type="LEFT" leader="NONE" unit="HWPUNIT"/></hp:case>"#
+            ),
+            "case 는 절반값(1644) + unit=HWPUNIT: {xml}"
+        );
+        assert!(
+            xml.contains(
+                r#"<hp:default><hh:tabItem pos="3288" type="LEFT" leader="NONE"/></hp:default>"#
+            ),
+            "default 는 저장값(3288), unit 없음: {xml}"
+        );
+        assert_eq!(
+            xml.matches("<hp:switch>").count(),
+            1,
+            "탭 1개당 switch 1개: {xml}"
+        );
+    }
+
+    #[test]
     fn write_para_pr_emits_margin_switch_case_default() {
         // paraPr margin/lineSpacing 은 <hp:switch>(case=저장값/2, default=저장값)
         // 구조로, margin 자식은 hc: 네임스페이스(value, unit 순)로 출력되어야 한다.
@@ -1804,6 +2163,100 @@ mod tests {
         assert!(
             xml.contains(r#"<hh:shadow type="NONE""#),
             "shadow NONE 항상 출력: {xml}"
+        );
+    }
+
+    /// [#2695] charPr 자식 하나를 담은 최소 hh:head 를 파싱해 CharShape 를 얻는다.
+    fn parse_single_char_pr(child: &str) -> CharShape {
+        let xml = format!(
+            r##"<?xml version="1.0" encoding="UTF-8"?>
+<hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head">
+  <hh:refList>
+    <hh:charProperties itemCnt="1">
+      <hh:charPr id="0" height="1000" textColor="#000000" shadeColor="none">
+        <hh:fontRef hangul="0" latin="0" hanja="0" japanese="0" other="0" symbol="0" user="0"/>
+        {child}
+      </hh:charPr>
+    </hh:charProperties>
+  </hh:refList>
+</hh:head>"##
+        );
+        let (doc_info, _) =
+            crate::parser::hwpx::header::parse_hwpx_header(&xml).expect("parse hh:head");
+        doc_info.char_shapes[0].clone()
+    }
+
+    /// [#2695] CharShape 를 charPr 로 직렬화한 XML 문자열.
+    fn write_single_char_pr(cs: &CharShape) -> String {
+        let mut writer = Writer::new(Vec::new());
+        write_char_pr(&mut writer, 0, cs).expect("write charPr");
+        String::from_utf8(writer.into_inner()).unwrap()
+    }
+
+    #[test]
+    fn char_pr_outline_type_roundtrips_all_eight_values() {
+        // [#2695] 외곽선은 HWP5 attr bits 8-10(3비트) = 8종이다. 종전엔 파서가
+        // NONE/SOLID/DASH/DOT 4종만 알고 나머지를 `_ => 0` 으로, 직렬화가
+        // `_ => "NONE"` 으로 떨궈 4~7 지정 시 외곽선이 통째로 사라졌다.
+        for (name, expected) in [
+            ("NONE", 0u8),
+            ("SOLID", 1),
+            ("DASH", 2),
+            ("DOT", 3),
+            ("DASH_DOT", 4),
+            ("DASH_DOT_DOT", 5),
+            ("LONG_DASH", 6),
+            ("CIRCLE", 7),
+        ] {
+            let cs = parse_single_char_pr(&format!(r#"<hh:outline type="{name}"/>"#));
+            assert_eq!(
+                cs.outline_type, expected,
+                "outline type={name} 은 IR {expected} 로 파싱돼야 함"
+            );
+
+            let xml = write_single_char_pr(&cs);
+            assert!(
+                xml.contains(&format!(r#"<hh:outline type="{name}"/>"#)),
+                "outline_type={expected} 은 type=\"{name}\" 으로 방출돼야 함: {xml}"
+            );
+        }
+    }
+
+    #[test]
+    fn char_pr_shadow_drop_survives_roundtrip_with_offsets() {
+        // [#2695] 비연속(DROP)은 offsetX/offsetY 로 본체와 떨어뜨려 그리는 종류다.
+        // 종전엔 파서가 DROP|CONTINUOUS 를 모두 1 로 합치고 직렬화가 0 이외를
+        // 무조건 CONTINUOUS 로 써서 DROP 이 방출 불가능했고, 보존된 오프셋도
+        // 해석 주체를 잃었다.
+        let cs = parse_single_char_pr(
+            r##"<hh:shadow type="DROP" color="#C0C0C0" offsetX="10" offsetY="-7"/>"##,
+        );
+        assert_eq!(cs.shadow_type, 1, "DROP 은 IR 1(비연속)");
+        assert_eq!(cs.shadow_offset_x, 10);
+        assert_eq!(cs.shadow_offset_y, -7);
+
+        let xml = write_single_char_pr(&cs);
+        assert!(
+            xml.contains(r#"<hh:shadow type="DROP""#),
+            "shadow_type=1 은 type=\"DROP\" 으로 방출돼야 함: {xml}"
+        );
+        assert!(
+            xml.contains(r#"offsetX="10" offsetY="-7""#),
+            "오프셋도 함께 보존돼야 함: {xml}"
+        );
+    }
+
+    #[test]
+    fn char_pr_shadow_continuous_is_ir_two_not_one() {
+        // [#2695] 연속은 HWP5 attr bits 11-12 = 2 다. 종전 파서는 1 로 읽어
+        // HWPX 를 경유한 .hwp 재저장 시 비트값이 2→1 로 손상됐다.
+        let cs = parse_single_char_pr(r##"<hh:shadow type="CONTINUOUS" color="#808080"/>"##);
+        assert_eq!(cs.shadow_type, 2, "CONTINUOUS 는 IR 2(연속)");
+
+        let xml = write_single_char_pr(&cs);
+        assert!(
+            xml.contains(r#"<hh:shadow type="CONTINUOUS""#),
+            "shadow_type=2 는 type=\"CONTINUOUS\" 로 방출돼야 함: {xml}"
         );
     }
 
@@ -1941,5 +2394,87 @@ mod tests {
 
         assert_eq!(xml.matches("<hh:paraHead").count(), 10);
         assert!(xml.starts_with(r#"<hh:numbering id="1" start="0">"#));
+    }
+
+    #[test]
+    fn write_numbering_skeleton_emits_level_format_string_as_text() {
+        // [#3838] 번호 형식 문자열("^1." 등)은 `hh:paraHead` 의 **텍스트 내용**이다.
+        // 폴백이 자기닫힘 태그로 속성만 내보내면 형식이 사라져 문단 번호가 아예
+        // 렌더되지 않는다 — IR diff 는 0 이라 `--verify` 게이트가 못 잡는다.
+        //
+        // 한컴 원본 실측(HWPX 40건): paraHead 232개 중 172개가 내용을 갖는다.
+        let mut n = Numbering::default();
+        n.level_formats[0] = "^1.".to_string();
+        n.level_formats[1] = "(^2)".to_string();
+
+        let mut writer = Writer::new(Vec::new());
+        write_numbering(&mut writer, 0, &n).unwrap();
+        let xml = String::from_utf8(writer.into_inner()).unwrap();
+
+        assert!(
+            xml.contains(">^1.</hh:paraHead>"),
+            "level 1 형식 문자열이 텍스트 내용으로 나가야 한다: {xml}"
+        );
+        assert!(
+            xml.contains(">(^2)</hh:paraHead>"),
+            "level 2 형식 문자열이 텍스트 내용으로 나가야 한다: {xml}"
+        );
+        // 형식이 빈 수준은 종전대로 자기닫힘 — 빈 내용을 만들지 않는다.
+        assert!(
+            xml.contains("checkable=\"0\"/>"),
+            "형식이 없는 수준은 자기닫힘을 유지해야 한다: {xml}"
+        );
+    }
+
+    #[test]
+    fn write_numbering_skeleton_uses_number_format_not_hardcoded_digit() {
+        // [#2947] HWP5 경유(raw_para_heads 없음) 시 h.number_format(예: ROMAN_CAPITAL=2)
+        // 을 무시하고 "DIGIT" 로 고정 방출하면 로마자/한글 문단 번호가 유실된다.
+        let mut n = Numbering::default();
+        n.heads[0].number_format = 2; // ROMAN_CAPITAL
+
+        let mut writer = Writer::new(Vec::new());
+        write_numbering(&mut writer, 0, &n).unwrap();
+        let xml = String::from_utf8(writer.into_inner()).unwrap();
+
+        assert!(
+            xml.contains(r#"numFormat="ROMAN_CAPITAL""#),
+            "level 1 paraHead 는 number_format=2 를 ROMAN_CAPITAL 로 방출해야 한다: {xml}"
+        );
+    }
+
+    #[test]
+    fn write_numbering_skeleton_preserves_text_distance_and_char_shape_id() {
+        // HWP5 경로(raw_para_heads 없음)에서 NumberingHead.text_distance /
+        // char_shape_id 는 DocInfo 파서가 실제 값으로 채워 넣는 필드인데,
+        // 폴백 스켈레톤이 textOffset="50" / charPrIDRef=u32::MAX 로 하드코딩해
+        // 유실시키면 안 된다 (write_bullet 의 대응 필드 처리와 대칭이어야 함).
+        let mut n = Numbering::default();
+        n.heads[0].text_distance = 130;
+        n.heads[0].char_shape_id = 7;
+
+        let mut writer = Writer::new(Vec::new());
+        write_numbering(&mut writer, 0, &n).unwrap();
+        let xml = String::from_utf8(writer.into_inner()).unwrap();
+
+        assert!(
+            xml.contains(r#"textOffset="130""#),
+            "text_distance 유실: {xml}"
+        );
+        assert!(
+            xml.contains(r#"charPrIDRef="7""#),
+            "char_shape_id 유실: {xml}"
+        );
+    }
+
+    #[test]
+    fn tab_leader_str_emits_double_and_triple_line_types() {
+        // fill_type 9/10/11 이 "NONE" 으로 유실되지 않고 OWPML LineType3 스펙 리터럴
+        // (Core XML schema.xml 335~349행)로 방출돼야 한다 (#2857). 파서는 옛 이름
+        // (THIN_THICK/THICK_THIN/TRIM)도 하위호환으로 계속 받는다.
+        assert_eq!(tab_leader_str(9), "SLIM_THICK");
+        assert_eq!(tab_leader_str(10), "THICK_SLIM");
+        assert_eq!(tab_leader_str(11), "SLIM_THICK_SLIM");
+        assert_eq!(tab_leader_str(8), "DOUBLE_SLIM");
     }
 }

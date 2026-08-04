@@ -114,7 +114,7 @@ impl CanvasRenderer {
             }
             RenderNodeType::TextRun(run) => {
                 self.draw_text(
-                    &run.text,
+                    run.display_or_text(),
                     node.bbox.x,
                     node.bbox.y + node.bbox.height,
                     &run.style,
@@ -204,7 +204,12 @@ impl CanvasRenderer {
                             }
                         }
                         PaintOp::TextRun { bbox, run } => {
-                            self.draw_text(&run.text, bbox.x, bbox.y + bbox.height, &run.style);
+                            self.draw_text(
+                                run.display_or_text(),
+                                bbox.x,
+                                bbox.y + bbox.height,
+                                &run.style,
+                            );
                         }
                         PaintOp::Rectangle { bbox, rect } => {
                             self.open_shape_transform(&rect.transform, bbox);
@@ -246,7 +251,7 @@ impl CanvasRenderer {
                             self.open_shape_transform(&image.transform, &eff_bbox);
                             let data = resolved
                                 .as_deref()
-                                .map(|payload| payload.data.as_slice())
+                                .map(|payload| &payload.data[..])
                                 .or(image.data.as_deref());
                             if let Some(data) = data {
                                 self.draw_image(
@@ -758,6 +763,7 @@ mod tests {
             border_fill_id: 0,
             baseline: 12.0,
             field_marker: Default::default(),
+            display_text: None,
         }
     }
 }

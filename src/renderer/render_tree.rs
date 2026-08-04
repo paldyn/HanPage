@@ -5,13 +5,27 @@
 
 use serde::Serialize;
 
-use super::composer::CharOverlapInfo;
+use super::composer::{legacy_hancom_product_display_text, CharOverlapInfo};
 use super::layout::CellContext;
 use super::{GradientFillInfo, LineStyle, PathCommand, ShapeStyle, TextStyle};
 use crate::model::image::ImageEffect;
 use crate::model::shape::TextWrap;
 use crate::model::style::ImageFillMode;
 use crate::model::{ColorRef, Rect};
+
+/// 가운뎃점 `·`(U+00B7) 합성 원의 반지름 / em (Task #257, #2999).
+///
+/// Task #257 이 폰트 대체 시 글리프 LSB·폭 불일치를 피하려고 `·` 를 폰트 비의존
+/// 벡터로 그린다. 상수는 한글 COM PDF 12문서 실측으로 보정했다 — 문자 bbox
+/// 내부 잉크를 900dpi 로 측정한 폰트·크기 그룹별 중앙값이 0.053~0.080 범위이고,
+/// 양자화 영향이 작은 fs ≥ 12 그룹의 중앙값이 0.0598 이다. 종전 값 0.08 은 그
+/// 범위의 최상단(휴먼명조 0.0798)이라 대부분의 폰트에서 반지름 ~1.3배, 면적
+/// ~1.8배 과대였다.
+pub const MIDDLE_DOT_RADIUS_EM: f64 = 0.060;
+
+/// 가운뎃점 합성 원의 세로 중심 오프셋 / em — baseline 기준 위쪽.
+/// 실측 중앙값 0.3520~0.3559 로 종전 값이 정확해 유지한다.
+pub const MIDDLE_DOT_CY_OFFSET_EM: f64 = 0.35;
 
 pub const REAL_PICTURE_WATERMARK_PAGE_OPACITY: f64 = 0.26;
 pub const REAL_PICTURE_WATERMARK_FILL_OPACITY: f64 = 0.15;
@@ -59,6 +73,11 @@ pub struct RenderLayerInfo {
     pub z_order: i32,
     /// Stable tie-breaker within the same z-order.
     pub stable_index: u32,
+    /// 바탕쪽(master page) 유래 여부. 한컴 의미론에서 바탕쪽 개체의 text_wrap 은
+    /// 바탕쪽 내부 순서에만 적용되고 바탕쪽 전체는 본문 뒤에 깔리므로, replay plane
+    /// 분류는 이 플래그로 BehindText 상한을 적용한다 (#2318, SVG node_z_plane 계약).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub master_page: bool,
 }
 
 impl RenderLayerInfo {
@@ -67,7 +86,14 @@ impl RenderLayerInfo {
             text_wrap,
             z_order,
             stable_index,
+            master_page: false,
         }
+    }
+
+    /// 바탕쪽 유래 표시를 부여한 사본을 반환한다 (#2318).
+    pub fn for_master_page(mut self) -> Self {
+        self.master_page = true;
+        self
     }
 }
 
@@ -89,6 +115,9 @@ pub struct RenderNode {
     pub dirty: bool,
     /// 가시성
     pub visible: bool,
+    /// 문단 부호·투명 테두리처럼 편집 화면에서만 보여야 하는 보조 표시.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub editor_only: bool,
 }
 
 impl RenderNode {
@@ -101,6 +130,7 @@ impl RenderNode {
             children: Vec::new(),
             dirty: true,
             visible: true,
+            editor_only: false,
         }
     }
 
@@ -113,6 +143,12 @@ impl RenderNode {
     /// 기존 노드에 레이어 메타데이터를 부여한다.
     pub fn set_layer(&mut self, layer: RenderLayerInfo) {
         self.layer = Some(layer);
+    }
+
+    /// 출력/인쇄 profile에서 제외할 편집 전용 노드로 표시한다.
+    pub fn with_editor_only(mut self) -> Self {
+        self.editor_only = true;
+        self
     }
 
     /// dirty 플래그 설정 (변경된 노드만 재렌더링)
@@ -164,16 +200,23 @@ impl RenderNode {
                 "TextLine",
                 format!(",\"pi\":{}", tl.para_index.unwrap_or(0)),
             ),
-            RenderNodeType::TextRun(tr) => (
-                "TextRun",
-                format!(
+            RenderNodeType::TextRun(tr) => {
+                let mut extra = format!(
                     ",\"text\":{},\"pi\":{}",
                     json_escape(&tr.text),
                     tr.section_index
                         .map(|_| tr.para_index.unwrap_or(0))
                         .unwrap_or(0)
-                ),
-            ),
+                );
+                // `text`는 char_start와 같은 모델 좌표를 보존한다. 그러나 머리말/꼬리말
+                // 필드처럼 화면에 N자로 표시되는 marker는 displayText도 JSON에 노출해야
+                // render-tree 소비자가 실제 표시값을 검증·표시할 수 있다 (Task #3216).
+                if let Some(display_text) = &tr.display_text {
+                    extra.push_str(",\"displayText\":");
+                    extra.push_str(&json_escape(display_text));
+                }
+                ("TextRun", extra)
+            }
             RenderNodeType::Table(tn) => (
                 "Table",
                 format!(
@@ -191,7 +234,31 @@ impl RenderNode {
             RenderNodeType::TableCell(tc) => {
                 ("Cell", format!(",\"row\":{},\"col\":{}", tc.row, tc.col))
             }
-            RenderNodeType::Image(_) => ("Image", String::new()),
+            RenderNodeType::Image(image) => {
+                let mut extra = String::new();
+                if let Some(para_index) = image.para_index {
+                    extra.push_str(&format!(",\"pi\":{para_index}"));
+                }
+                if let Some(control_index) = image.control_index {
+                    extra.push_str(&format!(",\"ci\":{control_index}"));
+                }
+                let text_wrap = image
+                    .text_wrap
+                    .or_else(|| self.layer.and_then(|layer| layer.text_wrap));
+                if let Some(text_wrap) = text_wrap {
+                    let name = match text_wrap {
+                        TextWrap::Square => "Square",
+                        TextWrap::Tight => "Tight",
+                        TextWrap::Through => "Through",
+                        TextWrap::TopAndBottom => "TopAndBottom",
+                        TextWrap::BehindText => "BehindText",
+                        TextWrap::InFrontOfText => "InFrontOfText",
+                    };
+                    extra.push_str(",\"textWrap\":");
+                    extra.push_str(&json_escape(name));
+                }
+                ("Image", extra)
+            }
             RenderNodeType::TextBox => ("TextBox", String::new()),
             RenderNodeType::Equation(_) => ("Equation", String::new()),
             RenderNodeType::Line(_) => ("Line", String::new()),
@@ -618,6 +685,17 @@ pub struct PageBackgroundImage {
 }
 
 impl PageBackgroundImage {
+    /// 공통 `ImageFill` 원시 저장값을 쪽 배경의 화면 색조 인자로 바꾼다.
+    ///
+    /// HWP5/HWPX/HWP3의 `ImageFill`은 IR에서 `(brightness, contrast)` 필드에
+    /// legacy binary 저장 순서를 보존한다. 쪽 배경 화면에서는 이 순서가 반대여서,
+    /// 원시값을 그대로 필터에 넘기면 HWPX `bright="50" contrast="-15"`가
+    /// `brightness=-15, contrast=50`으로 뒤집혀 보인다. parser·IR diff·round-trip
+    /// 계약은 건드리지 않고 renderer 경계에서만 의미 순서를 투영한다.
+    pub const fn display_brightness_contrast(&self) -> (i8, i8) {
+        (self.contrast, self.brightness)
+    }
+
     /// 워터마크 효과 적용 여부 (Issue #1156).
     ///
     /// HWP/HWPX 에는 워터마크 적용 비트가 없다. 한컴 편집기는 "워터마크 효과"
@@ -734,6 +812,23 @@ pub struct TextRunNode {
     pub baseline: f64,
     /// 누름틀 필드 마커: 이 TextRun 위치에 표시할 필드 경계 마커
     pub field_marker: FieldMarkerType,
+    /// 표시 텍스트 (`Some` 이면 그리기·폭 계산은 본 필드를 쓴다).
+    ///
+    /// `text` 는 모델과 같은 문자 수를 유지해 `char_start` 와 같은 공간에 있도록 한다.
+    /// 머리말/꼬리말 필드처럼 모델 1자가 화면에서 N자로 보이는 경우가 여기 해당한다
+    /// (`ComposedTextRun::display_text` 와 같은 규약, Task #3216).
+    pub display_text: Option<String>,
+}
+
+impl TextRunNode {
+    /// 사람이 보게 될 텍스트 — 그리기·폭 계산, 그리고 **문자열을 만들어 내보내는**
+    /// 추출·직렬화(쪽 텍스트, 마크다운)가 이것을 쓴다.
+    ///
+    /// 오프셋·인덱싱에는 쓰지 않는다 — 그쪽은 `text` 다. 필드처럼 모델 1자가 표시
+    /// N자인 런에서 둘은 길이가 다르다.
+    pub fn display_or_text(&self) -> &str {
+        self.display_text.as_deref().unwrap_or(&self.text)
+    }
 }
 
 /// 누름틀 필드 조판부호 마커 유형
@@ -1048,9 +1143,9 @@ pub struct ImageNode {
     /// 렌더러에서 이미지 원본 px 크기와 비교하여 source rect 계산
     /// None이면 전체 이미지 표시
     pub crop: Option<(i32, i32, i32, i32)>,
-    /// 원본 이미지 크기 (HWPUNIT) — `pic.shape_attr.{original_width, original_height}`.
-    /// crop 좌표를 픽셀로 변환할 때 정확한 HU/px 스케일 계산에 사용.
-    /// None이면 폴백 동작.
+    /// 그림 자르기 좌표의 전체 범위 — HWP/HWPX `imgDim`.
+    /// crop 좌표를 디코딩된 이미지 픽셀로 변환할 때 축별 스케일 계산에 사용한다.
+    /// None이면 표준 75 HU/px로 폴백한다.
     pub original_size_hu: Option<(u32, u32)>,
     /// 그림 효과 (실사/그레이스케일/흑백/패턴)
     pub effect: ImageEffect,
@@ -1195,6 +1290,13 @@ pub struct EquationNode {
     pub color: u32,
     /// 수식 글자 크기 (HWPUNIT → px 변환 후)
     pub font_size: f64,
+    /// 원본 수식 스크립트(HWP 수식 편집기 문법, 예 `sqrt {3} of {5}`).
+    ///
+    /// [#3413] 텍스트 추출 표면(`extract_page_text_native` 등)이 수식 내용을 방출할 수
+    /// 있도록 노드에 보존한다. 이 값이 없으면 수식은 렌더에만 존재하고 평문에서는
+    /// 조용히 사라진다(수학 문서에서 선택지·발문이 통째로 비는 원인).
+    #[serde(default)]
+    pub script: String,
     /// 소속 구역 인덱스
     pub section_index: Option<usize>,
     /// 수식 컨트롤을 소유한 문단 인덱스
@@ -1227,6 +1329,33 @@ pub struct PageRenderTree {
     /// 인라인 Shape 좌표 맵: (section, para, control, cell_path) → (x, y)
     #[serde(skip)]
     inline_shape_positions: std::collections::HashMap<InlineShapeKey, (f64, f64)>,
+}
+
+/// `clip_overlapping_same_bin_images` 전용 대략적 replay plane 분류.
+///
+/// `src/paint/replay_order.rs` (`paint_op_replay_plane_with_layer`,
+/// `cap_master_page_plane`) 가 실제 페인트 backend 에서 적용하는 재생 순서는
+/// Background → BehindText → Flow → InFrontOfText 로, **트리 순서와 무관하게
+/// plane 별로 별도 재생**된다. 즉 트리 순서상 `BehindText` 개체가 `Flow`
+/// 개체보다 뒤에 있어도 실제로는 `BehindText` 가 먼저(더 아래에) 그려진다.
+/// clip 함수는 "트리 순서 = z 순서(먼저 그려짐 = 아래)"를 가정하므로, plane
+/// 이 다른 페어는 이 가정이 성립하지 않아 clip 방향을 잘못 판단할 수 있다
+/// (아래에 깔릴 그림이 아니라 위에 그려질 그림이 잘리는 역방향 clip).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipReplayPlane {
+    BehindText,
+    Flow,
+    InFrontOfText,
+}
+
+impl ClipReplayPlane {
+    fn from_text_wrap(wrap: Option<TextWrap>) -> Self {
+        match wrap {
+            Some(TextWrap::BehindText) => Self::BehindText,
+            Some(TextWrap::InFrontOfText) => Self::InFrontOfText,
+            _ => Self::Flow,
+        }
+    }
 }
 
 impl PageRenderTree {
@@ -1322,6 +1451,37 @@ impl PageRenderTree {
         self.root.mark_clean_recursive();
     }
 
+    /// 한컴 PDF가 현대 글리프로 인쇄하는 닫힌 레거시 제품명 어휘를 최종 화면
+    /// 문자열에만 투영한다.
+    ///
+    /// 본문은 composer에서 이미 처리하지만, 표 셀·머리말처럼 `TextRunNode`를
+    /// 직접 만드는 경로는 composer를 거치지 않는다. 렌더 트리 완성 뒤 한 번
+    /// 순회하면 두 경로가 같은 표시 계약을 지키면서도 `text`/offset은 원문대로
+    /// 보존한다. 일반 옛한글이나 CharOverlap 런은 건드리지 않는다.
+    pub(crate) fn apply_legacy_hancom_product_display_projection(&mut self) {
+        fn visit(node: &mut RenderNode) {
+            if let RenderNodeType::TextRun(run) = &mut node.node_type {
+                if run.char_overlap.is_none() {
+                    // PUA `U+F53A`처럼 실제 옛한글을 display_text에서 `ᄒᆞᆫ`으로
+                    // 확장한 경우는 product convention이 아니다. raw model text에
+                    // 닫힌 제품명이 있을 때만 기존 화면 문자열(있다면 PUA 확장본)을
+                    // 다시 투영한다.
+                    if legacy_hancom_product_display_text(&run.text).is_some() {
+                        let source = run.display_or_text();
+                        if let Some(display) = legacy_hancom_product_display_text(source) {
+                            run.display_text = Some(display);
+                        }
+                    }
+                }
+            }
+            for child in &mut node.children {
+                visit(child);
+            }
+        }
+
+        visit(&mut self.root);
+    }
+
     /// 동일 `bin_data_id` 를 가진 ImageNode 가 세로로 인접 겹칠 때,
     /// 트리 순서상 먼저 그려지는 (z 가 작은) 쪽의 bbox/crop 을 위에 덮는
     /// (z 가 큰) 쪽의 top 까지 축소한다.
@@ -1340,8 +1500,14 @@ impl PageRenderTree {
     /// 조건 2/3 은 의도적 시각 효과 (test-image, 3-10월_교육_통합 의 대각선
     /// 오프셋 등) 를 보호하기 위한 strict 가드.
     pub fn clip_overlapping_same_bin_images(&mut self) {
-        // Phase 1: 트리 순서대로 ImageNode 의 (id, bbox, bin_id, crop) 수집
-        let mut images: Vec<(NodeId, BoundingBox, u16, Option<(i32, i32, i32, i32)>)> = Vec::new();
+        // Phase 1: 트리 순서대로 ImageNode 의 (id, bbox, bin_id, crop, plane) 수집
+        let mut images: Vec<(
+            NodeId,
+            BoundingBox,
+            u16,
+            Option<(i32, i32, i32, i32)>,
+            ClipReplayPlane,
+        )> = Vec::new();
         Self::collect_image_nodes(&self.root, &mut images);
 
         if images.len() < 2 {
@@ -1355,10 +1521,19 @@ impl PageRenderTree {
 
         for i in 0..images.len() {
             for j in (i + 1)..images.len() {
-                let (id_a, bbox_a, bin_a, crop_a) = &images[i];
-                let (_id_b, bbox_b, bin_b, _crop_b) = &images[j];
+                let (id_a, bbox_a, bin_a, crop_a, plane_a) = &images[i];
+                let (_id_b, bbox_b, bin_b, _crop_b, plane_b) = &images[j];
                 // 조건 1: 같은 bin_id
                 if bin_a != bin_b {
+                    continue;
+                }
+                // 조건 0 (#paint/replay_order.rs plane 분리 재생 정합):
+                // BehindText/InFrontOfText 는 Flow 와 별도 plane 으로 재생되어
+                // 실제 페인트 순서가 트리 순서와 반대일 수 있다. 서로 다른
+                // plane 페어는 clip 방향을 트리 순서만으로 확정할 수 없으므로
+                // 건너뛴다 (트리 순서가 곧 페인트 순서인 동일 plane 내에서만
+                // 이 함수의 z 가정이 성립한다).
+                if plane_a != plane_b {
                     continue;
                 }
                 // 조건 2/3: x, width 동일 (1px tolerance)
@@ -1406,10 +1581,22 @@ impl PageRenderTree {
 
     fn collect_image_nodes(
         node: &RenderNode,
-        out: &mut Vec<(NodeId, BoundingBox, u16, Option<(i32, i32, i32, i32)>)>,
+        out: &mut Vec<(
+            NodeId,
+            BoundingBox,
+            u16,
+            Option<(i32, i32, i32, i32)>,
+            ClipReplayPlane,
+        )>,
     ) {
         if let RenderNodeType::Image(img) = &node.node_type {
-            out.push((node.id, node.bbox, img.bin_data_id, img.crop));
+            out.push((
+                node.id,
+                node.bbox,
+                img.bin_data_id,
+                img.crop,
+                ClipReplayPlane::from_text_wrap(img.text_wrap),
+            ));
         }
         for child in &node.children {
             Self::collect_image_nodes(child, out);
@@ -1466,6 +1653,93 @@ mod tests {
     }
 
     #[test]
+    fn legacy_hancom_product_projection_covers_direct_text_runs_only() {
+        fn text_run(id: NodeId, text: &str) -> RenderNode {
+            RenderNode::new(
+                id,
+                RenderNodeType::TextRun(TextRunNode {
+                    text: text.to_owned(),
+                    style: TextStyle::default(),
+                    char_shape_id: None,
+                    para_shape_id: None,
+                    section_index: None,
+                    para_index: None,
+                    char_start: None,
+                    cell_context: None,
+                    is_para_end: false,
+                    is_line_break_end: false,
+                    rotation: 0.0,
+                    is_vertical: false,
+                    char_overlap: None,
+                    border_fill_id: 0,
+                    baseline: 0.0,
+                    field_marker: FieldMarkerType::None,
+                    display_text: None,
+                }),
+                BoundingBox::new(0.0, 0.0, 1.0, 1.0),
+            )
+        }
+
+        let mut tree = PageRenderTree::new(0, 100.0, 100.0);
+        let product_id = tree.next_id();
+        tree.root.children.push(text_run(product_id, "ᄒᆞᆫ글 97"));
+        let general_old_hangul_id = tree.next_id();
+        tree.root
+            .children
+            .push(text_run(general_old_hangul_id, "ᄒᆞᆫ겨울은 일반 옛한글이다"));
+
+        tree.apply_legacy_hancom_product_display_projection();
+
+        let RenderNodeType::TextRun(product) = &tree.root.children[0].node_type else {
+            panic!("expected product text run");
+        };
+        assert_eq!(product.text, "ᄒᆞᆫ글 97", "원문/offset 공간은 보존한다");
+        assert_eq!(product.display_text.as_deref(), Some("한글 97"));
+
+        let RenderNodeType::TextRun(general_old_hangul) = &tree.root.children[1].node_type else {
+            panic!("expected general old-Hangul text run");
+        };
+        assert_eq!(general_old_hangul.display_text, None);
+    }
+
+    #[test]
+    fn legacy_hancom_product_projection_does_not_rewrite_pua_old_hangul() {
+        let mut tree = PageRenderTree::new(0, 100.0, 100.0);
+        let id = tree.next_id();
+        tree.root.children.push(RenderNode::new(
+            id,
+            RenderNodeType::TextRun(TextRunNode {
+                text: "\u{f53a}글".to_owned(),
+                style: TextStyle::default(),
+                char_shape_id: None,
+                para_shape_id: None,
+                section_index: None,
+                para_index: None,
+                char_start: None,
+                cell_context: None,
+                is_para_end: false,
+                is_line_break_end: false,
+                rotation: 0.0,
+                is_vertical: false,
+                char_overlap: None,
+                border_fill_id: 0,
+                baseline: 0.0,
+                field_marker: FieldMarkerType::None,
+                display_text: Some("ᄒᆞᆫ글".to_owned()),
+            }),
+            BoundingBox::new(0.0, 0.0, 1.0, 1.0),
+        ));
+
+        tree.apply_legacy_hancom_product_display_projection();
+
+        let RenderNodeType::TextRun(pua_old_hangul) = &tree.root.children[0].node_type else {
+            panic!("expected PUA old-Hangul text run");
+        };
+        assert_eq!(pua_old_hangul.text, "\u{f53a}글");
+        assert_eq!(pua_old_hangul.display_text.as_deref(), Some("ᄒᆞᆫ글"));
+    }
+
+    #[test]
     fn test_render_node_dirty_flag() {
         let mut node = RenderNode::new(
             0,
@@ -1491,6 +1765,28 @@ mod tests {
         let bbox = BoundingBox::from_hwpunit_rect(&rect, 96.0);
         assert!((bbox.width - 96.0).abs() < 0.01);
         assert!((bbox.height - 96.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn render_tree_json_exposes_image_owner_and_text_wrap() {
+        let mut tree = PageRenderTree::new(0, 100.0, 100.0);
+        let mut image = ImageNode::new(9, None);
+        image.para_index = Some(1355);
+        image.control_index = Some(0);
+        image.text_wrap = Some(TextWrap::Square);
+        let image_id = tree.next_id();
+        tree.root.children.push(RenderNode::new(
+            image_id,
+            RenderNodeType::Image(image),
+            BoundingBox::new(10.0, 20.0, 30.0, 40.0),
+        ));
+
+        let json = tree.root.to_json();
+
+        assert!(json.contains("\"type\":\"Image\""));
+        assert!(json.contains("\"pi\":1355"));
+        assert!(json.contains("\"ci\":0"));
+        assert!(json.contains("\"textWrap\":\"Square\""));
     }
 
     // === Task #1154: clip_overlapping_same_bin_images 단위 테스트 ===
@@ -1800,6 +2096,44 @@ mod tests {
         let body = &tree.root.children[0];
         let lower = &body.children[0];
         assert!((image_bbox(lower).height - 219.58).abs() < 0.01);
+    }
+
+    /// Task #M100: BehindText 와 Flow 처럼 서로 다른 재생 plane 에 걸친 페어는
+    /// clip 대상에서 제외해야 한다. `src/paint/replay_order.rs` 의 plane 분리
+    /// 재생 규약상 BehindText 는 트리 순서와 무관하게 Flow 보다 먼저(더 아래)
+    /// 그려지므로, 트리 순서만 보고 clip 방향을 정하면 실제로는 위에 그려질
+    /// Flow 그림이 잘못 잘릴 수 있다.
+    #[test]
+    fn test_clip_skips_cross_plane_pairs() {
+        let mut tree = PageRenderTree::new(0, 1122.5, 1587.4);
+        // 트리 순서상 먼저 (Flow, y=100~300)
+        let mut flow = make_image_node(
+            tree.next_id(),
+            BoundingBox::new(100.0, 100.0, 200.0, 200.0),
+            9,
+            Some((0, 0, 1000, 2000)),
+        );
+        if let RenderNodeType::Image(ref mut img) = flow.node_type {
+            img.text_wrap = Some(TextWrap::Square);
+        }
+        // 트리 순서상 나중 (BehindText, y=150~350) — 실제 재생 순서는 Flow 보다 먼저(더 아래)
+        let mut behind = make_image_node(
+            tree.next_id(),
+            BoundingBox::new(100.0, 150.0, 200.0, 200.0),
+            9,
+            Some((0, 0, 1000, 2000)),
+        );
+        if let RenderNodeType::Image(ref mut img) = behind.node_type {
+            img.text_wrap = Some(TextWrap::BehindText);
+        }
+        tree.root.children.push(flow);
+        tree.root.children.push(behind);
+
+        tree.clip_overlapping_same_bin_images();
+
+        // 두 그림 모두 원래 크기 유지 — plane 이 다르므로 clip 미적용
+        assert_eq!(image_bbox(&tree.root.children[0]).height, 200.0);
+        assert_eq!(image_bbox(&tree.root.children[1]).height, 200.0);
     }
 
     /// 단일 이미지만 있는 경우 변경 없음 (no-op).

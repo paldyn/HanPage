@@ -56,6 +56,15 @@ pub struct Font {
     pub name: String,
     /// 글꼴 유형 (0: 알 수 없음, 1: TTF, 2: HFT)
     pub alt_type: u8,
+    /// HWPX 부모 `<hh:font>`가 embedded font resource를 가리키는지 여부.
+    pub is_embedded: bool,
+    /// HWPX 부모 `<hh:font>`의 embedded binary item reference.
+    pub bin_item_id_ref: String,
+    /// HWPX package manifest에서 해소된 BinData storage ID.
+    ///
+    /// 원본 `binaryItemIDRef`는 round-trip을 위해 그대로 보존하고, renderer는 이
+    /// 필드만 사용해 임베디드 font bytes를 찾는다.
+    pub resolved_bin_data_id: Option<u16>,
     /// 대체 글꼴 이름
     pub alt_name: Option<String>,
     /// 글꼴 유형 정보 (HWP5 FACE_NAME type info 10바이트)
@@ -82,6 +91,8 @@ pub struct SubstFont {
     pub is_embedded: bool,
     /// 임베드 바이너리 아이템 ID 참조 (비임베드 시 빈 문자열; 항상 존재)
     pub bin_item_id_ref: String,
+    /// HWPX package manifest에서 해소된 BinData storage ID.
+    pub resolved_bin_data_id: Option<u16>,
 }
 
 /// 글자 모양 (HWPTAG_CHAR_SHAPE)
@@ -343,6 +354,10 @@ pub struct Bullet {
     pub image_data: [u8; 4],
     /// 체크 글머리표 문자
     pub check_bullet_char: char,
+    /// HWPX `<hh:bullet>` 자식 `<hh:paraHead>`(+`<hh:img>`) 원본 구간 (무손실 splice 용).
+    /// align/useInstWidth/autoIndent/textOffsetType/checkable 등 7수준 필드로 표현
+    /// 못하는 HWPX 전용 속성 보존. [#2790]
+    pub raw_para_head: Option<String>,
 }
 
 /// 텍스트 정렬 방식
@@ -433,6 +448,10 @@ pub struct Style {
     pub para_shape_id: u16,
     /// 글자 모양 ID 참조
     pub char_shape_id: u16,
+    /// [Task #2839] 양식(폼) 필드 잠금 여부 (HWPX `lockForm`).
+    /// 파서가 값을 읽지 않고 시리얼라이저가 "0" 을 하드코딩해 원본이 항상
+    /// 잠금 해제 상태로 바뀌던 결함 수정.
+    pub lock_form: bool,
 }
 
 /// 테두리/배경 (HWPTAG_BORDER_FILL)
@@ -450,6 +469,8 @@ pub struct BorderFill {
     pub center_line: CenterLine,
     /// 채우기 정보
     pub fill: Fill,
+    /// 3차원 효과 (HWPX borderFill@threeD)
+    pub three_d: bool,
 }
 
 /// 중심선 방향 (HWPX borderFill@centerLine)

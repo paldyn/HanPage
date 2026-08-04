@@ -61,16 +61,18 @@ HanPage 가 사용하는 파서·렌더·편집 엔진은 오픈소스 프로젝
 
 > 0.5.0까지 혼자 뼈대를 완성하고 공개하는 이유 — 커뮤니티가 붙었을 때 방향이 흔들리지 않으려면 핵심 아키텍처가 먼저 견고해야 합니다.
 
-### v0.5.0 ~ v0.7.x — 뼈대 (현재)
+## 이정표
+
+### v0.5.0 ~ v0.8.x — 뼈대 (현재)
 
 > 역공학 완성, 읽기/쓰기 기반 구축
 
 - HWP 5.0 / HWPX 파서, 문단·표·수식·이미지·차트 렌더링
 - HML(HWPML 2.9/2.91) 가져오기: 본문·서식·표·사각형 글상자·지원 수식, loss-safe HML/HWP/HWPX 저장
 - 페이지네이션 (다단 분할, 표 행 분할), 머리말/꼬리말/바탕쪽/각주
-- SVG 내보내기 (CLI) + Canvas 렌더링 (WASM/Web)
+- SVG/PNG/PDF 내보내기 (CLI) + Canvas/CanvasKit 렌더링 (WASM/Web)
 - 웹 에디터 + hwpctl 호환 API (30 Actions, Field API)
-- 1,100+ 테스트
+- 3,400+ Rust 테스트 + studio 단위/e2e/시각 회귀 CI
 
 > HML은 실제 corpus로 확인된 HWPML 2.9/2.91 구조만 제한 지원합니다. 지원 범위의 수식은
 > 가져와 편집할 수 있고, 보존 불가 요소가 없는 HML 원본은 preflight 검사 후 HML로 다시
@@ -109,6 +111,7 @@ HanPage 가 사용하는 파서·렌더·편집 엔진은 오픈소스 프로젝
 ### Parsing (파싱)
 - HWP 5.0 binary format (OLE2 Compound File)
 - HWPX (Open XML-based format)
+- HML (HWPML 2.9/2.91) — 검증된 구조 제한 지원
 - Sections, paragraphs, tables, textboxes, images, equations, charts
 - Header/footer, master pages, footnotes/endnotes
 
@@ -138,37 +141,19 @@ HanPage 가 사용하는 파서·렌더·편집 엔진은 오픈소스 프로젝
 
 ### Output (출력)
 - SVG export (CLI, legacy + layer replay)
-- Canvas rendering (WASM/Web)
-- HWP 편집 저장 및 HWPX → HWP 변환 저장 경로
+- PNG export (native Skia, `--features native-skia`)
+- PDF export: SVG compatibility 기본(`--text-as-paths` 지원, 바이트 재현성), native Skia direct opt-in(`--features native-skia`, `--backend direct`)
+- Canvas rendering (WASM/Web) + 명시 opt-in 문서 단위 Canvas2D/CanvasKit 자동 선택
+- 저장: HWP 편집 저장, HWPX/HML 의미 보존 저장, HWPX → HWP 변환 경로
 - Debug overlay (paragraph/table boundaries + indices + y-coordinates)
 
 ### Multi-Renderer Backends (멀티 렌더러 백엔드)
-- `PageRenderTree` can be lowered into a `PageLayerTree` paint IR before backend replay.
-- P1 public surfaces are Rust native `DocumentCore::build_page_layer_tree(page)` and WASM `getPageLayerTree(page)`.
-- Layer JSON starts at `schemaVersion: 1`, uses additive `schemaMinorVersion` / `resourceTableMinorVersion`, `unit: "px"`, and `coordinateSystem: "page-top-left-y-down"` to match the existing page render coordinates.
-- Compatible schema changes should be additive; incompatible JSON shape changes require a schema version bump.
-- **Legacy SVG** remains the default compatibility output.
-- **Layered SVG** can be exercised with `RHWP_RENDER_PATH=layer-svg`.
-- The layered SVG path is a transition adapter that expands `PageLayerTree` back into the existing SVG renderer.
-- Browser/native Canvas paths render through `PageLayerTree` replay by default.
-- Legacy Canvas remains available through `renderPageCanvasLegacy` / `renderPageToCanvasLegacy` for parity checks.
-- P3 visual regression coverage runs `npm run e2e:render-diff:ci` in `rhwp-studio` to compare legacy Canvas and layer Canvas in Chromium; CI uploads render-diff artifacts and writes a summary.
-- The default render-diff fixtures cover basic text/table output, business-document layout, and treat-as-char object placement; override with `RHWP_RENDER_DIFF_FILES`, `RHWP_RENDER_DIFF_MAX_PAGES`, or `RHWP_RENDER_DIFF_ALL=1`.
-- P4 adds native-only `DocumentCore::render_page_png_native(page)` behind `--features native-skia`; it renders `PageLayerTree` to encoded PNG through `SkiaLayerRenderer`.
-- P5 adds native Skia equation replay from `EquationNode.layout_box`, so equations are no longer placeholder boxes in the PNG path.
-- P5 replays the existing equation layout tree directly; it does not add CanvasKit equation replay or native form replay.
-- P6 adds native Skia `RawSvg` fragment rasterization through `resvg`, with external file href loading disabled.
-- P11 adds the Text IR v2 compatibility contract: `textSources`, per-`TextRun` source spans, paint style metadata, run placement/clusters, feature arrays, and explicit special text visual ops. `TextRun` remains the fallback replay path.
-- P12 adds guarded `GlyphRun` sidecar variants, font blob/face identity metadata, and a shape-lowering API. Canvas2D/layered SVG still use `TextRun` fallback; native Skia also keeps the fallback until exact blob-backed typeface replay is wired. Normal lowering does not emit glyph ids until a shaping pass explicitly inserts them.
-- P14 adds guarded `GlyphOutline` sidecar variants and backend text variant selection diagnostics. Existing renderers still keep the `TextRun` fallback path.
-- P15-P17 add diagnostics-only CanvasKit replay policy planning and the browser CanvasKit direct renderer. Both `default` and `compat` keep hidden Canvas2D overlays forbidden; `compat` is a conservative direct replay policy, not an overlay fallback.
-- P18 expands CanvasKit image replay to consume crop, fill mode, original size, transform, and payload-fingerprint cache keys while leaving image effects as deterministic diagnostics.
-- P19 adds guarded richer `GlyphOutline` payload vocabulary for color layers, bitmap glyphs, and sanitized static SVG glyphs. It also opens the first explicit CanvasKit replay subset for COLRv1 solid/linear/radial/sweep color glyph paths while keeping unsupported graph nodes and the other payload families on the `TextRun` fallback.
-- CI covers the native Skia path with `cargo test --features native-skia skia --lib`; the feature is not available on `wasm32` targets.
-- The initial native Skia path is a PNG raster backend with core image/equation/raw-svg replay; full CanvasKit glyph replay, exact native glyph replay, real font blob extraction, complex text shaping, advanced image parity, and native form replay stay as follow-up work.
-- C ABI export is intentionally left for a later PR.
-- `ResourceArena` now reserves font blob storage and font resource identity for glyph replay; document image/SVG interning stays as follow-up work.
-- This phase establishes the frontend/backend boundary for later CanvasKit and fuller native Skia backends.
+- 공통 paint IR: `PageRenderTree` → `PageLayerTree` (Rust `DocumentCore::build_page_layer_tree`, WASM `getPageLayerTree`) — `schemaVersion: 1`, 호환 변경은 additive 원칙
+- 백엔드: legacy/layered SVG, Canvas2D, CanvasKit 직접 replay, native Skia PNG/direct PDF(`--features native-skia`)
+- Studio, 브라우저 확장/embed, VS Code 뷰어의 기본 요청은 호환 경로인 Canvas2D입니다. Studio 계열에서 `?renderer=auto`를 명시하면 bounded document preflight가 완전하고 적격이며 필요한 문서 폰트를 준비할 수 있는 경우만 CanvasKit으로 고정합니다. 표준 선·도형 점선과 수평 글자 겹침, 탭 리더, 밑줄·취소선·강조점, 위치가 확정된 공백·탭·문단 끝·줄바꿈 부호, nominal glyph replay가 안전한 일반 `TextRun`의 세로쓰기·장평·음영·그림자·외곽선·양각·음각은 CanvasKit이 직접 재생합니다. 방향과 cluster advance 권한이 아직 없는 복합 shaping 문자, 옛한글·boxed-PUA와 장평 또는 paint effect의 조합, 세로·회전된 특수 시각 op, `[표]`, `[그림]` 같은 구조 조판 부호를 포함하는 `showControlCodes`, 판정·초기화·리소스 준비·런타임 실패는 해당 문서 revision 전체를 Canvas2D로 고정합니다. `?renderer=canvas2d`와 `?renderer=canvaskit`은 명시적 강제 선택입니다.
+- Text IR v2: 폰트 blob 증명 기반 GlyphRun/GlyphOutline 사이드카 — 검증된 수평 nominal GlyphRun은 CanvasKit direct replay, 나머지는 `TextRun` 폴백 (호환 계약)
+- direct PDF는 print profile과 CSS px→PDF point `72/96` 변환을 사용합니다. 손실되는 gradient/pattern/shadow/connector/image adjustment는 SVG backend 사용을 안내하며 실패하고, Raw SVG만 `--raster-dpi` 기반 bounded raster fallback을 사용합니다.
+- 시각 회귀 CI: render-diff(Canvas 계열 + browser/compatibility PDF report), selected direct/compatibility PDF 2% hard gate, 4-backend 공통 replay-plane(배경→글뒤→본문→글앞) 계약
 
 ### Web Editor (웹 에디터)
 - Text editing (insert, delete, undo/redo)
@@ -183,8 +168,6 @@ HanPage 가 사용하는 파서·렌더·편집 엔진은 오픈소스 프로젝
 - Template data binding support
 
 ## npm 패키지 — 웹에서 바로 사용하기
-
-현재 배포 버전은 `@rhwp/core` / `@rhwp/editor` v0.7.18입니다.
 
 ### 에디터 임베드 (3줄)
 
@@ -231,6 +214,41 @@ document.getElementById('viewer').innerHTML = doc.renderPageSvg(0);
 | [@rhwp/editor](https://www.npmjs.com/package/@rhwp/editor) | 완전한 에디터 UI (iframe) | `npm i @rhwp/editor` |
 | [@rhwp/core](https://www.npmjs.com/package/@rhwp/core) | WASM 파서/렌더러 (API) | `npm i @rhwp/core` |
 
+## 파이썬에서 쓰기
+
+`bindings/python` 이 CLI `--json` 봉투와 `mcp-serve` 세션 계약을 그대로 재포장한다
+(런타임 의존성 0 — 표준 라이브러리만).
+
+```bash
+pip install -e bindings/python      # PyPI 배포 전
+export RHWP_BIN=$(pwd)/target/release/rhwp
+```
+
+```python
+import rhwp
+
+# 1층 — 무상태
+meta = rhwp.info("보고서.hwp")
+print(meta.page_count, meta.format)
+
+# 2층 — 세션 (같은 문서를 반복해서 만질 때)
+with rhwp.open("서식.hwp") as doc:
+    doc.fill_fields({"성명": "홍길동"})
+    saved = doc.save("제출본.hwp", verify=True)
+    assert saved.verify.identical
+
+# 3층 — 계획 (하나라도 불가능하면 아무것도 저장하지 않는다)
+plan = rhwp.Plan("서식.hwp", "제출본.hwp").fill_fields({"성명": "홍길동"}).verify()
+if plan.check().ok:
+    plan.run()
+```
+
+문서: [README](bindings/python/README.md) ·
+[API](bindings/python/docs/API.md) ·
+[요리책](bindings/python/docs/COOKBOOK.md) ·
+[문제 해결](bindings/python/docs/TROUBLESHOOTING.md) ·
+[이주 가이드](bindings/python/docs/MIGRATION.md)
+
 ## Quick Start (소스 빌드)
 
 처음 프로젝트에 참여하는 개발자는 [온보딩 가이드](mydocs/manual/onboarding_guide.md)를 먼저 읽어보세요. 프로젝트 아키텍처, 디버깅 도구, 개발 워크플로우를 한눈에 파악할 수 있습니다.
@@ -245,7 +263,7 @@ document.getElementById('viewer').innerHTML = doc.renderPageSvg(0);
 ```bash
 cargo build                    # Development build
 cargo build --release          # Release build
-cargo test                     # Run tests (1,100+ tests)
+cargo test                     # Run tests (3,400+ tests)
 ```
 
 ### WASM Build
@@ -269,6 +287,29 @@ npx vite --host 0.0.0.0 --port 7700
 
 Open `http://localhost:7700` in your browser.
 
+## AI 에이전트에서 쓰기 (MCP)
+
+rhwp 는 MCP(Model Context Protocol) 서버를 내장한다 — 설정 한 줄이면 Claude Code 등
+MCP 호스트가 HWP/HWPX 를 읽고·검색하고·채우고·변환한다:
+
+```jsonc
+// .mcp.json
+{ "mcpServers": { "rhwp": { "command": "rhwp", "args": ["mcp-serve"] } } }
+```
+
+첫 호출 3종 (조사 → 위치 → 채움):
+
+```jsonc
+hwp_info        { "path": "문서.hwp" }                       // 규모·형식 파악
+hwp_search      { "path": "문서.hwp", "query": "위임전결" }   // 몇 쪽 어느 셀인지
+hwp_fill_fields { "path": "서식.hwp", "data": {"성명":"홍길동"} }  // 누름틀 채움
+```
+
+대형 문서는 `hwp_open` → `hwp_doc_*` 세션 도구로 재파싱 없이 반복 조회·편집한다.
+전체 도구 지도·오류 의미론은 [MCP 통합 가이드](mydocs/manual/mcp_integration_guide.md),
+막히면 [에이전트 실패 사전](mydocs/manual/agent_troubleshooting_guide.md).
+CLI 만 쓸 때의 입구는 `rhwp capabilities` 한 번이면 된다(전 명령 기계 계약 자기서술).
+
 ## CLI Usage
 
 ### SVG Export
@@ -278,6 +319,14 @@ rhwp export-svg sample.hwp                         # Export to output/
 rhwp export-svg sample.hwp -o my_dir/              # Export to custom directory
 rhwp export-svg sample.hwp -p 0                    # Export specific page (0-indexed)
 rhwp export-svg sample.hwp --debug-overlay         # Debug overlay (paragraph/table boundaries)
+```
+
+### PNG / PDF Export
+
+```bash
+rhwp export-png sample.hwp -o out/                 # PNG (requires --features native-skia build)
+rhwp export-pdf sample.hwp -o out.pdf              # PDF (byte-reproducible)
+rhwp export-pdf sample.hwp --text-as-paths         # Text as vector paths (font-free)
 ```
 
 ### Document Inspection
@@ -312,9 +361,14 @@ src/
 │   ├── layout/                # Layout (paragraph, table, shapes, cells)
 │   ├── pagination/            # Pagination engine
 │   ├── equation/              # Equation parser/layout/renderer
+│   ├── typeset.rs             # Typeset engine (main pagination)
 │   ├── svg.rs                 # SVG output
-│   └── web_canvas.rs          # Canvas output
-├── serializer/                # HWP file serializer (save)
+│   ├── web_canvas.rs          # Canvas output
+│   └── skia/                  # Native Skia PNG/PDF (--features native-skia)
+├── paint/                     # PageLayerTree paint IR + replay planes
+├── emf/                       # EMF parser + SVG converter
+├── ooxml_chart/               # OOXML chart parser + SVG renderer
+├── serializer/                # HWP/HWPX/HML serializer (save)
 └── wasm_api.rs                # WASM bindings
 
 rhwp-studio/                   # Web editor (TypeScript + Vite)
@@ -327,12 +381,19 @@ rhwp-studio/                   # Web editor (TypeScript + Vite)
 ├── e2e/                       # E2E tests (Puppeteer + Chrome CDP)
 │   └── helpers.mjs            # Test helpers (headless/host modes)
 
+npm/editor/                    # @rhwp/editor (iframe embed package)
+rhwp-chrome/ rhwp-firefox/     # Browser extensions (+ rhwp-safari, rhwp-vscode)
+rhwp-shared/                   # Shared frontend modules
+assets/fonts/                  # Canonical open-source font root
+
 mydocs/                        # Project documentation (Korean)
-├── orders/                    # Daily task tracking
-├── plans/                     # Task plans and implementation specs
+├── orders/                    # Daily task tracking (archives/: past months)
+├── plans/                     # Task plans (archives/: completed)
+├── working/ report/           # Stage reports / final reports
+├── pr/                        # External PR review records (archives/)
 ├── feedback/                  # Code review feedback
-├── tech/                      # Technical documents
-└── manual/                    # Manuals and guides
+├── tech/ manual/              # Technical docs / guides
+└── troubleshootings/          # Troubleshooting records
 
 scripts/                       # Build & quality tools
 ├── metrics.sh                 # Code quality metrics collection
@@ -353,11 +414,11 @@ scripts/                       # Build & quality tools
 |--|-----------|-----------|
 | **사람의 역할** | AI 출력 수락 | 지시, 검토, 결정 |
 | **계획** | 없음 — "그냥 만들어" | 계획서 작성 → 승인 → 실행 |
-| **품질 관문** | 동작하길 바람 | 1,100+ 테스트 + Clippy + CI + 코드 리뷰 |
+| **품질 관문** | 동작하길 바람 | 3,400+ 테스트 + Clippy + CI + 코드 리뷰 |
 | **디버깅** | AI에게 AI 버그 수정 요청 | 사람이 진단, AI가 구현 |
 | **아키텍처** | 우연히 형성 | 의도적 설계 (CQRS, 의존성 방향) |
-| **문서** | 없음 | 2,200+개 파일의 프로세스 기록 |
-| **결과물** | 취약, 유지보수 어려움 | 프로덕션 수준, 100K+ 라인 |
+| **문서** | 없음 | 10,000+개 파일의 프로세스 기록 |
+| **결과물** | 취약, 유지보수 어려움 | 프로덕션 수준, 450K+ 라인 |
 
 AI는 배율기입니다. 하지만 배율기는 기존 프로세스를 증폭시킵니다. 프로세스 없음 × AI = 빠른 혼돈. 좋은 프로세스 × AI = 비범한 결과물.
 
@@ -375,7 +436,7 @@ AI는 배율기입니다. 하지만 배율기는 기존 프로세스를 증폭�
 품질 및 정확성 판단            ←    코드, 문서, 테스트 생성
 ```
 
-`mydocs/` 디렉토리(2,200+개 파일, 영문 번역: `mydocs/eng/`)에 전체 개발 기록이 있습니다: 일일 작업 기록, 구현 계획서, 코드 리뷰 피드백, 기술 연구 문서, 트러블슈팅 기록.
+`mydocs/` 디렉토리(10,000+개 파일, 영문 번역: `mydocs/eng/`)에 전체 개발 기록이 있습니다: 일일 작업 기록, 구현 계획서, 코드 리뷰 피드백, 기술 연구 문서, 트러블슈팅 기록.
 
 > `mydocs/`는 코드에 대한 문서가 아닙니다 — **AI로 소프트웨어를 만드는 방법**에 대한 문서입니다. 오픈소스 방법론입니다.
 
@@ -385,14 +446,16 @@ AI는 배율기입니다. 하지만 배율기는 기존 프로세스를 증폭�
 
 ```
 local/task{N}  ──커밋──커밋──┐
-                              ├─→ devel merge (관련 타스크 묶어서)
-                              ├─→ main merge + 태그 (릴리즈 시점)
+                              ├─→ local/devel merge (작업 단위)
+                              ├─→ devel merge + push (검증 후)
+                              ├─→ main merge + 태그 (릴리즈 시점, PR 기반)
 ```
 
 | 브랜치 | 용도 |
 |--------|------|
-| `main` | 릴리즈 (태그: v0.5.0 등) |
-| `devel` | 개발 통합 |
+| `main` | 릴리즈 (태그: v0.8.0 등) |
+| `devel` | 개발 통합 (원격 push 대상) |
+| `local/devel` | devel 의 로컬 작업 브랜치 |
 | `local/task{N}` | GitHub Issue 번호 기반 타스크 브랜치 |
 
 ### 타스크 관리
@@ -473,7 +536,11 @@ graph TB
 - **엔진 자체 (파서·렌더·페이지네이션·편집·CLI·WASM·확장)**: upstream [edwardkim/rhwp](https://github.com/edwardkim/rhwp)에 PR을 제출해주세요. PR base 는 upstream 의 `devel` 입니다.
 - **HanPage 호스팅·재배포 (CI, gh-pages 워크플로우, 도메인 설정 등)**: 본 저장소의 [Issues](https://github.com/paldyn/HanPage/issues) / [PRs](https://github.com/paldyn/HanPage/pulls)로 제출해주세요.
 
-> **한컴 PDF 는 정답지가 아닙니다**: 한컴 도구 (편집기 / Viewer / 한컴독스), 버전 (2010 / 2020 / 2022), 출력 경로 (한컴 자체 / OS 인쇄) 별로 PDF 결과가 다릅니다. 자세한 내용과 환경별 비교 자료는 [한컴 PDF 환경 의존성 위키](https://github.com/edwardkim/rhwp/wiki/한컴-PDF-환경-의존성) 를 참고하세요.
+- **PR base 는 `devel`** 입니다 (`main` 아님). GitHub 기본 브랜치는 `main` 이지만 기여 PR 은 모두 `devel` 로 받습니다.
+- **이슈 먼저 확인**: 동일 영역에 진행 중인 작업이 있는지 [열린 이슈](https://github.com/edwardkim/rhwp/issues) 와 [열린 PR](https://github.com/edwardkim/rhwp/pulls) 을 먼저 확인해 주세요. 중복 작업을 방지합니다.
+- **Claude·Codex 재사용 기능**: 에이전트나 Skill을 새로 만들기 전 [capability 카탈로그](mydocs/manual/agent_capability_registry.md)에서 기존 기능과 Issue 기반 `CAP-<N>` 등록 규칙을 확인해 주세요.
+- **이슈 close 는 메인테이너**: 작업 완료 후 PR 만 제출해 주세요. 이슈는 PR 머지 시 메인테이너가 close 합니다.
+- **한컴 PDF 는 정답지가 아닙니다**: 한컴 도구 (편집기 / Viewer / 한컴독스), 버전 (2010 / 2020 / 2022), 출력 경로 (한컴 자체 / OS 인쇄) 별로 PDF 결과가 다릅니다. 자세한 내용과 환경별 비교 자료는 [한컴 PDF 환경 의존성 위키](https://github.com/edwardkim/rhwp/wiki/한컴-PDF-환경-의존성) 를 참고하세요.
 
 상세한 엔진 기여 절차 (Fork → 브랜치 → 커밋 → PR) 는 [CONTRIBUTING.md](CONTRIBUTING.md) 를 참고하세요.
 

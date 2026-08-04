@@ -31,6 +31,10 @@ impl SvgLayerRenderer {
         &mut self.renderer
     }
 
+    pub fn inner(&self) -> &SvgRenderer {
+        &self.renderer
+    }
+
     fn build_render_tree(&mut self, tree: &PageLayerTree) -> PageRenderTree {
         let mut render_tree = PageRenderTree::new(0, tree.page_width, tree.page_height);
         render_tree.root.bbox = tree.root.bounds;
@@ -237,6 +241,8 @@ impl LayerRenderer for SvgLayerRenderer {
         self.renderer.show_paragraph_marks = tree.output_options.show_paragraph_marks;
         self.renderer.show_control_codes = tree.output_options.show_control_codes;
         self.renderer.debug_overlay = tree.output_options.debug_overlay;
+        self.renderer.show_missing_picture_placeholder = tree.profile.shows_editor_visuals();
+        self.renderer.show_editor_only_nodes = tree.profile.shows_editor_visuals();
         let render_tree = self.build_render_tree(tree);
         self.renderer.render_tree(&render_tree);
         Ok(())
@@ -290,6 +296,7 @@ mod tests {
                 border_fill_id: 0,
                 baseline: 15.0,
                 field_marker: Default::default(),
+                display_text: None,
             }),
             BoundingBox::new(20.0, 20.0, 60.0, 20.0),
         ));
@@ -358,6 +365,32 @@ mod tests {
     }
 
     #[test]
+    fn missing_picture_placeholder_follows_render_profile() {
+        let mut render_tree = PageRenderTree::new(0, 80.0, 60.0);
+        render_tree.root.node_type = RenderNodeType::Page(PageNode {
+            page_index: 0,
+            width: 80.0,
+            height: 60.0,
+            section_index: 0,
+        });
+        render_tree.root.children.push(RenderNode::new(
+            23,
+            RenderNodeType::Placeholder(PlaceholderNode::missing_picture(None, None, None, None)),
+            BoundingBox::new(10.0, 10.0, 40.0, 30.0),
+        ));
+
+        let screen_tree = LayerBuilder::new(RenderProfile::Screen).build(&render_tree);
+        let print_tree = LayerBuilder::new(RenderProfile::Print).build(&render_tree);
+        let mut screen = SvgLayerRenderer::new();
+        screen.render_page(&screen_tree).unwrap();
+        let mut print = SvgLayerRenderer::new();
+        print.render_page(&print_tree).unwrap();
+
+        assert!(screen.output().contains("stroke-dasharray=\"6 3\""));
+        assert!(!print.output().contains("stroke-dasharray=\"6 3\""));
+    }
+
+    #[test]
     fn render_page_consumes_layer_output_options() {
         let mut render_tree = PageRenderTree::new(0, 80.0, 60.0);
         render_tree.root.node_type = RenderNodeType::Page(PageNode {
@@ -388,6 +421,7 @@ mod tests {
                 border_fill_id: 0,
                 baseline: 16.0,
                 field_marker: Default::default(),
+                display_text: None,
             }),
             BoundingBox::new(10.0, 15.0, 40.0, 20.0),
         ));

@@ -13,6 +13,7 @@ use wasm_bindgen::JsCast;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement};
 
 use super::layer_renderer::{LayerRenderResult, LayerRenderer};
+use super::partial_replay::{expanded_plain_text_replay_bounds, expanded_text_replay_bounds};
 use super::pua_oldhangul::map_pua_old_hangul;
 use super::render_tree::{
     BoundingBox, EllipseNode, EquationNode, FootnoteMarkerNode, FormObjectNode, ImageNode,
@@ -31,10 +32,51 @@ use crate::model::style::UnderlineType;
 use crate::paint::replay_order::layer_node_has_replay_plane;
 use crate::paint::{
     paint_op_replay_plane_with_layer, render_layer_replay_plane, ClipKind, GroupKind, LayerNode,
-    LayerNodeKind, PageLayerTree, PaintOp, PaintReplayPlane,
+    LayerNodeKind, PageLayerTree, PaintOp, PaintReplayPlane, RenderProfile,
 };
 
 const TEXT_MARK_CLIP_RIGHT_PAD: f64 = 48.0;
+
+/// Returns a conservative replay envelope for text ops that may be culled.
+/// `None` means fail closed: replay the op and let the Canvas clip decide.
+fn partial_text_replay_bounds(op: &PaintOp) -> Option<BoundingBox> {
+    match op {
+        PaintOp::TextRun { bbox, run } => expanded_text_replay_bounds(
+            *bbox,
+            &run.style,
+            run.rotation,
+            run.is_vertical,
+            run.char_overlap.is_some(),
+        ),
+        PaintOp::FootnoteMarker { bbox, marker } => Some(expanded_plain_text_replay_bounds(
+            *bbox,
+            marker.base_font_size,
+        )),
+        _ => None,
+    }
+}
+
+/// Canvas 폰트의 실측 폭을 레이아웃 advance에 맞출 때 적용할 배율을 계산한다.
+///
+/// 음수 자간은 다음 글자의 시작 위치만 당기는 속성이다. 이를 글자 자체의 폭 제한으로
+/// 사용하면 한글 glyph가 가로로 눌리므로, 음수 자간에서는 폭 맞춤을 적용하지 않는다.
+fn canvas_cluster_fit_scale(
+    cluster_advance: f64,
+    visual_width: f64,
+    letter_spacing: f64,
+    pin_ascii_advance: bool,
+) -> Option<f64> {
+    if cluster_advance <= 0.0 || visual_width <= 0.0 || letter_spacing < 0.0 {
+        return None;
+    }
+    if pin_ascii_advance {
+        return Some((cluster_advance / visual_width).clamp(0.1, 2.0));
+    }
+    if visual_width > cluster_advance + 0.25 {
+        return Some((cluster_advance / visual_width).clamp(0.1, 1.0));
+    }
+    None
+}
 
 /// Hanyang-PUA 옛한글 코드포인트를 KS X 1026-1:2007 자모 시퀀스로 확장 (Task #528).
 fn expand_pua_old_hangul_canvas(text: &str) -> String {
@@ -327,6 +369,14 @@ pub struct WebCanvasRenderer {
     /// `LayerFilter::All` renders the layer tree in logical replay-plane order,
     /// independent of raw tree child order.
     active_replay_plane: Option<PaintReplayPlane>,
+    render_profile: RenderProfile,
+    /// [#3137 Stage 4] 기존 Canvas의 좁은 영역만 다시 그릴 때 사용하는 page-space clip.
+    ///
+    /// full render는 `None`을 유지한다. partial render는 canvas 크기를 바꾸지 않고
+    /// 이 영역만 clear/replay한다. text op는 layout bbox를 그대로 사용하지 않고
+    /// 보수적인 ink envelope와 겹치지 않을 때만 Canvas 호출 전에 건너뛴다.
+    partial_clip: Option<BoundingBox>,
+    partial_context_saved: bool,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -348,6 +398,9 @@ impl WebCanvasRenderer {
             layer_filter: LayerFilter::All,
             transparent_page_background: false,
             active_replay_plane: None,
+            render_profile: RenderProfile::Screen,
+            partial_clip: None,
+            partial_context_saved: false,
         })
     }
 
@@ -359,6 +412,11 @@ impl WebCanvasRenderer {
     /// 다층 레이어 필터 설정 (Task #516, Stage 5.2)
     pub fn set_layer_filter(&mut self, filter: LayerFilter) {
         self.layer_filter = filter;
+    }
+
+    /// 기존 Canvas를 유지한 채 page-space의 좁은 영역만 다시 그린다.
+    pub fn set_partial_clip(&mut self, clip: BoundingBox) {
+        self.partial_clip = Some(clip);
     }
 
     /// PaintOp replay plane 이 현재 layer_filter 와 일치하는지 판정.
@@ -438,6 +496,10 @@ impl WebCanvasRenderer {
             self.active_replay_plane = prev;
         } else {
             self.render_layer_node(&tree.root, None);
+        }
+        if self.partial_context_saved {
+            self.ctx.restore();
+            self.partial_context_saved = false;
         }
         self.transparent_page_background = false;
     }
@@ -631,7 +693,6 @@ impl WebCanvasRenderer {
         }
         if let Some(img) = &bg.image {
             let preserve_color_watermark = img.is_real_picture_watermark_tone_preset();
-            let is_watermark_image = img.is_watermark();
             let mut baked_color_watermark = false;
             let render_data: std::borrow::Cow<[u8]> = if preserve_color_watermark {
                 match crate::renderer::image_resolver::real_picture_watermark_bytes_to_hancom_tone_png_bytes(
@@ -641,10 +702,10 @@ impl WebCanvasRenderer {
                         baked_color_watermark = true;
                         std::borrow::Cow::Owned(png)
                     }
-                    None => std::borrow::Cow::Borrowed(img.data.as_slice()),
+                    None => std::borrow::Cow::Borrowed(&img.data[..]),
                 }
             } else {
-                std::borrow::Cow::Borrowed(img.data.as_slice())
+                std::borrow::Cow::Borrowed(&img.data[..])
             };
             let filter_str = if preserve_color_watermark {
                 if baked_color_watermark {
@@ -653,12 +714,17 @@ impl WebCanvasRenderer {
                     Some(real_picture_watermark_tone_filter())
                 }
             } else {
-                compose_image_filter(img.effect, img.brightness, img.contrast)
+                let (brightness, contrast) = img.display_brightness_contrast();
+                compose_image_filter(img.effect, brightness, contrast)
             };
             if let Some(ref f) = filter_str {
                 self.ctx.set_filter(f);
             }
-            let needs_watermark_opacity = preserve_color_watermark || is_watermark_image;
+            // 일반 RealPic 쪽 배경의 밝기·대비는 색조 조정일 뿐 opacity 표식이
+            // 아니다. 다만 기존 비-RealPic 워터마크는 legacy opacity 계약을 유지한다.
+            let needs_watermark_opacity = preserve_color_watermark
+                || (!matches!(img.effect, crate::model::image::ImageEffect::RealPic)
+                    && img.is_watermark());
             if needs_watermark_opacity {
                 let opacity = if preserve_color_watermark {
                     REAL_PICTURE_WATERMARK_PAGE_OPACITY
@@ -705,12 +771,7 @@ impl WebCanvasRenderer {
             } else {
                 12.0
             };
-            let font_family = if run.style.font_family.is_empty() {
-                "sans-serif".to_string()
-            } else {
-                let fallback = super::generic_fallback(&run.style.font_family);
-                format!("\"{}\" , {}", run.style.font_family, fallback)
-            };
+            let font_family = super::canvas_font_family_chain(&run.style.font_family);
             let font = format!(
                 "{}{}{:.3}px {}",
                 font_style_str, font_weight, font_size, font_family
@@ -722,10 +783,15 @@ impl WebCanvasRenderer {
             let _ = self.ctx.rotate(run.rotation * std::f64::consts::PI / 180.0);
             self.ctx.set_text_align("center");
             self.ctx.set_text_baseline("middle");
-            let _ = self.ctx.fill_text(&run.text, 0.0, 0.0);
+            let _ = self.ctx.fill_text(run.display_or_text(), 0.0, 0.0);
             self.ctx.restore();
         } else {
-            self.draw_text(&run.text, bbox.x, bbox.y + run.baseline, &run.style);
+            self.draw_text(
+                run.display_or_text(),
+                bbox.x,
+                bbox.y + run.baseline,
+                &run.style,
+            );
         }
         if self.show_paragraph_marks || self.show_control_codes {
             let is_marker = !matches!(
@@ -883,7 +949,7 @@ impl WebCanvasRenderer {
                         baked_watermark = true;
                         std::borrow::Cow::Owned(png)
                     }
-                    None => std::borrow::Cow::Borrowed(data.as_slice()),
+                    None => std::borrow::Cow::Borrowed(&data[..]),
                 }
             } else if is_watermark_image
                 && crate::renderer::image_resolver::detect_image_mime_type(data) == "image/jpeg"
@@ -895,10 +961,10 @@ impl WebCanvasRenderer {
                         baked_watermark = true;
                         std::borrow::Cow::Owned(png)
                     }
-                    None => std::borrow::Cow::Borrowed(data.as_slice()),
+                    None => std::borrow::Cow::Borrowed(&data[..]),
                 }
             } else {
-                std::borrow::Cow::Borrowed(data.as_slice())
+                std::borrow::Cow::Borrowed(&data[..])
             };
             let filter_str = if baked_watermark {
                 None
@@ -1084,9 +1150,11 @@ impl WebCanvasRenderer {
     fn render_placeholder(&mut self, bbox: &BoundingBox, ph: &PlaceholderNode) {
         // [Task #2225] 그림 미지정 placeholder — 한컴 편집기식 표시:
         // 개체 영역 점선 테두리 + 중앙의 작은 그림-없음 아이콘(사선 그어진
-        // 그림 픽토그램). 편집자 정보 제공용이며 인쇄 등가 출력에서는
-        // svg/skia 백엔드가 미출력한다.
+        // 그림 픽토그램). 편집자 정보 제공용이며 인쇄 등가 profile에서는 미출력한다.
         if ph.kind == crate::renderer::render_tree::PlaceholderKind::MissingPicture {
+            if !self.render_profile.shows_editor_visuals() {
+                return;
+            }
             self.set_line_dash(&StrokeDash::Dash);
             self.ctx.set_stroke_style_str("#999999");
             self.ctx.set_line_width(1.0);
@@ -1304,6 +1372,18 @@ impl WebCanvasRenderer {
                     // Task #1197: 다층 레이어 필터 — RenderNode.layer 또는 이미지 wrap 기반
                     // replay plane 에 따라 skip.
                     if !self.should_render_op(op, active_layer) {
+                        continue;
+                    }
+                    // Layout bbox alone does not contain all glyph ink. Cull only plain text
+                    // whose expanded replay envelope is outside the clip; risky effects and
+                    // editor-only text marks fail closed and are always replayed.
+                    if !self.show_paragraph_marks
+                        && !self.show_control_codes
+                        && self.partial_clip.is_some_and(|clip| {
+                            partial_text_replay_bounds(op)
+                                .is_some_and(|bounds| !bounds.intersects(&clip))
+                        })
+                    {
                         continue;
                     }
                     self.render_paint_op(op);
@@ -2083,6 +2163,7 @@ impl WebCanvasRenderer {
 #[cfg(target_arch = "wasm32")]
 impl LayerRenderer for WebCanvasRenderer {
     fn render_page(&mut self, tree: &PageLayerTree) -> LayerRenderResult<()> {
+        self.render_profile = tree.profile;
         self.render_layer_tree(tree);
         Ok(())
     }
@@ -2093,11 +2174,23 @@ impl Renderer for WebCanvasRenderer {
     fn begin_page(&mut self, width: f64, height: f64) {
         self.width = width;
         self.height = height;
+        if self.partial_clip.is_some() {
+            self.ctx.save();
+            self.partial_context_saved = true;
+            let _ = self.ctx.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        }
         // 줌 스케일 적용: 렌더트리 좌표(문서 단위)를 캔버스 해상도에 맞게 확대
         if self.scale != 1.0 {
             let _ = self.ctx.scale(self.scale, self.scale);
         }
-        self.ctx.clear_rect(0.0, 0.0, width, height);
+        if let Some(clip) = self.partial_clip {
+            self.ctx.begin_path();
+            self.ctx.rect(clip.x, clip.y, clip.width, clip.height);
+            self.ctx.clip();
+            self.ctx.clear_rect(clip.x, clip.y, clip.width, clip.height);
+        } else {
+            self.ctx.clear_rect(0.0, 0.0, width, height);
+        }
         // 캔버스 초기화 (흰색 배경). 분리된 flow/behind/front layer 는
         // HTML 합성 순서가 페이지 배경을 담당하므로 투명하게 유지한다.
         if self.should_render_page_background() {
@@ -2133,20 +2226,14 @@ impl Renderer for WebCanvasRenderer {
         };
 
         // 위첨자/아래첨자: 글꼴 크기 축소 + y좌표 조정
-        let (font_size, y) = if style.superscript {
-            (base_font_size * 0.7, y - base_font_size * 0.3)
-        } else if style.subscript {
-            (base_font_size * 0.7, y + base_font_size * 0.15)
-        } else {
-            (base_font_size, y)
-        };
+        let (font_size, y) = style.script_draw_metrics(base_font_size, y);
+        // [#2771] 폰트를 이미 0.7 배로 설정했으므로 measure_text 도 0.7 배 폭을
+        // 돌려준다. 맞춤 대상 advance(본문 기준)를 같은 배율로 줄이지 않으면
+        // fit_scale = base / (0.7·base) ≈ 1.43 이 되어 글리프가 가로로 늘어난다.
+        // 비첨자는 정확히 1.0 이라 종전 fit_scale 이 불변이다.
+        let script_advance_scale = style.script_advance_scale();
 
-        let font_family = if style.font_family.is_empty() {
-            "sans-serif".to_string()
-        } else {
-            let fallback = super::generic_fallback(&style.font_family);
-            format!("\"{}\", {}", style.font_family, fallback)
-        };
+        let font_family = super::canvas_font_family_chain(&style.font_family);
 
         let font = format!(
             "{}{}{:.3}px {}",
@@ -2332,16 +2419,12 @@ impl Renderer for WebCanvasRenderer {
                             .ok()
                             .map(|metrics| metrics.width())
                             .and_then(|actual_w| {
-                                let visual_w = actual_w * ratio;
-                                if visual_w <= 0.0 {
-                                    None
-                                } else if pin_ascii_advance {
-                                    Some((cluster_advance / visual_w).clamp(0.1, 2.0))
-                                } else if visual_w > cluster_advance + 0.25 {
-                                    Some((cluster_advance / visual_w).clamp(0.1, 1.0))
-                                } else {
-                                    None
-                                }
+                                canvas_cluster_fit_scale(
+                                    cluster_advance * script_advance_scale,
+                                    actual_w * ratio,
+                                    style.letter_spacing,
+                                    pin_ascii_advance,
+                                )
                             })
                     } else {
                         None
@@ -2980,12 +3063,7 @@ impl WebCanvasRenderer {
             glyph_color.clone()
         };
 
-        let font_family = if style.font_family.is_empty() {
-            "sans-serif".to_string()
-        } else {
-            let fallback = super::generic_fallback(&style.font_family);
-            format!("\"{}\" , {}", style.font_family, fallback)
-        };
+        let font_family = super::canvas_font_family_chain(&style.font_family);
         let font_weight = if style.bold { "bold " } else { "" };
         let font_style_str = if style.italic { "italic " } else { "" };
         let font = format!(
@@ -3146,12 +3224,7 @@ impl WebCanvasRenderer {
             glyph_color.clone()
         };
 
-        let font_family = if style.font_family.is_empty() {
-            "sans-serif".to_string()
-        } else {
-            let fallback = super::generic_fallback(&style.font_family);
-            format!("\"{}\" , {}", style.font_family, fallback)
-        };
+        let font_family = super::canvas_font_family_chain(&style.font_family);
 
         let cx = bbox_x + box_size / 2.0;
         let cy = bbox_y + bbox_h - box_size / 2.0;
@@ -3343,7 +3416,7 @@ impl WebCanvasRenderer {
     ) {
         let mode = fill_mode.unwrap_or(ImageFillMode::FitToSize);
         match mode {
-            ImageFillMode::FitToSize | ImageFillMode::None => {
+            ImageFillMode::FitToSize | ImageFillMode::Total | ImageFillMode::None => {
                 // crop이 있으면 source rect 기반 drawImage 사용
                 if let Some(crop_rect) = crop {
                     if let Some((img_w, img_h)) = parse_image_dimensions_canvas(data) {
@@ -3654,5 +3727,18 @@ mod tests {
         assert_eq!(color_to_css(0x00FF0000), "#0000ff"); // 파랑
         assert_eq!(color_to_css(0x00FFFFFF), "#ffffff"); // 흰색
         assert_eq!(color_to_css(0x00000000), "#000000"); // 검정
+    }
+
+    #[test]
+    fn issue_2809_negative_letter_spacing_does_not_compress_glyph() {
+        assert_eq!(canvas_cluster_fit_scale(7.5, 15.0, -7.5, false), None);
+        assert_eq!(canvas_cluster_fit_scale(7.5, 15.0, -7.5, true), None);
+    }
+
+    #[test]
+    fn non_negative_letter_spacing_keeps_existing_font_fit_policy() {
+        assert_eq!(canvas_cluster_fit_scale(7.5, 15.0, 0.0, false), Some(0.5));
+        assert_eq!(canvas_cluster_fit_scale(7.5, 15.0, 0.0, true), Some(0.5));
+        assert_eq!(canvas_cluster_fit_scale(15.0, 14.9, 0.0, false), None);
     }
 }

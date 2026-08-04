@@ -1,5 +1,7 @@
 import { ModalDialog } from './dialog';
 import type { EventBus } from '@/core/event-bus';
+import type { CommandServices } from '@/command/types';
+import { applyThroughRouter } from './dialog-apply';
 import type { PageBorderFillSettings, BorderLineProps } from '@/core/types';
 import type { WasmBridge } from '@/core/wasm-bridge';
 
@@ -59,6 +61,7 @@ export class PageBorderDialog extends ModalDialog {
     private wasm: WasmBridge,
     private eventBus: EventBus,
     private sectionIdx: number,
+    private services?: CommandServices,
   ) {
     super('쪽 테두리/배경', 560);
   }
@@ -108,7 +111,7 @@ export class PageBorderDialog extends ModalDialog {
     return body;
   }
 
-  protected onConfirm(): void {
+  protected onConfirm(): boolean {
     const applyPage = this.radioValue('page-border-apply', 'all');
     const next: PageBorderFillSettings = {
       ...this.settings,
@@ -133,8 +136,15 @@ export class PageBorderDialog extends ModalDialog {
       applyPage: applyPage === 'exceptFirst' ? 'exceptFirst' : 'all',
     };
 
-    this.wasm.setPageBorderFill(this.sectionIdx, next);
-    this.eventBus.emit('document-changed');
+    // [쪽 테두리/배경 이관] snapshot 으로 라우팅(#2077 동형). services 미주입 시 직접 적용 fallback.
+    const apply = () => this.wasm.setPageBorderFill(this.sectionIdx, next);
+    return applyThroughRouter({
+      services: this.services,
+      label: 'PageBorderDialog',
+      operationType: 'pageBorder',
+      operation: (ih) => { apply(); return ih.getCursorPosition(); },
+      fallback: () => { apply(); this.eventBus.emit('document-changed'); },
+    });
   }
 
   private buildBorderTab(): HTMLElement {
@@ -410,7 +420,10 @@ export class PageBorderDialog extends ModalDialog {
   private buildLineWidthSelect(): HTMLSelectElement {
     this.lineWidthSelect = document.createElement('select');
     this.lineWidthSelect.className = 'dialog-select';
-    ['0.1mm', '0.12mm', '0.15mm', '0.2mm', '0.25mm', '0.3mm', '0.4mm', '0.5mm', '0.6mm'].forEach((text, idx) => {
+    [
+      '0.1mm', '0.12mm', '0.15mm', '0.2mm', '0.25mm', '0.3mm', '0.4mm', '0.5mm', '0.6mm',
+      '0.7mm', '1mm', '1.5mm', '2mm', '3mm', '4mm', '5mm',
+    ].forEach((text, idx) => {
       const option = document.createElement('option');
       option.value = String(idx);
       option.textContent = text;

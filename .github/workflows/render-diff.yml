@@ -3,21 +3,32 @@ name: Render Diff
 on:
   pull_request:
     branches: [main, devel]
+    types: [opened, reopened, synchronize]
     paths:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'src/paint/**'
+      - 'src/model/**'
       - 'src/renderer/**'
       - 'src/document_core/queries/rendering.rs'
       - 'src/wasm_api.rs'
       - 'src/main.rs'
-      - 'web/fonts/**'
+      - 'assets/fonts/**'
+      - 'ttfs/**'
       - 'scripts/renderer_baseline.py'
       - 'scripts/renderer_baseline_manifest.json'
+      - 'scripts/ci-impact-classifier.cjs'
+      - 'scripts/generate_font_glyph_payload_fixture.py'
+      - 'scripts/generate_exact_face_collection_fixture.py'
+      - 'scripts/generate_font_native_hwpx_fixture.py'
+      - 'scripts/requirements-font-fixtures.txt'
+      - 'samples/render-p35-font-native-bitmap.hwpx'
+      - 'tests/fixtures/fonts/**'
       - 'docs/canvaskit-parity-implementation.md'
       - 'docs/text-ir-v2.md'
       - 'rhwp-studio/**'
-      - 'mydocs/**'
+      # Review 기록·asset은 렌더 입력이 아니다. trailing review-only commit이
+      # Canvas visual diff를 다시 시작하지 않게 mydocs/**는 trigger에서 제외한다 (#3559).
       - '.github/workflows/render-diff.yml'
   workflow_dispatch:
     inputs:
@@ -54,23 +65,28 @@ jobs:
   preflight:
     name: Render Diff preflight
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
+      actions: read
       contents: read
-      checks: read
       pull-requests: read
     outputs:
       fast_pass: ${{ steps.detect.outputs.fast_pass || 'false' }}
       reason: ${{ steps.detect.outputs.reason || 'preflight-unavailable' }}
       candidate_sha: ${{ steps.detect.outputs.candidate_sha || '' }}
+      render_required: ${{ steps.impact.outputs.render_required || 'true' }}
+      impact_reason: ${{ steps.impact.outputs.reason || 'fail-closed:impact-unavailable' }}
 
     steps:
       - name: Detect review-only fast pass
         id: detect
         continue-on-error: true
-        uses: actions/github-script@v8
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
+          # [#2804] API 5xx 일시 오류에 job 이 죽지 않도록 재시도한다.
+          # retry-exempt-status-codes 기본값(400,401,403,404,422)이 4xx 를 제외하므로 5xx 만 재시도된다.
+          retries: 3
           script: |
-            const allowedConclusions = new Set(['success', 'skipped', 'neutral']);
             const { owner, repo } = context.repo;
 
             function setResult(fastPass, reason, candidateSha = '') {
@@ -97,6 +113,7 @@ jobs:
                 && (
                   filename.endsWith('.hwp')
                   || filename.endsWith('.hwpx')
+                  || filename.endsWith('.hml')
                   || filename.endsWith('.pdf')
                   || filename.endsWith('.png')
                 )
@@ -111,6 +128,20 @@ jobs:
               return hasReferenceArtifact ? 'review-reference-only' : 'mydocs-only';
             }
 
+            function isCurrentBaseReviewMerge(commit, baseSha) {
+              const parents = commit.parents || [];
+              return parents.length === 2 && parents.some((parent) => parent.sha === baseSha);
+            }
+
+            async function isCurrentBaseAncestor(candidateSha, baseSha) {
+              const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+                owner,
+                repo,
+                basehead: `${baseSha}...${candidateSha}`,
+              });
+              return comparison.status === 'ahead' || comparison.status === 'identical';
+            }
+
             function latestRun(runs) {
               return runs
                 .slice()
@@ -119,6 +150,87 @@ jobs:
                   const aTime = Date.parse(a.completed_at || a.started_at || a.created_at || 0);
                   return bTime - aTime;
                 })[0];
+            }
+
+            async function renderDiffResult(candidateSha, pr) {
+              const workflowRuns = await github.paginate(github.rest.actions.listWorkflowRuns, {
+                owner,
+                repo,
+                workflow_id: 'render-diff.yml',
+                event: 'pull_request',
+                head_sha: candidateSha,
+                per_page: 100,
+              });
+              const renderDiffRun = latestRun(workflowRuns.filter((run) => (
+                run.path === '.github/workflows/render-diff.yml'
+                && run.event === 'pull_request'
+                && run.head_sha === candidateSha
+              )));
+
+              if (!renderDiffRun) {
+                return {
+                  state: 'missing',
+                  reason: `missing-render-diff-workflow:${candidateSha}`,
+                };
+              }
+              if (renderDiffRun.status !== 'completed') {
+                return {
+                  state: 'pending',
+                  reason: `render-diff-workflow-not-completed:${renderDiffRun.status}`,
+                };
+              }
+              if (renderDiffRun.conclusion !== 'success') {
+                return {
+                  state: 'failed',
+                  reason: `latest-render-diff-workflow-not-success:${renderDiffRun.conclusion}`,
+                };
+              }
+              const runCreatedAt = Date.parse(renderDiffRun.created_at);
+              const pullCreatedAt = Date.parse(pr.created_at);
+              if (!Number.isFinite(runCreatedAt)
+                || !Number.isFinite(pullCreatedAt)
+                || renderDiffRun.head_branch !== pr.head.ref
+                || renderDiffRun.head_repository?.id !== pr.head.repo?.id
+                || runCreatedAt < pullCreatedAt) {
+                return { state: 'failed', reason: 'render-diff-workflow-pr-identity-mismatch' };
+              }
+
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                owner,
+                repo,
+                run_id: renderDiffRun.id,
+                filter: 'latest',
+                per_page: 100,
+              });
+              const renderDiffJob = latestRun(jobs.filter((job) => (
+                job.name === 'Canvas visual diff'
+              )));
+              if (!renderDiffJob) {
+                return {
+                  state: 'failed',
+                  reason: `missing-canvas-visual-diff-job:${candidateSha}`,
+                };
+              }
+              if (renderDiffJob.status !== 'completed') {
+                return {
+                  state: 'pending',
+                  reason: `canvas-visual-diff-not-completed:${renderDiffJob.status}`,
+                };
+              }
+              if (renderDiffJob.conclusion !== 'success') {
+                return {
+                  state: 'failed',
+                  reason: `canvas-visual-diff-not-success:${renderDiffJob.conclusion}`,
+                };
+              }
+              const expectedIdentityStep = `Render Diff identity PR #${pr.number} base ${pr.base.sha}`;
+              const identityStep = (renderDiffJob.steps || []).find((step) => (
+                step.name === expectedIdentityStep
+              ));
+              if (identityStep?.status !== 'completed' || identityStep.conclusion !== 'success') {
+                return { state: 'failed', reason: 'canvas-visual-diff-identity-mismatch' };
+              }
+              return { state: 'green' };
             }
 
             try {
@@ -152,8 +264,8 @@ jobs:
                 return;
               }
 
-              let trailingReviewOnlyCommits = 0;
-              let candidateSha = '';
+              const reviewOnlyCandidates = [];
+              let codeCandidateSha = '';
 
               for (let index = commits.length - 1; index >= 0; index -= 1) {
                 const sha = commits[index].sha;
@@ -172,90 +284,183 @@ jobs:
 
                 const reviewOnly = files.every((file) => isAllowedReviewPath(file));
                 if (reviewOnly) {
-                  if ((commit.parents || []).length !== 1) {
-                    setResult(false, `${reviewOnlyLabel(files)}-merge-commit:${sha}`);
-                    return;
+                  const parents = commit.parents || [];
+                  if (parents.length === 1) {
+                    reviewOnlyCandidates.push(sha);
+                    continue;
                   }
-                  trailingReviewOnlyCommits += 1;
-                  continue;
+                  // #3233 keeps the narrow Update branch merge topology. Its green
+                  // workflow can be reused after one or more review-only records.
+                  if (reviewOnlyCandidates.length > 0
+                    && isCurrentBaseReviewMerge(commit, pr.base.sha)) {
+                    reviewOnlyCandidates.push(sha);
+                    core.info(`including current-base ${reviewOnlyLabel(files)} merge candidate ${sha}`);
+                    break;
+                  }
+                  setResult(false, `${reviewOnlyLabel(files)}-merge-not-reusable:${sha}`);
+                  return;
                 }
 
-                candidateSha = sha;
+                codeCandidateSha = sha;
                 break;
               }
 
-              if (trailingReviewOnlyCommits === 0) {
+              if (reviewOnlyCandidates.length === 0) {
                 setResult(false, 'no-trailing-review-only-commits');
                 return;
               }
-              if (!candidateSha) {
-                candidateSha = pr.base.sha;
-                core.info(`all PR commits are review-only; using base SHA ${candidateSha}`);
-                setResult(true, 'all-review-only-no-render-impact', candidateSha);
-                return;
+              if (codeCandidateSha) {
+                reviewOnlyCandidates.push(codeCandidateSha);
               }
 
-              const checkRuns = await github.paginate(github.rest.checks.listForRef, {
-                owner,
-                repo,
-                ref: candidateSha,
-                per_page: 100,
-              });
-              const renderDiffRun = latestRun(checkRuns.filter((run) => (
-                run.name === 'Canvas visual diff'
-                && run.app?.slug === 'github-actions'
-              )));
-
-              if (!renderDiffRun) {
-                setResult(false, `missing-canvas-visual-diff:${candidateSha}`, candidateSha);
-                return;
-              }
-              if (renderDiffRun.status !== 'completed') {
-                setResult(false, `canvas-visual-diff-not-completed:${renderDiffRun.status}`, candidateSha);
-                return;
-              }
-              if (!allowedConclusions.has(renderDiffRun.conclusion)) {
-                setResult(false, `canvas-visual-diff-not-green:${renderDiffRun.conclusion}`, candidateSha);
-                return;
+              for (const candidateSha of reviewOnlyCandidates) {
+                if (!(await isCurrentBaseAncestor(candidateSha, pr.base.sha))) {
+                  core.info(`candidate does not include current base: ${candidateSha}`);
+                  continue;
+                }
+                const result = await renderDiffResult(candidateSha, pr);
+                if (result.state === 'green') {
+                  setResult(true, 'canvas-visual-diff-success', candidateSha);
+                  return;
+                }
+                if (result.state === 'failed') {
+                  setResult(false, result.reason, candidateSha);
+                  return;
+                }
+                core.info(`candidate not reusable yet: ${candidateSha} (${result.reason})`);
               }
 
-              setResult(true, `canvas-visual-diff-green:${renderDiffRun.conclusion}`, candidateSha);
+              setResult(false, 'no-green-current-base-render-candidate');
             } catch (error) {
               core.warning(`Render Diff preflight failed; running full Render Diff. ${error.message}`);
               setResult(false, 'preflight-error');
             }
 
+      # The workflow keeps the broad rhwp-studio/** trigger so the trusted base classifier,
+      # rather than a second path heuristic, decides whether the heavy Canvas job is needed.
+      - name: Check out trusted CI impact classifier
+        id: checkout-impact-classifier
+        if: ${{ steps.detect.outputs.fast_pass != 'true' }}
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}
+          persist-credentials: false
+          sparse-checkout: scripts/ci-impact-classifier.cjs
+          sparse-checkout-cone-mode: false
+
+      - name: Collect Render Diff impact input
+        id: collect-impact
+        if: ${{ steps.detect.outputs.fast_pass != 'true' }}
+        continue-on-error: true
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          retries: 3
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const inputPath = path.join(
+              process.env.GITHUB_WORKSPACE || process.cwd(),
+              '.render-diff-impact-input.json',
+            );
+
+            function writeInput(input) {
+              fs.writeFileSync(inputPath, `${JSON.stringify(input)}\n`, 'utf8');
+            }
+
+            try {
+              if (context.eventName !== 'pull_request') {
+                writeInput({
+                  eventName: context.eventName,
+                  files: [],
+                  forceFullReason: 'manual-or-unsupported-event',
+                });
+                return;
+              }
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                ...context.repo,
+                pull_number: context.payload.pull_request.number,
+                per_page: 100,
+              });
+              writeInput({
+                eventName: context.eventName,
+                files: files.map((file) => ({
+                  filename: file.filename,
+                  previous_filename: file.previous_filename || '',
+                  status: file.status || 'modified',
+                })),
+              });
+            } catch (error) {
+              core.warning(`Render Diff impact collection failed; running full. ${error.message}`);
+              writeInput({
+                eventName: context.eventName,
+                files: [],
+                forceFullReason: 'collection-error',
+              });
+            }
+
+      - name: Classify Render Diff impact
+        id: impact
+        if: ${{ steps.detect.outputs.fast_pass != 'true' }}
+        continue-on-error: true
+        run: >-
+          node scripts/ci-impact-classifier.cjs
+          --input .render-diff-impact-input.json
+          --github-output "$GITHUB_OUTPUT"
+
+      - name: Summarize Render Diff impact
+        if: ${{ always() }}
+        env:
+          RENDER_REQUIRED: ${{ steps.impact.outputs.render_required || 'true' }}
+          IMPACT_REASON: ${{ steps.impact.outputs.reason || 'fail-closed:impact-unavailable' }}
+        run: |
+          {
+            echo '### Render Diff impact'
+            printf -- '- render_required: %s\n' "${RENDER_REQUIRED}"
+            printf -- '- reason: %s\n' "${IMPACT_REASON}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
   canvas-visual-diff:
     name: Canvas visual diff
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs: preflight
-    if: ${{ always() && needs.preflight.outputs.fast_pass != 'true' }}
+    if: ${{ always() && needs.preflight.outputs.fast_pass != 'true' && needs.preflight.outputs.render_required == 'true' }}
     permissions:
       contents: read
     env:
       RHWP_CHROMIUM_BUILD_ID: '1660786'
 
     steps:
-      - uses: actions/checkout@v5
+      - name: "Render Diff identity PR #${{ github.event.pull_request.number }} base ${{ github.event.pull_request.base.sha }}"
+        if: ${{ github.event_name == 'pull_request' }}
+        run: printf '%s\n' 'Render Diff identity recorded'
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 브랜치 (2026-08-01 시점)
         with:
           targets: wasm32-unknown-unknown
 
       - name: Install PDF raster tools
-        continue-on-error: true
-        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            fonts-dejavu-core \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            poppler-utils
 
       - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        uses: ./.github/actions/install-wasm-pack
 
       # [Task #1667] Render Diff is PR-heavy; pull_request caches are scoped to
       # refs/pull/* and are not reused by other PRs. Keep PR runs restore-only,
       # and allow only trusted manual devel/main seed runs to save a cache.
       - name: Restore cargo registry & build cache
         id: render_diff_cargo_cache_restore
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.cargo/registry
@@ -269,12 +474,11 @@ jobs:
         run: wasm-pack build --target web --dev
 
       - name: Build native CLI for PDF report
-        continue-on-error: true
-        run: cargo build --bin rhwp
+        run: cargo build --features native-skia --bin rhwp
 
       - name: Save cargo registry & build cache
         if: ${{ github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/devel' || github.ref == 'refs/heads/main') && steps.render_diff_cargo_cache_restore.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: |
             ~/.cargo/registry
@@ -283,7 +487,7 @@ jobs:
           key: ${{ runner.os }}-render-diff-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
 
@@ -294,7 +498,7 @@ jobs:
       - name: Install Chromium
         working-directory: rhwp-studio
         run: |
-          browser_path=$(npx @puppeteer/browsers install chromium@${RHWP_CHROMIUM_BUILD_ID} --path .cache/puppeteer --format '{{path}}' | tail -n 1)
+          browser_path=$(npx @puppeteer/browsers install chromium@"${RHWP_CHROMIUM_BUILD_ID}" --path .cache/puppeteer --format '{{path}}' | tail -n 1)
           browser_path=$(realpath "$browser_path")
           echo "CHROME_PATH=$browser_path" >> "$GITHUB_ENV"
 
@@ -302,10 +506,13 @@ jobs:
         working-directory: rhwp-studio
         run: |
           node --check e2e/renderer-contract.test.mjs
+          node --check e2e/issue-2214-page-local-repaint.test.mjs
           node --check e2e/canvaskit-font-coverage.test.mjs
           node --check e2e/canvas-render-diff.test.mjs
           node --check e2e/pdf-render-diff-report.mjs
           node --check e2e/renderer-baseline.mjs
+          node --check e2e/renderer-baseline-native-diff.mjs
+          node e2e/renderer-baseline-native-diff.mjs --self-test
           node --check e2e/run-render-diff.mjs
           python3 -m py_compile ../scripts/renderer_baseline.py
           npm run e2e:renderer-contract
@@ -321,6 +528,10 @@ jobs:
           RHWP_RENDER_DIFF_WRITE_IMAGES: ${{ inputs['write-images'] == true && '1' || '0' }}
           RHWP_RENDER_DIFF_PDF: '1'
           RHWP_RENDER_DIFF_PDF_WRITE_IMAGES: '1'
+          RHWP_RENDER_DIFF_DIRECT_PDF: '1'
+          RHWP_RENDER_DIFF_DIRECT_PDF_GATE: '1'
+          RHWP_RENDER_DIFF_DIRECT_PDF_MAX_RATIO: '0.02'
+          RHWP_RENDER_DIFF_DIRECT_PDF_RASTER_DPI: '144'
           RHWP_RENDER_DIFF_RHWP_BIN: ../target/debug/rhwp
         run: npm run e2e:render-diff:ci
 
@@ -349,7 +560,7 @@ jobs:
 
       - name: Upload render diff artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: render-diff-artifacts
           path: |

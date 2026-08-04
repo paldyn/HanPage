@@ -66,6 +66,7 @@ pub fn serialize_common_obj_attr(common: &CommonObjAttr) -> Vec<u8> {
 ///
 /// 비트 레이아웃 (parser/control/shape.rs 의 역방향):
 /// - bit 0: treat_as_char
+/// - bit 2: affect_line_spacing (줄 간격에 영향 — [#2784], 스펙 표 70)
 /// - bit 3-4: vert_rel_to (Paper=0, Page=1, Para=2)
 /// - bit 5-7: vert_align
 /// - bit 8-9: horz_rel_to
@@ -83,6 +84,10 @@ pub(crate) fn pack_common_attr_bits(common: &CommonObjAttr) -> u32 {
     let mut a: u32 = 0;
     if common.treat_as_char {
         a |= 0x01;
+    }
+    // [#2784] affectLSpacing — 개체 공통 속성 attr bit 2 (스펙 표 70).
+    if common.affect_line_spacing {
+        a |= 1 << 2;
     }
     a |= (vert_rel_to_to_bits(common.vert_rel_to) & 0x03) << 3;
     a |= (vert_align_to_bits(common.vert_align) & 0x07) << 5;
@@ -108,6 +113,30 @@ pub(crate) fn pack_common_attr_bits(common: &CommonObjAttr) -> u32 {
         a |= 1 << 28;
     }
     a
+}
+
+/// tac/rel_to 마이그레이션 후 stale packed `attr` 동기화.
+///
+/// 배경 (Issue #3781 실측): `insert_picture_native` 가 `attr` 비트를 seed 하고
+/// `migrate_picture_floating_to_inline` 은 **enum 필드만** 갱신한다. 직렬화는
+/// `attr != 0` 이면 packed 값을 우선하므로(라운드트립 보존 계약), 마이그레이션된
+/// 그림이 HWP 바이너리 왕복에서 floating(Paper) 앵커로 되살아나
+/// `treatAsChar=1 + vertRelTo=PAPER` 모순 산출물이 된다 (한글 렌더 깨짐).
+/// 앵커 관련 비트(tac bit0 · vert_rel 3-4 · horz_rel 8-9)만 enum 에서 재기입하고,
+/// criterion/wrap/flow 등 나머지 비트는 보존한다 (전체 재패킹은 enum 미동기
+/// 필드의 정보 손실 위험).
+pub(crate) fn sync_anchor_bits(common: &mut CommonObjAttr) {
+    if common.attr == 0 {
+        return; // 직렬화가 pack_common_attr_bits 로 전량 재패킹 — 손댈 것 없음.
+    }
+    let mut a = common.attr;
+    a &= !(0x01 | (0x03 << 3) | (0x03 << 8));
+    if common.treat_as_char {
+        a |= 0x01;
+    }
+    a |= (vert_rel_to_to_bits(common.vert_rel_to) & 0x03) << 3;
+    a |= (horz_rel_to_to_bits(common.horz_rel_to) & 0x03) << 8;
+    common.attr = a;
 }
 
 fn vert_rel_to_to_bits(v: VertRelTo) -> u32 {
@@ -214,6 +243,7 @@ mod tests {
             treat_as_char: false,
             flow_with_text: false,
             allow_overlap: false,
+            affect_line_spacing: false,
             hwp5_gen_shape_attr_bit26: false,
             size_protect: false,
             hwp5_gen_shape_attr_bit28: false,
@@ -227,7 +257,9 @@ mod tests {
             height_criterion: SizeCriterion::Absolute,
             description: String::new(),
             raw_extra: Vec::new(),
+            locked: false,
             numbering_type: crate::model::shape::ObjectNumberingType::None,
+            drop_cap_style: crate::model::shape::DropCapStyle::None,
         }
     }
 
@@ -300,6 +332,25 @@ mod tests {
         assert!(parsed.size_protect);
         assert!(parsed.hwp5_gen_shape_attr_bit26);
         assert!(parsed.hwp5_gen_shape_attr_bit28);
+    }
+
+    #[test]
+    fn roundtrip_affect_line_spacing_bit2() {
+        // [#2784] affectLSpacing 은 개체 공통 속성 attr bit 2 (스펙 표 70) 에 위치.
+        // 한컴 원본 issue1949.hwp 의 bit 2 set 개체(표 1 + 수식 5)가 짝 HWPX 의
+        // affectLSpacing="1" 개체와 1:1 일치함으로 실파일 검증됨.
+        let mut original = make_sample();
+        original.affect_line_spacing = true;
+        let bytes = serialize_common_obj_attr(&original);
+        let attr = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
+        assert_ne!(
+            attr & (1 << 2),
+            0,
+            "affect_line_spacing 은 bit 2 에 팩돼야 함"
+        );
+        assert_eq!(attr & (1 << 1), 0, "bit 1 은 예약이라 세팅되면 안 됨");
+        let parsed = parse_common_obj_attr(&bytes);
+        assert!(parsed.affect_line_spacing);
     }
 
     #[test]
@@ -396,5 +447,53 @@ mod tests {
         let bytes = serialize_common_obj_attr(&original);
         let parsed = parse_common_obj_attr(&bytes);
         assert_eq!(parsed.text_flow, TextFlow::BothSides);
+    }
+}
+
+#[cfg(test)]
+mod sync_anchor_bits_tests {
+    use super::*;
+    use crate::model::shape::{HorzRelTo, VertRelTo};
+
+    /// Issue #3781 실측 회귀: insert 가 seed 한 floating attr
+    /// ((4<<15)|(2<<18) — tac=0·rel=Paper) 위에서 inline 마이그레이션(enum 갱신) 후
+    /// sync 하면 tac/rel 비트만 Para 로 바뀌고 criterion 비트는 보존된다.
+    #[test]
+    fn sync_anchor_bits_updates_stale_floating_seed() {
+        let mut common = CommonObjAttr {
+            attr: (4 << 15) | (2 << 18),
+            treat_as_char: false,
+            vert_rel_to: VertRelTo::Paper,
+            horz_rel_to: HorzRelTo::Paper,
+            ..Default::default()
+        };
+        // 마이그레이션이 하는 일 (enum 갱신).
+        common.treat_as_char = true;
+        common.vert_rel_to = VertRelTo::Para;
+        common.horz_rel_to = HorzRelTo::Para;
+        sync_anchor_bits(&mut common);
+        assert_eq!(common.attr & 0x01, 0x01, "tac bit");
+        assert_eq!((common.attr >> 3) & 0x03, 2, "vert_rel_to = Para");
+        assert_eq!(
+            (common.attr >> 8) & 0x03,
+            3,
+            "horz_rel_to = Para (Paper0/Page1/Column2/Para3)"
+        );
+        assert_eq!((common.attr >> 15) & 0x07, 4, "width criterion 보존");
+        assert_eq!((common.attr >> 18) & 0x03, 2, "height criterion 보존");
+    }
+
+    /// attr=0(합성 경로) 은 무접촉 — 직렬화가 전량 재패킹한다.
+    #[test]
+    fn sync_anchor_bits_leaves_zero_attr_untouched() {
+        let mut common = CommonObjAttr {
+            attr: 0,
+            treat_as_char: true,
+            vert_rel_to: VertRelTo::Para,
+            horz_rel_to: HorzRelTo::Para,
+            ..Default::default()
+        };
+        sync_anchor_bits(&mut common);
+        assert_eq!(common.attr, 0);
     }
 }

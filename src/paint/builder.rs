@@ -4,12 +4,14 @@ use crate::paint::layer_tree::{
 };
 use crate::paint::paint_op::{PaintOp, TextDecorationKind};
 use crate::paint::profile::RenderProfile;
+use crate::paint::{lower_font_native_glyph_sidecars, EmbeddedFontFace};
 use crate::renderer::render_tree::{PageRenderTree, RenderNode, RenderNodeType};
 
 /// semantic render tree를 visual layer tree로 내린다.
 pub struct LayerBuilder {
     profile: RenderProfile,
     output_options: LayerOutputOptions,
+    bin_data_epoch: u32,
 }
 
 impl LayerBuilder {
@@ -17,6 +19,7 @@ impl LayerBuilder {
         Self {
             profile,
             output_options: LayerOutputOptions::default(),
+            bin_data_epoch: 0,
         }
     }
 
@@ -25,7 +28,20 @@ impl LayerBuilder {
         self
     }
 
+    pub fn with_bin_data_epoch(mut self, bin_data_epoch: u32) -> Self {
+        self.bin_data_epoch = bin_data_epoch;
+        self
+    }
+
     pub fn build(&mut self, tree: &PageRenderTree) -> PageLayerTree {
+        self.build_with_embedded_fonts(tree, &[])
+    }
+
+    pub fn build_with_embedded_fonts(
+        &mut self,
+        tree: &PageRenderTree,
+        fonts: &[EmbeddedFontFace<'_>],
+    ) -> PageLayerTree {
         let (page_width, page_height) = match &tree.root.node_type {
             RenderNodeType::Page(page) => (page.width, page.height),
             _ => (tree.root.bbox.width, tree.root.bbox.height),
@@ -40,8 +56,12 @@ impl LayerBuilder {
         )
         .with_layer(tree.root.layer);
 
-        PageLayerTree::with_profile(page_width, page_height, root, self.profile)
-            .with_output_options(self.output_options)
+        let mut layer_tree =
+            PageLayerTree::with_profile(page_width, page_height, root, self.profile)
+                .with_output_options(self.output_options)
+                .with_bin_data_epoch(self.bin_data_epoch);
+        lower_font_native_glyph_sidecars(&mut layer_tree.root, &mut layer_tree.resources, fonts);
+        layer_tree
     }
 
     fn build_children(&mut self, node: &RenderNode) -> Vec<LayerNode> {
@@ -52,7 +72,7 @@ impl LayerBuilder {
     }
 
     fn build_node(&mut self, node: &RenderNode) -> Option<LayerNode> {
-        if !node.visible {
+        if !node.visible || (node.editor_only && !self.profile.shows_editor_visuals()) {
             return None;
         }
 
@@ -219,13 +239,16 @@ fn text_run_ops(
     output_options: LayerOutputOptions,
 ) -> Vec<PaintOp> {
     let has_char_overlap = run.char_overlap.is_some();
-    let has_control_mark = (output_options.show_paragraph_marks
-        || output_options.show_control_codes)
-        && (run.field_marker != Default::default() || run.is_para_end || run.is_line_break_end);
-    let has_tab_leader = !run.style.tab_leaders.is_empty();
-    let has_underline = run.style.underline != UnderlineType::None;
-    let has_strikethrough = run.style.strikethrough;
-    let has_emphasis_dot = run.style.emphasis_dot > 0;
+    let show_text_marks = output_options.show_paragraph_marks || output_options.show_control_codes;
+    let has_control_mark = show_text_marks
+        && (run.is_para_end
+            || run.is_line_break_end
+            || run.text.chars().any(|ch| matches!(ch, ' ' | '\t')));
+    // Legacy renderers bypass normal text decoration/leader paint for overlap runs.
+    let has_tab_leader = !has_char_overlap && !run.style.tab_leaders.is_empty();
+    let has_underline = !has_char_overlap && run.style.underline != UnderlineType::None;
+    let has_strikethrough = !has_char_overlap && run.style.strikethrough;
+    let has_emphasis_dot = !has_char_overlap && run.style.emphasis_dot > 0;
 
     let mut ops = Vec::with_capacity(
         1 + has_char_overlap as usize
@@ -321,6 +344,86 @@ mod tests {
             }
             other => panic!("expected root group, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn normal_builder_export_keeps_text_fallback_and_font_native_sidecar_resources() {
+        let bbox = BoundingBox::new(10.0, 20.0, 16.0, 16.0);
+        let mut run = text_run("\u{E100}");
+        run.char_shape_id = Some(2);
+        run.style.font_size = 16.0;
+        run.baseline = 12.0;
+        let mut tree = PageRenderTree::new(0, 100.0, 100.0);
+        tree.root
+            .children
+            .push(RenderNode::new(1, RenderNodeType::TextRun(run), bbox));
+        let font = include_bytes!("../../tests/fixtures/fonts/RHWPBitmapSvgGlyphSmoke.ttf");
+        let mut builder = LayerBuilder::new(RenderProfile::Screen);
+
+        let layer_tree = builder.build_with_embedded_fonts(
+            &tree,
+            &[EmbeddedFontFace {
+                char_shape_id: 2,
+                language_index: 0,
+                family: "RHWP Bitmap SVG Glyph Smoke",
+                alternate_family: None,
+                bytes: font,
+                face_index: 0,
+            }],
+        );
+
+        let LayerNodeKind::Group { children, .. } = &layer_tree.root.kind else {
+            panic!("expected root group");
+        };
+        let LayerNodeKind::Leaf { ops } = &children[0].kind else {
+            panic!("expected text leaf");
+        };
+        assert!(matches!(
+            ops.as_slice(),
+            [
+                PaintOp::TextRun { .. },
+                PaintOp::GlyphRun { .. },
+                PaintOp::GlyphOutline { .. }
+            ]
+        ));
+        assert_eq!(layer_tree.resources.image_count(), 1);
+        assert_eq!(layer_tree.resources.font_blob_count(), 1);
+        assert_eq!(layer_tree.resources.font_resources().blobs.len(), 1);
+        assert_eq!(layer_tree.resources.font_resources().faces.len(), 1);
+    }
+
+    #[test]
+    fn builder_keeps_oversized_compact_image_unresolved() {
+        let mut bmp = vec![0u8; 58];
+        bmp[..2].copy_from_slice(b"BM");
+        bmp[2..6].copy_from_slice(&58u32.to_le_bytes());
+        bmp[10..14].copy_from_slice(&54u32.to_le_bytes());
+        bmp[14..18].copy_from_slice(&40u32.to_le_bytes());
+        bmp[18..22].copy_from_slice(&8193i32.to_le_bytes());
+        bmp[22..26].copy_from_slice(&8193i32.to_le_bytes());
+        bmp[26..28].copy_from_slice(&1u16.to_le_bytes());
+        bmp[28..30].copy_from_slice(&8u16.to_le_bytes());
+        bmp[30..34].copy_from_slice(&1u32.to_le_bytes());
+        bmp[54..58].copy_from_slice(&[0, 1, 0, 1]);
+        let mut tree = PageRenderTree::new(0, 100.0, 100.0);
+        tree.root.children.push(RenderNode::new(
+            1,
+            RenderNodeType::Image(ImageNode::new(1, Some(bmp))),
+            BoundingBox::new(0.0, 0.0, 10.0, 10.0),
+        ));
+
+        let layer_tree = LayerBuilder::new(RenderProfile::Screen).build(&tree);
+
+        let LayerNodeKind::Group { children, .. } = &layer_tree.root.kind else {
+            panic!("expected root group");
+        };
+        let LayerNodeKind::Leaf { ops } = &children[0].kind else {
+            panic!("expected image leaf");
+        };
+        assert!(matches!(
+            ops.as_slice(),
+            [PaintOp::Image { resolved: None, .. }]
+        ));
     }
 
     #[test]
@@ -616,10 +719,6 @@ mod tests {
         let mut run = text_run("special\ttext");
         run.field_marker = FieldMarkerType::FieldBegin;
         run.is_para_end = true;
-        run.char_overlap = Some(CharOverlapInfo {
-            border_type: 1,
-            inner_char_size: 90,
-        });
         run.style.tab_leaders.push(TabLeaderInfo {
             start_x: 12.0,
             end_x: 36.0,
@@ -652,7 +751,7 @@ mod tests {
         };
 
         assert!(matches!(ops[0], PaintOp::TextRun { .. }));
-        assert!(ops
+        assert!(!ops
             .iter()
             .any(|op| matches!(op, PaintOp::CharOverlap { .. })));
         assert!(ops
@@ -680,6 +779,134 @@ mod tests {
                 ..
             }
         )));
+    }
+
+    #[test]
+    fn lowers_space_and_tab_control_marks_without_an_end_marker() {
+        let run = text_run("space\tmark");
+        let mut tree = PageRenderTree::new(0, 100.0, 100.0);
+        tree.root.children.push(RenderNode::new(
+            1,
+            RenderNodeType::TextRun(run),
+            BoundingBox::new(1.0, 2.0, 80.0, 20.0),
+        ));
+
+        let mut builder =
+            LayerBuilder::new(RenderProfile::Screen).with_output_options(LayerOutputOptions {
+                show_control_codes: true,
+                ..Default::default()
+            });
+        let layer_tree = builder.build(&tree);
+
+        let LayerNodeKind::Group { children, .. } = &layer_tree.root.kind else {
+            panic!("expected root group");
+        };
+        let LayerNodeKind::Leaf { ops } = &children[0].kind else {
+            panic!("expected text leaf");
+        };
+        assert!(ops
+            .iter()
+            .any(|op| matches!(op, PaintOp::TextControlMark { .. })));
+    }
+
+    #[test]
+    fn either_view_option_preserves_legacy_text_mark_union_semantics() {
+        let mut paragraph_run = text_run("plain");
+        paragraph_run.is_para_end = true;
+        let paragraph_ops = text_run_ops(
+            BoundingBox::new(0.0, 0.0, 40.0, 10.0),
+            paragraph_run,
+            LayerOutputOptions {
+                show_control_codes: true,
+                ..Default::default()
+            },
+        );
+        assert!(paragraph_ops
+            .iter()
+            .any(|op| matches!(op, PaintOp::TextControlMark { .. })));
+
+        let space_ops = text_run_ops(
+            BoundingBox::new(0.0, 0.0, 40.0, 10.0),
+            text_run("a b"),
+            LayerOutputOptions {
+                show_paragraph_marks: true,
+                ..Default::default()
+            },
+        );
+        assert!(space_ops
+            .iter()
+            .any(|op| matches!(op, PaintOp::TextControlMark { .. })));
+    }
+
+    #[test]
+    fn overlap_runs_do_not_gain_normal_text_decorations_or_tab_leaders() {
+        let mut run = text_run("overlap");
+        run.char_overlap = Some(CharOverlapInfo {
+            border_type: 1,
+            inner_char_size: 90,
+        });
+        run.style.tab_leaders.push(TabLeaderInfo {
+            start_x: 2.0,
+            end_x: 20.0,
+            fill_type: 1,
+        });
+        run.style.underline = UnderlineType::Bottom;
+        run.style.strikethrough = true;
+        run.style.emphasis_dot = 1;
+
+        let ops = text_run_ops(
+            BoundingBox::new(0.0, 0.0, 40.0, 10.0),
+            run,
+            LayerOutputOptions::default(),
+        );
+
+        assert!(ops
+            .iter()
+            .any(|op| matches!(op, PaintOp::CharOverlap { .. })));
+        assert!(!ops.iter().any(|op| matches!(op, PaintOp::TabLeader { .. })));
+        assert!(!ops
+            .iter()
+            .any(|op| matches!(op, PaintOp::TextDecoration { .. })));
+    }
+
+    #[test]
+    fn excludes_editor_only_nodes_from_print_profile() {
+        let editor_line = RenderNode::new(
+            1,
+            RenderNodeType::Line(crate::renderer::render_tree::LineNode::new(
+                0.0,
+                0.0,
+                20.0,
+                0.0,
+                crate::renderer::LineStyle::default(),
+            )),
+            BoundingBox::new(0.0, 0.0, 20.0, 1.0),
+        )
+        .with_editor_only();
+
+        let mut tree = PageRenderTree::new(0, 100.0, 100.0);
+        tree.root.children.push(editor_line);
+
+        let screen = LayerBuilder::new(RenderProfile::Screen).build(&tree);
+        let print = LayerBuilder::new(RenderProfile::Print).build(&tree);
+
+        let LayerNodeKind::Group {
+            children: screen_children,
+            ..
+        } = &screen.root.kind
+        else {
+            panic!("expected screen root group");
+        };
+        let LayerNodeKind::Group {
+            children: print_children,
+            ..
+        } = &print.root.kind
+        else {
+            panic!("expected print root group");
+        };
+
+        assert_eq!(screen_children.len(), 1);
+        assert!(print_children.is_empty());
     }
 
     #[test]
@@ -936,6 +1163,7 @@ mod tests {
             border_fill_id: 0,
             baseline: 12.0,
             field_marker: Default::default(),
+            display_text: None,
         }
     }
 
@@ -953,6 +1181,7 @@ mod tests {
             color_str: "#000000".to_string(),
             color: 0x00000000,
             font_size: 12.0,
+            script: String::new(),
             section_index: None,
             para_index: None,
             control_index: None,

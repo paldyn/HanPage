@@ -59,6 +59,10 @@ pub struct Document {
     /// tolerance 2.0 vs 64.0px 등)를 HWPX 로 해석해야 같은 IR 이 같은 쪽수가 된다
     /// (roundtrip 자기정합). native HWP5 는 마커가 없어 불변.
     pub is_hwpx_variant: bool,
+    /// [#2403 Stage 1] 문서 출처 서명 — 파서가 확정하는 단일 진실.
+    /// `is_hwp3_variant`/`is_hwpx_variant` 는 shim 으로 존치하며 파서의 같은
+    /// 쓰기 지점에서 동기된다. 레이아웃 분기는 [`Self::layout_profile`] 경유.
+    pub provenance: crate::model::provenance::SourceProvenance,
 }
 
 /// 미리보기 데이터 (PrvImage, PrvText 스트림)
@@ -174,6 +178,12 @@ pub struct DocInfo {
     pub bullet_count: u32,
     /// MemoShape 개수 (ID_MAPPINGS에 포함, 현재 파싱 미지원이지만 보존 필요)
     pub memo_shape_count: u32,
+    /// HWPX 헤더 `<hh:refList>` 안의 `<hh:memoProperties>...</hh:memoProperties>`
+    /// (또는 자기닫힘) 블록을 원본 그대로 보존한다. `extra_records`의
+    /// HWPTAG_MEMO_SHAPE 바이너리는 hwpx→hwp5 변환 전용이라 hwpx→hwpx
+    /// 라운드트립 시 refList에 재방출되지 않아, memoPr(메모 테두리/색상 모양)이
+    /// 통째로 소실되는 문제를 splice 보존으로 막는다. 원본에 없으면 None.
+    pub memo_properties_xml: Option<String>,
     /// DISTRIBUTE_DOC_DATA 레코드 제거 플래그 (serializer에서 raw_stream surgical remove 수행)
     pub distribute_doc_data_removed: bool,
     /// raw_stream이 model 변경과 동기화되지 않음 (serializer에서 재생성 필요)
@@ -250,11 +260,16 @@ pub struct SectionDef {
     pub text_direction: u8,
     /// 개요 번호 ID (SectionDef 바이트 14-15, Numbering 테이블 참조, 1-based)
     pub outline_numbering_id: u16,
+    /// [#2779] 메모 모양 ID (HWPX `secPr@memoShapeIDRef`, header.xml `hh:memoPr@id` 참조).
+    /// HWP5 SECTION_DEF 고정 필드에는 대응 슬롯이 없어 HWPX 경로 전용 보존 필드다.
+    pub memo_shape_id: u16,
     /// CTRL_HEADER 데이터의 파싱된 필드 이후 추가 바이트 (라운드트립 보존용)
     pub raw_ctrl_extra: Vec<u8>,
     /// 추가 쪽 테두리/배경 (2번째, 3번째 등)
     pub extra_page_border_fills: Vec<PageBorderFill>,
-    /// 파서가 인식하지 못한 자식 레코드 (바탕쪽 등, 라운드트립 보존용)
+    /// 파서가 인식하지 못한 자식 레코드 (바탕쪽 등, 라운드트립 보존용).
+    /// 첫 중첩 CTRL_HEADER 전의 SectionDef 직접 자식 CTRL_DATA는
+    /// Paragraph.ctrl_data_records가 소유한다.
     pub extra_child_records: Vec<RawRecord>,
     /// 바탕쪽 (extra_child_records에서 파싱, 렌더링 전용)
     pub master_pages: Vec<MasterPage>,
@@ -270,6 +285,31 @@ impl Document {
             .iter()
             .find(|(p, _)| p == path)
             .map(|(_, d)| d.as_slice())
+    }
+
+    /// [#2403 Stage 1] 레이아웃 호환 정책 질의 표면.
+    ///
+    /// 기존 분기의 1:1 파생 — `hwp3_layout` = `is_hwp3_variant`,
+    /// `hwpx_stored_layout` = (HWPX 컨테이너 && rhwp HWP5→HWPX 산출물 마커
+    /// 없음) || rhwp HWPX→HWP 변환본. HWP5→HWPX 마커는 세션 중 부착될 수
+    /// 있어 저장 값이 아닌 현재 문서 상태에서 파생한다. `native_hwp5_layout`은
+    /// HWP5 컨테이너이면서 HWP3/HWPX 변환 계보가 없는 경우에만 true다.
+    pub fn layout_profile(&self) -> crate::model::provenance::LayoutCompatibilityProfile {
+        use crate::model::provenance::SourceFormat;
+        let hwp5_origin_hwpx = self.hwpx_aux_entry(HWP5_ORIGIN_HWPX_MARKER_PATH).is_some();
+        crate::model::provenance::LayoutCompatibilityProfile::new(
+            self.provenance.hwp3_lineage,
+            self.provenance.format == SourceFormat::Hwp3,
+            (self.provenance.format == SourceFormat::Hwpx && !hwp5_origin_hwpx)
+                || self.provenance.hwpx_lineage,
+            hwp5_origin_hwpx,
+            self.provenance.format == SourceFormat::Hwp5
+                && !self.provenance.hwp3_lineage
+                && !self.provenance.hwpx_lineage,
+        )
+        .with_hwp3_password_layout(
+            self.provenance.format == SourceFormat::Hwp3 && self.header.encrypted,
+        )
     }
 
     /// 외부 이미지 binDataId가 이미 로드되었는지 확인한다.
@@ -331,13 +371,14 @@ impl Document {
         let idx = (bin_data_id as usize).saturating_sub(1);
         if idx < self.bin_data_content.len() {
             self.bin_data_content[idx].id = bin_data_id;
-            self.bin_data_content[idx].data = data;
+            self.bin_data_content[idx].data =
+                crate::model::bin_data::BinDataBytes::from_shared(data);
             self.bin_data_content[idx].extension = extension;
         } else {
             self.bin_data_content
                 .push(crate::model::bin_data::BinDataContent {
                     id: bin_data_id,
-                    data,
+                    data: crate::model::bin_data::BinDataBytes::from_shared(data),
                     extension,
                 });
         }
@@ -562,6 +603,61 @@ mod tests {
         let doc = Document::default();
         assert_eq!(doc.sections.len(), 0);
         assert_eq!(doc.doc_properties.section_count, 0);
+    }
+
+    #[test]
+    fn hwp3_native_layout_matches_legacy_version_and_lineage_expression() {
+        use crate::model::provenance::SourceFormat;
+
+        // formatting.rs 의 종전 판정식 `version.major==3 && !hwp3_layout()` 이
+        // hwp3_native_layout() 과 4개 출처에서 모두 일치함을 고정한다.
+        let build = |format: SourceFormat, hwp3_lineage: bool, major: u8| {
+            let mut doc = Document::default();
+            doc.provenance.format = format;
+            doc.provenance.hwp3_lineage = hwp3_lineage;
+            doc.header.version.major = major;
+            doc
+        };
+
+        let cases = [
+            // (format, hwp3_lineage, major, 기대 native 여부)
+            (SourceFormat::Hwp3, false, 3, true),  // native HWP3
+            (SourceFormat::Hwp5, true, 5, false),  // HWP3→HWP5 변환본
+            (SourceFormat::Hwp5, false, 5, false), // 일반 HWP5
+            (SourceFormat::Hwpx, false, 5, false), // HWPX
+        ];
+
+        for (format, lineage, major, expected) in cases {
+            let doc = build(format, lineage, major);
+            let legacy = doc.header.version.major == 3 && !doc.layout_profile().hwp3_layout();
+            let refactored = doc.layout_profile().hwp3_native_layout();
+            assert_eq!(legacy, refactored, "{format:?}/{lineage}/{major}");
+            assert_eq!(refactored, expected, "{format:?}/{lineage}/{major}");
+        }
+    }
+
+    #[test]
+    fn hwp3_password_layout_requires_native_hwp3_and_encrypted_origin() {
+        use crate::model::provenance::SourceFormat;
+
+        let mut hwp3 = Document::default();
+        hwp3.provenance.format = SourceFormat::Hwp3;
+        assert!(
+            !hwp3.layout_profile().hwp3_password_layout(),
+            "평문 HWP3에는 암호 원본 전용 레이아웃 계약을 적용하지 않는다"
+        );
+
+        hwp3.header.encrypted = true;
+        assert!(
+            hwp3.layout_profile().hwp3_password_layout(),
+            "복호화 뒤에도 보존한 HWP3 암호 플래그가 레이아웃 계약을 선택한다"
+        );
+
+        hwp3.provenance.format = SourceFormat::Hwpx;
+        assert!(
+            !hwp3.layout_profile().hwp3_password_layout(),
+            "HWPX 암호 문서는 HWP3 전용 계약을 사용하지 않는다"
+        );
     }
 
     #[test]

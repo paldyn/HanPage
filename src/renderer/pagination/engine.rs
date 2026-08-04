@@ -1058,6 +1058,7 @@ impl Paginator {
                             para_index: pi,
                             control_index: ci,
                             source_section_index: section_index,
+                            table_path: Vec::new(),
                         };
                         hf_entries.push((pi, r, true, h.apply_to));
                     }
@@ -1066,6 +1067,7 @@ impl Paginator {
                             para_index: pi,
                             control_index: ci,
                             source_section_index: section_index,
+                            table_path: Vec::new(),
                         };
                         hf_entries.push((pi, r, false, f.apply_to));
                     }
@@ -1082,6 +1084,14 @@ impl Paginator {
                     }
                     Control::Table(table) => {
                         Self::collect_pagehide_in_table(table, pi, &mut page_hides);
+                        crate::renderer::pagination::collect_nested_header_footer_controls(
+                            table,
+                            pi,
+                            section_index,
+                            ci,
+                            &[],
+                            &mut hf_entries,
+                        );
                     }
                     _ => {}
                 }
@@ -1230,7 +1240,11 @@ impl Paginator {
         // 다단 레이아웃에서 문단 내 단 경계 감지
         // [Task #459] on_first_multicolumn_page 가드 제거: 다단 구역이 여러 페이지에 걸칠 때
         // 후속 페이지에서도 LINE_SEG vpos-reset 으로 인코딩된 단 경계를 인식해야 함.
-        let col_breaks = if st.col_count > 1 && st.current_column == 0 {
+        // [Task #2320] current_column == 0 가드 제거: 마지막 단에서 시작하는 문단의
+        // 문단 내 vpos 되감김은 "다음 페이지 단 0 으로 계속"의 쪽 경계 인코딩이다.
+        // 되감김 없는 문단은 breaks=[0] 으로 기존 경로 그대로 흐른다. 분할의 단/쪽
+        // 진행은 advance_column_or_new_page 가 처리한다.
+        let col_breaks = if st.col_count > 1 {
             Self::detect_column_breaks_in_paragraph(para)
         } else {
             vec![0]
@@ -1774,6 +1788,7 @@ impl Paginator {
                                                 tb_para_index: tp_idx,
                                                 tb_control_index: tc_idx,
                                             },
+                                            fragment: None,
                                         });
                                         let fn_height = super::estimate_footnote_note_height(
                                             &fn_ctrl, self.dpi,
@@ -1823,6 +1838,7 @@ impl Paginator {
                                 para_index: para_idx,
                                 control_index: ctrl_idx,
                             },
+                            fragment: None,
                         });
                         let fn_height = super::estimate_footnote_note_height(fn_ctrl, self.dpi);
                         st.add_footnote_height(fn_height);
@@ -2166,6 +2182,7 @@ impl Paginator {
                                     cell_para_index: cp_idx,
                                     cell_control_index: cc_idx,
                                 },
+                                fragment: None,
                             });
                             let fn_height = super::estimate_footnote_note_height(fn_ctrl, self.dpi);
                             st.add_footnote_height(fn_height);
@@ -2442,9 +2459,14 @@ impl Paginator {
         };
 
         // 캡션 높이 계산
+        // [#2699] 음수 line_spacing(고정값 줄간격 TAC 표 마커, Task #9)은 캡션 예약에서 제외.
+        // 클램프하지 않으면 :2471의 caption_overhead가 |ls|만큼 작아져 과소 예약이 되고,
+        // 아래 "Bottom 캡션 공간 확보" 판정이 발동하지 않아 마지막 행+캡션이 본문 하단을 넘는다.
+        // 렌더러도 음수 ls에서는 y_offset을 더하지 않는다(layout.rs:7154). 형제: :1941/:1947
         let host_line_spacing_for_caption = para
             .line_segs
             .first()
+            .filter(|seg| seg.line_spacing > 0)
             .map(|seg| crate::renderer::hwpunit_to_px(seg.line_spacing, self.dpi))
             .unwrap_or(0.0);
         let caption_base_overhead = {
@@ -2764,13 +2786,9 @@ impl Paginator {
         // 쪽번호: PageNumberAssigner 가 NewNumber 1회 적용 + 단조 증가를 보장 (Issue #353)
         let mut assigner =
             crate::renderer::page_number::PageNumberAssigner::new(new_page_numbers, 1);
-        // 머리말/꼬리말은 한번 설정되면 이후 페이지에도 유지 (누적)
-        let mut header_both: Option<HeaderFooterRef> = None;
-        let mut header_even: Option<HeaderFooterRef> = None;
-        let mut header_odd: Option<HeaderFooterRef> = None;
-        let mut footer_both: Option<HeaderFooterRef> = None;
-        let mut footer_even: Option<HeaderFooterRef> = None;
-        let mut footer_odd: Option<HeaderFooterRef> = None;
+        // 머리말/꼬리말은 한번 설정되면 이후 페이지에도 유지 (누적).
+        // 선택 규칙은 typeset.rs 와 공유한다 (#3234).
+        let mut active_hf = crate::renderer::pagination::ActiveHeaderFooter::default();
         // 머리말/꼬리말은 정의된 문단이 등장하는 페이지부터 적용
         // (전체 스캔 초기 등록 제거 — 각 페이지의 범위 내 머리말만 누적)
         // 각 페이지의 다음 페이지 첫 문단 인덱스 사전 계산 (borrow 충돌 방지)
@@ -2812,42 +2830,14 @@ impl Paginator {
 
             // 현재 페이지까지의 머리말/꼬리말 업데이트
             // 현재 페이지의 마지막 문단까지만 포함 (다음 페이지 첫 문단의 머리말은 다음 페이지에서 등록)
-            for (para_idx, hf_ref, is_header, apply_to) in hf_entries.iter() {
-                if *para_idx > page_last_para {
-                    break;
-                }
-                if *is_header {
-                    match apply_to {
-                        HeaderFooterApply::Both => header_both = Some(hf_ref.clone()),
-                        HeaderFooterApply::Even => header_even = Some(hf_ref.clone()),
-                        HeaderFooterApply::Odd => header_odd = Some(hf_ref.clone()),
-                    }
-                } else {
-                    match apply_to {
-                        HeaderFooterApply::Both => footer_both = Some(hf_ref.clone()),
-                        HeaderFooterApply::Even => footer_even = Some(hf_ref.clone()),
-                        HeaderFooterApply::Odd => footer_odd = Some(hf_ref.clone()),
-                    }
-                }
-            }
+            active_hf.accumulate(hf_entries, page_last_para);
 
             let page_num_u32 = assigner.assign(page);
             page.page_number = page_num_u32;
 
-            let page_num = page_num_u32 as usize;
-            let is_odd = page_num % 2 == 1;
-
-            page.active_header = if is_odd {
-                header_odd.clone().or_else(|| header_both.clone())
-            } else {
-                header_even.clone().or_else(|| header_both.clone())
-            };
-
-            page.active_footer = if is_odd {
-                footer_odd.clone().or_else(|| footer_both.clone())
-            } else {
-                footer_even.clone().or_else(|| footer_both.clone())
-            };
+            let (active_header, active_footer) = active_hf.active(page_num_u32);
+            page.active_header = active_header;
+            page.active_footer = active_footer;
 
             if !assigner.should_hide_page_number() {
                 page.page_number_pos = page_number_pos.clone();

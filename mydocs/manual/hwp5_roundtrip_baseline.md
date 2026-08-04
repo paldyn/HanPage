@@ -1,3 +1,10 @@
+---
+kind: guide
+status: active
+canonical: mydocs/manual/hwp5_roundtrip_baseline.md
+last_verified: 2026-07-27
+---
+
 # HWP5 Roundtrip Baseline 가이드 (Task #1552)
 
 `samples/*.hwp` 전수에 대한 HWP5→IR→HWP5 roundtrip **무손실** 검증 체계의 사용·유지보수 매뉴얼.
@@ -27,19 +34,18 @@
 |------|------|----------|
 | **A (baseline)** | C1~C5 전부 통과. 신규 HWP5 샘플 자동 포함 | `tests/hwp5_roundtrip_baseline.rs` 기본 대상 |
 | **B (xfail)** | 식별된 결함으로 baseline 제외. 사유 필수 | `XFAIL` 상수 |
-| **자동 제외** | HWP5 아님(HWP3/HWPML) 또는 배포용 문서 — serializer 결함 아님 | `out_of_scope()` (포맷·distribution 감지) |
+| **자동 제외** | HWP5 아님(HWP3/HWPML), 배포용 문서 또는 비밀번호 암호 문서 — 일반 gate에 비밀번호 입력이 없어 serializer 결함을 판정할 수 없음 | `out_of_scope()` (포맷·distribution·암호 감지) |
 
-현황 (2026-06-26, `samples/*.hwp` 319건):
-- **A=297, B(xfail)=9**, 자동 제외=13 (HWP3 10 + 배포용 3).
-- B(xfail) 9건은 전부 `serialize_document`의 **BinData 그림 스트림 드롭(F1)**:
-  `img-start-001`(20/20), `BookReview`(7/10), `Worldcup_FIFA2010_32`(13/47),
-  `exam_social`(2/8), `NewYear_s_Day`(2/4), `곡선이있는분산형`(2/3), `pic-crop-01`(2/3),
-  `interview`(1/3), `BlogForm_Recipe`(1/3). 후속 이슈에서 serializer 수정 시 승격.
+현재 `XFAIL` 목록은 비어 있다. 과거 BinData 그림 스트림 드롭으로 등록했던 9건은 Task #1554에서
+`extra_streams` 보존을 적용한 뒤 모두 baseline으로 승격했다. 전체 샘플 수와 HWP3·배포용 자동 제외 수는
+샘플 추가에 따라 달라지므로 문서에 고정하지 않고 `tests/hwp5_roundtrip_baseline.rs`의 전수 수집과
+`out_of_scope()` 판정 결과를 권위로 삼는다.
 
 > **자동 제외 근거**: HWP3(`HWP Document File V3.00`)는 별도 포맷이라 HWP5 직렬화 시
 > 교차변환(페이지 폭증)된다. 배포용 문서는 `serialize_document` 직접 적용 시
 > `DISTRIBUTE_DOC_DATA` 누락으로 재파싱 실패하나, 정상 경로는 `convert_to_editable`
-> 선행이므로 게이트 범위 밖이다(별도 이슈로 분리).
+> 선행이므로 게이트 범위 밖이다(별도 이슈로 분리). 비밀번호 암호 문서는 일반 gate가
+> 비밀번호를 받지 않으므로 전용 fixture test에서 정답 비밀번호·오답·저장 결과를 검증한다.
 
 ## 3. 통합 테스트 (`tests/hwp5_roundtrip_baseline.rs`)
 
@@ -57,7 +63,8 @@ cargo test --release --test hwp5_roundtrip_baseline
 `samples/` 에 `.hwp` 추가 시 자동으로 baseline 게이트에 포함된다.
 - 통과 → 끝 (A등급)
 - 실패 → 결함 수정하거나 **사유와 함께** `XFAIL` 등록(사유 없는 등록 금지)
-- HWP3/배포용 → `out_of_scope()` 가 자동 제외(목록 불필요)
+- HWP3/배포용/비밀번호 암호 → `out_of_scope()` 가 자동 제외(목록 불필요). 단, 비밀번호
+  암호 fixture는 정답·오답 입력과 공개 API/CLI를 검증하는 전용 test를 같은 변경에 추가한다.
 
 ### xfail 승격 절차
 serializer 결함(F1 등) 해소 시 `xfail_entries_still_fail` 가 실패한다.

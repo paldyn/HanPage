@@ -446,6 +446,7 @@ impl DocumentCore {
                     },
                     center_line: CenterLine::None,
                     fill: Fill::default(),
+                    three_d: false,
                 };
                 self.document.doc_info.border_fills.push(new_bf);
                 self.document.doc_info.raw_stream = None;
@@ -574,7 +575,8 @@ impl DocumentCore {
             outer_margin_bottom: 283,
             raw_ctrl_data,
             raw_table_record_attr: 0x00000006, // 한컴 기본값 (bit1=셀분리금지, bit2=repeat_header)
-            raw_table_record_extra: vec![0u8; 2],
+            // [#3570] 한컴은 TABLE 레코드를 zone 개수까지만 쓴다 — 여분 2바이트 없음.
+            raw_table_record_extra: Vec::new(),
             dirty: true,
             local_resize_rows: Vec::new(),
             local_resize_cols: Vec::new(),
@@ -660,6 +662,8 @@ impl DocumentCore {
 
         let insert_para_idx;
         let table_control_idx;
+        // [Task #2299] 분할 삽입이면 우측 절반까지 신규 구간에 포함해야 한다.
+        let mut did_split_for_table = false;
         if is_empty_para {
             // 빈 문단이면 UI에서 넘어온 offset과 무관하게 현재 줄을 표 host로 사용한다.
             self.document.sections[section_idx].paragraphs[para_idx] = table_para;
@@ -700,6 +704,7 @@ impl DocumentCore {
         } else {
             // 문단 중간이면 분할 후 삽입
             if char_offset > 0 && !para.text.is_empty() {
+                did_split_for_table = true;
                 let new_para =
                     self.document.sections[section_idx].paragraphs[para_idx].split_at(char_offset);
                 self.document.sections[section_idx]
@@ -725,6 +730,25 @@ impl DocumentCore {
         self.document.sections[section_idx]
             .paragraphs
             .insert(insert_para_idx + 1, make_empty_neighbor_para());
+
+        // [Task #2299] 신규 문단들(표 host·이웃 빈 문단·분할 우측)의 placeholder
+        // vpos 를 흐름에 연결한다 — 방치하면 이후 편집의 vpos 재계산이 이를 저장
+        // 단/쪽 리셋으로 오인해 영구 고착시킨다. 분할 좌측(host)은 높이가 바뀌었을
+        // 수 있어 함께 reflow 한다.
+        let fresh_end = insert_para_idx + 2 + usize::from(did_split_for_table);
+        for i in para_idx..fresh_end.min(self.document.sections[section_idx].paragraphs.len()) {
+            self.reflow_paragraph(section_idx, i);
+        }
+        let doc_hwp3_layout = self.document.layout_profile().hwp3_layout();
+        crate::renderer::composer::recalculate_section_vpos(
+            &mut self.document.sections[section_idx].paragraphs,
+            para_idx,
+            Some(insert_para_idx..fresh_end),
+            None,
+            &self.styles,
+            self.dpi,
+            doc_hwp3_layout,
+        );
 
         // --- 6. 스타일 갱신 + 리플로우 + 페이지네이션 ---
         // 새 BorderFill 추가 시 styles.border_styles 갱신이 필요하므로 rebuild_section 사용
@@ -860,6 +884,7 @@ impl DocumentCore {
                     },
                     center_line: CenterLine::None,
                     fill: Fill::default(),
+                    three_d: false,
                 };
                 self.document.doc_info.border_fills.push(new_bf);
                 self.document.doc_info.raw_stream = None;
@@ -978,7 +1003,8 @@ impl DocumentCore {
             outer_margin_bottom: outer_margin,
             raw_ctrl_data,
             raw_table_record_attr: 0x04000006,
-            raw_table_record_extra: vec![0u8; 2],
+            // [#3570] 한컴은 TABLE 레코드를 zone 개수까지만 쓴다 — 여분 2바이트 없음.
+            raw_table_record_extra: Vec::new(),
             dirty: true,
             local_resize_rows: Vec::new(),
             local_resize_cols: Vec::new(),

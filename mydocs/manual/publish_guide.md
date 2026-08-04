@@ -1,3 +1,10 @@
+---
+kind: guide
+status: active
+canonical: mydocs/manual/publish_guide.md
+last_verified: 2026-07-17
+---
+
 # 배포 가이드
 
 rhwp 프로젝트의 배포 대상과 절차를 정리한다.
@@ -34,9 +41,9 @@ rhwp 프로젝트의 배포 대상과 절차를 정리한다.
 ```
 코드 작업 완료
   ↓
-devel push → CI 자동 실행 (build + test + clippy)
+devel 대상 PR merge → CI 자동 실행 (build + test + clippy)
   ↓
-main merge + push → GitHub Pages 자동 배포
+main 대상 release PR merge → GitHub Pages 자동 배포
   ↓
 GitHub Release 생성 (태그)
   ↓ npm-publish.yml 자동 실행
@@ -120,32 +127,27 @@ v{MAJOR}.{MINOR}.{PATCH}
 - @rhwp/editor 는 독자적으로 PATCH를 올릴 수 있다 (README 보강 등).
 - npm은 한 번 배포한 버전을 덮어쓸 수 없으므로, README만 수정해도 PATCH를 올려야 한다.
 
-### 브라우저 확장 버전 정책 (라이브러리와 이원화)
+### 브라우저 확장 버전 정책 (라이브러리와 통일)
 
-**rhwp-chrome / rhwp-edge / rhwp-firefox / rhwp-safari** 의 버전은 라이브러리(Cargo.toml) 와 **독립적으로 관리**한다.
+> **[2026-07-26 정책 전환, v0.8.0]** 종전 이원화(확장 0.2.x 독립 넘버링)를 종료하고,
+> **rhwp-chrome / rhwp-edge / rhwp-firefox / rhwp-safari 의 버전을 라이브러리
+> (Cargo.toml)와 동일하게 통일**한다. 확장만 재출시해야 하는 경우에는 PATCH 를 올리되
+> 다음 라이브러리 릴리즈에서 다시 동일 버전으로 수렴시킨다.
 
-| 영역 | 2026-05-26 현재 |
-|------|----------------|
-| 라이브러리 (Cargo.toml) | `0.7.13` |
-| rhwp-chrome / Edge | `0.2.3` |
-| rhwp-safari | `0.2.1` |
-| rhwp-firefox | `0.2.3` |
-
-#### 이원화 이유
-
-- **배포 주기 독립**: 라이브러리는 기능 추가·버그픽스 주기로, 확장은 스토어 심사 주기(Chrome/Edge/AMO) 로 별도 움직임
-- **스토어 요구사항**: 각 스토어가 manifest 의 `version` 을 자체 규칙으로 관리 요구 (예: 4자리, 재사용 불가)
-- **사용자 인지 버전**: 확장 사용자에게 보이는 버전은 "확장 버전"이고, 라이브러리 버전은 기술 내부 번호
+- 통일 이유: 사용자·스토어 심사자·이슈 리포트에서 확장 버전과 엔진 버전의 대응을
+  즉시 식별. 확장은 매 릴리즈 WASM 을 새로 번들링하므로 실질 내용도 라이브러리 버전을
+  따른다.
+- 스토어 제약(버전 재사용 불가)은 통일 정책과 충돌하지 않는다 — 단조 증가만 지키면 된다.
 
 #### 확장 버전 동기화 파일
 
 **rhwp-chrome/rhwp-edge** (한 코드베이스, 동일 버전):
 - `rhwp-chrome/manifest.json` — 스토어 심사 기준
 - `rhwp-chrome/package.json`
-- `rhwp-chrome/dev-tools-inject.js` 상수
-- `rhwp-chrome/content-script.js` 상수
 
-> manifest 하나만 바꾸고 다른 세 곳이 누락되면 UI 일관성 깨짐. v0.2.0 사이클에서 같은 실수가 발생해 hotfix v0.2.1 을 낸 이력 있음.
+> `dev-tools-inject.js`·`content-script.js` 는 `chrome.runtime.getManifest().version`
+> 런타임 참조로 리팩터링되어 별도 상수 갱신이 필요 없다 (v0.2.0 사이클의 4곳 수동
+> 동기화 사고 이력은 이 리팩터링으로 해소).
 
 **rhwp-firefox**:
 - `rhwp-firefox/manifest.json`
@@ -156,10 +158,10 @@ v{MAJOR}.{MINOR}.{PATCH}
 
 #### 확장 버전 올리기 기준
 
-- 스토어 심사 필요한 변경 → PATCH 이상
-- UI/동작 변경 없음 (dist 만 재빌드) → 버전 그대로 유지
-
-> 라이브러리 MINOR 업이 확장 버전 업을 강제하지는 않는다. 확장은 WASM을 새로 번들링해도 스토어 메타데이터 변경 필요 시에만 버전 업.
+- 라이브러리 릴리즈에 확장을 포함하면 라이브러리와 동일 버전으로 맞춘다.
+- 확장 단독 재출시(스토어 심사 필요한 확장 전용 변경)는 PATCH 를 올리고, 다음
+  라이브러리 릴리즈에서 동일 버전으로 재수렴한다.
+- UI/동작 변경 없음 (dist 만 재빌드) → 스토어 재제출이 없으면 버전 유지 가능.
 
 #### 확장 배포 빌드
 
@@ -179,7 +181,7 @@ cd dist
 zip -r ../rhwp-firefox-{version}.zip .
 
 cd ../..
-git archive --format=zip --prefix=rhwp-source/ --output=rhwp-firefox/rhwp-source-{version}-amo.zip HEAD Cargo.toml rust-toolchain.toml rustfmt.toml Dockerfile docker-compose.yml .env.docker.example LICENSE README.md README_EN.md CHANGELOG.md CHANGELOG_EN.md THIRD_PARTY_LICENSES.md src rhwp-studio rhwp-firefox rhwp-shared web/fonts scripts npm/README.md npm/editor
+git archive --format=zip --prefix=rhwp-source/ --output=rhwp-firefox/rhwp-source-{version}-amo.zip HEAD Cargo.toml rust-toolchain.toml rustfmt.toml Dockerfile docker-compose.yml .env.docker.example LICENSE README.md README_EN.md CHANGELOG.md CHANGELOG_EN.md THIRD_PARTY_LICENSES.md assets/fonts src rhwp-studio rhwp-firefox rhwp-shared scripts npm/README.md npm/editor
 ```
 
 Firefox AMO 제출 시에는 확장 패키지와 함께 검토용 source zip을 업로드한다.
@@ -188,7 +190,7 @@ AMO source 업로드 제한은 200 MB 이므로 전체 Git tree를 압축하지 
 
 source zip은 확장 재빌드에 필요한 경로만 포함한다.
 
-- 포함: `src/`, `rhwp-studio/`, `rhwp-firefox/`, `rhwp-shared/`, `web/fonts/`, build scripts, manifest/package files
+- 포함: `src/`, `rhwp-studio/`, `rhwp-firefox/`, `rhwp-shared/`, `assets/fonts/`, build scripts, manifest/package files
 - 제외: top-level `samples/`, `pdf-large/`, `output/`, `target/`, `node_modules/`, extension `dist/`
 
 #### 확장 스토어 제출 문서
@@ -292,33 +294,30 @@ version = "0.8.0"
 | Trademark 면책 조항 | O | O | O |
 | Notice (한컴 공개 문서) | O | O | O |
 
-### 4단계: Git 커밋 + devel/main push
+### 4단계: 변경 PR과 `devel` → `main` 통합
 
 ```bash
-# 변경사항 커밋
+# release 준비 변경은 작업 브랜치에서 커밋하고 devel 대상 PR로 통합
 git add -A
 git commit -m "v0.7.3 릴리즈 준비"
 
-# local/devel → devel 검증 → origin/devel push
-git checkout devel
-git merge local/devel
+# merge된 최신 devel 검증
+git fetch upstream
+git switch devel
+git merge --ff-only upstream/devel
 cargo build
-cargo test
-# macOS release 통합 검증: cargo test --profile release-test --tests
-docker compose --env-file .env.docker run --rm wasm
-git push origin devel
+cargo test --profile release-test --tests
+wasm-pack build --target web --out-dir pkg
 
-# devel → main merge → origin/main push
-git checkout main
-git merge devel
-git push origin main
+# release 시 devel → main PR 생성
+gh pr create --repo edwardkim/rhwp --base main --head devel \
+  --title "v0.7.3 릴리즈" --body-file <release-pr-body.md>
 ```
 
-> 이 PC의 기본 작업 흐름은 task branch → `local/devel` merge → `devel` merge/test → `origin/devel` push → `main` merge/push 순서다.
-> `local/devel`을 원격 `devel`로 직접 push하지 않는다.
-> `devel`에서 최소 compile/test/WASM 빌드를 확인한 뒤 원격으로 push한다.
+> release 준비 변경도 `upstream/devel`에 직접 push하지 않는다. 작업 브랜치 PR과 CI를 거쳐 통합하고,
+> 검증된 `devel`을 `main` 대상 release PR로 올린다.
 >
-> main push 시 CI/CD가 자동 실행된다:
+> main merge 시 CI/CD가 자동 실행된다:
 > - `ci.yml` → build + test + clippy 검증
 > - `deploy-pages.yml` → GitHub Pages 데모 사이트 자동 배포
 
@@ -415,8 +414,8 @@ GitHub Release 생성 후 Actions 탭에서 `Publish All Packages` 워크플로�
 
 ### 배포 순서
 
-- [ ] devel push → CI 통과 확인
-- [ ] main merge + push → GitHub Pages 배포 확인
+- [ ] devel 대상 PR merge → CI 통과 확인
+- [ ] main 대상 release PR merge → GitHub Pages 배포 확인
 - [ ] GitHub Release 생성 → Actions 탭에서 `Publish All Packages` 실행 확인
 - [ ] @rhwp/core npm 배포 확인
 - [ ] @rhwp/editor npm 배포 확인

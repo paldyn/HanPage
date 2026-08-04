@@ -55,12 +55,12 @@ Vite 7700에서 `hwpx_sample2.hwpx`를 CanvasKit 경로로 열어 1쪽의 `■`�
 
 ## Visual Sweep
 
-`mydocs/manual/visual_sweep_guide.md` 기준으로 HWP 2020 PDF와 rhwp native SVG export를 비교했다.
+`mydocs/manual/verification/visual_sweep_guide.md` 기준으로 HWP 2020 PDF와 rhwp native SVG export를 비교했다.
 
 명령:
 
 ```bash
-python3 scripts/task1274_visual_sweep.py \
+python3 scripts/visual_sweep.py \
   --key issue2190-hwpx-sample2 \
   --hwp samples/hwpx_sample2.hwpx \
   --pdf pdf/hwpx_sample2-2020.pdf \

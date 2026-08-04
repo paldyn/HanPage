@@ -12,12 +12,51 @@ use super::border_rendering::{
 use super::table_layout::{calc_nested_split_rows, NestedTableSplit};
 use super::text_measurement::{estimate_text_width, resolved_to_text_style};
 use super::utils::find_bin_data;
-use super::{CellContext, CellPathEntry, LayoutEngine};
+use super::{
+    repeats_native_empty_host_rowbreak_fragment_margin, CellContext, CellPathEntry, LayoutEngine,
+};
 use crate::model::bin_data::BinDataContent;
 use crate::model::control::Control;
 use crate::model::paragraph::Paragraph;
 use crate::model::shape::CaptionDirection;
 use crate::model::style::{Alignment, BorderLine};
+
+/// 분할 셀 조각에서 실제로 보이는 첫 줄의 저장 vpos를 찾는다.
+///
+/// `cell_line_ranges_from_cut`은 문단 중간 줄에서 시작할 수 있다. 문단 첫 줄을
+/// 쓰면 이미 앞 조각에서 소비한 줄 높이를 다시 더해 다음 문단 스냅이 밀린다.
+fn fragment_vpos_origin(
+    cell: &crate::model::table::Cell,
+    line_ranges: Option<&[(usize, usize)]>,
+) -> i32 {
+    line_ranges
+        .and_then(|ranges| {
+            ranges
+                .iter()
+                .position(|&(start, end)| start < end)
+                .and_then(|para_idx| {
+                    let (start_line, _) = ranges[para_idx];
+                    cell.paragraphs.get(para_idx).and_then(|para| {
+                        para.line_segs
+                            .get(start_line)
+                            // recompose된 문단처럼 저장 LINE_SEG가 줄 수보다 적으면
+                            // 기존의 보수적 첫 세그먼트 폴백을 유지한다.
+                            .or_else(|| para.line_segs.first())
+                            .map(|seg| seg.vertical_pos)
+                    })
+                })
+        })
+        .unwrap_or(0)
+        .max(0)
+}
+
+/// 셀의 실제 텍스트 하단 경계.
+///
+/// `text_y_start`에는 세로 정렬 offset이 포함되므로 여기에 전체 `cell_h`를 더하면
+/// Center/Bottom 셀에서 물리 셀 하단을 넘는다.
+fn cell_content_bottom(cell_y: f64, cell_h: f64, pad_bottom: f64) -> f64 {
+    cell_y + cell_h - pad_bottom
+}
 
 // 표 수평 정렬 보조 타입은 table_layout.rs에 통합됨
 
@@ -300,6 +339,15 @@ impl LayoutEngine {
                         inner_width,
                         styles,
                     );
+                    // [#2291] 부실 저장(ls==1·실폭 초과) 재분할 — 가로쓰기 셀 한정.
+                    if cell.text_direction == 0 {
+                        crate::renderer::composer::recompose_stored_single_line_if_overflowing(
+                            comp,
+                            para,
+                            inner_width,
+                            styles,
+                        );
+                    }
                 }
             }
 
@@ -386,20 +434,6 @@ impl LayoutEngine {
             };
             let line_ranges: Option<Vec<(usize, usize)>> = cut_units
                 .map(|(su, eu)| self.cell_line_ranges_from_cut(cell, table, styles, su, eu));
-            // [Task #1073] 이 셀이 per-중첩행 분해 대상(단일 문단 + 가시 텍스트 없음 + 단일
-            // 중첩 표 2행+)이면 cut 유닛 인덱스가 곧 중첩행 범위 → 렌더 NestedTableSplit 에
-            // start_row 로 전달(연속 페이지가 중첩행 0부터 재렌더되는 결함 정정).
-            let nested_cut_range: Option<(usize, usize)> = cut_units.filter(|_| {
-                cell.paragraphs.len() == 1
-                    && cell.paragraphs[0].text.trim().is_empty()
-                    && cell.paragraphs[0]
-                        .controls
-                        .iter()
-                        .filter(|c| matches!(c, crate::model::control::Control::Table(_)))
-                        .count()
-                        == 1
-            });
-
             // 셀 내 텍스트 높이 (분할 행이면 줄 범위 내만 계산)
             // spacing_before: 셀 첫 문단 제외, spacing_after: 셀 마지막 문단 제외
             let split_para_count = cell.paragraphs.len();
@@ -585,6 +619,10 @@ impl LayoutEngine {
 
             let mut para_y = text_y_start;
             let mut has_preceding_text = false;
+            // [#3637] 이 조각에서 **실제로 그려지는 첫 문단**의 vpos. 아래 중첩 표
+            // 문단 스냅이 쓰는 조각 원점이다. `line_segs.first()` 를 그대로 쓰면 셀
+            // 전체 좌표라 연속 조각에서 원점만큼 통째로 밀린다.
+            let frag_vpos_origin = fragment_vpos_origin(cell, line_ranges.as_deref());
             let preserve_linear_single_cell_vpos = cut_units.is_some_and(|(su, _)| su == 0)
                 && matches!(
                     table.page_break,
@@ -621,6 +659,18 @@ impl LayoutEngine {
                 let mixed_nested_split = cut_units.and_then(|(su, eu)| {
                     self.mixed_nested_split_from_cut(cell, table, styles, su, eu, cp_idx)
                 });
+                // [Task #1073] 이 문단이 per-중첩행 유닛으로 분해됐으면(가시 텍스트 없음 +
+                // 단일 중첩 표 2행+) 컷에 들어온 유닛의 `nested_row` 에서 중첩 행 범위를
+                // 얻어 NestedTableSplit 으로 넘긴다.
+                //
+                // 종전에는 "컷 유닛 인덱스 == 중첩행 번호" 라고 가정해 **셀**이 문단 1개일
+                // 때만 이 경로를 썼다. 분해 조건은 문단 단위(cell_units)인데 게이트는 셀
+                // 단위여서, 문단이 여럿인 셀은 아래 `available_h` 휴리스틱으로 폴백했고 그
+                // 분기는 오프셋을 0.0 으로 고정하므로 연속 페이지가 행 0 부터 다시 그리고
+                // 뒤 행이 어느 페이지에도 나오지 않았다.
+                let nested_cut_rows: Option<(usize, usize)> = cut_units.and_then(|(su, eu)| {
+                    self.nested_row_range_from_cut_units(cell, table, styles, su, eu, cp_idx)
+                });
                 let visible_non_inline_controls = cut_units.is_some_and(|(su, eu)| {
                     self.cell_cut_contains_non_inline_control_units(
                         cell, table, styles, su, eu, cp_idx,
@@ -653,6 +703,25 @@ impl LayoutEngine {
                     }
                 }
 
+                // [#3637 진단] 조각 셀에서 실제로 배치되는 문단과 그 y. 컷 범위 밖
+                // 문단이 예외 경로(중첩 표 보유 등)로 새는지 직접 본다. 동작 불변.
+                if std::env::var("RHWP_DIAG_CELLPARA").is_ok() {
+                    eprintln!(
+                        "DIAG_CELLPARA pi={} cell=({},{}) cp={} lines={}..{} cut={:?} nested={:?} mixed={} nonline={} para_y={:.1} cell_bot={:.1}",
+                        para_index,
+                        cell.row,
+                        cell.col,
+                        cp_idx,
+                        start_line,
+                        end_line,
+                        cut_units,
+                        nested_cut_rows,
+                        mixed_nested_split.is_some(),
+                        visible_non_inline_controls,
+                        para_y,
+                        cell_content_bottom(cell_y, cell_h, pad_bottom),
+                    );
+                }
                 let cell_context = CellContext {
                     parent_para_index: para_index,
                     path: vec![CellPathEntry {
@@ -1160,6 +1229,7 @@ impl LayoutEngine {
                                         color_str,
                                         color: eq.color,
                                         font_size: font_size_px,
+                                        script: eq.script.clone(),
                                         section_index: Some(section_index),
                                         para_index: Some(para_index),
                                         control_index: Some(ctrl_idx),
@@ -1211,6 +1281,7 @@ impl LayoutEngine {
                                     };
                                     let nested_w = if nested_table.common.width > 0 {
                                         hwpunit_to_px(nested_table.common.width as i32, self.dpi)
+                                            * self.render_table_width_scale(nested_table)
                                     } else {
                                         inner_area.width
                                     };
@@ -1238,9 +1309,10 @@ impl LayoutEngine {
                                                 visible_height: split.visible_height,
                                                 flow_height: split.flow_height,
                                                 offset_within_start: split.offset_within_start,
+                                                terminal: split.terminal,
                                             })
-                                        } else if let Some((su, eu)) = nested_cut_range {
-                                            // [Task #1073] 페이지네이션 컷(중첩행 범위)으로 직접
+                                        } else if let Some((row_lo, row_hi)) = nested_cut_rows {
+                                            // [Task #1073] 페이지네이션 컷의 중첩행 범위로 직접
                                             // NestedTableSplit 구성 — 연속 페이지가 start_row 부터
                                             // 렌더(available_h 휴리스틱의 row0 재렌더 결함 정정).
                                             let ncol = nested_table.col_count as usize;
@@ -1257,8 +1329,8 @@ impl LayoutEngine {
                                                 nested_table.cell_spacing as i32,
                                                 self.dpi,
                                             );
-                                            let start_row = su.min(nrow);
-                                            let end_row = eu.min(nrow);
+                                            let start_row = row_lo.min(nrow);
+                                            let end_row = row_hi.min(nrow).max(start_row);
                                             let mut vis_h = 0.0;
                                             for r in start_row..end_row {
                                                 vis_h += nrow_heights[r];
@@ -1271,6 +1343,10 @@ impl LayoutEngine {
                                                 end_row,
                                                 visible_height: vis_h,
                                                 flow_height: vis_h,
+                                                // [#3658] per-중첩행 컷 경로도 마지막 유닛까지
+                                                // 포함한 컷(end_cut=[])이면 종료 조각이다.
+                                                terminal: cut_units
+                                                    .is_some_and(|(_, eu)| eu == usize::MAX),
                                                 offset_within_start: 0.0,
                                             })
                                         } else if nested_h > available_h + 0.5 {
@@ -1334,6 +1410,7 @@ impl LayoutEngine {
                                         None,
                                         split_ref,
                                         None,
+                                        None,
                                         false,
                                         clamp_header_negative_para_offset,
                                     );
@@ -1360,9 +1437,33 @@ impl LayoutEngine {
                     if !is_last_para {
                         if let Some(next_para) = cell.paragraphs.get(cp_idx + 1) {
                             if let Some(next_seg) = next_para.line_segs.first() {
-                                let next_vpos_y =
-                                    text_y_start + hwpunit_to_px(next_seg.vertical_pos, self.dpi);
-                                para_y = para_y.max(next_vpos_y);
+                                // [#3637] `vertical_pos` 는 **셀 전체** 좌표라 조각 시작
+                                // 유닛만큼의 원점이 빠져 있지 않다. 조각 후반부(start_cut 이
+                                // 큰 연속 조각)에서 이 스냅은 문단을 셀 상자 밖으로 밀어내고,
+                                // 그 글자는 어느 렌더 경로에도 보이지 않는다 — 텍스트 추출에만
+                                // 남는다(156083443 보도자료 10쪽: cp=164 다음이 vpos=72846
+                                // → y=1018.5, 셀 바닥 1005.1).
+                                //
+                                // 원점을 빼는 교정은 #3654 에서 실패했다. para_y 를 낮추면 그
+                                // 값이 다시 컷 판정으로 되먹임되어 다른 문서에 새 넘침을
+                                // 만든다. 이 스냅은 **밀어내기 전용**(`max`)이므로 셀 바닥으로
+                                // 상한만 두면 밀림을 막으면서 기존 위치는 보존한다 — 스냅이
+                                // 필요했던 쪽 안 문단은 상자 안이라 상한에 걸리지 않는다.
+                                //
+                                // 그래서 두 가지를 함께 건다.
+                                //   ① 조각 원점(frag_vpos_origin)을 빼 조각-상대 좌표로
+                                //   ② 그래도 남는 셀 내부 도약(#3654 가 걸린 자리, 소방방재
+                                //      45,290 HU)에 대비해 셀 바닥으로 상한
+                                // ①만으로는 #3654 처럼 도약 문서에서 여전히 밀려나고,
+                                // ②만으로는 상한에서 멈춘 뒤 뒤 문단이 그 아래로 쌓인다.
+                                let next_vpos_y = text_y_start
+                                    + hwpunit_to_px(
+                                        (next_seg.vertical_pos - frag_vpos_origin).max(0),
+                                        self.dpi,
+                                    );
+                                let cell_content_bottom =
+                                    cell_content_bottom(cell_y, cell_h, pad_bottom);
+                                para_y = para_y.max(next_vpos_y.min(cell_content_bottom));
                             }
                         }
                     }
@@ -1444,6 +1545,13 @@ impl LayoutEngine {
             return y_start;
         }
 
+        let repeat_fragment_outer_margin = repeats_native_empty_host_rowbreak_fragment_margin(
+            self.profile.get().native_hwp5_layout(),
+            paragraphs,
+            para_index,
+            control_index,
+        );
+
         // 분할 표 첫 부분: vert_offset 적용 (자리차지 표의 세로 오프셋).
         // [Task #712] HwpUnit=u32 이라 `vertical_offset > 0` 는 음수 비트표현
         // (예: -1796 HU = 0xFFFFF8FC = 4294965500u32) 도 양수로 통과시켜
@@ -1452,7 +1560,7 @@ impl LayoutEngine {
         // `raw_y.max(y_start)` 클램프가 있어 음수 무력화. Partial 경로에는
         // 클램프가 없으므로 게이트를 signed 비교로 정정해 동등 효과.
         let vert_off_signed = table.common.vertical_offset as i32;
-        let y_start = if !is_continuation
+        let effective_vertical_offset = if !is_continuation
             && !table.common.treat_as_char
             && matches!(
                 table.common.text_wrap,
@@ -1476,10 +1584,74 @@ impl LayoutEngine {
                 .get(&para_index)
                 .copied()
                 .unwrap_or(0.0);
-            let eff_off = (hwpunit_to_px(vert_off_signed, self.dpi) - host_h).max(0.0);
-            y_start + eff_off
+            (hwpunit_to_px(vert_off_signed, self.dpi) - host_h).max(0.0)
         } else {
-            y_start
+            0.0
+        };
+        // [#2287 후속/1.hwpx p28] 같은 단의 직전 흐름 표와의 미세 겹침 방지
+        // 안전망: 자리차지 표의 v_off/outer 흐름 미가산(#2097 반증 기록 축 —
+        // 전면 가산은 82802 악화)으로 후속 TopAndBottom 표 조각의 typeset
+        // 좌표가 직전 표 렌더 끝보다 소폭(6.4px) 이르게 잡히면 괘선이 겹쳐
+        // 렌더된다. 흐름 표(vert=문단·비 TAC) 한정으로 직전 표 렌더 하단
+        // 아래로 push-down — 겹침이 없으면 no-op.
+        let is_para_flow_table = !table.common.treat_as_char
+            && matches!(
+                table.common.text_wrap,
+                crate::model::shape::TextWrap::TopAndBottom
+            )
+            && matches!(
+                table.common.vert_rel_to,
+                crate::model::shape::VertRelTo::Para
+            );
+        let y_start = if is_para_flow_table {
+            let prev_table_end = col_node
+                .children
+                .iter()
+                .filter_map(|child| {
+                    let RenderNodeType::Table(meta) = &child.node_type else {
+                        return None;
+                    };
+                    let repeated_previous_bottom = if repeat_fragment_outer_margin {
+                        meta.para_index
+                            .zip(meta.control_index)
+                            .and_then(|(pi, ci)| paragraphs.get(pi)?.controls.get(ci))
+                            .and_then(|control| match control {
+                                Control::Table(previous) => Some(hwpunit_to_px(
+                                    previous.outer_margin_bottom as i32,
+                                    self.dpi,
+                                )),
+                                _ => None,
+                            })
+                            .unwrap_or(0.0)
+                    } else {
+                        0.0
+                    };
+                    Some(child.bbox.y + child.bbox.height + repeated_previous_bottom)
+                })
+                .fold(f64::NEG_INFINITY, f64::max);
+            if repeat_fragment_outer_margin {
+                // The strict native-HWP shape uses the painted predecessor plus its trailing
+                // margin as the flow base, then opens this fragment's top margin.  Apply the
+                // positive object offset only to the first fragment.  This ordering restores the
+                // 965HU p2 gap (283 previous-bottom + 283 current-top + 399 offset) and repeats
+                // only 283HU at the p3 continuation top.
+                let flow_base = if prev_table_end.is_finite() {
+                    y_start.max(prev_table_end)
+                } else {
+                    y_start
+                };
+                flow_base
+                    + hwpunit_to_px(table.outer_margin_top as i32, self.dpi)
+                    + effective_vertical_offset
+            } else if prev_table_end.is_finite()
+                && y_start + effective_vertical_offset < prev_table_end - 0.5
+            {
+                prev_table_end
+            } else {
+                y_start + effective_vertical_offset
+            }
+        } else {
+            y_start + effective_vertical_offset
         };
 
         let col_count = table.col_count as usize;
@@ -1555,6 +1727,16 @@ impl LayoutEngine {
                         .filter(|c| c.row as usize == r && c.row_span == 1)
                         .collect();
                     rcells.sort_by_key(|c| c.col);
+                    // [#2287/PR #2290 P1] 컷 블록 안의 rs=1 셀 없는 걸침-전용 행은
+                    // 원본(resolve) 높이가 그대로 남아 rowspan 셀 bbox 가 컷과
+                    // 무관하게 원본 크기(교육부 47×9 r3=2107px → 셀 2354.6px)로
+                    // 유지됐다 — valign 이 콘텐츠를 셀 중앙(페이지 밖 y≈1259)으로
+                    // 밀어 tail overflow 로 관측(리뷰 p26/p30). 컷 블록의 행높이는
+                    // 아래 블록-합 보정이 권위이므로 여기서는 0 으로 둔다.
+                    if rcells.is_empty() {
+                        row_heights[r] = 0.0;
+                        continue;
+                    }
                     let mut per_start: Vec<usize> = Vec::with_capacity(rcells.len());
                     let mut per_end: Vec<usize> = Vec::with_capacity(rcells.len());
                     let mut has_visible_range = false;
@@ -1584,15 +1766,24 @@ impl LayoutEngine {
                         per_start.push(su);
                         per_end.push(eu);
                     }
+                    // [#2287/PR #2290 P1] 컷 블록(in_start/in_end) 안 행은 rs=1
+                    // 셀 컷이 "전체 소비"(su=0, eu=len)여도 whole-row 경로의 선언
+                    // 셀높이 max 를 타면 안 된다 — 블록 분할 중 행높이는 콘텐츠
+                    // 기반이어야 하고, rowspan 가시분은 아래 블록-합 보정이 채운다
+                    // (교육부 r3: rs=1 셀 2개 전체 소비 17.1px 인데 선언 max 로
+                    // 2107.1 유지 → 셀 bbox 2354.6 → valign 이 페이지 밖으로).
                     let h = if !has_visible_range {
                         0.0
-                    } else if has_row_cut {
+                    } else if has_row_cut || in_start || in_end {
                         self.row_cut_content_height(table, r, &per_start, &per_end, styles)
                     } else {
                         self.row_cut_content_height(table, r, &[], &[], styles)
                     };
                     if h > 0.0 {
                         row_heights[r] = h;
+                    } else if has_row_cut {
+                        // 컷 범위가 이 행에서 비가시(전부 다른 조각 소속)면 0.
+                        row_heights[r] = 0.0;
                     }
                 } else {
                     let su: &[usize] = if r == start_row { start_cut } else { &[] };
@@ -1608,9 +1799,78 @@ impl LayoutEngine {
                     if rowspan_touched && su.is_empty() && eu.is_empty() && !has_single_row_cells {
                         continue;
                     }
+                    // [#2287 후속/1.hwpx p14] 컷 없는(whole-row) **순수 텍스트**
+                    // 행은 재계산하지 않는다 — resolve_row_heights 가
+                    // mt.row_heights(= typeset 조각 소비와 동일 측정 공간)를 이미
+                    // 반영했는데, row_cut_content_height(whole-row)로 덮으면
+                    // content(ls 계상 규칙 상이)가 선언 셀높이보다 커지는 행에서
+                    // 렌더만 부풀어(85×3 표 41행 × +4.0px = +152px) typeset 소비
+                    // 밖으로 조각 꼬리가 밀린다 — p14 QUR-001~005 행이 page frame
+                    // 밖(y 1058~1164)으로 사라진 결함. 중첩 표 포함 행은 반대로
+                    // mt 가 중첩 높이를 과소 계상해 재계산이 행 겹침을 막고
+                    // 있으므로(rowbreak-problem-pages p7 pi=21 r2, 기존 회귀
+                    // 테스트) 종전 재계산을 유지한다.
+                    if su.is_empty() && eu.is_empty() && measured_table.is_some() {
+                        let row_has_nested = table.cells.iter().any(|c| {
+                            c.row as usize == r
+                                && c.row_span == 1
+                                && c.paragraphs.iter().any(|p| {
+                                    p.controls.iter().any(|ct| matches!(ct, Control::Table(_)))
+                                })
+                        });
+                        if !row_has_nested {
+                            continue;
+                        }
+                    }
                     let h = self.row_cut_content_height(table, r, su, eu, styles);
                     if h > 0.0 {
                         row_heights[r] = h;
+                    }
+                }
+            }
+            // [#2287/PR #2290 P1] 블록-합 보정: 컷 블록에 걸친 rowspan 셀의 컷
+            // 가시 높이(su..eu 유닛 합 + pad)가 rs=1 기반 행높이 합보다 크면
+            // 블록 마지막 행에 차액을 가산한다 — rowspan 셀 bbox 가 컷 가시
+            // 높이와 정합해야 클립/valign 이 컷 의미대로 동작한다 (typeset 의
+            // consumed_height 와 동일 좌표계).
+            if is_block_split {
+                let mut blocks: Vec<(usize, usize)> = Vec::new();
+                for b in [start_block, end_block].into_iter().flatten() {
+                    if !blocks.contains(&b) {
+                        blocks.push(b);
+                    }
+                }
+                for (bs, be) in blocks {
+                    let mut target = 0.0f64;
+                    for c in table.cells.iter().filter(|c| {
+                        c.row_span > 1 && (c.row as usize) >= bs && (c.row as usize) < be
+                    }) {
+                        let su = if start_block == Some((bs, be)) {
+                            block_cut_index(table, bs, be, c)
+                                .and_then(|i| start_cut.get(i).copied())
+                                .unwrap_or(0)
+                        } else {
+                            0
+                        };
+                        let eu = if end_block == Some((bs, be)) {
+                            block_cut_index(table, bs, be, c)
+                                .and_then(|i| end_cut.get(i).copied())
+                                .unwrap_or(usize::MAX)
+                        } else {
+                            usize::MAX
+                        };
+                        target = target.max(self.cell_cut_visible_height(c, table, styles, su, eu));
+                    }
+                    if target <= 0.0 {
+                        continue;
+                    }
+                    let cur: f64 = (bs..be.min(row_count))
+                        .map(|r| row_heights.get(r).copied().unwrap_or(0.0))
+                        .sum();
+                    if target > cur + 0.5 {
+                        if let Some(last) = (bs..be.min(row_count)).next_back() {
+                            row_heights[last] += target - cur;
+                        }
                     }
                 }
             }
@@ -1631,6 +1891,7 @@ impl LayoutEngine {
             row_count,
             cell_spacing,
             self.dpi,
+            self.render_table_width_scale(table),
         );
 
         let table_width = row_col_x
@@ -1960,6 +2221,65 @@ impl LayoutEngine {
             // Left/Right 캡션은 표 높이에 영향 없음
             0.0
         };
+        // [#3637 진단] 조각 렌더 높이 vs 페이지네이터 컷 예산. 동작 불변.
+        // TABLE_SPLIT_RESULT 의 consumed 와 짝지어 보면 두 공간의 발산이 보인다.
+        if std::env::var("RHWP_DIAG_FRAG").is_ok() {
+            eprintln!(
+                "DIAG_FRAG pi={} ci={} rows={}..{} cont={} blk={} start_cut={:?} end_cut={:?} y_start={:.1} tbl_h={:.1} cap={:.1}",
+                para_index,
+                control_index,
+                start_row,
+                end_row,
+                is_continuation,
+                is_block_split,
+                start_cut,
+                end_cut,
+                y_start,
+                partial_table_height,
+                caption_total,
+            );
+        }
         y_start + partial_table_height + caption_total
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{cell_content_bottom, fragment_vpos_origin};
+    use crate::model::paragraph::{LineSeg, Paragraph};
+    use crate::model::table::Cell;
+
+    fn paragraph_with_vpos(vposes: &[i32]) -> Paragraph {
+        Paragraph {
+            line_segs: vposes
+                .iter()
+                .map(|&vertical_pos| LineSeg {
+                    vertical_pos,
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn split_cell_fragment_origin_uses_first_visible_line_not_paragraph_start() {
+        let cell = Cell {
+            paragraphs: vec![paragraph_with_vpos(&[4_000, 5_000, 6_000])],
+            ..Default::default()
+        };
+
+        assert_eq!(
+            fragment_vpos_origin(&cell, Some(&[(1, 3)])),
+            5_000,
+            "문단 중간에서 시작한 조각은 첫 줄 vpos를 다시 쓰면 안 된다"
+        );
+    }
+
+    #[test]
+    fn split_cell_snap_cap_uses_physical_content_bottom_not_valign_start() {
+        // Center/Bottom valign의 text_y_start에는 이미 offset이 들어 있다. 물리 셀
+        // 하단은 어떤 valign이든 cell_y + cell_h - pad_bottom으로 고정된다.
+        assert_eq!(cell_content_bottom(100.0, 80.0, 7.0), 173.0);
     }
 }

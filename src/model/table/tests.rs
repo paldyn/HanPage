@@ -282,6 +282,26 @@ fn test_set_column_widths_wrong_len() {
 // === merge_cells 테스트 ===
 
 #[test]
+fn test_merge_cells_zero_span_cell_does_not_panic() {
+    // 손상된 HWP5 문서에서 row_span/col_span이 0으로 파싱될 수 있다
+    // (src/parser/control.rs 참고). merge_cells()가 겹침 검사 시
+    // `row + row_span - 1`을 saturating 없이 계산하면 u16 언더플로로
+    // 패닉했다. 정상 표 안에 span 0인 셀이 섞여 있어도 패닉 없이
+    // 동작해야 한다 (회귀 방지).
+    let mut table = make_table(2, 2);
+    // 병합 대상 범위 밖의 셀에 span 0을 주입해, retain 이전의
+    // 겹침 검사 루프가 이 셀도 순회하도록 한다.
+    if let Some(cell) = table.cells.iter_mut().find(|c| c.col == 1 && c.row == 1) {
+        cell.row_span = 0;
+        cell.col_span = 0;
+    }
+
+    // 패닉하지 않고 정상적으로 (0,0)-(0,0) 병합(사실상 no-op)이 처리되어야 한다.
+    let result = table.merge_cells(0, 0, 0, 0);
+    assert!(result.is_ok());
+}
+
+#[test]
 fn test_merge_cells_2x2_full() {
     let mut table = make_table(2, 2);
 
@@ -1059,6 +1079,82 @@ fn test_leading_header_rows_none_and_all() {
         }
     }
     assert_eq!(all.leading_header_rows(), vec![0, 1, 2]);
+}
+
+#[test]
+fn inferred_local_resize_rows_rejects_degenerate_width_total() {
+    let mut table = make_table(3, 3);
+    let base_widths = [12_698, 1_940, 5_421];
+    for row in 0..3 {
+        for (col, width) in base_widths.into_iter().enumerate() {
+            let idx = table.cell_index_at(row, col as u16).unwrap();
+            table.cells[idx].width = width;
+        }
+    }
+
+    // issue #2439와 같은 HWP5 퇴화값: 첫 셀만 1 HU이고 나머지는 기준 행과 같다.
+    // 행 전체 폭이 보존되지 않으므로 보상 resize 결과가 아니다.
+    let first = table.cell_index_at(0, 0).unwrap();
+    table.cells[first].width = 1;
+    table.common.width = base_widths.into_iter().sum();
+
+    assert_eq!(table.inferred_local_resize_rows(), Vec::<u16>::new());
+    assert_eq!(table.base_grid_outlier_rows(), vec![0]);
+}
+
+#[test]
+fn oversized_width_outlier_is_excluded_from_base_grid_without_becoming_local_resize() {
+    let mut table = make_table(3, 2);
+    for cell in &mut table.cells {
+        cell.width = 100;
+    }
+    let oversized = table.cell_index_at(0, 0).unwrap();
+    table.cells[oversized].width = 150;
+    table.common.width = 200;
+
+    assert_eq!(table.base_grid_outlier_rows(), vec![0]);
+    assert_eq!(table.inferred_local_resize_rows(), Vec::<u16>::new());
+}
+
+#[test]
+fn inferred_local_resize_rows_keeps_compensated_independent_row() {
+    let mut table = make_table(3, 3);
+    for cell in &mut table.cells {
+        cell.width = 3_000;
+    }
+
+    // 첫 셀을 줄인 만큼 둘째 셀을 늘린 실제 보상 resize는 전체 폭을 유지한다.
+    let first = table.cell_index_at(0, 0).unwrap();
+    let second = table.cell_index_at(0, 1).unwrap();
+    table.cells[first].width = 2_500;
+    table.cells[second].width = 3_500;
+    table.common.width = 9_000;
+
+    assert_eq!(table.inferred_local_resize_rows(), vec![0]);
+}
+
+#[test]
+fn inferred_local_resize_rows_keeps_serialized_shift_row_matching_common_width() {
+    let mut table = make_table(4, 5);
+    let base_widths = [8_390, 8_390, 8_390, 8_956, 7_824];
+    for row in 0..4 {
+        for (col, width) in base_widths.into_iter().enumerate() {
+            let idx = table.cell_index_at(row, col as u16).unwrap();
+            table.cells[idx].width = width;
+        }
+    }
+
+    // 저장·복구된 Shift resize 행은 셀 간격이 흡수되어 기준 행 합이 아니라
+    // common.width와 일치할 수 있다. 셀별 반올림 누적(여기서는 4 HU)도 허용한다.
+    let shifted = [2_393, 15_630, 8_393, 8_955, 7_823];
+    for (col, width) in shifted.into_iter().enumerate() {
+        let idx = table.cell_index_at(1, col as u16).unwrap();
+        table.cells[idx].width = width;
+    }
+    table.cell_spacing = 310;
+    table.common.width = 43_190;
+
+    assert_eq!(table.inferred_local_resize_rows(), vec![1]);
 }
 
 /// 삽입 지점의 열(행)에 비병합 셀이 하나도 없으면 insert_row / insert_column 의

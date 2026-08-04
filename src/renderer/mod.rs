@@ -15,23 +15,31 @@ pub mod equation;
 pub(crate) mod equation_tac_flow;
 pub mod float_placement;
 pub mod font_metrics_data;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod font_paths;
 pub(crate) mod form_caption;
+pub(crate) mod hancom_pua;
 pub mod height_cursor;
 pub mod height_measurer;
 pub mod html;
+pub(crate) mod image_header;
 pub mod image_resolver;
 pub mod layer_renderer;
 pub mod layout;
 pub mod page_layout;
 pub mod page_number;
 pub mod pagination;
+#[cfg(any(target_arch = "wasm32", test))]
+pub(crate) mod partial_replay;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod pdf;
 pub mod pua_oldhangul;
+pub mod render_normalization;
 pub mod render_tree;
 pub mod scheduler;
 #[cfg(all(not(target_arch = "wasm32"), feature = "native-skia"))]
 pub mod skia;
+pub(crate) mod static_svg;
 pub mod style_resolver;
 pub mod svg;
 pub mod svg_fragment;
@@ -197,7 +205,54 @@ pub struct TextStyle {
     pub shade_color: ColorRef,
 }
 
+/// 위첨자/아래첨자 글리프를 그릴 때 적용하는 본문 대비 글꼴 크기 배율.
+pub const SCRIPT_FONT_SCALE: f64 = 0.7;
+/// 위첨자 baseline 상향 이동량 (본문 글꼴 크기 대비 em).
+pub const SUPERSCRIPT_RISE_EM: f64 = 0.3;
+/// 아래첨자 baseline 하향 이동량 (본문 글꼴 크기 대비 em).
+pub const SUBSCRIPT_DROP_EM: f64 = 0.15;
+
 impl TextStyle {
+    /// 위첨자/아래첨자 run 의 **그리기** 글꼴 크기와 baseline 을 계산한다.
+    ///
+    /// SVG·Canvas·HTML·Skia·paint JSON 이 각자 하드코딩하던 동일 상수를 한곳으로
+    /// 모은 것이다 (#2771). 레이아웃 advance 는 본문 run 기준을 유지하고 실제
+    /// 글리프 크기와 baseline 만 조정한다는 계약은 종전과 같다.
+    ///
+    /// 비첨자 run 은 인자를 그대로 돌려주므로 기존 출력이 비트 단위로 보존된다.
+    pub fn script_draw_metrics(&self, base_font_size: f64, baseline_y: f64) -> (f64, f64) {
+        if self.superscript {
+            (
+                base_font_size * SCRIPT_FONT_SCALE,
+                baseline_y - base_font_size * SUPERSCRIPT_RISE_EM,
+            )
+        } else if self.subscript {
+            (
+                base_font_size * SCRIPT_FONT_SCALE,
+                baseline_y + base_font_size * SUBSCRIPT_DROP_EM,
+            )
+        } else {
+            (base_font_size, baseline_y)
+        }
+    }
+
+    /// 글자폭 맞춤(fit) 대상 advance 에 적용할 배율 (#2771).
+    ///
+    /// SVG `textLength` 와 Canvas `fit_scale` 은 "레이아웃 advance 에 글리프 폭을
+    /// 맞춘다". 그런데 첨자 글리프는 `script_draw_metrics` 로 0.7 배 축소되어
+    /// 그려지므로, 대상 advance 를 같은 배율로 줄이지 않으면 브라우저가 축소된
+    /// 글리프를 본문 폭까지 되늘려 1/0.7 ≈ 1.43 배 가로 확대가 발생한다.
+    ///
+    /// 비첨자는 **정확히 1.0** 을 돌려준다. `advance * 1.0` 은 IEEE-754 상
+    /// 반올림이 없는 항등 연산이라 기존 `textLength` 값이 비트 단위로 불변이다.
+    pub fn script_advance_scale(&self) -> f64 {
+        if self.superscript || self.subscript {
+            SCRIPT_FONT_SCALE
+        } else {
+            1.0
+        }
+    }
+
     /// 시각적 bold 여부.
     ///
     /// CharShape.bold=true 외에도 HY헤드라인M 같은 heavy display face 를
@@ -616,7 +671,12 @@ pub fn corrected_line_metrics(
     if max_fs > 0.0 && raw_lh < max_fs {
         match ls_type {
             LineSpacingType::Percent => {
-                let extra = (max_fs * (ls_val - 100.0) / 100.0).max(0.0);
+                // [#2279] sub-100% 퍼센트 음수 gap 존중 (line_breaking 정합)
+                let extra = if ls_val > 0.0 {
+                    max_fs * (ls_val - 100.0) / 100.0
+                } else {
+                    0.0
+                };
                 (max_fs, extra)
             }
             LineSpacingType::Fixed => (ls_val.max(max_fs), 0.0),
@@ -852,6 +912,94 @@ pub(crate) fn para_has_no_stored_line_segs(p: &crate::model::paragraph::Paragrap
     p.line_segs.is_empty() || p.line_segs.iter().all(|s| s.tag & 0x8000_0000 != 0)
 }
 
+/// 셀 문단의 저장 `LINE_SEG.vertical_pos` 를 절대 앵커로 신뢰할 수 있는지 판정한다.
+///
+/// `vertical_pos == 0` 은 "셀 상단"이라는 유효한 값이면서 동시에 "앵커 없음"의
+/// 센티널이기도 하다. 첫 문단은 0 이 곧 셀 상단이라 그대로 신뢰하고, 두 번째 이후
+/// 문단은 양수 vpos 가 저장돼 있을 때만 앵커로 쓴다.
+#[inline]
+pub(crate) fn first_seg_vpos_is_anchor(
+    para: &crate::model::paragraph::Paragraph,
+    cell_para_index: usize,
+) -> bool {
+    para.line_segs
+        .first()
+        .is_some_and(|seg| cell_para_index == 0 || seg.vertical_pos > 0)
+}
+
+/// 셀의 저장 vpos 흐름이 문단 위치를 구분해 담고 있는지 ("사다리" 온전성).
+///
+/// 셀 안 문단이 전부 `vpos == 0` 으로 저장된 문서(중첩 표 안쪽 셀에서 흔하다)에서는
+/// 저장 흐름이 문단 위치를 구분하지 못한다. 이 경우 다음 세 가지가 모두 성립하지
+/// 않으므로 저장 지오메트리를 신뢰해선 안 된다.
+///
+/// - 문단별 절대 배치 — 전 문단이 셀 상단 한 y 로 리셋된다
+/// - `max(vpos + lh)` 기반 셀 높이 — 1문단분으로 붕괴한다
+/// - `para_top + 중첩표 높이` 의 max 합성 — 텍스트와 중첩 표가 서로를 가린다
+#[inline]
+pub(crate) fn cell_vpos_ladder_is_intact(
+    paragraphs: &[crate::model::paragraph::Paragraph],
+) -> bool {
+    paragraphs
+        .iter()
+        .enumerate()
+        .all(|(idx, para)| first_seg_vpos_is_anchor(para, idx))
+}
+
+/// [#2287] 저장 LINE_SEG 없는 빈 anchor 문단의 TAC(글자처럼) 그림/도형 플로우
+/// 줄 메트릭 합성. 컨트롤 폭을 가용 폭에 greedy wrap 하여 줄별 (최대 높이, 0)
+/// 을 돌려준다.
+///
+/// 한글은 글자처럼 개체를 줄박스로 취급해 그림 높이만큼 본문 흐름을 전진시키나,
+/// rhwp 는 composed lines 가 비면(빈 텍스트 + 컨트롤) 문단 높이가 0 으로 붕괴해
+/// 차트/스캔 그림 수십 장이 한 쪽에 응축된다 (미래부 정서분석 88 vs 한글 129쪽,
+/// 농촌 S-OJT 꼬리 26쪽 응축 — 10k 서베이 r14 대형 음수 델타 지배 성분).
+/// 호출부는 pairs 가 빈 경우(합성 폴백 실패 후)에만 사용한다.
+pub(crate) fn tac_object_stack_line_metrics(
+    para: &crate::model::paragraph::Paragraph,
+    dpi: f64,
+    available_width_px: Option<f64>,
+) -> Option<Vec<(f64, f64)>> {
+    use crate::model::control::Control;
+    if !para_has_no_stored_line_segs(para) {
+        return None;
+    }
+    let objs: Vec<(f64, f64)> = para
+        .controls
+        .iter()
+        .filter_map(|c| {
+            let common = match c {
+                Control::Picture(pic) if pic.common.treat_as_char => &pic.common,
+                Control::Shape(s) if s.common().treat_as_char => s.common(),
+                _ => return None,
+            };
+            let w = hwpunit_to_px(common.width as i32, dpi);
+            let h = hwpunit_to_px(common.height as i32, dpi);
+            (h > 0.5).then_some((w, h))
+        })
+        .collect();
+    if objs.is_empty() {
+        return None;
+    }
+    let avail = available_width_px.unwrap_or(f64::INFINITY).max(1.0);
+    let mut lines: Vec<(f64, f64)> = Vec::new();
+    let mut line_w = 0.0f64;
+    let mut line_h = 0.0f64;
+    for (w, h) in objs {
+        if line_w > 0.0 && line_w + w > avail + 0.5 {
+            lines.push((line_h, 0.0));
+            line_w = 0.0;
+            line_h = 0.0;
+        }
+        line_w += w;
+        line_h = line_h.max(h);
+    }
+    if line_h > 0.0 {
+        lines.push((line_h, 0.0));
+    }
+    (!lines.is_empty()).then_some(lines)
+}
+
 /// HWPUNIT을 픽셀로 변환
 #[inline]
 pub fn hwpunit_to_px(hwpunit: i32, dpi: f64) -> f64 {
@@ -905,6 +1053,77 @@ pub(crate) fn text_anchor_square_table_strip(
         + cm.margin.right as i32;
     let strip_sw = full_sw - strip_cs;
     (strip_cs > 0 && strip_sw > 0).then_some((strip_cs, strip_sw))
+}
+
+/// [#3314] 요청 face 의 굵기/폭 접미사를 벗긴 base family.
+///
+/// `"Noto Serif KR Black"` → `Some("Noto Serif KR")`, 접미사가 없으면 `None`.
+/// 폴백 체인은 요청 face 바로 뒤에 이 base 를 끼워 넣는다 — 접미사 face 가
+/// 미설치일 때 같은 family 의 base face 가 generic 체인(Batang 등)보다 먼저
+/// 구제한다(1.hwpx: 한컴 NotoSerifKR vs rhwp Batang, 제목 잉크 −31%).
+/// 요청 face 가 실존하면 체인 선두라 무영향. **렌더 경로 전용** — 측정 경로
+/// (`text_measurement`)는 쓰지 않아 조판(쪽수)이 불변이다.
+pub fn base_family_without_weight_suffix(font_family: &str) -> Option<String> {
+    // 뒤에서부터 제거되는 토큰들. "Extra Bold" 처럼 두 토큰으로 쪼개진 경우를
+    // 위해 수식 접두 토큰(extra/ultra/semi/demi)도 포함한다.
+    const WEIGHT_TOKENS: &[&str] = &[
+        "black",
+        "heavy",
+        "extrabold",
+        "ultrabold",
+        "semibold",
+        "demibold",
+        "bold",
+        "medium",
+        "regular",
+        "normal",
+        "extralight",
+        "ultralight",
+        "demilight",
+        "light",
+        "thin",
+        "extra",
+        "ultra",
+        "semi",
+        "demi",
+    ];
+    let mut tokens: Vec<&str> = font_family.split_whitespace().collect();
+    let original_len = tokens.len();
+    while tokens.len() > 1 {
+        let last = tokens.last().expect("len > 1").to_ascii_lowercase();
+        if WEIGHT_TOKENS.contains(&last.as_str()) {
+            tokens.pop();
+        } else {
+            break;
+        }
+    }
+    (tokens.len() < original_len).then(|| tokens.join(" "))
+}
+
+/// [#3314] 렌더용 폴백 체인 문자열: `요청 face → (base family) → generic 체인`.
+pub fn render_font_family_chain(font_family: &str) -> String {
+    let fb = generic_fallback(font_family);
+    match base_family_without_weight_suffix(font_family) {
+        Some(base) => format!("{},'{}',{}", font_family, base, fb),
+        None => format!("{},{}", font_family, fb),
+    }
+}
+
+/// Canvas 2D 렌더용 인용 font-family 체인.
+///
+/// [#3314] Canvas API가 요구하는 인용 형식을 유지하면서, 굵기 접미사 face
+/// 바로 뒤에 base family를 넣어 generic 폴백보다 먼저 선택되게 한다.
+/// 측정 경로에는 사용하지 않는다.
+pub fn canvas_font_family_chain(font_family: &str) -> String {
+    if font_family.is_empty() {
+        return "sans-serif".to_string();
+    }
+
+    let fallback = generic_fallback(font_family);
+    match base_family_without_weight_suffix(font_family) {
+        Some(base) => format!("\"{}\", \"{}\", {}", font_family, base, fallback),
+        None => format!("\"{}\", {}", font_family, fallback),
+    }
 }
 
 /// CSS generic fallback 반환 (serif 또는 sans-serif)
@@ -1047,6 +1266,9 @@ impl AutoNumberCounter {
                 self.page += 1;
                 self.page
             }
+            // 총 쪽수는 카운터로 증가시키는 값이 아니라 페이지네이션이 끝난 뒤
+            // 알려지는 문서 전체 쪽수를 그대로 표시하는 필드라 여기서 처리하지 않는다.
+            AutoNumberType::TotalPage => 0,
         }
     }
 
@@ -1059,6 +1281,7 @@ impl AutoNumberCounter {
             AutoNumberType::Footnote => self.footnote,
             AutoNumberType::Endnote => self.endnote,
             AutoNumberType::Page => self.page,
+            AutoNumberType::TotalPage => 0,
         }
     }
 
@@ -1314,6 +1537,135 @@ mod tests {
     }
 
     #[test]
+    fn test_script_draw_metrics_matches_shared_contract() {
+        // [#2771] SVG/Canvas/HTML/Skia/paint JSON 이 공유하는 첨자 계약:
+        // 글꼴 0.7 배 + baseline 위 0.3em / 아래 0.15em.
+        let base = TextStyle {
+            font_size: 20.0,
+            ..Default::default()
+        };
+
+        let sup = TextStyle {
+            superscript: true,
+            ..base.clone()
+        };
+        let (sup_size, sup_y) = sup.script_draw_metrics(20.0, 100.0);
+        assert!(
+            (sup_size - 14.0).abs() < 1e-9,
+            "위첨자 글꼴은 0.7 배여야 함: {sup_size}"
+        );
+        assert!(
+            (sup_y - 94.0).abs() < 1e-9,
+            "위첨자 baseline 은 0.3em 위여야 함: {sup_y}"
+        );
+
+        let sub = TextStyle {
+            subscript: true,
+            ..base.clone()
+        };
+        let (sub_size, sub_y) = sub.script_draw_metrics(20.0, 100.0);
+        assert!(
+            (sub_size - 14.0).abs() < 1e-9,
+            "아래첨자 글꼴은 0.7 배여야 함: {sub_size}"
+        );
+        assert!(
+            (sub_y - 103.0).abs() < 1e-9,
+            "아래첨자 baseline 은 0.15em 아래여야 함: {sub_y}"
+        );
+
+        // 비첨자는 인자를 그대로 돌려준다.
+        assert_eq!(base.script_draw_metrics(20.0, 100.0), (20.0, 100.0));
+    }
+
+    #[test]
+    fn test_script_advance_scale_is_exact_identity_for_non_script() {
+        // [#2771] 비첨자 배율이 **정확히 1.0** 이어야 기존 golden SVG 의
+        // textLength 값이 비트 단위로 보존된다 (`x * 1.0` 은 IEEE-754 상
+        // 반올림이 없는 항등 연산).
+        let base = TextStyle {
+            font_size: 20.0,
+            ..Default::default()
+        };
+        assert_eq!(base.script_advance_scale(), 1.0);
+        for advance in [0.0_f64, 6.2133, 1e-300, 1e300, f64::MIN_POSITIVE] {
+            assert_eq!(
+                (advance * base.script_advance_scale()).to_bits(),
+                advance.to_bits(),
+                "비첨자 advance 는 비트 단위로 불변이어야 함: {advance}"
+            );
+        }
+
+        // 첨자 배율은 그리기 글꼴 축소율과 반드시 같은 값이어야 한다.
+        // (다르면 글리프가 textLength 로 되늘어나는 #2771 결함이 재발한다.)
+        let sup = TextStyle {
+            superscript: true,
+            ..base.clone()
+        };
+        let sub = TextStyle {
+            subscript: true,
+            ..base.clone()
+        };
+        for style in [&sup, &sub] {
+            assert_eq!(
+                style.script_draw_metrics(20.0, 0.0).0,
+                20.0 * style.script_advance_scale()
+            );
+        }
+    }
+
+    // [#2287] 저장 LINE_SEG 없는 빈 anchor 문단의 TAC 그림 줄 메트릭 합성.
+    fn tac_picture_para(sizes_hu: &[(i32, i32)]) -> crate::model::paragraph::Paragraph {
+        use crate::model::control::Control;
+        let mut para = crate::model::paragraph::Paragraph::default();
+        for (w, h) in sizes_hu {
+            let mut pic = crate::model::image::Picture::default();
+            pic.common.treat_as_char = true;
+            pic.common.width = *w as u32;
+            pic.common.height = *h as u32;
+            para.controls.push(Control::Picture(Box::new(pic)));
+        }
+        para
+    }
+
+    #[test]
+    fn test_tac_object_stack_single_picture_line() {
+        // 590×387px 그림 1장 (미래부 정서분석 pi854 형상) — 1줄, 그림 높이.
+        let para = tac_picture_para(&[(44222, 29069)]);
+        let lines = tac_object_stack_line_metrics(&para, 96.0, Some(661.0)).unwrap();
+        assert_eq!(lines.len(), 1);
+        assert!((lines[0].0 - hwpunit_to_px(29069, 96.0)).abs() < 0.01);
+        assert_eq!(lines[0].1, 0.0);
+    }
+
+    #[test]
+    fn test_tac_object_stack_wraps_by_width() {
+        // 590px 그림 3장, 가용 661px — 줄당 1장씩 3줄 (농촌 S-OJT 스택 형상).
+        let para = tac_picture_para(&[(44222, 29069); 3]);
+        let lines = tac_object_stack_line_metrics(&para, 96.0, Some(661.0)).unwrap();
+        assert_eq!(lines.len(), 3);
+        // 300px 그림 2장, 가용 661px — 한 줄 수용.
+        let para2 = tac_picture_para(&[(22000, 10000), (22000, 12000)]);
+        let lines2 = tac_object_stack_line_metrics(&para2, 96.0, Some(661.0)).unwrap();
+        assert_eq!(lines2.len(), 1);
+        assert!((lines2[0].0 - hwpunit_to_px(12000, 96.0)).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_tac_object_stack_rejects_stored_ls_and_non_tac() {
+        // 저장 LINE_SEG 보유 문단 제외 (이중 계상 방지).
+        let mut para = tac_picture_para(&[(44222, 29069)]);
+        para.line_segs
+            .push(crate::model::paragraph::LineSeg::default());
+        assert!(tac_object_stack_line_metrics(&para, 96.0, Some(661.0)).is_none());
+        // 비-TAC 그림 제외 (PageItem::Shape 오버레이 경로 유지).
+        let mut para2 = tac_picture_para(&[(44222, 29069)]);
+        if let crate::model::control::Control::Picture(pic) = &mut para2.controls[0] {
+            pic.common.treat_as_char = false;
+        }
+        assert!(tac_object_stack_line_metrics(&para2, 96.0, Some(661.0)).is_none());
+    }
+
+    #[test]
     fn test_px_to_hwpunit() {
         let hu = px_to_hwpunit(96.0, 96.0);
         assert_eq!(hu, 7200);
@@ -1521,6 +1873,51 @@ mod tests {
         assert_eq!(format_number(26, NumberFormat::LatinUpper), "Z");
         assert_eq!(format_number(27, NumberFormat::LatinUpper), "AA");
         assert_eq!(format_number(1, NumberFormat::LatinLower), "a");
+    }
+
+    /// [#3314] 굵기 접미사 face 의 base family 추출과 렌더 체인 삽입.
+    #[test]
+    fn test_base_family_without_weight_suffix() {
+        assert_eq!(
+            base_family_without_weight_suffix("Noto Serif KR Black").as_deref(),
+            Some("Noto Serif KR")
+        );
+        assert_eq!(
+            base_family_without_weight_suffix("나눔고딕 Bold").as_deref(),
+            Some("나눔고딕")
+        );
+        assert_eq!(
+            base_family_without_weight_suffix("경기천년제목 Light").as_deref(),
+            Some("경기천년제목")
+        );
+        // 두 토큰 접미사 ("Extra Bold")
+        assert_eq!(
+            base_family_without_weight_suffix("Noto Sans KR Extra Bold").as_deref(),
+            Some("Noto Sans KR")
+        );
+        // 접미사 없음 → None (체인 불변)
+        assert_eq!(base_family_without_weight_suffix("맑은 고딕"), None);
+        assert_eq!(base_family_without_weight_suffix("HY헤드라인M"), None);
+        assert_eq!(base_family_without_weight_suffix("휴먼명조"), None);
+        // 전체가 접미사 토큰뿐이면 벗기지 않는다
+        assert_eq!(base_family_without_weight_suffix("Light"), None);
+        // 렌더 체인: 요청 face → base → generic
+        let chain = render_font_family_chain("Noto Serif KR Black");
+        assert!(chain.starts_with("Noto Serif KR Black,'Noto Serif KR',"));
+        let plain = render_font_family_chain("맑은 고딕");
+        assert!(plain.starts_with("맑은 고딕,'Malgun Gothic'"));
+
+        assert_eq!(
+            canvas_font_family_chain("Noto Serif KR Black"),
+            format!(
+                "\"Noto Serif KR Black\", \"Noto Serif KR\", {}",
+                generic_fallback("Noto Serif KR Black")
+            )
+        );
+        assert_eq!(
+            canvas_font_family_chain("맑은 고딕"),
+            format!("\"맑은 고딕\", {}", generic_fallback("맑은 고딕"))
+        );
     }
 
     #[test]

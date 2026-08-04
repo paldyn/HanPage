@@ -2,6 +2,15 @@ name: Full Renderer Sweep
 
 on:
   workflow_dispatch:
+    inputs:
+      corpus:
+        description: Renderer baseline corpus tier
+        required: true
+        default: representative
+        type: choice
+        options:
+          - representative
+          - full
 
 env:
   CARGO_TERM_COLOR: always
@@ -10,23 +19,25 @@ jobs:
   full-renderer-sweep:
     name: Full Renderer Sweep
     runs-on: ubuntu-latest
+    # [#3284] 러너 hang 을 실패로 드러내는 상한 (성능 목표 아님) — 실험 종료 후에도 유지
+    timeout-minutes: 60
     permissions:
       contents: read
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 브랜치 (2026-08-01 시점)
         with:
           components: clippy, rustfmt
           targets: wasm32-unknown-unknown
 
       - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        uses: ./.github/actions/install-wasm-pack
 
       - name: Cache cargo registry & build
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
@@ -38,7 +49,7 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20
           cache: npm
@@ -91,18 +102,18 @@ jobs:
           RHWP_RENDER_DIFF_ALL: "1"
         run: npm run e2e:render-diff:ci
 
-      - name: Capture representative multi-profile baseline
-        run: python3 scripts/renderer_baseline.py --profiles screen,print,high-quality,fast-preview --browser-mode headless --output output/renderer-baseline/workflow-dispatch
+      - name: Capture selected multi-profile baseline
+        run: python3 scripts/renderer_baseline.py --scope ${{ inputs.corpus }} --profiles screen,print,high-quality,fast-preview --include-pdf --browser-mode headless --output output/renderer-baseline/workflow-dispatch
 
       - name: Capture WebGPU-preferred CanvasKit baseline
-        run: python3 scripts/renderer_baseline.py --profiles screen --browser-mode headless --canvaskit-surface webgpu --skip-native --output output/renderer-baseline/workflow-dispatch-webgpu
+        run: python3 scripts/renderer_baseline.py --scope representative --profiles screen --browser-mode headless --canvaskit-surface webgpu --skip-native --output output/renderer-baseline/workflow-dispatch-webgpu
 
       - name: Capture software CanvasKit baseline
-        run: python3 scripts/renderer_baseline.py --profiles screen --browser-mode headless --canvaskit-surface software --skip-native --output output/renderer-baseline/workflow-dispatch-software
+        run: python3 scripts/renderer_baseline.py --scope representative --profiles screen --browser-mode headless --canvaskit-surface software --skip-native --output output/renderer-baseline/workflow-dispatch-software
 
       - name: Upload full renderer sweep artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: full-renderer-sweep-artifacts
           path: |

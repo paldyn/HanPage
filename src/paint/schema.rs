@@ -15,9 +15,10 @@ pub struct LayerTreeSchema {
 
 pub const LAYER_TREE_SCHEMA: LayerTreeSchema = LayerTreeSchema {
     schema_version: 1,
-    schema_minor_version: 17,
+    // 22: portable GlyphRun이 참조하는 font blob payload와 stable key를 resources에 추가.
+    schema_minor_version: 22,
     resource_table_version: 1,
-    resource_table_minor_version: 4,
+    resource_table_minor_version: 6,
     unit: "px",
     coordinate_system: "page-top-left-y-down",
 };

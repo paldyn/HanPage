@@ -139,8 +139,44 @@ pub fn serialize_hwpx(doc: &Document) -> Result<Vec<u8>, SerializeError> {
                     entry.bin_data_id
                 ))
             })?;
-        z.write_deflated(&entry.href, &data.data)?;
+        // [Issue #3547] OLE Storage 복원: HWPX 파서(`normalize_ole_bytes`)는 내부 OLE 의
+        // 선두 4-byte LE size prefix 를 제거한다. 재부착 없이 쓰면 한컴이 CFB 매직
+        // (D0CF11E0)을 OLE 개체 크기(~3.75GB)로 오인하여 "메모리 부족" 오류가 발생한다.
+        // HWP5 저장기(`cfb_writer`, #954)와 동형의 복원 — prefix 가 없던(비 CFB) 입력은
+        // 매직 검사에서 걸러져 영향이 없다.
+        let bytes = data.data.load();
+        const CFB_MAGIC: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+        let payload: Vec<u8> = if data.extension.eq_ignore_ascii_case("ole")
+            && bytes.len() >= 8
+            && bytes[..8] == CFB_MAGIC
+        {
+            let mut v = Vec::with_capacity(bytes.len() + 4);
+            v.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+            v.extend_from_slice(&bytes);
+            v
+        } else {
+            bytes
+        };
+        z.write_deflated(&entry.href, &payload)?;
         zip_bin_entries.insert(entry.href.clone());
+    }
+
+    // 8-1. [#3546] OOXML 차트 파트 — Chart/chartN.xml 바이트 원형 방출.
+    //      원본 content.hpf 가 Chart 파트를 나열하지 않으므로 manifest·3-way
+    //      단언 대상 밖이며(collect_from_document 에서 분리), BinData 로 옮기면
+    //      한컴이 차트 XML 을 OLE 복합문서로 해석한다.
+    for entry in &ctx.chart_entries {
+        let data = doc
+            .bin_data_content
+            .iter()
+            .find(|b| b.id == entry.bin_data_id)
+            .ok_or_else(|| {
+                SerializeError::XmlError(format!(
+                    "차트 BinDataContent 누락: bin_data_id={}",
+                    entry.bin_data_id
+                ))
+            })?;
+        z.write_deflated(&entry.href, &data.data.load())?;
     }
 
     // 9. Contents/content.hpf — 항상 동적 경로 + BinData 매니페스트 엔트리
@@ -184,6 +220,19 @@ pub fn serialize_hwpx(doc: &Document) -> Result<Vec<u8>, SerializeError> {
     assert_bin_data_3way(&bin_entries, &zip_bin_entries)?;
 
     z.finish()
+}
+
+/// Document IR을 한컴 ODF AES-256-CBC 비밀번호 보호 HWPX로 직렬화한다.
+///
+/// ZIP/문서 생성은 평문 `serialize_hwpx()`와 동일하게 수행한 뒤 공통 암호 모듈이
+/// header, section, settings, preview와 BinData 엔트리만 암호화한다.
+pub fn serialize_hwpx_with_password(
+    doc: &Document,
+    password: &[u8],
+) -> Result<Vec<u8>, SerializeError> {
+    let plain = serialize_hwpx(doc)?;
+    crate::password_crypto::encrypt_hwpx_package(&plain, password)
+        .map_err(|error| SerializeError::CryptoError(error.to_string()))
 }
 
 fn write_container_rdf(section_hrefs: &[String]) -> String {
@@ -559,11 +608,13 @@ mod tests {
                 horz_align: HorzAlign::Center,
                 ..Default::default()
             },
+            attr: 0,
             script: "x < y & z".to_string(),
             font_size: 1000,
             color: 0x000000FF,
             baseline: 120,
             unknown: 0,
+            eqedit: 0,
             font_name: "HYhwpEQ".to_string(),
             version_info: "Equation Version 60".to_string(),
             raw_ctrl_data: Vec::new(),
@@ -939,6 +990,7 @@ mod tests {
             start_char_idx: 0,
             end_char_idx: 1,
             control_idx: 2,
+            ..Default::default()
         }];
         section.paragraphs.push(p);
         doc.sections.push(section);
@@ -1269,7 +1321,7 @@ mod tests {
         let mut doc = Document::default();
         doc.bin_data_content.push(BinDataContent {
             id: 1,
-            data: fake_png.to_vec(),
+            data: fake_png.to_vec().into(),
             extension: "png".to_string(),
         });
 
@@ -1338,7 +1390,7 @@ mod tests {
         // 라운드트립: BinData 보존 확인
         let parsed = parse_hwpx(&bytes).expect("parse back");
         assert_eq!(parsed.bin_data_content.len(), 1);
-        assert_eq!(parsed.bin_data_content[0].data, fake_png);
+        assert_eq!(&parsed.bin_data_content[0].data.load()[..], fake_png);
         assert_eq!(parsed.bin_data_content[0].extension, "png");
     }
 
@@ -1369,7 +1421,7 @@ mod tests {
             .push(crate::model::style::CharShape::default());
         doc.bin_data_content.push(BinDataContent {
             id: 1,
-            data: b"BMfake_bmp_data".to_vec(),
+            data: b"BMfake_bmp_data".to_vec().into(),
             extension: "bmp".to_string(),
         });
         let mut section = crate::model::document::Section::default();
@@ -1459,7 +1511,7 @@ mod tests {
         let mut doc = Document::default();
         doc.bin_data_content.push(BinDataContent {
             id: 1,
-            data: alpha_png.clone(),
+            data: alpha_png.clone().into(),
             extension: "png".to_string(),
         });
 
@@ -1670,6 +1722,118 @@ mod tests {
             fn_ctrl.unwrap().paragraphs[0].text.contains("각주 텍스트"),
             "footnote paragraph text not preserved"
         );
+    }
+
+    /// [#2716] `<hp:footNote>` / `<hp:endNote>` 의 장식 문자·번호 모양·고유 ID 왕복 보존.
+    ///
+    /// 종전 `render_note_sublist` 는 `number` 만 방출해 한컴 저장본이 항상 쓰는
+    /// `suffixChar`/`instId`(828/828), `prefixChar`(598/828), `flag`(27/828) 가 전량
+    /// 유실됐다. 그 결과 미주 마커 「문1）」이 저장 왕복마다 「1)」로 퇴화했다
+    /// (samples/3-09월_교육_통합_2022.hwpx 46/46).
+    ///
+    /// 방출 규칙은 한컴 HWP5/HWPX 쌍(3-09월_교육_통합_2023, note 46개 전수 대조) 실측:
+    /// `flag` 는 number_shape != 0 일 때만, `prefixChar` 는 before != 0 일 때만,
+    /// `number`/`suffixChar`/`instId` 는 항상.
+    #[test]
+    fn footnote_endnote_decoration_attrs_roundtrip() {
+        use crate::model::control::Control;
+        use crate::model::footnote::{Endnote, Footnote};
+        use crate::model::paragraph::Paragraph;
+
+        let mut doc = Document::default();
+        let mut section = crate::model::document::Section::default();
+        let mut para = crate::model::paragraph::Paragraph::default();
+        para.text = "본문".to_string();
+        para.char_offsets = vec![8, 17];
+        para.char_count = 20;
+
+        let mut fn_para = Paragraph::default();
+        fn_para.text = "각주 본문".to_string();
+        para.controls.push(Control::Footnote(Box::new(Footnote {
+            number: 1,
+            paragraphs: vec![fn_para],
+            before_decoration_letter: 47928, // 0xBB38 '문'
+            after_decoration_letter: 65289,  // 0xFF09 '）'
+            number_shape: 3211264,           // 0x00310000
+            instance_id: 1085612573,
+            ..Default::default()
+        })));
+
+        // 접두 없음(0) + 닫는 장식 없음(0): prefixChar/flag 는 생략, suffixChar 는 0 방출.
+        let mut en_para = Paragraph::default();
+        en_para.text = "미주 본문".to_string();
+        para.controls.push(Control::Endnote(Box::new(Endnote {
+            number: 2,
+            paragraphs: vec![en_para],
+            before_decoration_letter: 0,
+            after_decoration_letter: 0,
+            number_shape: 0,
+            instance_id: 7,
+            ..Default::default()
+        })));
+
+        section.paragraphs.push(para);
+        doc.sections.push(section);
+
+        let bytes = serialize_hwpx(&doc).expect("serialize notes");
+        let cursor = std::io::Cursor::new(&bytes);
+        let mut archive = zip::ZipArchive::new(cursor).expect("zip");
+        let mut sec0 = archive.by_name("Contents/section0.xml").expect("section0");
+        let mut xml = String::new();
+        std::io::Read::read_to_string(&mut sec0, &mut xml).expect("read");
+        drop(sec0);
+
+        assert!(
+            xml.contains(
+                r#"<hp:footNote flag="3211264" number="1" prefixChar="47928" suffixChar="65289" instId="1085612573">"#
+            ),
+            "footNote 속성이 한컴 계약대로 방출되지 않음: {}",
+            xml
+        );
+        assert!(
+            xml.contains(r#"<hp:endNote number="2" suffixChar="0" instId="7">"#),
+            "endNote 생략 규칙(flag/prefixChar 생략, suffixChar 항상)이 어긋남: {}",
+            xml
+        );
+
+        let parsed = parse_hwpx(&bytes).expect("parse back");
+        let ctrls = &parsed.sections[0].paragraphs[0].controls;
+
+        let fn_ctrl = ctrls
+            .iter()
+            .find_map(|c| match c {
+                Control::Footnote(f) => Some(f),
+                _ => None,
+            })
+            .expect("footnote ctrl");
+        assert_eq!(
+            fn_ctrl.before_decoration_letter, 47928,
+            "footNote prefixChar"
+        );
+        assert_eq!(
+            fn_ctrl.after_decoration_letter, 65289,
+            "footNote suffixChar"
+        );
+        assert_eq!(fn_ctrl.number_shape, 3211264, "footNote flag");
+        assert_eq!(fn_ctrl.instance_id, 1085612573, "footNote instId");
+
+        let en_ctrl = ctrls
+            .iter()
+            .find_map(|c| match c {
+                Control::Endnote(e) => Some(e),
+                _ => None,
+            })
+            .expect("endnote ctrl");
+        assert_eq!(
+            en_ctrl.before_decoration_letter, 0,
+            "endNote prefixChar 없음"
+        );
+        assert_eq!(
+            en_ctrl.after_decoration_letter, 0,
+            "endNote suffixChar 0 이 ')' 로 오염됨"
+        );
+        assert_eq!(en_ctrl.number_shape, 0, "endNote flag 없음");
+        assert_eq!(en_ctrl.instance_id, 7, "endNote instId");
     }
 
     /// tac-img-02.hwpx 파싱 후 BinData 가 존재하는지, Picture 컨트롤이

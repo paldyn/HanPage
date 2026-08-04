@@ -2,8 +2,13 @@
 //!
 //! semantic render tree를 backend-friendly layer tree로 변환한다.
 
+pub(crate) const MAX_POSITIONED_CONTROL_MARKS_PER_RUN: usize = 4096;
+pub(crate) const MAX_PORTABLE_FONT_BLOB_BYTES: usize = 32 * 1024 * 1024;
+pub(crate) const MAX_PORTABLE_GLYPHS_PER_RUN: usize = 4096;
+
 pub mod builder;
 pub mod font;
+pub mod font_glyph;
 mod json;
 pub mod layer_tree;
 pub mod paint_op;
@@ -23,6 +28,13 @@ pub use font::{
     GlyphRunReplayEligibility, LanguageTag, LocalizedName, OpenTypeFeatureSetting, ScriptTag,
     ShapeKey, ShapingEngineId, TextDirection, VariationAxisValue, WritingMode,
 };
+pub use font_glyph::{
+    decode_font_bitmap_glyph_payload, decode_font_svg_glyph_payload,
+    lower_font_native_glyph_sidecars, resolve_embedded_font_face_index, EmbeddedFontFace,
+    FontBitmapGlyphDecodeError, FontBitmapGlyphDecodeOptions, FontGlyphLoweringReport,
+    FontSvgGlyphDecodeError, FontSvgGlyphDecodeOptions,
+};
+pub use json::LayerJsonOptions;
 pub use layer_tree::{
     CacheHint, ClipKind, GroupKind, LayerNode, LayerNodeKind, LayerOutputOptions, PageLayerTree,
     TextSourceAnnotation, TextSourceEntry, TextSourceId, TextSourceRange, TextSourceSpan,
@@ -48,8 +60,9 @@ pub use replay_order::{
     PaintReplayPlane,
 };
 pub use resources::{
-    font_blob_resource_key, image_resource_key, resource_digest_hex, svg_resource_key,
-    FontBlobResourceId, ImageResourceId, ResourceArena, SvgResourceId, RESOURCE_KEY_ALGORITHM,
+    font_blob_resource_key, image_resource_key, parse_source_image_key, resource_digest_hex,
+    source_image_key, svg_resource_key, FontBlobResourceId, ImageResourceId, ResourceArena,
+    SourceImageVariant, SvgResourceId, RESOURCE_KEY_ALGORITHM,
 };
 pub use schema::{
     LayerTreeSchema, LAYER_TREE_SCHEMA, PAGE_LAYER_TREE_COORDINATE_SYSTEM,

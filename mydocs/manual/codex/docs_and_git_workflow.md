@@ -1,4 +1,16 @@
+---
+kind: canonical
+status: active
+canonical: mydocs/manual/codex/docs_and_git_workflow.md
+last_verified: 2026-07-16
+---
+
 # Documentation And Git Workflow
+
+> 이 문서는 문서·Git 작업의 공통 절차를 다룬다. PR 검토·merge·후속 처리의 역할별 규칙은
+> [PR 리뷰·통합 워크플로우](../pr_review_workflow.md)와 그
+> [조건별 자식 가이드 선택표](../pr_review/README.md)를 우선한다. 현재 세션이나 종료된 작업의 상태는
+> 이 문서에 기록하지 않는다.
 
 ## Document Language
 
@@ -31,33 +43,84 @@ mydocs/report/task_m100_{issue}_report.md
 mydocs/orders/YYYYMMDD.md
 ```
 
+회차형 측정 기록:
+
+```text
+mydocs/report/{주제}_{회차}_{YYYYMMDD}.md
+```
+
+서베이·벤치마크처럼 동일 축을 반복 측정해 시계열로 비교하는 문서는 이슈 1:1 대응이
+아니므로 `task_m100_{issue}_report.md` 를 적용하지 않는다. 회차와 날짜가 식별자다.
+예: `survey_10k_r18_20260721.md`. 한 이슈로 몰면 회차끼리 이름이 충돌하고 시계열
+비교라는 목적이 사라진다.
+
+파일명의 숫자는 **이슈 번호**다. PR 번호를 쓰지 않는다 — GitHub 는 이슈와 PR 이 번호
+공간을 공유해 번호만으로는 종류를 판별할 수 없으므로(`gh issue view <PR번호>` 가 PR 을
+반환한다), 보고서 본문에 `Issue: #N` 을 명시해 근거를 남긴다. (#2753)
+
 ## Folder Roles
 
 - `mydocs/orders/`: 오늘할일
+- `mydocs/orders/archives/`: 전월 이전 오늘할일 보관 — 매월 초 전월분을 이동하고 당월분만 루트에 유지
 - `mydocs/plans/`: 수행 계획서, 구현 계획서
+- `mydocs/plans/archives/`: 완료된 계획서 보관 (merge 후 정리 시 이동)
 - `mydocs/working/`: 단계별 완료 보고서
 - `mydocs/report/`: 최종 보고서
+- `mydocs/feedback/`: 작업지시자 피드백, 코드 리뷰 의견
 - `mydocs/troubleshootings/`: 재발 방지용 문제 해결 기록
 - `mydocs/tech/`: 기술 조사와 스펙 정리
 - `mydocs/manual/`: 매뉴얼과 장기 지침
-- `mydocs/manual/memory/`: Claude 메모리 덤프
-- `mydocs/manual/codex/`: Codex 메모리 덤프
+- `mydocs/manual/memory/`: 과거 사용자 피드백과 프로젝트 memory의 historical 출처
+- `mydocs/manual/codex/`: Codex 부트스트랩과 현행 문서·Git 절차. 종료 세션 자료는 `archive/`에 보존
 
 ## Issue Workflow
 
 이슈 기반 작업의 기본 순서:
 
-1. GitHub Issue 확인 또는 생성
+1. GitHub Issue 확인 또는 생성 (**신규 등록 전 동일 증상 선행 검색** — 아래)
 2. 열린 PR 확인
 3. 이슈 assignee 지정
 4. 작업 브랜치 생성 또는 전환
-5. 오늘할일 문서 갱신
+5. 역할별 절차에 따라 오늘할일 또는 PR review 문서 갱신
 6. 계획서 작성
 7. 작업지시자 승인
 8. 구현과 테스트
 9. 단계별 보고서 작성
 10. 커밋
 11. 작업지시자 승인 후 이슈 close
+
+### 신규 이슈 등록 전 동일 증상 선행 검색
+
+내부에서 결함을 발견해 이슈를 새로 열기 전에, **같은 증상이 이미 외부 리포트로 열려
+있는지 먼저 검색한다.** 있으면 새 이슈를 만들지 말고 그 이슈에 원인 분석을 붙이거나,
+분리가 필요하면 원 이슈를 명시적으로 참조·연결한다.
+
+```bash
+# 증상 문자열·패닉 메시지·오류 코드로 열린 이슈 검색 (닫힌 것도 함께 보려면 state 제거)
+gh search issues --repo edwardkim/rhwp --state open "<증상 키워드>"
+gh search issues --repo edwardkim/rhwp "panicked at <파일명>"
+```
+
+**Why:** 다운스트림이 늘면 같은 결함이 **외부는 증상으로, 내부는 원인으로** 각각 등록된다.
+연결하지 않으면 내부 이슈만 처리되고 외부 리포터는 방치된다 — 수정이 배포됐는데도 그
+사실을 모른 채 우회 조치를 유지하게 된다.
+
+실제 사례: [#2519](https://github.com/edwardkim/rhwp/issues/2519)(외부 사용자, 각주 삽입
+패닉, 2026-07-20)와 [#3214](https://github.com/edwardkim/rhwp/issues/3214)(내부 발견, 같은
+원인, 2026-07-23)가 연결되지 않아, `597dabf07` 로 수정된 뒤에도 리포터는 11일간 응답을
+받지 못했고 배포에서 메뉴 세 개를 감춘 채 운영했다.
+
+이 사례는 검색으로 **잡혔을 것이다** — `gh search issues --repo edwardkim/rhwp "panicked at
+note.rs"` 한 번이면 두 이슈가 나란히 나온다(2026-07-31 실측). 비용은 명령 한 줄이다.
+
+**How to apply:**
+
+- 내부 이슈를 새로 열 때 증상 키워드로 최소 1회 검색한다. 패닉 메시지·오류 문자열은
+  외부 리포트에 원문 그대로 실리는 경우가 많아 검색어로 효과적이다.
+- 이미 외부 이슈가 있으면 **그 이슈를 주 트랙으로 삼는다.** 원인 분석은 코멘트로 붙이고,
+  범위가 달라 분리가 필요할 때만 새 이슈를 열되 양쪽을 상호 참조한다.
+- 수정이 merge되면 외부 리포트에 **해결 사실·적용 버전·확인 방법**을 회신한다.
+  auto-close 로 닫히더라도 외부 리포터에게는 별도 설명이 필요하다.
 
 ## GitHub CLI Usage
 
@@ -117,26 +180,10 @@ PR 댓글 톤은 과장하지 않는다. "정말 감사합니다", "정성스러
 - 이슈 close 전에는 정정 commit이 `devel` 또는 대상 브랜치에 실제 포함되어 있는지 확인한다.
 - 사용자가 만들었을 수 있는 변경은 임의로 되돌리지 않는다.
 
-## Devel Push Rule
+## Branch And PR Rule
 
-`local/devel`은 원격 push 대상이 아니다. 작업 완료 후 원격 `devel`에 반영할 때는 다음 순서를 지킨다.
-
-1. `local/devel`을 로컬 `devel`에 merge한다.
-2. 로컬 `devel`에서 compile/test/wasm build 등 필요한 검증을 통과시킨다.
-3. 검증 통과 후 `git push origin devel`을 실행한다.
-
-금지:
-
-```bash
-git push origin local/devel:devel
-```
-
-## Current Branch Memory
-
-2026-05-22 현재 작업 브랜치는 `local/task_m100_1053` 이다.
-
-Task #1053은 미지원 파일(HWPML 2.1 등)에 대해 적절한 오류코드와 사용자용
-메시지를 반환하도록 포맷 감지/오류 경로를 정정하는 작업이다.
-계획서와 구현 계획서는 작성되었고, GitHub assignee는 이미 `edwardkim`으로
-지정되어 있었다. Stage 1 구현/검증/보고서 작성과 작업지시자 시각 판정까지
-완료했다. `origin/devel` push와 GitHub Issue #1053 close까지 완료했다.
+- 로컬 작업과 검증의 기준은 최신 `upstream/devel`이다.
+- 일반 변경은 작업 브랜치에서 검증한 뒤 `devel` 대상 PR로 통합한다. `upstream/devel`에 직접 push하지 않는다.
+- collaborator·maintainer가 원 PR에 보정하거나 merge 후 운영 기록을 반영하는 경우에도
+  [PR 리뷰·통합 워크플로우](../pr_review_workflow.md)의 선택표가 지정한 역할별 경로를 따른다.
+- `local/*`은 로컬 작업 이름일 뿐 원격 `devel`을 갱신하는 명령의 근거가 아니다.

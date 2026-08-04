@@ -10,6 +10,9 @@ import { showShapePicker } from '@/ui/shape-picker';
 import { showToast } from '@/ui/toast';
 import type { ShapeType } from '@/ui/shape-picker';
 import type { CellPathLike } from '@/core/types';
+import type { WasmBridge } from '@/core/wasm-bridge';
+import type { InputHandler } from '@/engine/input-handler';
+import type { RefreshPolicy } from '@/engine/command';
 
 /** 스텁 커맨드 생성 헬퍼 */
 function stub(id: string, label: string, icon?: string, shortcut?: string): CommandDef {
@@ -54,6 +57,37 @@ function enterNoteEditing(
   (ih as any).active = true;
   (ih as any).updateCaret?.();
   (ih as any).textarea?.focus();
+}
+
+/**
+ * [Task #3207] 각주/미주 삽입을 snapshot 으로 기록한 뒤 노트 편집 모드로 진입한다.
+ *
+ * 삽입은 본문에 노트 참조를 넣어 문자 수를 바꾸므로 미기록 시 undo 불가 + 후속 undo
+ * 오프셋 오염으로 이어진다. undo 시 노트 모드 이탈은 별도 배선이 필요 없다 —
+ * SnapshotCommand 는 editContext() 를 노출하지 않아 restoreEditContextAfterHistory 의
+ * 본문 분기를 타고, 그 분기가 노트 모드를 빠져나와 삽입 위치로 커서를 되돌린다.
+ */
+function insertNote(
+  services: Parameters<CommandDef['execute']>[0],
+  kind: 'footnote' | 'endnote',
+): void {
+  const ih = services.getInputHandler();
+  if (!ih) return;
+  const pos = ih.getPosition();
+  let result: { ok: boolean; paraIdx: number; controlIdx: number } | undefined;
+  ih.executeOperation({
+    kind: 'snapshot',
+    operationType: kind === 'footnote' ? 'insertFootnote' : 'insertEndnote',
+    operation: (wasm) => {
+      result = kind === 'footnote'
+        ? wasm.insertFootnote(pos.sectionIndex, pos.paragraphIndex, pos.charOffset)
+        : wasm.insertEndnote(pos.sectionIndex, pos.paragraphIndex, pos.charOffset);
+      if (!result.ok) throw new Error(`[insert:${kind}] 삽입 실패`);
+      return pos;
+    },
+  });
+  // 편집 모드 게이트로 라우터가 작업을 드롭했으면 result 가 없다.
+  if (result) enterNoteEditing(services, ih, pos.sectionIndex, result.paraIdx, result.controlIdx);
 }
 
 export const insertCommands: CommandDef[] = [
@@ -145,23 +179,25 @@ export const insertCommands: CommandDef[] = [
       const pos = ih.getPosition();
       // 본문 전용 — 표 셀 내부에서는 실행하지 않음
       if ((pos as any).cellIndex !== undefined && (pos as any).cellIndex >= 0) return;
-      try {
-        const defaultFontSize = 1000; // 10pt → HWPUNIT
-        const defaultColor = 0x00000000; // 검정
-        const result = services.wasm.insertEquation(
-          pos.sectionIndex, pos.paragraphIndex, pos.charOffset,
-          '', defaultFontSize, defaultColor
-        );
-        if (result.ok) {
-          services.eventBus.emit('document-changed');
-          if (!equationEditorDialog) {
-            equationEditorDialog = new EquationEditorDialog(services.wasm, services.eventBus, services);
-          }
-          equationEditorDialog.open(pos.sectionIndex, result.paraIdx, result.controlIdx);
-        }
-      } catch (err) {
-        console.warn('[insert:equation] 수식 삽입 실패:', err);
-      }
+      const defaultFontSize = 1000; // 10pt → HWPUNIT
+      const defaultColor = 0x00000000; // 검정
+      // [Task #3207] 수식 삽입도 본문 문자 수를 바꾸므로 snapshot 으로 기록한다(각주/미주와 동형).
+      let result: { ok: boolean; paraIdx: number; controlIdx: number } | undefined;
+      ih.executeOperation({
+        kind: 'snapshot',
+        operationType: 'insertEquation',
+        operation: (wasm) => {
+          result = wasm.insertEquation(
+            pos.sectionIndex, pos.paragraphIndex, pos.charOffset,
+            '', defaultFontSize, defaultColor,
+          );
+          if (!result.ok) throw new Error('[insert:equation] 삽입 실패');
+          return pos;
+        },
+      });
+      if (!result) return;
+      equationEditorDialog ??= new EquationEditorDialog(services.wasm, services.eventBus, services);
+      equationEditorDialog.open(pos.sectionIndex, result.paraIdx, result.controlIdx);
     },
   },
   {
@@ -176,21 +212,27 @@ export const insertCommands: CommandDef[] = [
       fieldInsertDialog = new FieldInsertDialog();
       fieldInsertDialog.onApply = (props) => {
         try {
-          const result = services.wasm.insertClickHereField(
-            pos,
-            props.guide,
-            props.memo,
-            props.name,
-            props.editable,
-          );
-          if (result.ok) {
-            const insertedPos = { ...pos, charOffset: result.charOffset ?? pos.charOffset };
-            ih.moveCursorTo(insertedPos);
-            ih.markCurrentFieldEndOutside();
-            services.wasm.clearActiveField();
-            services.eventBus.emit('document-mutated', 'insert-field');
-            services.eventBus.emit('document-changed');
-          }
+          // [Task #2377] 누름틀 삽입은 안내문 텍스트를 문서에 넣는다(문자 수 변경) —
+          // 미기록 시 undo 불가 + 후속 undo 오프셋 오염. snapshot 으로 라우팅한다(이 커맨드는
+          // 일반 모드 전용이라 게이트 드롭 없음). 실패 시 throw 로 엔트리 생성을 막는다.
+          ih.executeOperation({
+            kind: 'snapshot',
+            operationType: 'insertField',
+            operation: (wasm) => {
+              const result = wasm.insertClickHereField(pos, props.guide, props.memo, props.name, props.editable);
+              if (!result.ok) throw new Error('insertClickHereField not ok');
+              return { ...pos, charOffset: result.charOffset ?? pos.charOffset };
+            },
+          });
+          // 커서는 라우터가 삽입 위치로 이동시킨다 — 필드 끝 밖 마킹·활성 필드 해제는 기존대로.
+          ih.markCurrentFieldEndOutside();
+          services.wasm.clearActiveField();
+          // [Task #2370] 수동 emit 제거 — 스냅샷 라우팅의 'full' refresh 가 afterEdit() 를
+          // 부르고 거기서 이미 'document-mutated'/'document-changed' 를 emit 한다.
+          // 구독자(markDirty·autosave)는 reason 을 라벨로만 쓰므로 중복 emit 은 순손해다.
+          // 모달 확인 버튼으로 옮겨간 포커스를 편집기로 복원 — 종전엔 moveCursorTo 끝의
+          // focusTextarea 가 담당했으나 라우터 경로엔 없다(field:edit 의 onClose 복원과 동형).
+          ih.focus();
         } catch (err) {
           console.warn('[insert:field] 누름틀 삽입 실패:', err);
         }
@@ -215,19 +257,7 @@ export const insertCommands: CommandDef[] = [
     icon: 'icon-footnote',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
-      if (!services.getContext().hasDocument) return;
-      const ih = services.getInputHandler();
-      if (!ih) return;
-      const pos = ih.getPosition();
-      try {
-        const result = services.wasm.insertFootnote(pos.sectionIndex, pos.paragraphIndex, pos.charOffset);
-        if (result.ok) {
-          services.eventBus.emit('document-changed');
-          enterNoteEditing(services, ih, pos.sectionIndex, result.paraIdx, result.controlIdx);
-        }
-      } catch (err) {
-        console.warn('[insert:footnote] 각주 삽입 실패:', err);
-      }
+      insertNote(services, 'footnote');
     },
   },
   {
@@ -236,19 +266,7 @@ export const insertCommands: CommandDef[] = [
     icon: 'icon-endnote',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
-      if (!services.getContext().hasDocument) return;
-      const ih = services.getInputHandler();
-      if (!ih) return;
-      const pos = ih.getPosition();
-      try {
-        const result = services.wasm.insertEndnote(pos.sectionIndex, pos.paragraphIndex, pos.charOffset);
-        if (result.ok) {
-          services.eventBus.emit('document-changed');
-          enterNoteEditing(services, ih, pos.sectionIndex, result.paraIdx, result.controlIdx);
-        }
-      } catch (err) {
-        console.warn('[insert:endnote] 미주 삽입 실패:', err);
-      }
+      insertNote(services, 'endnote');
     },
   },
   {
@@ -275,7 +293,7 @@ export const insertCommands: CommandDef[] = [
     execute(services) {
       const pos = services.getInputHandler()?.getPosition();
       const sectionIdx = pos?.sectionIndex ?? 0;
-      endnoteShapeDialog = new EndnoteShapeDialog(services.wasm, services.eventBus, sectionIdx);
+      endnoteShapeDialog = new EndnoteShapeDialog(services.wasm, services.eventBus, sectionIdx, services);
       endnoteShapeDialog.show();
     },
   },
@@ -418,8 +436,7 @@ export const insertCommands: CommandDef[] = [
       if (!ih) return;
       const ref = ih.getSelectedPictureRef();
       if (!ref || ref.type !== 'shape') return;
-      services.wasm.changeShapeZOrder(ref.sec, ref.ppi, ref.ci, 'front');
-      ih.exitPictureObjectSelectionAndAfterEdit();
+      changeZOrder(services, ih, ref, 'front');
     },
   },
   {
@@ -431,8 +448,7 @@ export const insertCommands: CommandDef[] = [
       if (!ih) return;
       const ref = ih.getSelectedPictureRef();
       if (!ref || ref.type !== 'shape') return;
-      services.wasm.changeShapeZOrder(ref.sec, ref.ppi, ref.ci, 'forward');
-      ih.exitPictureObjectSelectionAndAfterEdit();
+      changeZOrder(services, ih, ref, 'forward');
     },
   },
   {
@@ -444,8 +460,7 @@ export const insertCommands: CommandDef[] = [
       if (!ih) return;
       const ref = ih.getSelectedPictureRef();
       if (!ref || ref.type !== 'shape') return;
-      services.wasm.changeShapeZOrder(ref.sec, ref.ppi, ref.ci, 'backward');
-      ih.exitPictureObjectSelectionAndAfterEdit();
+      changeZOrder(services, ih, ref, 'backward');
     },
   },
   {
@@ -457,8 +472,7 @@ export const insertCommands: CommandDef[] = [
       if (!ih) return;
       const ref = ih.getSelectedPictureRef();
       if (!ref || ref.type !== 'shape') return;
-      services.wasm.changeShapeZOrder(ref.sec, ref.ppi, ref.ci, 'back');
-      ih.exitPictureObjectSelectionAndAfterEdit();
+      changeZOrder(services, ih, ref, 'back');
     },
   },
   {
@@ -470,15 +484,17 @@ export const insertCommands: CommandDef[] = [
       if (!ih) return;
       const ref = ih.getSelectedPictureRef();
       if (!ref) return;
-      if (ref.type === 'shape' || ref.type === 'line' || ref.type === 'group') {
-        services.wasm.deleteShapeControl(ref.sec, ref.ppi, ref.ci);
-      } else if (ref.type === 'equation') {
-        services.wasm.deleteEquationControl(ref.sec, ref.ppi, ref.ci);
-      } else if (ref.cellPath && ref.cellPath.length > 0) {
-        services.wasm.deleteCellPictureControlByPath(ref.sec, ref.ppi, ref.cellPath, ref.ci);
-      } else {
-        services.wasm.deletePictureControl(ref.sec, ref.ppi, ref.ci);
-      }
+      recordObjectMutation(ih, 'deleteObject', (wasm) => {
+        if (ref.type === 'shape' || ref.type === 'line' || ref.type === 'group') {
+          wasm.deleteShapeControl(ref.sec, ref.ppi, ref.ci);
+        } else if (ref.type === 'equation') {
+          wasm.deleteEquationControl(ref.sec, ref.ppi, ref.ci);
+        } else if (ref.cellPath && ref.cellPath.length > 0) {
+          wasm.deleteCellPictureControlByPath(ref.sec, ref.ppi, ref.cellPath, ref.ci);
+        } else {
+          wasm.deletePictureControl(ref.sec, ref.ppi, ref.ci);
+        }
+      }, DEFER_REFRESH_TO_EXIT);
       ih.exitPictureObjectSelectionAndAfterEdit();
     },
   },
@@ -495,10 +511,11 @@ export const insertCommands: CommandDef[] = [
       const sec = refs[0].sec;
       const targets = refs.map(r => ({ paraIdx: r.ppi, controlIdx: r.ci }));
       try {
-        const result = services.wasm.groupShapes(sec, targets);
+        let result: ReturnType<typeof services.wasm.groupShapes> | undefined;
+        recordObjectMutation(ih, 'groupShapes', (wasm) => { result = wasm.groupShapes(sec, targets); }, DEFER_REFRESH_TO_EXIT);
         ih.exitPictureObjectSelectionAndAfterEdit();
         // 생성된 GroupShape를 선택
-        ih.selectPictureObject(sec, result.paraIdx, result.controlIdx, 'group');
+        if (result) ih.selectPictureObject(sec, result.paraIdx, result.controlIdx, 'group');
       } catch (err) {
         console.warn('[group-shapes] 개체 묶기 실패:', err);
       }
@@ -514,7 +531,7 @@ export const insertCommands: CommandDef[] = [
       const ref = ih.getSelectedPictureRef();
       if (!ref || ref.type !== 'group') return;
       try {
-        services.wasm.ungroupShape(ref.sec, ref.ppi, ref.ci);
+        recordObjectMutation(ih, 'ungroupShape', (wasm) => { wasm.ungroupShape(ref.sec, ref.ppi, ref.ci); }, DEFER_REFRESH_TO_EXIT);
         ih.exitPictureObjectSelectionAndAfterEdit();
       } catch (err) {
         console.warn('[ungroup-shapes] 개체 풀기 실패:', err);
@@ -591,6 +608,62 @@ function getProps(services: import('../types').CommandServices, ref: PictureRef)
   return services.wasm.getPictureProperties(ref.sec, ref.ppi, ref.ci) as unknown as Record<string, unknown>;
 }
 
+/**
+ * [계급 1 이관] 개체 조작 뮤테이션을 snapshot 으로 기록해 undo/redo 를 보장한다.
+ * 메뉴/도구상자 커맨드가 `services.wasm.*` 를 직접 호출하면 히스토리를 우회한다(같은
+ * 삭제라도 Delete 키 경로는 이미 `executeOperation({kind:'snapshot'})` 로 기록됨,
+ * input-handler-keyboard.ts). 그 경로와 동형으로 위임한다 — 뮤테이션만 기록하고 선택
+ * 해제·afterEdit·재선택 등 UI 후처리는 호출부가 기존대로 수행한다.
+ */
+function recordObjectMutation(
+  ih: InputHandler,
+  operationType: string,
+  mutate: (wasm: WasmBridge) => boolean | void,
+  opts?: { refresh?: RefreshPolicy },
+): void {
+  const pos = ih.getCursorPosition();
+  ih.executeOperation({
+    kind: 'snapshot',
+    operationType,
+    // [Task #2370] mutate 가 명시적으로 false 를 반환하면 문서 무변경 → 기록 취소.
+    // void 반환(대부분의 호출부)은 종전대로 항상 기록한다.
+    operation: (wasm) => (mutate(wasm) === false ? null : pos),
+    meta: opts?.refresh ? { refresh: opts.refresh } : undefined,
+  });
+}
+
+/**
+ * [Task #2370 클러스터 B] 뒤에 `exitPictureObjectSelectionAndAfterEdit()` 가 따라오는
+ * 호출부용 옵션. 스냅샷 라우팅의 기본 'full' refresh 가 `afterEdit()` 를 부르고 곧바로
+ * 선택 해제가 또 `afterEdit()` 를 불러 중복 repaint 가 된다. 스냅샷 쪽 리프레시를 끄면
+ * 최종 상태(선택 해제까지 끝난) 기준 한 번만 그린다.
+ */
+const DEFER_REFRESH_TO_EXIT = { refresh: 'none' } as const;
+
+/**
+ * [Task #2370 클러스터 A] z순서 변경 — 이미 맨 앞/뒤라 바뀔 것이 없으면 기록하지 않는다.
+ *
+ * `change_shape_z_order_native`(shape.rs)는 경계 케이스에서 문서를 건드리지 않고
+ * `{ok:true, zOrder:<현재값>}` 을 그대로 돌려준다("이미 맨 앞/뒤" → `changes = None`).
+ * 반대로 실제로 바뀌는 경우 새 z 는 항상 이전과 다르다(front=max+1 · back=min-1 ·
+ * forward/backward=이웃 z 또는 ±1). 따라서 **반환 zOrder 와 호출 전 zOrder 의 일치가
+ * 곧 무변경 신호**다 — 이를 no-op 으로 보고해 phantom undo 엔트리와 스냅샷 2슬롯 점유를
+ * 막는다.
+ */
+function changeZOrder(
+  services: import('../types').CommandServices,
+  ih: InputHandler,
+  ref: PictureRef,
+  operation: 'front' | 'forward' | 'backward' | 'back',
+): void {
+  const zBefore = (getProps(services, ref) as { zOrder?: number }).zOrder;
+  recordObjectMutation(ih, 'changeZOrder', (wasm) => {
+    const r = wasm.changeShapeZOrder(ref.sec, ref.ppi, ref.ci, operation);
+    return r.ok && r.zOrder !== zBefore;
+  }, DEFER_REFRESH_TO_EXIT);
+  ih.exitPictureObjectSelectionAndAfterEdit();
+}
+
 function setProps(services: import('../types').CommandServices, ref: PictureRef, props: Record<string, unknown>): any {
   if (ref.type === 'shape') {
     if (ref.cellPath && ref.cellPath.length > 0) {
@@ -628,8 +701,9 @@ function applyRotationDelta(services: import('../types').CommandServices, delta:
   // -180 ~ 180 범위로 정규화
   next = ((next % 360) + 360) % 360;
   if (next > 180) next -= 360;
-  setProps(services, ref, { rotationAngle: next });
-  services.eventBus.emit('document-changed');
+  // recordObjectMutation → executeOperation snapshot 의 'full' refresh 가 afterEdit()→
+  // 'document-changed' 를 이미 emit 한다. 수동 emit 은 중복(이중 렌더)이라 제거. [undo P3 정리]
+  recordObjectMutation(ih, 'rotateObject', () => setProps(services, ref, { rotationAngle: next }));
 }
 
 /** horzFlip/vertFlip을 토글한다 (shape + image 지원). */
@@ -641,6 +715,6 @@ function toggleFlip(services: import('../types').CommandServices, key: 'horzFlip
   const props = getProps(services, ref);
   if (props.sizeProtect) return;
   const cur = !!props[key];
-  setProps(services, ref, { [key]: !cur });
-  services.eventBus.emit('document-changed');
+  // 위 rotate 와 동일 — snapshot 라우팅이 이미 refresh 하므로 수동 emit 제거. [undo P3 정리]
+  recordObjectMutation(ih, 'flipObject', () => setProps(services, ref, { [key]: !cur }));
 }

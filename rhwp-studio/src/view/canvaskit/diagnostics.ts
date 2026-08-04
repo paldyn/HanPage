@@ -1,5 +1,4 @@
 const EXPECTED_CANVASKIT_UNSUPPORTED_OPS = new Set([
-  'charOverlap',
   'equation:unsupportedDirectReplay',
   'glyphOutline',
   'glyphOutline:glyphOutlineStrokeStyleUnsupported',
@@ -7,7 +6,6 @@ const EXPECTED_CANVASKIT_UNSUPPORTED_OPS = new Set([
   'glyphOutline:unsupportedColorGlyph',
   'glyphOutline:unsupportedOutlinePayload',
   'glyphOutline:unsupportedSvgGlyph',
-  'glyphRun',
   'image:dataMissing',
   'image:dimensionUnavailable',
   'image:invalidBounds',
@@ -17,22 +15,11 @@ const EXPECTED_CANVASKIT_UNSUPPORTED_OPS = new Set([
   'imageEffect:grayScale',
   'imageEffect:pattern8x8',
   'rawSvg:unsupportedDirectReplay',
-  'tabLeader',
-  'textControlMark',
-  'textDecoration',
-  'textRun:embossTextEffect',
   'textRun:emphasisDot',
-  'textRun:engraveTextEffect',
-  'textRun:glyphMapping',
   'textRun:layoutPositions',
-  'textRun:outlineTextEffect',
-  'textRun:ratioTextEffect',
   'textRun:scriptTextRequiresShaping',
-  'textRun:shadeTextEffect',
-  'textRun:shadowTextEffect',
-  'textRun:textDecoration',
-  'textRun:verticalText',
   'textRunFont',
+  'viewOption:showControlCodes',
 ]);
 
 export function isExpectedCanvasKitUnsupportedOp(op: string): boolean {

@@ -299,6 +299,7 @@ impl LayoutEngine {
                             .unwrap_or(0),
                         baseline: advance * 0.85,
                         field_marker: FieldMarkerType::None,
+                        display_text: None,
                     }),
                     BoundingBox::new(char_x, char_y, char_width, advance),
                 );
@@ -488,6 +489,7 @@ impl LayoutEngine {
             row_count,
             cell_spacing,
             self.dpi,
+            self.render_table_width_scale(table),
         );
 
         let table_width = row_col_x
@@ -759,7 +761,7 @@ impl LayoutEngine {
 
                             let bin_id = pic.image_attr.bin_data_id;
                             let img_data =
-                                find_bin_data(bin_data_content, bin_id).map(|bd| bd.data.clone());
+                                find_bin_data(bin_data_content, bin_id).map(|bd| bd.data.load());
                             let img_node_id = tree.next_id();
                             // [Task #1151 v4] 셀 안 inline picture 의 cell context + outer
                             // 정보 보존. rendering.rs:1495 의 Image JSON 직렬화 에 cellIdx/

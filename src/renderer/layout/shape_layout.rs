@@ -247,6 +247,7 @@ fn push_ole_empty_para_end_anchor(
             border_fill_id: 0,
             baseline,
             field_marker: FieldMarkerType::None,
+            display_text: None,
         }),
         BoundingBox::new(anchor_x, anchor_y, 0.0, line_height),
     );
@@ -443,8 +444,11 @@ impl LayoutEngine {
         parent: &mut RenderNode,
         bbox: BoundingBox,
         cfb_data: &[u8],
+        section_index: usize,
+        para_index: usize,
+        control_index: usize,
     ) -> bool {
-        if !self.is_hwpx_source.get()
+        if !self.profile.get().hwpx_stored_layout()
             || !crate::parser::ole_container::is_hmapsi_ole_container(cfb_data)
         {
             return false;
@@ -482,7 +486,15 @@ impl LayoutEngine {
         );
         let node = RenderNode::new(
             node_id,
-            RenderNodeType::RawSvg(crate::renderer::render_tree::RawSvgNode::new(svg)),
+            // HMapsi preview도 다른 OLE preview와 동일하게 원본 control을 보존한다.
+            // 화면에는 이미 그려졌지만 ref가 없으면 getPageControlLayout()이 이를 `ole`
+            // 선택 대상으로 방출하지 않아 Studio 클릭이 텍스트 hit-test로 빠진다 (#3319).
+            RenderNodeType::RawSvg(crate::renderer::render_tree::RawSvgNode::ole(
+                svg,
+                section_index,
+                para_index,
+                control_index,
+            )),
             bbox,
         );
         parent.children.push(node);
@@ -661,6 +673,7 @@ impl LayoutEngine {
                     layout_box,
                     color_str,
                     color: eq.color,
+                    script: eq.script.clone(),
                     font_size: font_size_px,
                     section_index: Some(section_index),
                     para_index: Some(para_index),
@@ -1888,7 +1901,7 @@ impl LayoutEngine {
                 // 그룹 내 그림: common이 비어있으므로 w, h(shape_attr 기반)를 직접 사용
                 let bin_data_id = pic.image_attr.bin_data_id;
                 let image_data =
-                    find_bin_data(bin_data_content, bin_data_id).map(|c| c.data.clone());
+                    find_bin_data(bin_data_content, bin_data_id).map(|c| c.data.load());
                 let img_id = tree.next_id();
                 let img_node = RenderNode::new(
                     img_id,
@@ -1929,7 +1942,9 @@ impl LayoutEngine {
                 if let Some(content) = find_bin_data(bin_data_content, ole.bin_data_id as u16) {
                     // HWPX에서 주입된 OOXML 차트 XML 직접 경로 (CFB 컨테이너 없음)
                     if content.extension == "ooxml_chart" {
-                        if let Some(chart) = crate::ooxml_chart::OoxmlChart::parse(&content.data) {
+                        if let Some(chart) =
+                            crate::ooxml_chart::OoxmlChart::parse(&content.data.load())
+                        {
                             let svg_fragment =
                                 chart.render_svg(render_x, render_y, render_w, render_h);
                             push_ole_raw_svg_render_node(
@@ -1946,7 +1961,7 @@ impl LayoutEngine {
                     }
                     if !rendered {
                         if let Some(container) =
-                            crate::parser::ole_container::parse_ole_container(&content.data)
+                            crate::parser::ole_container::parse_ole_container(&content.data.load())
                         {
                             if let Some(ooxml_bytes) = container.ooxml_chart.as_ref() {
                                 if let Some(chart) =
@@ -2045,6 +2060,38 @@ impl LayoutEngine {
                                 }
                             }
 
+                            // [#3363] EMF 부재 시 WMF 프레젠테이션 폴백 — HWP3 내장
+                            // OLE(글맵시 등)의 OlePres000 은 표준 WMF 다. 기존 WMF
+                            // 그림 경로와 동일하게 SVG 로 변환해 data URI 로 배치한다.
+                            if !rendered {
+                                if let Some(wmf_bytes) = container.preview_wmf.as_ref() {
+                                    if let Some(svg_bytes) =
+                                        crate::renderer::svg::convert_wmf_to_svg(wmf_bytes)
+                                    {
+                                        use base64::Engine;
+                                        let b64 = base64::engine::general_purpose::STANDARD
+                                            .encode(&svg_bytes);
+                                        let href = format!("data:image/svg+xml;base64,{}", b64);
+                                        let svg_fragment = format!(
+                                            "<image x=\"{:.2}\" y=\"{:.2}\" width=\"{:.2}\" height=\"{:.2}\" preserveAspectRatio=\"xMidYMid meet\" xlink:href=\"{}\" href=\"{}\"/>",
+                                            render_x, render_y, render_w, render_h, href, href
+                                        );
+                                        push_ole_raw_svg_render_node(
+                                            tree,
+                                            parent,
+                                            BoundingBox::new(
+                                                render_x, render_y, render_w, render_h,
+                                            ),
+                                            svg_fragment,
+                                            section_index,
+                                            para_index,
+                                            control_index,
+                                        );
+                                        rendered = true;
+                                    }
+                                }
+                            }
+
                             // 네이티브 임베딩 이미지(BMP/PNG/JPEG/GIF) 폴백
                             if !rendered {
                                 if let Some((kind, bytes)) = container.native_image.as_ref() {
@@ -2091,7 +2138,10 @@ impl LayoutEngine {
                                 tree,
                                 parent,
                                 BoundingBox::new(render_x, render_y, render_w, render_h),
-                                &content.data,
+                                &content.data.load(),
+                                section_index,
+                                para_index,
+                                control_index,
                             )
                         {
                             rendered = true;
@@ -2135,7 +2185,7 @@ impl LayoutEngine {
             if let Some(ref img_fill) = drawing.fill.image {
                 let bin_data_id = img_fill.bin_data_id;
                 let image_data =
-                    find_bin_data(bin_data_content, bin_data_id).map(|c| c.data.clone());
+                    find_bin_data(bin_data_content, bin_data_id).map(|c| c.data.load());
                 // 이미지 원본 크기: shape_attr의 original_width/height (HWPUNIT)
                 let original_size = {
                     let ow = drawing.shape_attr.original_width;
@@ -2508,6 +2558,25 @@ impl LayoutEngine {
                 }) {
                     if let Some(comp) = composed_paras.get_mut(pi) {
                         self.substitute_page_auto_numbers_in_composed(para, comp, current_pn);
+                    }
+                }
+            }
+        }
+
+        // AutoNumber(TotalPage) 치환: 글상자 안의 총쪽수 필드를 문서 전체 쪽수로 변환
+        let total_pages = self.total_pages.get();
+        if total_pages > 0 {
+            for (pi, para) in textbox_paragraphs[..para_count].iter().enumerate() {
+                if para.controls.iter().any(|c| {
+                    matches!(c, crate::model::control::Control::AutoNumber(an)
+                        if an.number_type == crate::model::control::AutoNumberType::TotalPage)
+                }) {
+                    if let Some(comp) = composed_paras.get_mut(pi) {
+                        self.substitute_total_page_auto_numbers_in_composed(
+                            para,
+                            comp,
+                            total_pages,
+                        );
                     }
                 }
             }
@@ -2966,6 +3035,7 @@ impl LayoutEngine {
                                     layout_box,
                                     color_str,
                                     color: eq.color,
+                                    script: eq.script.clone(),
                                     font_size: font_size_px,
                                     section_index: Some(section_index),
                                     para_index: Some(para_index),
@@ -3311,6 +3381,7 @@ impl LayoutEngine {
                             .unwrap_or(0),
                         baseline: advance * 0.85,
                         field_marker: FieldMarkerType::None,
+                        display_text: None,
                     }),
                     BoundingBox::new(char_x, char_y, char_width, advance),
                 );

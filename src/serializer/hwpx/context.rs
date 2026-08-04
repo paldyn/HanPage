@@ -75,8 +75,19 @@ pub struct BinDataEntry {
     pub media_type: String,
     /// IR 상의 bin_data_id (storage_id) — 매핑 역추적용
     pub bin_data_id: u16,
-    /// content.hpf `isEmbeded` — false 면 외부 파일 참조(ZIP 엔트리 없음, #1891).
+    /// content.hpf `isEmbeded` — false 면 ZIP 엔트리가 없는 항목이다:
+    /// 외부 파일 참조(#1891) 또는 스트림 부재로 콘텐츠가 없는 항목(#3526).
     pub is_embedded: bool,
+}
+
+/// [#3546] OOXML 차트 파트 — BinData 매니페스트 대상이 아니라
+/// `Chart/chartN.xml` 원형 경로로 방출되는 항목.
+#[derive(Debug, Clone)]
+pub struct ChartPartEntry {
+    /// ZIP 엔트리 경로 (예: "Chart/chart1.xml")
+    pub href: String,
+    /// IR 상의 bin_data_id (= 60000 + N, HWPX 파서 주입 규약)
+    pub bin_data_id: u16,
 }
 
 /// 1-pass 스캔으로 구축되는 직렬화 컨텍스트.
@@ -90,6 +101,10 @@ pub struct SerializeContext {
     pub style_ids: IdPool<u16>,
     /// `bin_data_id` (IR) → manifest 엔트리 매핑
     pub bin_data_map: HashMap<u16, BinDataEntry>,
+    /// [#3546] OOXML 차트 파트 — Chart/chartN.xml 원형 방출 목록.
+    /// 원본 content.hpf 는 Chart 파트를 나열하지 않으므로 manifest·3-way
+    /// 단언 대상 밖이다.
+    pub chart_entries: Vec<ChartPartEntry>,
     /// 문서 전역 문단 ID 카운터 — `<hp:p id="...">` 에 발급한다.
     para_id_counter: u32,
     /// subList(셀·글상자) 직렬화 중첩 깊이 (#1379 3단계).
@@ -170,6 +185,18 @@ impl SerializeContext {
         // 순번(i+1) 명명은 링크 항목으로 id 에 구멍이 있는 문서(#1891 73504)에서
         // 이름과 id 가 어긋나 재파스 그림 참조가 엉킨다.
         for bd in doc.bin_data_content.iter() {
+            // [#3546] OOXML 차트 파트(HWPX 파서가 60000+N 으로 주입)는 BinData 가
+            // 아니다 — 원본은 Chart/chartN.xml 이고 content.hpf 도 나열하지 않는다.
+            // manifest 등록 없이 원형 경로로 별도 방출한다.
+            if bd.extension == "ooxml_chart" {
+                if let Some(n) = bd.id.checked_sub(60000).filter(|n| *n >= 1) {
+                    ctx.chart_entries.push(ChartPartEntry {
+                        href: format!("Chart/chart{}.xml", n),
+                        bin_data_id: bd.id,
+                    });
+                    continue;
+                }
+            }
             // 빈 확장자는 원본과 동일하게 확장자 없이(`image{id}.`) 재직렬화한다.
             // 예전엔 `.bin` 기본값을 붙였으나(#1981), 원본이 확장자 없는 BinData
             // (`BinData/image13.` 등, OLE·미상 임베드)를 담은 경우 라운드트립 확장자
@@ -190,15 +217,21 @@ impl SerializeContext {
             );
         }
 
-        // 외부 참조(Link) BinData: 콘텐츠가 없어도 manifest 항목과 참조는 보존해야
-        // 한다 (#1891 — 미등록이면 해당 <hp:pic> 직렬화가 실패해 그림 컨트롤이
-        // 통째로 드롭되고 레이아웃 앵커가 사라져 렌더가 갈라진다). ZIP 엔트리는
-        // 만들지 않고 content.hpf 에 isEmbeded="0" + 원본 href 로만 방출한다.
+        // 콘텐츠 없는 BinData: 바이트가 없어도 manifest 항목과 참조는 보존해야
+        // 한다 (미등록이면 `write_img` 가 Err 를 반환해(picture.rs) 해당 <hp:pic>
+        // 이 통째로 드롭되고 레이아웃 앵커까지 사라져 렌더가 갈라진다).
+        //
+        // [#1891] 은 외부 참조(Link)만 이 구멍을 막았으나, Embedding/Storage 도
+        // 스트림이 없으면(parser/mod.rs 가 "BinData 스트림 없음" 경고 후 skip)
+        // bin_data_content 가 비어 위 루프에 걸리지 않는다. 그 결과 두 루프를
+        // 모두 빠져나가 같은 드롭이 재현됐다(#3526 hwpspec.hwp bin_data_id=37).
+        // 따라서 data_type 을 가리지 않고 "아직 등록되지 않은 모든 항목"으로 넓힌다.
+        //
+        // ZIP 엔트리는 만들지 않고 content.hpf 에 isEmbeded="0" + href(외부 경로,
+        // 없으면 빈 문자열)로만 방출한다 — mod.rs 가 ZIP 쓰기와 3-way 단언에서,
+        // package_check 가 엔트리 실재 검사에서 각각 제외하므로 패키지는 정합하다.
         // 명명은 위와 같은 숫자 불변식(`image{storage_id}`)을 따른다.
         for bd in &doc.doc_info.bin_data_list {
-            if !matches!(bd.data_type, crate::model::bin_data::BinDataType::Link) {
-                continue;
-            }
             // storage_id=0 은 "참조 없는 placeholder pic" 센티널(#1567)과 겹치므로
             // 등록하지 않는다 (HWP5 Link 항목은 storage_id 미부여일 수 있음).
             if bd.storage_id == 0 || ctx.bin_data_map.contains_key(&bd.storage_id) {
@@ -371,12 +404,12 @@ mod tests {
         let mut doc = Document::default();
         doc.bin_data_content.push(BinDataContent {
             id: 6,
-            data: vec![0, 1, 2],
+            data: vec![0, 1, 2].into(),
             extension: String::new(),
         });
         doc.bin_data_content.push(BinDataContent {
             id: 7,
-            data: vec![3, 4, 5],
+            data: vec![3, 4, 5].into(),
             extension: "bmp".to_string(),
         });
         let ctx = SerializeContext::collect_from_document(&doc);
@@ -385,6 +418,71 @@ mod tests {
         assert_eq!(e6.media_type, "application/octet-stream");
         let e7 = &ctx.bin_data_map[&7];
         assert_eq!(e7.href, "BinData/image7.bmp");
+    }
+
+    #[test]
+    fn issue3526_contentless_embedding_bindata_is_registered() {
+        // [#3526] 스트림이 없어 `bin_data_content` 가 비는 Embedding/Storage 항목도
+        // manifest 에 등록돼야 한다. 미등록이면 picture.rs `write_img` 가 Err 를
+        // 반환해 <hp:pic> 이 통째로 드롭되고 앵커·레이아웃까지 사라진다
+        // (hwpspec.hwp bin_data_id=37). [#1891] 은 Link 만 막아서 Embedding/Storage
+        // 는 두 등록 루프를 모두 빠져나갔다.
+        use crate::model::bin_data::{BinData, BinDataContent, BinDataType};
+        let mut doc = Document::default();
+        // 정상 항목(콘텐츠 보유) — 넓힌 루프가 이걸 덮어쓰면 안 된다.
+        doc.bin_data_content.push(BinDataContent {
+            id: 1,
+            data: vec![0, 1, 2].into(),
+            extension: "png".to_string(),
+        });
+        doc.doc_info.bin_data_list.push(BinData {
+            data_type: BinDataType::Embedding,
+            storage_id: 1,
+            extension: Some("png".to_string()),
+            ..Default::default()
+        });
+        // 스트림 부재 재현: 목록에는 있으나 콘텐츠가 없는 Embedding / Storage.
+        doc.doc_info.bin_data_list.push(BinData {
+            data_type: BinDataType::Embedding,
+            storage_id: 37,
+            extension: Some("jpg".to_string()),
+            ..Default::default()
+        });
+        doc.doc_info.bin_data_list.push(BinData {
+            data_type: BinDataType::Storage,
+            storage_id: 38,
+            extension: Some("OLE".to_string()),
+            ..Default::default()
+        });
+
+        let ctx = SerializeContext::collect_from_document(&doc);
+
+        // `write_img`(picture.rs) 의 분기 조건 그 자체 — Some 이어야 pic 이 산다.
+        assert_eq!(
+            ctx.resolve_bin_id(37),
+            Some("image37"),
+            "콘텐츠 없는 Embedding 도 등록돼야 <hp:pic> 이 드롭되지 않는다"
+        );
+        assert_eq!(
+            ctx.resolve_bin_id(38),
+            Some("image38"),
+            "콘텐츠 없는 Storage 도 동일하게 등록"
+        );
+
+        let e37 = &ctx.bin_data_map[&37];
+        assert!(
+            !e37.is_embedded,
+            "ZIP 엔트리가 없으므로 isEmbeded=0 (mod.rs 3-way 단언 제외 대상)"
+        );
+        assert_eq!(e37.media_type, "image/jpeg");
+        // abs_path 없는 Embedding 은 빈 href — populate_link_image_paths 가 빈
+        // 경로를 걸러내므로(parser/mod.rs) 허위 external_path 가 생기지 않는다.
+        assert_eq!(e37.href, "", "존재하지 않는 ZIP 경로를 가리키면 안 된다");
+
+        // 콘텐츠 보유 항목은 그대로 임베드로 남아야 한다(덮어쓰기 회귀 가드).
+        let e1 = &ctx.bin_data_map[&1];
+        assert!(e1.is_embedded, "콘텐츠 보유 항목은 isEmbeded=1 유지");
+        assert_eq!(e1.href, "BinData/image1.png");
     }
 
     #[test]

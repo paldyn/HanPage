@@ -54,6 +54,15 @@ impl DocumentCore {
         let row_count = table.row_count;
         let col_count = table.col_count;
 
+        // Table::insert_row()는 새 셀을 push()한 뒤 전체를
+        // sort_by_key(row, col)로 재정렬한다. local_resize_cell_widths/heights는
+        // 이 재정렬 이전의 cell 인덱스를 그대로 물고 있는 Vec<(usize, u32)>라서,
+        // 삽입 이후에는 엉뚱한(또는 범위를 벗어난) 셀을 가리키는 stale 참조가 된다.
+        // delete_table_row_native()(#2843/#2849), merge_table_cells_native()(#2832)와
+        // 동일하게, 행 삽입도 셀 인덱스 배치를 바꾸므로 함께 비워야 한다.
+        table.local_resize_cell_widths.clear();
+        table.local_resize_cell_heights.clear();
+
         self.document.sections[section_idx].raw_stream = None;
         self.recompose_section(section_idx);
         self.paginate_if_needed();
@@ -86,6 +95,12 @@ impl DocumentCore {
         let row_count = table.row_count;
         let col_count = table.col_count;
 
+        // insert_table_row_native()와 동일한 사유(위 주석 참조): Table::insert_column()도
+        // 새 셀을 push()한 뒤 sort_by_key(row, col)로 재정렬하므로 local_resize_cell_widths/
+        // heights의 인덱스 참조가 stale 해진다. 함께 비운다.
+        table.local_resize_cell_widths.clear();
+        table.local_resize_cell_heights.clear();
+
         self.document.sections[section_idx].raw_stream = None;
         self.recompose_section(section_idx);
         self.paginate_if_needed();
@@ -116,6 +131,15 @@ impl DocumentCore {
         table.dirty = true;
         let row_count = table.row_count;
         let col_count = table.col_count;
+
+        // Table::delete_row()는 삭제 행의 셀을 retain()으로 제거하고 남은 셀을
+        // sort_by_key(row, col)로 재정렬한다. local_resize_cell_widths/heights는
+        // 이 재정렬 이전의 cell 인덱스를 그대로 물고 있는 Vec<(usize, u32)>라서,
+        // 삭제 이후에는 엉뚱한(또는 범위를 벗어난) 셀을 가리키는 stale 참조가 된다.
+        // merge_table_cells_native()(#2832)와 동일하게, 행 삭제도 셀 인덱스 배치를
+        // 바꾸므로 함께 비워야 한다.
+        table.local_resize_cell_widths.clear();
+        table.local_resize_cell_heights.clear();
 
         self.document.sections[section_idx].raw_stream = None;
         self.recompose_section(section_idx);
@@ -148,6 +172,14 @@ impl DocumentCore {
         let row_count = table.row_count;
         let col_count = table.col_count;
 
+        // Table::delete_column()은 삭제된 열의 셀들을 cells에서 제거하므로 그 뒤 셀들의
+        // 인덱스가 앞으로 당겨진다(shift). insert_table_row_native()/insert_table_column_native()
+        // (#2853/#2859), delete_table_row_native()(#2843/#2849), merge_table_cells_native()(#2832)와
+        // 동일하게, local_resize_cell_widths/heights는 삭제 이전 cell_idx를 그대로 물고 있는
+        // Vec<(usize, u32)>라서 stale 참조가 되므로 함께 비운다.
+        table.local_resize_cell_widths.clear();
+        table.local_resize_cell_heights.clear();
+
         self.document.sections[section_idx].raw_stream = None;
         self.recompose_section(section_idx);
         self.paginate_if_needed();
@@ -160,6 +192,444 @@ impl DocumentCore {
         Ok(super::super::helpers::json_ok_with(&format!(
             "\"rowCount\":{},\"colCount\":{}",
             row_count, col_count
+        )))
+    }
+
+    /// 표를 지정 행에서 두 개로 나눈다 (한컴 [표-표 나누기], table(dividing).htm).
+    ///
+    /// `at_row` 행부터 새 표가 시작된다. 첫 행(0)에서는 한컴과 동일하게 거부한다.
+    /// 뒤 표는 앞 표의 속성(테두리·폭·바깥 여백 등)을 상속하고, 캡션은 앞 표에
+    /// 남긴다. 두 표 사이에는 한컴처럼 빈 문단 하나를 둔다.
+    pub fn split_table_native(
+        &mut self,
+        section_idx: usize,
+        parent_para_idx: usize,
+        control_idx: usize,
+        at_row: u16,
+    ) -> Result<String, HwpError> {
+        use crate::model::control::Control;
+        use crate::model::paragraph::{CharShapeRef, LineSeg, Paragraph};
+
+        let host_para_shape_id;
+        let host_char_shape_id;
+        {
+            let para = self
+                .document
+                .sections
+                .get(section_idx)
+                .and_then(|s| s.paragraphs.get(parent_para_idx))
+                .ok_or_else(|| HwpError::RenderError("문단 인덱스 범위 초과".to_string()))?;
+            host_para_shape_id = para.para_shape_id;
+            host_char_shape_id = para
+                .char_shapes
+                .first()
+                .map(|cs| cs.char_shape_id)
+                .unwrap_or(0);
+        }
+
+        let back_table = {
+            let table = self.get_table_mut(section_idx, parent_para_idx, control_idx)?;
+            if at_row == 0 {
+                return Err(HwpError::RenderError(
+                    "첫 번째 줄에서는 표 나누기를 할 수 없습니다".to_string(),
+                ));
+            }
+            if at_row >= table.row_count {
+                return Err(HwpError::RenderError(format!(
+                    "행 인덱스 {} 범위 초과 (총 {}행)",
+                    at_row, table.row_count
+                )));
+            }
+            // 손상된 row/span은 이후 row 이동·그리드 재구축에서 overflow나 wrap을
+            // 만들 수 있으므로, 어떤 문서 변형보다 먼저 거절한다. 세로 병합 셀이
+            // 분할 행을 가로지르면 양쪽 어디에도 온전히 속할 수 없다 — 한컴도 이
+            // 경우 나누기를 막는다.
+            for cell in &table.cells {
+                let row_end = u32::from(cell.row) + u32::from(cell.row_span);
+                if cell.row_span == 0 || row_end > u32::from(table.row_count) {
+                    return Err(HwpError::RenderError(format!(
+                        "손상된 표 셀 행 범위: row={}, row_span={}, 총 {}행",
+                        cell.row, cell.row_span, table.row_count
+                    )));
+                }
+                if cell.row < at_row && row_end > u32::from(at_row) {
+                    return Err(HwpError::RenderError(
+                        "세로로 합쳐진 셀이 걸쳐 있어 이 위치에서 나눌 수 없습니다".to_string(),
+                    ));
+                }
+            }
+
+            // 뒤 표: 속성 상속을 위해 통째로 복제한 뒤 행을 갈라낸다.
+            let mut back = table.clone();
+            back.cells.retain(|c| c.row >= at_row);
+            for cell in &mut back.cells {
+                cell.row -= at_row;
+            }
+            back.row_count -= at_row;
+            // row_sizes(행별 셀 수)는 산술 분할 대신 셀에서 재계산한다 — 파싱이
+            // 불완전해 row_sizes 가 row_count 와 어긋난 문서에서도 직렬화가 깨지지
+            // 않게 한다.
+            back.rebuild_row_sizes();
+            // 캡션은 앞 표에 남긴다.
+            back.caption = None;
+            // zone(셀 영역 서식)은 행 범위로 갈라 보존한다. 분할선을 가로지르는
+            // zone 은 양쪽으로 잘라 담는다 (서식 무음 소실 방지).
+            back.zones = table
+                .zones
+                .iter()
+                .filter(|z| z.end_row >= at_row)
+                .map(|z| {
+                    let mut z = z.clone();
+                    z.start_row = z.start_row.saturating_sub(at_row);
+                    z.end_row -= at_row;
+                    z
+                })
+                .collect();
+            // 복제된 뒤 표에 고유 비-0 instance_id 를 새로 배정한다 — 같은 문서에
+            // 동일 ID 표 두 개가 생기면 한컴 재열기·객체 식별이 충돌하고, 0 은
+            // 저장소 계약(create_table_native "비-0 필수") 위반이다. 원본 ID 에
+            // 분할 인자를 섞은 해시라 연쇄 분할에서도 서로 달라진다.
+            let orig_id = if table.raw_ctrl_data.len() >= common_obj_offsets::INSTANCE_ID.end {
+                u32::from_le_bytes(
+                    table.raw_ctrl_data[common_obj_offsets::INSTANCE_ID]
+                        .try_into()
+                        .unwrap(),
+                )
+            } else {
+                table.common.instance_id
+            };
+            let back_id = {
+                let mut h = orig_id
+                    .wrapping_mul(0x9e37_79b1)
+                    .wrapping_add(at_row as u32)
+                    .wrapping_add((back.row_count as u32).wrapping_mul(0x1000));
+                if h == 0 {
+                    h = 0x7c15_4b69;
+                }
+                h
+            };
+            back.common.instance_id = back_id;
+            if back.raw_ctrl_data.len() >= common_obj_offsets::INSTANCE_ID.end {
+                back.raw_ctrl_data[common_obj_offsets::INSTANCE_ID]
+                    .copy_from_slice(&back_id.to_le_bytes());
+            }
+            // Alt 로 조절한 행별 폭(local resize)을 나누기가 지우면 사용자가 만든
+            // 칸 모양이 소실된다. cells 는 row-major 정렬이라 앞 표 인덱스는
+            // 불변, 뒤 표는 앞 셀 수만큼 당겨 재매핑해 보존한다.
+            let front_cell_count = table.cells.iter().filter(|c| c.row < at_row).count();
+            back.local_resize_rows = table
+                .local_resize_rows
+                .iter()
+                .filter(|r| **r >= at_row)
+                .map(|r| r - at_row)
+                .collect();
+            back.local_resize_cols = table.local_resize_cols.clone();
+            back.local_resize_cell_widths = table
+                .local_resize_cell_widths
+                .iter()
+                .filter(|(idx, _)| *idx >= front_cell_count)
+                .map(|(idx, w)| (idx - front_cell_count, *w))
+                .collect();
+            back.local_resize_cell_heights = table
+                .local_resize_cell_heights
+                .iter()
+                .filter(|(idx, _)| *idx >= front_cell_count)
+                .map(|(idx, h)| (idx - front_cell_count, *h))
+                .collect();
+            back.rebuild_grid();
+            back.update_ctrl_dimensions();
+            back.dirty = true;
+
+            // 앞 표: at_row 이후를 잘라낸다.
+            table.cells.retain(|c| c.row < at_row);
+            table.row_count = at_row;
+            table.rebuild_row_sizes();
+            table.zones.retain(|z| z.start_row < at_row);
+            for z in &mut table.zones {
+                if z.end_row >= at_row {
+                    z.end_row = at_row - 1;
+                }
+            }
+            // 앞 표 local resize: 뒤쪽 행 제거는 앞 셀 인덱스를 바꾸지 않으므로
+            // 앞 범위 항목만 남기면 된다.
+            table.local_resize_rows.retain(|r| *r < at_row);
+            table
+                .local_resize_cell_widths
+                .retain(|(idx, _)| *idx < front_cell_count);
+            table
+                .local_resize_cell_heights
+                .retain(|(idx, _)| *idx < front_cell_count);
+            table.rebuild_grid();
+            table.update_ctrl_dimensions();
+            table.dirty = true;
+            back
+        };
+
+        // 사이 빈 문단 + 뒤 표 host 문단 (create_table_native 의 문단 골격과 동일 계약).
+        let make_raw_header_extra = || {
+            let mut extra = vec![0u8; 10];
+            extra[0..2].copy_from_slice(&1u16.to_le_bytes());
+            extra[4..6].copy_from_slice(&1u16.to_le_bytes());
+            extra
+        };
+        let make_skeleton_para = || Paragraph {
+            text: String::new(),
+            char_count: 1,
+            control_mask: 0,
+            char_shapes: vec![CharShapeRef {
+                start_pos: 0,
+                char_shape_id: host_char_shape_id,
+            }],
+            line_segs: vec![LineSeg {
+                text_start: 0,
+                line_height: 1000,
+                text_height: 1000,
+                baseline_distance: 850,
+                line_spacing: 600,
+                segment_width: 0,
+                tag: LineSeg::TAG_SINGLE_SEGMENT_LINE,
+                ..Default::default()
+            }],
+            para_shape_id: host_para_shape_id,
+            style_id: 0,
+            has_para_text: false,
+            raw_header_extra: make_raw_header_extra(),
+            ..Default::default()
+        };
+        let between_para = make_skeleton_para();
+        let back_para = Paragraph {
+            char_count: 9, // 확장 제어문자(8) + 문단끝(1)
+            control_mask: 0x0000_0800,
+            controls: vec![Control::Table(Box::new(back_table))],
+            ctrl_data_records: vec![None],
+            has_para_text: true,
+            ..make_skeleton_para()
+        };
+
+        let paragraphs = &mut self.document.sections[section_idx].paragraphs;
+        paragraphs.insert(parent_para_idx + 1, between_para);
+        paragraphs.insert(parent_para_idx + 2, back_para);
+
+        // [Task #2299] 신규 문단(사이 빈 문단·뒤 표 host)의 placeholder vpos 를
+        // 흐름에 연결한다 — 방치하면 vertical_pos=0 이 저장 단/쪽 리셋으로
+        // 오인·고착된다. 앞 표 host 는 높이가 줄었으므로 함께 reflow 한다.
+        // (create_table_native 의 동일 계약 블록 참조)
+        let fresh_end =
+            (parent_para_idx + 3).min(self.document.sections[section_idx].paragraphs.len());
+        for i in parent_para_idx..fresh_end {
+            self.reflow_paragraph(section_idx, i);
+        }
+        let doc_hwp3_layout = self.document.layout_profile().hwp3_layout();
+        crate::renderer::composer::recalculate_section_vpos(
+            &mut self.document.sections[section_idx].paragraphs,
+            parent_para_idx,
+            Some(parent_para_idx + 1..fresh_end),
+            None,
+            &self.styles,
+            self.dpi,
+            doc_hwp3_layout,
+        );
+
+        self.document.sections[section_idx].raw_stream = None;
+        self.recompose_section(section_idx);
+        self.paginate_if_needed();
+
+        self.event_log.push(DocumentEvent::TableSplit {
+            section: section_idx,
+            para: parent_para_idx,
+            ctrl: control_idx,
+        });
+        Ok(super::super::helpers::json_ok_with(&format!(
+            "\"frontRows\":{},\"backParaIdx\":{}",
+            at_row,
+            parent_para_idx + 2
+        )))
+    }
+
+    /// 현재 표에 다음 표를 이어 붙인다 (한컴 [표-표 붙이기], table(attach).htm).
+    ///
+    /// 표 사이에 빈 문단만 있어야 하며, 내용(텍스트·컨트롤)이 있으면 거부한다.
+    /// 칸 수가 달라도 붙는다 — 뒤 표 행들은 자기 칸 배치를 유지한다. 폭은 두 표 중
+    /// 큰 쪽을 따른다. 뒤 표의 host 문단과 사이 빈 문단들은 제거된다.
+    pub fn merge_table_with_next_native(
+        &mut self,
+        section_idx: usize,
+        parent_para_idx: usize,
+        control_idx: usize,
+    ) -> Result<String, HwpError> {
+        use crate::model::control::Control;
+
+        // 1) 다음 표 위치 탐색 — 사이에는 빈 문단만 허용.
+        let (back_para_idx, back_ctrl_idx, back_rows, back_max_row) = {
+            let section = self
+                .document
+                .sections
+                .get(section_idx)
+                .ok_or_else(|| HwpError::RenderError("구역 인덱스 범위 초과".to_string()))?;
+            if parent_para_idx >= section.paragraphs.len() {
+                return Err(HwpError::RenderError("문단 인덱스 범위 초과".to_string()));
+            }
+            let mut found: Option<(usize, usize, u16, u16)> = None;
+            for (idx, para) in section
+                .paragraphs
+                .iter()
+                .enumerate()
+                .skip(parent_para_idx + 1)
+            {
+                let table_ctrl = para
+                    .controls
+                    .iter()
+                    .position(|c| matches!(c, Control::Table(_)));
+                if let Some(ci) = table_ctrl {
+                    // host 문단에 표 외 내용이 있으면 한컴과 동일하게 거부.
+                    if !para.text.trim().is_empty() || para.controls.len() != 1 {
+                        return Err(HwpError::RenderError(
+                            "표 사이에 다른 내용이 있어 붙일 수 없습니다".to_string(),
+                        ));
+                    }
+                    let Control::Table(back) = &para.controls[ci] else {
+                        unreachable!("표 컨트롤 위치 확인됨")
+                    };
+                    // 뒤 표 캡션은 무음 소실 대신 명시 거부 — 사용자가 캡션을
+                    // 지우고 다시 시도할 수 있게 한다.
+                    if back.caption.is_some() {
+                        return Err(HwpError::RenderError(
+                            "뒤 표에 캡션이 있어 붙일 수 없습니다. 캡션을 지운 뒤 다시 시도하세요"
+                                .to_string(),
+                        ));
+                    }
+                    // row_count 뿐 아니라 셀·zone·행별 폭이 실제로 참조하는 최대
+                    // 행도 함께 잰다 — 손상 문서는 row_count 범위 밖 행을 가질 수
+                    // 있고, 그대로 오프셋을 더하면 u16 오버플로가 난다.
+                    let max_row = back
+                        .cells
+                        .iter()
+                        .map(|c| c.row)
+                        .chain(back.zones.iter().map(|z| z.start_row.max(z.end_row)))
+                        .chain(back.local_resize_rows.iter().copied())
+                        .max()
+                        .unwrap_or(0)
+                        .max(back.row_count.saturating_sub(1));
+                    found = Some((idx, ci, back.row_count, max_row));
+                    break;
+                }
+                if !para.text.trim().is_empty() || !para.controls.is_empty() {
+                    return Err(HwpError::RenderError(
+                        "표 사이에 다른 내용이 있어 붙일 수 없습니다".to_string(),
+                    ));
+                }
+            }
+            found.ok_or_else(|| HwpError::RenderError("붙일 다음 표가 없습니다".to_string()))?
+        };
+
+        // 2) 남은 검증을 문서 변형 전에 끝낸다 — 여기서 실패하면 문서는 그대로다.
+        //    (뒤 표를 먼저 remove 하면 실패 경로에서 뒤 표가 소실된다.)
+        let front_rows = self
+            .get_table_mut(section_idx, parent_para_idx, control_idx)?
+            .row_count;
+        if front_rows as u32 + back_rows as u32 > u16::MAX as u32
+            || front_rows as u32 + back_max_row as u32 > u16::MAX as u32
+        {
+            return Err(HwpError::RenderError(
+                "붙인 표의 행 수가 최대치(65535)를 넘습니다".to_string(),
+            ));
+        }
+
+        // 3) 뒤 표 분리 회수.
+        let back_table = {
+            let para = &mut self.document.sections[section_idx].paragraphs[back_para_idx];
+            match para.controls.remove(back_ctrl_idx) {
+                Control::Table(t) => *t,
+                _ => unreachable!("표 컨트롤 위치 확인됨"),
+            }
+        };
+
+        // 4) 앞 표에 행 이어붙이기. (이 조회는 2)에서 이미 성공한 재차용이라
+        //    실패하지 않는다 — borrow 를 좁히기 위한 재조회일 뿐이다.)
+        {
+            let table = self.get_table_mut(section_idx, parent_para_idx, control_idx)?;
+            let back_cell_count = back_table.cells.len();
+            let mut back_cells = back_table.cells;
+            for cell in &mut back_cells {
+                cell.row += front_rows;
+            }
+            table.cells.extend(back_cells);
+            table.row_count += back_table.row_count;
+            // row_sizes(행별 셀 수)는 이어붙인 셀에서 재계산한다 — 어느 쪽이든
+            // row_sizes 가 어긋나 있던 문서에서도 결과가 자기 일관된다.
+            table.rebuild_row_sizes();
+            table.col_count = table.col_count.max(back_table.col_count);
+            // 폭은 아래 update_ctrl_dimensions() 가 병합된 칸 폭에서 재계산한다.
+            // zone 서식 보존: 뒤 표 zone 은 행 오프셋을 더해 이어 붙인다.
+            let mut back_zones = back_table.zones;
+            for z in &mut back_zones {
+                z.start_row += front_rows;
+                z.end_row += front_rows;
+            }
+            table.zones.extend(back_zones);
+            // local resize(행별 폭/높이) 보존: 뒤 표 항목은 행·셀 인덱스에
+            // 앞 표만큼 오프셋을 더해 이어 붙인다.
+            let front_cell_count = table.cells.len() - back_cell_count;
+            table
+                .local_resize_rows
+                .extend(back_table.local_resize_rows.iter().map(|r| r + front_rows));
+            for col in back_table.local_resize_cols {
+                if !table.local_resize_cols.contains(&col) {
+                    table.local_resize_cols.push(col);
+                }
+            }
+            table.local_resize_cell_widths.extend(
+                back_table
+                    .local_resize_cell_widths
+                    .iter()
+                    .map(|(idx, w)| (idx + front_cell_count, *w)),
+            );
+            table.local_resize_cell_heights.extend(
+                back_table
+                    .local_resize_cell_heights
+                    .iter()
+                    .map(|(idx, h)| (idx + front_cell_count, *h)),
+            );
+            table.rebuild_grid();
+            table.update_ctrl_dimensions();
+            table.dirty = true;
+        }
+
+        // 5) 사이 빈 문단들과 뒤 표 host 문단 제거.
+        self.document.sections[section_idx]
+            .paragraphs
+            .drain(parent_para_idx + 1..=back_para_idx);
+
+        // [Task #2299] host 표 높이가 늘고 뒤 문단들이 당겨졌으므로 저장 vpos 를
+        // 재계산한다 — 방치하면 stale vpos 가 그대로 직렬화된다.
+        // (delete_table_control_native 의 동일 계약 블록 참조)
+        let stored_end_for_reset = crate::renderer::composer::paragraph_flow_end(
+            &self.document.sections[section_idx].paragraphs[parent_para_idx],
+        );
+        self.reflow_paragraph(section_idx, parent_para_idx);
+        let doc_hwp3_layout = self.document.layout_profile().hwp3_layout();
+        crate::renderer::composer::recalculate_section_vpos(
+            &mut self.document.sections[section_idx].paragraphs,
+            parent_para_idx,
+            None,
+            stored_end_for_reset,
+            &self.styles,
+            self.dpi,
+            doc_hwp3_layout,
+        );
+
+        self.document.sections[section_idx].raw_stream = None;
+        self.recompose_section(section_idx);
+        self.paginate_if_needed();
+
+        self.event_log.push(DocumentEvent::TablesMerged {
+            section: section_idx,
+            para: parent_para_idx,
+            ctrl: control_idx,
+        });
+        Ok(super::super::helpers::json_ok_with(&format!(
+            "\"rowCount\":{}",
+            front_rows + back_rows
         )))
     }
 
@@ -180,6 +650,15 @@ impl DocumentCore {
             .map_err(|e| HwpError::RenderError(e))?;
         table.dirty = true;
         let cell_count = table.cells.len();
+
+        // Table::merge_cells()는 비주 셀을 retain()으로 제거하고 남은 셀을
+        // sort_by_key(row, col)로 재정렬한다. local_resize_cell_widths/heights는
+        // 이 재정렬 이전의 cell 인덱스를 그대로 물고 있는 Vec<(usize, u32)>라서,
+        // 병합 이후에는 엉뚱한(또는 범위를 벗어난) 셀을 가리키는 stale 참조가 된다.
+        // transpose_unmerged_table_in_place()가 레이아웃 전면 재구성 시 이 두 필드를
+        // 비우는 것과 동일하게, 병합도 셀 인덱스 배치를 바꾸므로 함께 비워야 한다.
+        table.local_resize_cell_widths.clear();
+        table.local_resize_cell_heights.clear();
 
         self.document.sections[section_idx].raw_stream = None;
         self.recompose_section(section_idx);
@@ -210,6 +689,12 @@ impl DocumentCore {
             .map_err(|e| HwpError::RenderError(e))?;
         table.dirty = true;
         let cell_count = table.cells.len();
+
+        // Table::split_cell()은 대상 셀을 나눈 새 셀들을 push()한 뒤 재정렬하므로
+        // insert_table_row_native()/insert_table_column_native()(#2853/#2859)와 동일한 이유로
+        // local_resize_cell_widths/heights의 cell_idx가 stale해진다. 함께 비운다.
+        table.local_resize_cell_widths.clear();
+        table.local_resize_cell_heights.clear();
 
         self.document.sections[section_idx].raw_stream = None;
         self.recompose_section(section_idx);
@@ -245,6 +730,11 @@ impl DocumentCore {
             .map_err(|e| HwpError::RenderError(e))?;
         table.dirty = true;
         let cell_count = table.cells.len();
+
+        // split_table_cell_native()와 동일한 사유(위 주석 참조): split_cell_into()도 새 셀들을
+        // push() 후 재정렬하므로 local_resize_cell_widths/heights가 stale해진다.
+        table.local_resize_cell_widths.clear();
+        table.local_resize_cell_heights.clear();
 
         self.document.sections[section_idx].raw_stream = None;
         self.recompose_section(section_idx);
@@ -289,6 +779,12 @@ impl DocumentCore {
             .map_err(|e| HwpError::RenderError(e))?;
         table.dirty = true;
         let cell_count = table.cells.len();
+
+        // split_table_cell_native()/split_table_cell_into_native()와 동일한 이유(위 주석 참조):
+        // split_cells_in_range()도 내부적으로 split_cell_into()를 반복 호출해 cells 배열의
+        // 인덱스 배치를 바꾸므로 local_resize_cell_widths/heights가 stale해진다. 함께 비운다.
+        table.local_resize_cell_widths.clear();
+        table.local_resize_cell_heights.clear();
 
         self.document.sections[section_idx].raw_stream = None;
         self.recompose_section(section_idx);
@@ -1311,6 +1807,14 @@ impl DocumentCore {
 
             let mut new_bf = self.document.doc_info.border_fills[bf_idx].clone();
             new_bf.borders[dir] = new_border;
+            // 파싱된 문서의 BorderFill 은 원본 BORDER_FILL 레코드 바이트를 raw_data 로
+            // 들고 있고(parser/doc_info.rs), 직렬화기는 raw_data 가 있으면 필드 대신 그
+            // 바이트를 그대로 쓴다(serializer/doc_info.rs). 비우지 않으면 위에서 바꾼
+            // borders[dir] 이 저장 시 사라져 이웃 셀의 공유 변이 옛 테두리로 되돌아간다.
+            // border_fills_equal(helpers.rs)이 raw_data 를 비교에서 제외하므로 아래
+            // 중복 검색도 이를 걸러내지 못한다. 같은 커맨드의 형제
+            // create_border_fill_from_json(html_table_import.rs)은 이미 raw_data 를 비운다.
+            new_bf.raw_data = None;
 
             // 동일한 BorderFill 검색/추가
             let bf_id = {
@@ -1327,6 +1831,13 @@ impl DocumentCore {
                     Some(id) => id,
                     None => {
                         self.document.doc_info.border_fills.push(new_bf);
+                        // [#2555] DocInfo 패스스루 무효화. 이 함수는 섹션 스트림만
+                        // 지우는데 섹션과 DocInfo 는 별개 계층이라, 이게 없으면
+                        // serialize_doc_info 가 원본 스트림을 그대로 반환해
+                        // (serializer/doc_info.rs:23-33) 새 BORDER_FILL 이 저장되지 않고
+                        // 본문의 border_fill_id 만 범위를 벗어난다. 형제 호출부
+                        // (object_ops/table.rs:451, html_table_import.rs:769)는 모두 무효화한다.
+                        self.document.doc_info.raw_stream_dirty = true;
                         self.document.doc_info.border_fills.len() as u16
                     }
                 }
@@ -1444,6 +1955,20 @@ impl DocumentCore {
                     let entry = width_delta_by_row.entry(cell.row).or_insert((0, 0));
                     entry.0 += 1;
                     entry.1 += actual_delta;
+                    // local resize override(절대값 렌더 폭)를 가진 셀에 plain delta 가
+                    // 적용되면 override 도 같은 양만큼 이동시킨다. 그대로 두면 이후
+                    // 칸 전체 조절(Ctrl) 시 이 셀의 행만 옛 경계에 얼어붙어 나머지
+                    // 칸과 따로 논다 (renderWidth 힌트 갱신 케이스는 아래 local_resize
+                    // 블록이 절대값을 다시 쓰므로 이 보정과 겹치지 않는다).
+                    if upd.render_width.is_none() {
+                        if let Some((_, w)) = table
+                            .local_resize_cell_widths
+                            .iter_mut()
+                            .find(|(idx, _)| *idx == upd.cell_idx)
+                        {
+                            *w = (*w as i64 + actual_delta).max(MIN_CELL_SIZE as i64) as u32;
+                        }
+                    }
                 }
                 if upd.height_delta != 0 {
                     let old_h = cell.height;
@@ -1455,6 +1980,16 @@ impl DocumentCore {
                     let entry = height_delta_by_col.entry(cell.col).or_insert((0, 0));
                     entry.0 += 1;
                     entry.1 += actual_delta;
+                    // 높이 override 도 폭과 동일하게 동반 이동 (위 주석 참조).
+                    if upd.render_height.is_none() {
+                        if let Some((_, h)) = table
+                            .local_resize_cell_heights
+                            .iter_mut()
+                            .find(|(idx, _)| *idx == upd.cell_idx)
+                        {
+                            *h = (*h as i64 + actual_delta).max(MIN_CELL_SIZE as i64) as u32;
+                        }
+                    }
                 }
             }
             if upd.local_resize {
@@ -2377,16 +2912,12 @@ impl DocumentCore {
         }
     }
 
-    /// 표 전체의 바운딩박스를 반환한다 (네이티브).
-    pub(crate) fn get_table_bbox_native(
+    fn validate_table_bbox_ref(
         &self,
         section_idx: usize,
         parent_para_idx: usize,
         control_idx: usize,
-    ) -> Result<String, HwpError> {
-        use crate::renderer::render_tree::{RenderNode, RenderNodeType};
-
-        // 해당 문단에 표 컨트롤이 실제로 있는지 사전 확인 (전체 페이지 순회 방지)
+    ) -> Result<(), HwpError> {
         let has_table = self
             .document
             .sections
@@ -2401,6 +2932,17 @@ impl DocumentCore {
                 section_idx, parent_para_idx, control_idx
             )));
         }
+        Ok(())
+    }
+
+    fn find_table_bbox_on_page(
+        &self,
+        section_idx: usize,
+        parent_para_idx: usize,
+        control_idx: usize,
+        page_idx: usize,
+    ) -> Result<Option<String>, HwpError> {
+        use crate::renderer::render_tree::{RenderNode, RenderNodeType};
 
         fn find_table_bbox(
             node: &RenderNode,
@@ -2429,16 +2971,33 @@ impl DocumentCore {
             None
         }
 
+        let tree = self.build_page_tree_cached(page_idx as u32)?;
+        Ok(find_table_bbox(
+            &tree.root,
+            section_idx,
+            parent_para_idx,
+            control_idx,
+            page_idx,
+        ))
+    }
+
+    /// 표 전체의 첫 번째 fragment 바운딩박스를 반환한다 (네이티브).
+    ///
+    /// page 를 모르는 기존 호출자의 호환 계약이다. pointer 처럼 현재 page 를 아는 호출자는
+    /// `get_table_bbox_at_page_native` 를 사용해야 한다.
+    pub(crate) fn get_table_bbox_native(
+        &self,
+        section_idx: usize,
+        parent_para_idx: usize,
+        control_idx: usize,
+    ) -> Result<String, HwpError> {
+        self.validate_table_bbox_ref(section_idx, parent_para_idx, control_idx)?;
+
         let total_pages = self.page_count() as usize;
         for page_num in 0..total_pages {
-            let tree = self.build_page_tree_cached(page_num as u32)?;
-            if let Some(result) = find_table_bbox(
-                &tree.root,
-                section_idx,
-                parent_para_idx,
-                control_idx,
-                page_num,
-            ) {
+            if let Some(result) =
+                self.find_table_bbox_on_page(section_idx, parent_para_idx, control_idx, page_num)?
+            {
                 return Ok(result);
             }
         }
@@ -2447,6 +3006,35 @@ impl DocumentCore {
             "표 노드를 찾을 수 없습니다 (sec={}, ppi={}, ci={})",
             section_idx, parent_para_idx, control_idx
         )))
+    }
+
+    /// 지정 page 에 배치된 표 fragment 의 바운딩박스를 반환한다 (네이티브).
+    ///
+    /// 다른 page 의 첫 fragment 로 fallback 하지 않는다. page-local pointer 좌표와 다른
+    /// fragment bbox 를 비교하면 텍스트 클릭이 표 경계로 오인될 수 있기 때문이다 (#2400).
+    pub(crate) fn get_table_bbox_at_page_native(
+        &self,
+        section_idx: usize,
+        parent_para_idx: usize,
+        control_idx: usize,
+        page_idx: usize,
+    ) -> Result<String, HwpError> {
+        self.validate_table_bbox_ref(section_idx, parent_para_idx, control_idx)?;
+        let total_pages = self.page_count() as usize;
+        if page_idx >= total_pages {
+            return Err(HwpError::RenderError(format!(
+                "페이지 인덱스 {} 범위 초과 (pageCount={})",
+                page_idx, total_pages
+            )));
+        }
+
+        self.find_table_bbox_on_page(section_idx, parent_para_idx, control_idx, page_idx)?
+            .ok_or_else(|| {
+                HwpError::RenderError(format!(
+                    "페이지 {}에서 표 노드를 찾을 수 없습니다 (sec={}, ppi={}, ci={})",
+                    page_idx, section_idx, parent_para_idx, control_idx
+                ))
+            })
     }
 
     /// [Task #919] 글상자/도형 컨트롤의 페이지 좌표 바운딩박스를 반환한다 (네이티브).
@@ -2639,10 +3227,20 @@ impl DocumentCore {
             section.raw_stream = None;
         }
 
+        // [Task #2299] 리셋 판별용 — reflow 이전 저장 흐름 end 캡처.
+        let stored_end_for_reset = crate::renderer::composer::paragraph_flow_end(
+            &self.document.sections[section_idx].paragraphs[parent_para_idx],
+        );
         self.reflow_paragraph(section_idx, parent_para_idx);
+        let doc_hwp3_layout = self.document.layout_profile().hwp3_layout();
         crate::renderer::composer::recalculate_section_vpos(
             &mut self.document.sections[section_idx].paragraphs,
             parent_para_idx,
+            None,
+            stored_end_for_reset,
+            &self.styles,
+            self.dpi,
+            doc_hwp3_layout,
         );
         self.recompose_section(section_idx);
         self.paginate_if_needed();
@@ -2938,6 +3536,168 @@ mod table_attr_save_roundtrip_tests {
         assert!(
             matches!(vrel, VertRelTo::Para),
             "vertRelTo 변경이 HWP5 저장에서 유실됨 (실제: {vrel:?})"
+        );
+    }
+}
+
+#[cfg(test)]
+mod neighbor_border_raw_data_tests {
+    //! 이웃 셀 테두리 갱신의 raw_data 유실 회귀 테스트.
+    //!
+    //! update_neighbor_borders 는 이웃 셀의 BorderFill 을 clone 해 한 방향만 바꾸는데,
+    //! 파싱된 문서에서 물려온 raw_data 를 비우지 않으면 직렬화기가 원본 바이트를 그대로
+    //! 써서 방금 바꾼 방향이 저장 시 사라진다. 이웃 셀의 공유 변이 옛 테두리로 되돌아간다.
+    //! 같은 커맨드의 형제 create_border_fill_from_json 은 이미 raw_data 를 비운다.
+
+    use crate::document_core::DocumentCore;
+    use crate::model::control::Control;
+    use crate::model::document::{Document, Section};
+    use crate::model::paragraph::Paragraph;
+    use crate::model::style::{BorderFill, BorderLine, BorderLineType};
+    use crate::model::table::{Cell, Table};
+
+    /// 2 칸짜리 표 한 줄. 셀 0(target)과 셀 1(neighbor)이 세로 변을 공유한다.
+    fn core_with_two_cell_row() -> DocumentCore {
+        let mut doc = Document::default();
+
+        // border_fills[0] (id=1): target 셀(0)의 fill — 이 테스트에서는 무관.
+        let mut bf_target = BorderFill::default();
+        bf_target.raw_data = Some(vec![0xAA; 39]);
+        doc.doc_info.border_fills.push(bf_target);
+
+        // border_fills[1] (id=2): 이웃 셀(1)의 fill — clone 되어 갱신되는 대상.
+        let mut bf_neighbor = BorderFill::default();
+        bf_neighbor.raw_data = Some(vec![0xBB; 39]);
+        doc.doc_info.border_fills.push(bf_neighbor);
+
+        let mut table = Table::default();
+        table.row_count = 1;
+        table.col_count = 2;
+        table.cells = vec![
+            Cell {
+                row: 0,
+                col: 0,
+                col_span: 1,
+                row_span: 1,
+                border_fill_id: 1,
+                ..Default::default()
+            },
+            Cell {
+                row: 0,
+                col: 1,
+                col_span: 1,
+                row_span: 1,
+                border_fill_id: 2,
+                ..Default::default()
+            },
+        ];
+
+        let mut para = Paragraph::default();
+        para.controls.push(Control::Table(Box::new(table)));
+
+        let mut section = Section::default();
+        section.paragraphs.push(para);
+        doc.sections.push(section);
+
+        let mut core = DocumentCore::new_empty();
+        core.document = doc;
+        core
+    }
+
+    #[test]
+    fn neighbor_border_update_drops_stale_raw_data() {
+        let mut core = core_with_two_cell_row();
+        let new_border = BorderLine {
+            line_type: BorderLineType::Double,
+            width: 3,
+            color: 0x00FF0000,
+        };
+        // target = 셀 0, 우측 엣지(target_col=0, span=1)를 셀 1 이 공유 → 셀 1 의 좌측(dir=0)
+        // 이 new_borders[1] 로 갱신된다("대상 셀의 우측 엣지 공유 → 이웃 좌측").
+        core.update_neighbor_borders(
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            &[
+                BorderLine::default(),
+                new_border,
+                BorderLine::default(),
+                BorderLine::default(),
+            ],
+        );
+
+        let table = match &core.document.sections[0].paragraphs[0].controls[0] {
+            Control::Table(t) => t,
+            _ => panic!("표 컨트롤이어야 함"),
+        };
+        let updated_bf_id = table.cells[1].border_fill_id;
+        assert_ne!(
+            updated_bf_id, 2,
+            "테두리가 바뀌었으니 새 BorderFill 이 push 돼야 함"
+        );
+
+        let bf = &core.document.doc_info.border_fills[(updated_bf_id as usize) - 1];
+        assert!(
+            bf.raw_data.is_none(),
+            "raw_data 가 남으면 저장 시 이웃 셀의 공유 변이 옛 테두리로 되돌아간다"
+        );
+        assert_eq!(
+            bf.borders[0].width, 3,
+            "이웃 셀 기준 좌측 테두리가 갱신돼야 함"
+        );
+        assert!(matches!(bf.borders[0].line_type, BorderLineType::Double));
+    }
+
+    /// [#2555] 새 BorderFill push 시 DocInfo 패스스루를 무효화해야 한다.
+    ///
+    /// 이 함수는 섹션 스트림만 지우는데 섹션과 DocInfo 는 별개 계층이다.
+    /// 무효화가 없으면 serialize_doc_info 가 원본 스트림을 그대로 반환해
+    /// (serializer/doc_info.rs:23-33) 새 BORDER_FILL 이 저장되지 않고, 본문의
+    /// border_fill_id 만 범위를 벗어나 dangling 이 된다.
+    #[test]
+    fn neighbor_border_push_marks_doc_info_dirty() {
+        let mut core = core_with_two_cell_row();
+        // 파싱된 문서 상태 재현: 원본 DocInfo 스트림이 있고 아직 깨끗하다.
+        core.document.doc_info.raw_stream = Some(vec![0xCC; 64]);
+        core.document.doc_info.raw_stream_dirty = false;
+        let before_len = core.document.doc_info.border_fills.len();
+
+        let new_border = BorderLine {
+            line_type: BorderLineType::Double,
+            width: 3,
+            color: 0x00FF0000,
+        };
+        core.update_neighbor_borders(
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            &[
+                BorderLine::default(),
+                new_border,
+                BorderLine::default(),
+                BorderLine::default(),
+            ],
+        );
+
+        assert_eq!(
+            core.document.doc_info.border_fills.len(),
+            before_len + 1,
+            "새 조합이므로 BorderFill 이 push 돼야 함(전제 확인)"
+        );
+        assert!(
+            core.document.doc_info.raw_stream_dirty,
+            "DocInfo 패스스루가 무효화되지 않으면 push 한 BORDER_FILL 이 저장되지 않아 \
+             본문의 border_fill_id 가 dangling 이 된다"
         );
     }
 }

@@ -10,7 +10,12 @@ test('EditorTransport는 exact origin의 v1 port로 binary를 caller detach 없�
     postMessage(message, targetOrigin, ports) {
       assert.equal(targetOrigin, 'https://studio.example');
       assert.equal(message.type, 'rhwp-connect');
-      assert.deepEqual(message.capabilities, ['transferable-array-buffer', 'hml-export']);
+      assert.deepEqual(message.capabilities, [
+        'transferable-array-buffer',
+        'hml-export',
+        'renderer-diagnostics-v1',
+        'notify-saved-v1',
+      ]);
       const server = ports[0];
       server.onmessage = ({ data }) => {
         received = data;
@@ -296,13 +301,36 @@ test('createEditor 연결 실패는 생성한 iframe과 transport를 정리한�
 
   try {
     await assert.rejects(
-      createEditor(container, { studioUrl: 'https://studio.example/app' }),
+      createEditor(container, { studioUrl: 'https://studio.example/app?profile=screen', renderer: 'canvaskit' }),
       /version mismatch/,
     );
+    assert.equal(iframe.src, 'https://studio.example/app?profile=screen&renderer=canvaskit');
     assert.equal(removed, true);
   } finally {
     globalThis.document = originalDocument;
     globalThis.window = originalWindow;
+  }
+});
+
+test('createEditor는 지원하지 않는 renderer를 iframe 생성 전에 거부한다', async () => {
+  const originalDocument = globalThis.document;
+  let created = false;
+  globalThis.document = {
+    baseURI: 'https://host.example/',
+    createElement() {
+      created = true;
+      return {};
+    },
+  };
+
+  try {
+    await assert.rejects(
+      createEditor({ appendChild() {} }, { renderer: 'svg' }),
+      /Unsupported renderer: svg/,
+    );
+    assert.equal(created, false);
+  } finally {
+    globalThis.document = originalDocument;
   }
 });
 

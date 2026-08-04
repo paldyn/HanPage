@@ -1,4 +1,17 @@
 import init, { HwpDocument } from "@rhwp-wasm/rhwp.js";
+import { blake3 } from "@noble/hashes/blake3.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
+
+import {
+  parseCanvasKitDocumentPreflight,
+  withCanvasKitSurfaceBlockers,
+} from "@/core/canvaskit-document-preflight";
+import { resolveCanvasKitFontPlan } from "@/core/font-loader";
+import type { PageLayerTree } from "@/core/types";
+import {
+  RendererSession,
+  type RendererSessionSelection,
+} from "@/view/renderer-session";
 
 // WASM 렌더러가 호출하는 텍스트 폭 측정 콜백 등록
 installMeasureTextWidth();
@@ -11,7 +24,9 @@ const scrollContainer = document.getElementById("scroll-container")!;
 const scrollContent = document.getElementById("scroll-content")!;
 const stbPage = document.getElementById("stb-page")!;
 const stbMessage = document.getElementById("stb-message")!;
-const stbZoomVal = document.getElementById("stb-zoom-val")!;
+const stbZoomLabel = document.getElementById("stb-zoom-label")!;
+const stbZoomMenu = document.getElementById("stb-zoom-menu")!;
+const stbZoomPopup = document.getElementById("stb-zoom-popup")!;
 const stbZoomOut = document.getElementById("stb-zoom-out")!;
 const stbZoomIn = document.getElementById("stb-zoom-in")!;
 
@@ -28,19 +43,89 @@ const navPanels = new Map<string, HTMLElement>(
   ])
 );
 const stbSidebarToggle = document.getElementById("stb-sidebar-toggle")!;
-const stbViewMode = document.getElementById("stb-view-mode")!;
 
 // 문서 상태
+type ZoomMode = "manual" | "fitWidth" | "fitPage";
+
 let hwpDoc: HwpDocument | null = null;
 let pageInfos: PageInfo[] = [];
+/** 실제 적용 중인 배율. 맞춤 모드에서도 계산된 값이 들어간다. */
 let currentZoom = 1.0;
+let zoomMode: ZoomMode = "manual";
 let currentPage = 0;
 let viewMode: "single" | "double" = "single";
 let fileName = "";
+let documentLoadGeneration = 0;
+let rendererSelection: RendererSessionSelection | null = null;
+let rendererFallbackScheduled = false;
 const PREFETCH_MARGIN = 300;
 const ZOOM_STEP = 0.1;
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 3.0;
+/** .page-row 의 CSS gap 과 일치해야 한다. */
+const ROW_GAP = 12;
+/** #scroll-container 의 세로 padding 과 일치해야 한다. */
+const CONTENT_PADDING = 12;
+/** 맞춤 배율에서 쪽 좌우로 남겨 두는 여백. */
+const SIDE_MARGIN = 12;
+
+const canvasKitDefaultFontUri = scrollContainer.dataset.canvaskitFontUri ?? "";
+const canvasKitFontsBaseUri = scrollContainer.dataset.canvaskitFontsBaseUri ?? "";
+const vscodeBundledFontFiles = new Set([
+  "NotoSerifKR-Regular.woff2",
+  "NotoSerifKR-Bold.woff2",
+  "NotoSansKR-Regular.woff2",
+  "NotoSansKR-Bold.woff2",
+  "NotoSansKR-ExtraLight.woff2",
+  "Pretendard-Regular.woff2",
+  "Pretendard-Bold.woff2",
+  "D2Coding-Regular.woff2",
+  "NanumGothic-Regular.woff2",
+  "NanumMyeongjo-Regular.woff2",
+  "GowunBatang-Regular.woff2",
+  "GowunDodum-Regular.woff2",
+]);
+const canvasKitFontPlan = (requiredFontFamilies: readonly string[]) => resolveCanvasKitFontPlan(
+  requiredFontFamilies,
+  {
+    localFontBaseUrl: canvasKitFontsBaseUri,
+    availableLocalFiles: vscodeBundledFontFiles,
+    disableExternalWebFonts: true,
+  },
+);
+const rendererSession = new RendererSession(
+  { backend: "canvas2d", source: "default" },
+  { mode: "default", source: "default" },
+  { preference: "auto", requested: "auto" },
+  "screen",
+  async (mode, surface) => {
+    const { CanvasKitLayerRenderer } = await import("@/view/canvaskit-renderer");
+    return CanvasKitLayerRenderer.create(
+      mode,
+      surface,
+      {
+        ...(canvasKitDefaultFontUri ? { defaultFontUrl: canvasKitDefaultFontUri } : {}),
+        requirePreparedFontFamilies: true,
+      },
+    );
+  },
+  {
+    transformCanvasKitPreflight(report) {
+      const plan = canvasKitFontPlan(report.requiredFontFamilies);
+      return withCanvasKitSurfaceBlockers(
+        report,
+        plan.unavailableFonts.map(font => `fontUnavailable:${font}`),
+      );
+    },
+    async prepareCanvasKitDocument(renderer, report) {
+      const plan = canvasKitFontPlan(report.requiredFontFamilies);
+      if (plan.unavailableFonts.length > 0) {
+        throw new Error(`CanvasKit font family가 준비되지 않았습니다: ${plan.unavailableFonts.join(", ")}`);
+      }
+      await renderer.prepareBundledFonts(plan.sources);
+    },
+  },
+);
 
 interface PageInfo {
   width: number;
@@ -74,43 +159,8 @@ window.addEventListener("message", (event) => {
   const msg = event.data;
 
   if (msg.type === "load") {
-    if (!wasmReady) {
-      stbMessage.textContent = "오류: WASM이 아직 초기화되지 않았습니다";
-      return;
-    }
-    try {
-      fileName = msg.fileName;
-      stbMessage.textContent = `${fileName} 로딩 중...`;
-
-      const fileBytes = toUint8Array(msg.fileData);
-      hwpDoc = new HwpDocument(fileBytes);
-      hwpDoc.setClipEnabled(false);
-
-      const docInfo = JSON.parse(hwpDoc.getDocumentInfo());
-      const pageCount: number = docInfo.page_count ?? docInfo.pageCount ?? 0;
-
-      pageInfos = [];
-      for (let i = 0; i < pageCount; i++) {
-        const pi = JSON.parse(hwpDoc.getPageInfo(i));
-        pageInfos.push({
-          width: pi.width,
-          height: pi.height,
-          rendered: false,
-          element: null,
-        });
-      }
-
-      stbMessage.textContent = fileName;
-      updateStatusBar();
-      buildPageLayout();
-      updateVisiblePages();
-      buildSidebar();
-
-      vscode.postMessage({ type: "loaded", pageCount });
-    } catch (err: any) {
-      stbMessage.textContent = `오류: ${err.message ?? err}`;
-      console.error("HWP 로드 실패:", err);
-    }
+    void loadDocument(msg);
+    return;
   }
 
   if (msg.type === "exportSvg") {
@@ -149,6 +199,94 @@ window.addEventListener("message", (event) => {
   }
 });
 
+async function loadDocument(msg: { fileName: string; fileData: unknown }): Promise<void> {
+  if (!wasmReady) {
+    stbMessage.textContent = "오류: WASM이 아직 초기화되지 않았습니다";
+    return;
+  }
+
+  const generation = ++documentLoadGeneration;
+  let nextDocument: HwpDocument | null = null;
+  try {
+    fileName = msg.fileName;
+    stbMessage.textContent = `${fileName} 로딩 중...`;
+    releaseRenderedDocument();
+    const previousDocument = hwpDoc;
+    hwpDoc = null;
+    rendererSelection = null;
+    delete document.documentElement.dataset.rendererBackend;
+    delete document.documentElement.dataset.rendererDecisionKey;
+    previousDocument?.free();
+
+    const fileBytes = toUint8Array(msg.fileData);
+    const digest = `blake3:${bytesToHex(blake3(fileBytes))}`;
+    rendererSession.beginDocument(digest);
+    nextDocument = new HwpDocument(fileBytes);
+    nextDocument.setClipEnabled(false);
+
+    hwpDoc = nextDocument;
+
+    const selection = await rendererSession.resolve({
+      getCanvasKitDocumentPreflight(mode, profile) {
+        return parseCanvasKitDocumentPreflight(
+          nextDocument!.getCanvasKitDocumentPreflight(mode, profile),
+          "[VS Code] CanvasKit document preflight",
+        );
+      },
+    });
+    if (
+      generation !== documentLoadGeneration
+      || hwpDoc !== nextDocument
+      || !rendererSession.isCurrent(selection)
+    ) return;
+    applyRendererSelection(selection);
+
+    const docInfo = JSON.parse(nextDocument.getDocumentInfo());
+    const pageCount: number = docInfo.page_count ?? docInfo.pageCount ?? 0;
+
+    pageInfos = [];
+    for (let i = 0; i < pageCount; i++) {
+      const pi = JSON.parse(nextDocument.getPageInfo(i));
+      pageInfos.push({
+        width: pi.width,
+        height: pi.height,
+        rendered: false,
+        element: null,
+      });
+    }
+
+    stbMessage.textContent = fileName;
+    updateStatusBar();
+    buildPageLayout();
+    updateVisiblePages();
+    buildSidebar();
+    await Promise.resolve();
+    if (generation !== documentLoadGeneration || hwpDoc !== nextDocument) return;
+    const activeSelection = rendererSelection ?? selection;
+
+    vscode.postMessage({
+      type: "loaded",
+      pageCount,
+      renderer: activeSelection.diagnostics,
+    });
+  } catch (err: any) {
+    if (generation !== documentLoadGeneration) return;
+    if (hwpDoc === nextDocument) {
+      hwpDoc = null;
+      nextDocument?.free();
+    }
+    rendererSelection = null;
+    stbMessage.textContent = `오류: ${err.message ?? err}`;
+    console.error("HWP 로드 실패:", err);
+  }
+}
+
+function applyRendererSelection(selection: RendererSessionSelection): void {
+  rendererSelection = selection;
+  document.documentElement.dataset.rendererBackend = selection.backend;
+  document.documentElement.dataset.rendererDecisionKey = selection.diagnostics.decisionKey;
+}
+
 // ── 상태 표시줄 업데이트 ──
 
 function updateStatusBar(): void {
@@ -156,18 +294,117 @@ function updateStatusBar(): void {
   if (!pageInputActive) {
     stbPage.textContent = total > 0 ? `${currentPage + 1} / ${total} 쪽` : "- / - 쪽";
   }
-  stbZoomVal.textContent = `${Math.round(currentZoom * 100)}%`;
+  stbZoomLabel.textContent = `${Math.round(currentZoom * 100)}%`;
+  updateZoomMenuChecks();
 }
+
+// ── 통합 배율 메뉴 ──
+
+/** 메뉴 항목 중 현재 상태에 해당하는 것의 data 값. 없으면 null. */
+function currentMenuKey(): string | null {
+  if (zoomMode === "fitWidth") return "fitWidth";
+  if (zoomMode === "fitPage") return viewMode === "double" ? "fitSpread" : "fitPage";
+  return String(currentZoom);
+}
+
+function updateZoomMenuChecks(): void {
+  const key = currentMenuKey();
+  for (const item of stbZoomPopup.querySelectorAll<HTMLElement>(".stb-popup-item")) {
+    const itemKey = item.dataset.mode ?? item.dataset.zoom ?? "";
+    const check = item.querySelector<HTMLElement>(".stb-check");
+    if (check) check.textContent = itemKey === key ? "✓" : "";
+  }
+}
+
+function setZoomMenuOpen(open: boolean): void {
+  stbZoomPopup.hidden = !open;
+  stbZoomMenu.setAttribute("aria-expanded", String(open));
+}
+
+stbZoomMenu.addEventListener("click", (e) => {
+  e.stopPropagation();
+  setZoomMenuOpen(stbZoomPopup.hidden !== false);
+});
+
+document.addEventListener("click", () => setZoomMenuOpen(false));
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") setZoomMenuOpen(false);
+});
+
+stbZoomPopup.addEventListener("click", (e) => {
+  const item = (e.target as HTMLElement).closest<HTMLElement>(".stb-popup-item");
+  if (!item) return;
+  setZoomMenuOpen(false);
+
+  // 맞춤 3항목은 쪽 배치까지 함께 결정한다. % 프리셋은 배치를 유지한 채 수동 배율로 바꾼다.
+  switch (item.dataset.mode) {
+    case "fitWidth":
+      applyZoomMode("fitWidth", "single");
+      return;
+    case "fitPage":
+      applyZoomMode("fitPage", "single");
+      return;
+    case "fitSpread":
+      applyZoomMode("fitPage", "double");
+      return;
+  }
+
+  const zoom = Number(item.dataset.zoom);
+  if (Number.isFinite(zoom)) applyZoomMode("manual", viewMode, zoom);
+});
 
 // ── 줌 제어 ──
 
-function applyZoom(newZoom: number, anchorY?: number): void {
-  newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
-  if (newZoom === currentZoom) return;
+const clampZoom = (z: number): number => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+
+/**
+ * 맞춤 배율을 계산한다.
+ *
+ * 쪽 크기가 서로 다른 문서(가로/세로 혼합)에서 스크롤 중 배율이 요동치지 않도록
+ * 현재 쪽이 아니라 문서 전체의 최대 폭·최대 높이를 기준으로 삼는다.
+ *
+ * availW/availH 는 컨테이너의 **content-box** 크기(padding·스크롤바 제외)다.
+ * ResizeObserver 의 contentRect 가 정확히 이 값이므로 그대로 넘길 수 있다.
+ * 생략하면 clientWidth/clientHeight 에서 padding 을 빼서 같은 기준을 만든다.
+ */
+function computeFitZoom(mode: "fitWidth" | "fitPage", availW?: number, availH?: number): number {
+  if (pageInfos.length === 0) return currentZoom;
+
+  let maxW = 0;
+  let maxH = 0;
+  for (const pi of pageInfos) {
+    if (pi.width > maxW) maxW = pi.width;
+    if (pi.height > maxH) maxH = pi.height;
+  }
+  if (maxW <= 0 || maxH <= 0) return currentZoom;
+
+  // 배치된 콘텐츠의 원본 크기 (1쪽 = 쪽 하나, 2쪽 = 두 쪽 + gap)
+  const pagesPerRow = viewMode === "double" ? 2 : 1;
+  const docW = maxW * pagesPerRow + ROW_GAP * (pagesPerRow - 1);
+
+  // 가용 뷰포트 (content-box). #scroll-container 의 padding 은 세로에만 있다 (12px 0).
+  const viewW = (availW ?? scrollContainer.clientWidth) - SIDE_MARGIN * 2;
+  const viewH = availH ?? scrollContainer.clientHeight - CONTENT_PADDING * 2;
+  if (viewW <= 0 || viewH <= 0) return currentZoom;
+
+  const fitW = viewW / docW;
+  if (mode === "fitWidth") return clampZoom(fitW);
+  return clampZoom(Math.min(fitW, viewH / maxH));
+}
+
+/**
+ * 배율을 적용하고 레이아웃을 재구성한다.
+ *
+ * @param relayoutAnyway 배율이 그대로여도 레이아웃을 다시 만든다.
+ *   1쪽↔2쪽 배치만 바뀌고 배율이 우연히 같을 때 필요하다.
+ */
+function setZoom(newZoom: number, anchorY?: number, relayoutAnyway = false): void {
+  newZoom = clampZoom(newZoom);
+  if (newZoom === currentZoom && !relayoutAnyway) return;
 
   const oldZoom = currentZoom;
 
-  // 앵커 기준점 (기본: ��포트 중앙)
+  // 앵커 기준점 (기본: 뷰포트 중앙)
   const containerRect = scrollContainer.getBoundingClientRect();
   const anchor = anchorY ?? (containerRect.top + containerRect.height / 2);
   const yInContainer = anchor - containerRect.top;
@@ -180,8 +417,71 @@ function applyZoom(newZoom: number, anchorY?: number): void {
   updateStatusBar();
 }
 
-stbZoomOut.addEventListener("click", () => applyZoom(currentZoom - ZOOM_STEP));
-stbZoomIn.addEventListener("click", () => applyZoom(currentZoom + ZOOM_STEP));
+/** 수동 배율로 전환하고 배율을 적용한다. (−/+ 버튼, Ctrl+휠, % 프리셋) */
+function setManualZoom(newZoom: number, anchorY?: number): void {
+  zoomMode = "manual";
+  setZoom(newZoom, anchorY);
+  updateStatusBar();
+}
+
+/**
+ * 쪽 배치와 맞춤 모드를 함께 설정한다.
+ *
+ * 맞춤 3항목(폭 맞춤 / 쪽 맞춤 / 두 쪽 맞춤)이 배치까지 결정하는 유일한 진입점이다.
+ */
+function applyZoomMode(mode: ZoomMode, nextViewMode: "single" | "double", zoom?: number): void {
+  const layoutChanged = nextViewMode !== viewMode;
+  const keepPage = currentPage;
+
+  viewMode = nextViewMode;
+  zoomMode = mode;
+
+  const target = mode === "manual" ? (zoom ?? currentZoom) : computeFitZoom(mode);
+  // 배치가 바뀌었는데 배율이 우연히 같으면 setZoom 이 조기 반환하므로 강제 재구성한다.
+  setZoom(target, undefined, layoutChanged);
+
+  if (layoutChanged) scrollToPage(keepPage);
+  updateStatusBar();
+}
+
+// ── 뷰포트 크기 변화 대응 ──
+//
+// 창/에디터 패널 리사이즈, 사이드바 접기·펼치기로 뷰포트가 바뀌면 맞춤 배율을 다시 계산한다.
+// 수동 배율일 때는 크기 변화와 무관하게 고정한다.
+
+/** 새 배율이 현재와 이 비율 미만으로 다르면 무시한다. 스크롤바 출현으로 인한 진동 방지. */
+const FIT_HYSTERESIS = 0.01;
+
+let resizeRaf = 0;
+
+const zoomResizeObserver = new ResizeObserver((entries) => {
+  if (zoomMode === "manual" || pageInfos.length === 0) return;
+
+  // ResizeObserver 의 contentRect 는 스크롤바를 제외한 크기다.
+  // clientWidth 를 쓰면 배율↑ → 스크롤바 출현 → 폭↓ → 배율↓ 진동이 생길 수 있다.
+  const rect = entries[entries.length - 1].contentRect;
+  const availW = rect.width;
+  const availH = rect.height;
+
+  if (resizeRaf) cancelAnimationFrame(resizeRaf);
+  resizeRaf = requestAnimationFrame(() => {
+    resizeRaf = 0;
+    if (zoomMode === "manual") return;
+
+    const next = computeFitZoom(zoomMode, availW, availH);
+    if (Math.abs(next - currentZoom) / currentZoom < FIT_HYSTERESIS) return;
+
+    const keepPage = currentPage;
+    setZoom(next);
+    scrollToPage(keepPage);
+    updateStatusBar();
+  });
+});
+
+zoomResizeObserver.observe(scrollContainer);
+
+stbZoomOut.addEventListener("click", () => setManualZoom(currentZoom - ZOOM_STEP));
+stbZoomIn.addEventListener("click", () => setManualZoom(currentZoom + ZOOM_STEP));
 
 // Ctrl+마우스 휠 줌
 scrollContainer.addEventListener(
@@ -190,7 +490,7 @@ scrollContainer.addEventListener(
     if (!e.ctrlKey) return;
     e.preventDefault();
     const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-    applyZoom(currentZoom + delta, e.clientY);
+    setManualZoom(currentZoom + delta, e.clientY);
   },
   { passive: false }
 );
@@ -280,21 +580,151 @@ function renderPage(pageNum: number): void {
   wrapper.appendChild(canvas);
 
   const scale = currentZoom * dpr;
-  hwpDoc.renderPageToCanvas(pageNum, canvas, scale);
+  let renderedCanvas: HTMLCanvasElement;
+  try {
+    renderedCanvas = renderDocumentPage(pageNum, canvas, scale);
+  } catch (error) {
+    pi.rendered = false;
+    stbMessage.textContent = `렌더링 오류: ${error instanceof Error ? error.message : String(error)}`;
+    console.error(`HWP 페이지 렌더링 실패 (page=${pageNum}):`, error);
+    return;
+  }
+  renderedCanvas.style.width = `${cssW}px`;
+  renderedCanvas.style.height = `${cssH}px`;
   pi.rendered = true;
 
   cancelReRender(pageNum);
+  if (rendererSelection?.backend === "canvaskit") return;
   const timers: ReturnType<typeof setTimeout>[] = [];
   for (const delay of [200, 600]) {
     timers.push(
       setTimeout(() => {
-        if (pi.rendered && hwpDoc && canvas.isConnected) {
-          hwpDoc.renderPageToCanvas(pageNum, canvas, scale);
+        if (
+          pi.rendered
+          && hwpDoc
+          && renderedCanvas.isConnected
+          && rendererSelection?.backend === "canvas2d"
+        ) {
+          hwpDoc.renderPageToCanvas(pageNum, renderedCanvas, scale);
         }
       }, delay)
     );
   }
   reRenderTimers.set(pageNum, timers);
+}
+
+function renderDocumentPage(
+  pageNum: number,
+  targetCanvas: HTMLCanvasElement,
+  scale: number,
+): HTMLCanvasElement {
+  const documentAtRender = hwpDoc;
+  if (!documentAtRender) throw new Error("문서가 로드되지 않았습니다");
+  const selection = rendererSelection;
+  if (selection?.backend !== "canvaskit" || !selection.canvaskitRenderer) {
+    documentAtRender.renderPageToCanvas(pageNum, targetCanvas, scale);
+    return targetCanvas;
+  }
+
+  const decisionKey = selection.diagnostics.decisionKey;
+  let tree: PageLayerTree;
+  try {
+    tree = parsePageLayerTree(
+      documentAtRender.getPageLayerTreeWithProfile(pageNum, "screen"),
+      pageNum,
+    );
+  } catch (error) {
+    if (!scheduleRendererFallback(error, decisionKey, "resource")) throw error;
+    documentAtRender.renderPageToCanvas(pageNum, targetCanvas, scale);
+    return targetCanvas;
+  }
+
+  const originalParent = targetCanvas.parentElement;
+  const originalIndex = originalParent
+    ? Array.prototype.indexOf.call(originalParent.children, targetCanvas)
+    : -1;
+  let renderedCanvas = targetCanvas;
+  try {
+    renderedCanvas = selection.canvaskitRenderer.renderPage(tree, targetCanvas, scale);
+    const diagnostics = selection.canvaskitRenderer.diagnostics();
+    if (!diagnostics.passesRuntimeReadinessGate) {
+      throw new Error(
+        `CanvasKit runtime readiness 실패: ${diagnostics.readinessBlockers.join(", ")}`,
+      );
+    }
+    return renderedCanvas;
+  } catch (error) {
+    if (!scheduleRendererFallback(error, decisionKey, "runtime")) throw error;
+    renderedCanvas = currentCanvasAt(originalParent, originalIndex, renderedCanvas);
+    const canvas2d = replaceCanvas(renderedCanvas);
+    documentAtRender.renderPageToCanvas(pageNum, canvas2d, scale);
+    return canvas2d;
+  }
+}
+
+function parsePageLayerTree(json: string, pageNum: number): PageLayerTree {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch (error) {
+    throw new Error(`PageLayerTree parse 실패 (page=${pageNum}): ${error}`);
+  }
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error(`PageLayerTree shape 오류 (page=${pageNum}): object가 아닙니다`);
+  }
+  const tree = parsed as Partial<PageLayerTree>;
+  if (
+    !tree.root
+    || !Number.isFinite(tree.pageWidth)
+    || !Number.isFinite(tree.pageHeight)
+    || tree.pageWidth! <= 0
+    || tree.pageHeight! <= 0
+  ) {
+    throw new Error(`PageLayerTree shape 오류 (page=${pageNum}): 필수 필드가 없습니다`);
+  }
+  return tree as PageLayerTree;
+}
+
+function currentCanvasAt(
+  parent: HTMLElement | null,
+  childIndex: number,
+  fallback: HTMLCanvasElement,
+): HTMLCanvasElement {
+  const current = parent && childIndex >= 0 ? parent.children.item(childIndex) : null;
+  return current instanceof HTMLCanvasElement ? current : fallback;
+}
+
+function replaceCanvas(canvas: HTMLCanvasElement): HTMLCanvasElement {
+  const parent = canvas.parentElement;
+  if (!parent) return canvas;
+  const replacement = canvas.cloneNode(true) as HTMLCanvasElement;
+  parent.replaceChild(replacement, canvas);
+  return replacement;
+}
+
+function scheduleRendererFallback(
+  error: unknown,
+  expectedDecisionKey: string,
+  kind: "resource" | "runtime",
+): boolean {
+  if (rendererSelection?.backend === "canvas2d") return true;
+  const fallback = kind === "resource"
+    ? rendererSession.fallbackFromResourceFailure(error, expectedDecisionKey)
+    : rendererSession.fallbackFromRuntimeFailure(error, expectedDecisionKey);
+  if (!fallback) return false;
+
+  applyRendererSelection(fallback);
+  vscode.postMessage({ type: "rendererSelectionChanged", renderer: fallback.diagnostics });
+  if (rendererFallbackScheduled) return true;
+  rendererFallbackScheduled = true;
+  queueMicrotask(() => {
+    rendererFallbackScheduled = false;
+    if (!rendererSession.isCurrent(fallback)) return;
+    for (let pageNum = 0; pageNum < pageInfos.length; pageNum++) releasePage(pageNum);
+    buildThumbnails();
+    updateVisiblePages();
+  });
+  return true;
 }
 
 function cancelReRender(pageNum: number): void {
@@ -430,7 +860,11 @@ function renderThumbnail(pageNum: number): void {
   const scale = THUMB_WIDTH / pi.width;
   canvas.width = Math.round(pi.width * scale * dpr);
   canvas.height = Math.round(pi.height * scale * dpr);
-  hwpDoc.renderPageToCanvas(pageNum, canvas, scale * dpr);
+  try {
+    renderDocumentPage(pageNum, canvas, scale * dpr);
+  } catch (error) {
+    console.error(`HWP 썸네일 렌더링 실패 (page=${pageNum}):`, error);
+  }
 }
 
 /** 현재 페이지 썸네일을 강조하고 보이도록 스크롤한다. */
@@ -473,21 +907,6 @@ stbSidebarToggle.addEventListener("click", () => toggleSidebar());
 navCollapse.addEventListener("click", () => toggleSidebar(true));
 navReopen.addEventListener("click", () => toggleSidebar(false));
 
-// ── 보기 모드: 1쪽 / 2쪽 ──
-
-function setViewMode(mode: "single" | "double"): void {
-  if (mode === viewMode) return;
-  viewMode = mode;
-  stbViewMode.textContent = mode === "double" ? "2쪽" : "1쪽";
-  const keepPage = currentPage;
-  buildPageLayout();
-  updateVisiblePages();
-  scrollToPage(keepPage);
-}
-
-stbViewMode.addEventListener("click", () => {
-  setViewMode(viewMode === "single" ? "double" : "single");
-});
 
 // ── 사이드바: 목차 ──
 
@@ -628,9 +1047,24 @@ function toUint8Array(data: unknown): Uint8Array {
   throw new Error(`Uint8Array로 변환할 수 없는 데이터: ${typeof data}`);
 }
 
+function releaseRenderedDocument(): void {
+  for (let pageNum = 0; pageNum < pageInfos.length; pageNum++) releasePage(pageNum);
+  pageInfos = [];
+  scrollContent.innerHTML = "";
+  thumbObserver?.disconnect();
+  const thumbPanel = navPanels.get("thumb");
+  if (thumbPanel) thumbPanel.innerHTML = "";
+}
+
 // 기본 컨텍스트 메뉴 억제
 document.addEventListener("contextmenu", (e) => {
   e.preventDefault();
+});
+
+window.addEventListener("unload", () => {
+  rendererSession.dispose();
+  hwpDoc?.free();
+  hwpDoc = null;
 });
 
 function installMeasureTextWidth(): void {

@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import math
 import os
 import shutil
 import socket
@@ -45,6 +47,12 @@ def parse_args() -> argparse.Namespace:
         help="case-insensitive literal filter applied to sample id/file/category",
     )
     parser.add_argument(
+        "--scope",
+        choices=("representative", "full"),
+        default="representative",
+        help="capture the bounded representative tier or the complete corpus",
+    )
+    parser.add_argument(
         "--browser-mode",
         choices=("host", "headless"),
         default="headless",
@@ -71,6 +79,11 @@ def parse_args() -> argparse.Namespace:
         "--skip-browser",
         action="store_true",
         help="skip canvas2d / canvaskit browser captures",
+    )
+    parser.add_argument(
+        "--include-pdf",
+        action="store_true",
+        help="also capture print-profile PDF artifacts in the native baseline matrix",
     )
     parser.add_argument(
         "--readiness-only",
@@ -104,17 +117,23 @@ def parse_profiles(raw: str) -> list[str]:
 
 
 def load_manifest(
-    manifest_path: Path, filter_pattern: str, readiness_only: bool = False
+    manifest_path: Path,
+    filter_pattern: str,
+    scope: str,
+    readiness_only: bool = False,
 ) -> dict:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("schemaVersion") != 1:
+        raise SystemExit("baseline manifest schemaVersion must be 1")
     samples = manifest.get("samples", [])
     if not isinstance(samples, list) or not samples:
         raise SystemExit("baseline manifest must contain a non-empty samples array")
 
     filter_text = filter_pattern.strip().lower()
     selected = []
+    seen_sample_ids: set[str] = set()
     for sample in samples:
-        file_name = str(sample["file"]).strip()
+        file_name = str(sample.get("file") or "").strip()
         if (
             not file_name
             or "\0" in file_name
@@ -134,6 +153,13 @@ def load_manifest(
         parts = file_name.split("/")
         if any(not part or part in (".", "..") for part in parts):
             raise SystemExit(f"baseline sample file escapes samples/: {sample['file']}")
+        sample_path = (SAMPLES_DIR / file_name).resolve()
+        try:
+            sample_path.relative_to(SAMPLES_DIR.resolve())
+        except ValueError:
+            raise SystemExit(f"baseline sample file escapes samples/: {sample['file']}") from None
+        if not sample_path.is_file():
+            raise SystemExit(f"baseline sample file not found: {sample_path}")
 
         sample_id = str(sample.get("id") or Path(file_name).stem).strip()
         if not sample_id or any(
@@ -141,9 +167,43 @@ def load_manifest(
             for char in sample_id
         ):
             raise SystemExit(f"invalid baseline sample id: {sample.get('id')}")
+        if sample_id in seen_sample_ids:
+            raise SystemExit(f"duplicate baseline sample id: {sample_id}")
+        seen_sample_ids.add(sample_id)
         category = sample.get("category", "uncategorized")
-        page = int(sample.get("page", 0))
+        baseline_tier = sample.get("baselineTier")
+        if baseline_tier not in ("representative", "extended"):
+            raise SystemExit(f"invalid baselineTier for baseline sample: {sample_id}")
+        page = sample.get("page", 0)
+        if type(page) is not int or page < 0:
+            raise SystemExit(
+                f"baseline sample page must be a non-negative integer: {sample_id} page={page}"
+            )
+        diagnostic_axes = sample.get("diagnosticAxes")
+        if (
+            not isinstance(diagnostic_axes, list)
+            or not diagnostic_axes
+            or len(diagnostic_axes) > 16
+            or any(
+                not isinstance(axis, str)
+                or not axis
+                or len(axis) > 64
+                or any(
+                    not (char.isascii() and (char.isalnum() or char in "._-"))
+                    for char in axis
+                )
+                for axis in diagnostic_axes
+            )
+            or len(set(diagnostic_axes)) != len(diagnostic_axes)
+        ):
+            raise SystemExit(f"invalid diagnosticAxes for baseline sample: {sample_id}")
+        document_digest = f"sha256:{hashlib.sha256(sample_path.read_bytes()).hexdigest()}"
+        manifest_digest = sample.get("documentDigest")
+        if manifest_digest is not None and manifest_digest != document_digest:
+            raise SystemExit(f"baseline sample documentDigest mismatch: {sample_id}")
         if readiness_only and sample.get("canvaskitReadinessGate") is not True:
+            continue
+        if scope == "representative" and baseline_tier != "representative":
             continue
         minimum_ink_pixels = (sample.get("browserParityThresholds") or {}).get(
             "minimumInkPixels"
@@ -154,6 +214,78 @@ def load_manifest(
             raise SystemExit(
                 f"readiness sample {sample_id} requires a positive minimumInkPixels threshold"
             )
+        if readiness_only:
+            performance_budget = sample.get("canvaskitPerformanceBudget")
+            required_budget_keys = {
+                "maxColdDocumentLoadAndInitialRenderMs",
+                "maxWarmReplayMs",
+                "maxWarmRendererDurationMs",
+                "maxImageCachePixels",
+            }
+            if not isinstance(performance_budget, dict) or set(performance_budget) != required_budget_keys:
+                raise SystemExit(
+                    f"readiness sample {sample_id} requires a complete CanvasKit performance budget"
+                )
+            if any(
+                not isinstance(value, (int, float))
+                or isinstance(value, bool)
+                or not math.isfinite(value)
+                or value <= 0
+                for value in performance_budget.values()
+            ):
+                raise SystemExit(
+                    f"readiness sample {sample_id} CanvasKit performance budgets must be positive"
+                )
+            readiness_expectations = sample.get("canvaskitReadinessExpectations")
+            if readiness_expectations is not None:
+                allowed_expectation_keys = {
+                    "glyphOutlinePayloadKinds",
+                    "minLayerFeatureCounts",
+                    "minWarmImageCacheHits",
+                }
+                if (
+                    not isinstance(readiness_expectations, dict)
+                    or not set(readiness_expectations).issubset(allowed_expectation_keys)
+                ):
+                    raise SystemExit(
+                        f"readiness sample {sample_id} has invalid CanvasKit expectations"
+                    )
+                payload_kinds = readiness_expectations.get("glyphOutlinePayloadKinds", [])
+                if (
+                    not isinstance(payload_kinds, list)
+                    or any(kind not in {"bitmapGlyph", "svgGlyph"} for kind in payload_kinds)
+                ):
+                    raise SystemExit(
+                        f"readiness sample {sample_id} has invalid glyph payload expectations"
+                    )
+                min_cache_hits = readiness_expectations.get("minWarmImageCacheHits", 0)
+                if (
+                    not isinstance(min_cache_hits, int)
+                    or isinstance(min_cache_hits, bool)
+                    or min_cache_hits < 0
+                ):
+                    raise SystemExit(
+                        f"readiness sample {sample_id} has invalid warm image cache expectations"
+                    )
+                min_feature_counts = readiness_expectations.get(
+                    "minLayerFeatureCounts", {}
+                )
+                allowed_feature_counts = {
+                    "dashedStrokes",
+                    "verticalPresentationPunctuation",
+                    "verticalTextRuns",
+                }
+                if (
+                    not isinstance(min_feature_counts, dict)
+                    or not set(min_feature_counts).issubset(allowed_feature_counts)
+                    or any(
+                        type(value) is not int or value <= 0
+                        for value in min_feature_counts.values()
+                    )
+                ):
+                    raise SystemExit(
+                        f"readiness sample {sample_id} has invalid layer feature expectations"
+                    )
         if filter_text and not (
             filter_text in str(sample_id).lower()
             or filter_text in str(file_name).lower()
@@ -166,7 +298,10 @@ def load_manifest(
                 "id": sample_id,
                 "file": file_name,
                 "category": category,
+                "baselineTier": baseline_tier,
                 "page": page,
+                "diagnosticAxes": diagnostic_axes,
+                "documentDigest": document_digest,
                 "notes": sample.get("notes", ""),
             }
         )
@@ -210,7 +345,9 @@ def collect_files(output_dir: Path, suffix: str) -> list[str]:
     return sorted(collected)
 
 
-def capture_native_sample(sample: dict, output_root: Path, profiles: list[str]) -> list[dict]:
+def capture_native_sample(
+    sample: dict, output_root: Path, profiles: list[str], include_pdf: bool
+) -> list[dict]:
     sample_path = (SAMPLES_DIR / sample["file"]).resolve()
     try:
         sample_path.relative_to(SAMPLES_DIR.resolve())
@@ -242,7 +379,88 @@ def capture_native_sample(sample: dict, output_root: Path, profiles: list[str]) 
         ],
         ROOT,
     )
-    outputs.append({"backend": "legacy-svg", "files": collect_files(legacy_dir, ".svg")})
+    legacy_files = collect_files(legacy_dir, ".svg")
+    if len(legacy_files) != 1:
+        raise SystemExit(
+            "legacy SVG baseline export must create exactly one artifact: "
+            + ", ".join(legacy_files)
+        )
+    legacy_path = Path(legacy_files[0])
+    if not legacy_path.is_absolute():
+        legacy_path = ROOT / legacy_path
+    if not legacy_path.is_file() or legacy_path.stat().st_size == 0:
+        raise SystemExit(
+            f"legacy SVG baseline export did not create a non-empty artifact: {legacy_path}"
+        )
+    outputs.append(
+        {
+            "backend": "legacy-svg",
+            "profile": None,
+            "comparisonIdentity": {
+                "schemaVersion": 1,
+                "sampleId": sample["id"],
+                "documentDigest": sample["documentDigest"],
+                "page": sample["page"],
+                "profile": None,
+                "backend": "legacy-svg",
+                "surface": None,
+            },
+            "artifact": {
+                "sha256": hashlib.sha256(legacy_path.read_bytes()).hexdigest(),
+                "sizeBytes": legacy_path.stat().st_size,
+            },
+            "files": legacy_files,
+        }
+    )
+
+    if include_pdf:
+        pdf_dir = output_root / sample["id"] / "pdf-print"
+        if pdf_dir.exists():
+            shutil.rmtree(pdf_dir)
+        ensure_dir(pdf_dir)
+        pdf_path = pdf_dir / f"{sample['id']}-page-{target_page}.pdf"
+        run_command(
+            [
+                "cargo",
+                "run",
+                "--bin",
+                "rhwp",
+                "--",
+                "export-pdf",
+                str(sample_path),
+                "--page",
+                target_page,
+                "--profile",
+                "print",
+                "--output",
+                str(pdf_path),
+            ],
+            ROOT,
+        )
+        if not pdf_path.is_file() or pdf_path.stat().st_size == 0:
+            raise SystemExit(
+                f"PDF baseline export did not create a non-empty artifact: {pdf_path}"
+            )
+        outputs.append(
+            {
+                "backend": "pdf",
+                "profile": "print",
+                "comparisonIdentity": {
+                    "schemaVersion": 1,
+                    "sampleId": sample["id"],
+                    "documentDigest": sample["documentDigest"],
+                    "page": sample["page"],
+                    "profile": "print",
+                    "backend": "pdf",
+                    "surface": "vector",
+                },
+                "artifact": {
+                    "sha256": hashlib.sha256(pdf_path.read_bytes()).hexdigest(),
+                    "sizeBytes": pdf_path.stat().st_size,
+                },
+                "files": collect_files(pdf_dir, ".pdf"),
+            }
+        )
 
     for profile in profiles:
         layer_dir = output_root / sample["id"] / f"layer-svg-{profile}"
@@ -260,20 +478,45 @@ def capture_native_sample(sample: dict, output_root: Path, profiles: list[str]) 
                 str(sample_path),
                 "--page",
                 target_page,
+                "--profile",
+                profile,
                 "--output",
                 str(layer_dir),
             ],
             ROOT,
-            {
-                "RHWP_RENDER_PATH": "layer-svg",
-                "RHWP_RENDER_PROFILE": profile,
-            },
         )
+        layer_files = collect_files(layer_dir, ".svg")
+        if len(layer_files) != 1:
+            raise SystemExit(
+                f"layer SVG ({profile}) baseline export must create exactly one artifact: "
+                + ", ".join(layer_files)
+            )
+        layer_path = Path(layer_files[0])
+        if not layer_path.is_absolute():
+            layer_path = ROOT / layer_path
+        if not layer_path.is_file() or layer_path.stat().st_size == 0:
+            raise SystemExit(
+                f"layer SVG ({profile}) baseline export did not create a non-empty artifact: "
+                f"{layer_path}"
+            )
         outputs.append(
             {
                 "backend": "layer-svg",
                 "profile": profile,
-                "files": collect_files(layer_dir, ".svg"),
+                "comparisonIdentity": {
+                    "schemaVersion": 1,
+                    "sampleId": sample["id"],
+                    "documentDigest": sample["documentDigest"],
+                    "page": sample["page"],
+                    "profile": profile,
+                    "backend": "layer-svg",
+                    "surface": None,
+                },
+                "artifact": {
+                    "sha256": hashlib.sha256(layer_path.read_bytes()).hexdigest(),
+                    "sizeBytes": layer_path.stat().st_size,
+                },
+                "files": layer_files,
             }
         )
 
@@ -295,17 +538,45 @@ def capture_native_sample(sample: dict, output_root: Path, profiles: list[str]) 
                 str(sample_path),
                 "--page",
                 target_page,
+                "--profile",
+                profile,
                 "--output",
                 str(skia_dir),
             ],
             ROOT,
-            {"RHWP_RENDER_PROFILE": profile},
         )
+        skia_files = collect_files(skia_dir, ".png")
+        if len(skia_files) != 1:
+            raise SystemExit(
+                f"native Skia ({profile}) baseline export must create exactly one artifact: "
+                + ", ".join(skia_files)
+            )
+        skia_path = Path(skia_files[0])
+        if not skia_path.is_absolute():
+            skia_path = ROOT / skia_path
+        if not skia_path.is_file() or skia_path.stat().st_size == 0:
+            raise SystemExit(
+                f"native Skia ({profile}) baseline export did not create a non-empty artifact: "
+                f"{skia_path}"
+            )
         outputs.append(
             {
                 "backend": "native-skia",
                 "profile": profile,
-                "files": collect_files(skia_dir, ".png"),
+                "comparisonIdentity": {
+                    "schemaVersion": 1,
+                    "sampleId": sample["id"],
+                    "documentDigest": sample["documentDigest"],
+                    "page": sample["page"],
+                    "profile": profile,
+                    "backend": "native-skia",
+                    "surface": "raster",
+                },
+                "artifact": {
+                    "sha256": hashlib.sha256(skia_path.read_bytes()).hexdigest(),
+                    "sizeBytes": skia_path.stat().st_size,
+                },
+                "files": skia_files,
             }
         )
 
@@ -354,6 +625,7 @@ def capture_browser_baseline(
     output_root: Path,
     browser_mode: str,
     filter_pattern: str,
+    scope: str,
     profiles: list[str],
     canvaskit_surface: str,
     readiness_only: bool,
@@ -386,6 +658,7 @@ def capture_browser_baseline(
             f"--manifest={manifest_path}",
             f"--output={output_root}",
             f"--profiles={','.join(profiles)}",
+            f"--scope={scope}",
             f"--canvaskit-surface={canvaskit_surface}",
         ]
         if filter_pattern:
@@ -410,13 +683,8 @@ def capture_browser_baseline(
         if not report_path.exists():
             raise RuntimeError(f"browser baseline did not write report: {report_path}")
         return report_path, True
-    if readiness_only and report_path.exists():
-        report = json.loads(report_path.read_text(encoding="utf-8"))
-        failed = ((report.get("canvaskitReadinessGate") or {}).get("summary") or {}).get(
-            "failed", 0
-        )
-        if isinstance(failed, int) and failed > 0:
-            return report_path, False
+    if report_path.exists():
+        return report_path, False
     raise subprocess.CalledProcessError(completed.returncode, cmd)
 
 
@@ -486,6 +754,9 @@ def write_reports(
     parity_data = None
     if parity_report and parity_report.exists():
         parity_data = json.loads(parity_report.read_text(encoding="utf-8"))
+    browser_replay_diagnostics = (
+        browser_data.get("canvaskitReplayDiagnostics") if browser_data else None
+    ) or {}
 
     browser_performance_summary: list[dict] = []
     browser_surface_diagnostics_summary: list[dict] = []
@@ -504,6 +775,7 @@ def write_reports(
                     "sampleCount": 0,
                     "appLoadMsTotal": 0.0,
                     "documentLoadAndInitialRenderMsTotal": 0.0,
+                    "selectedPageRenderMsTotal": 0.0,
                     "screenshotMsTotal": 0.0,
                     "totalMsTotal": 0.0,
                     "effectPixelsTotal": 0,
@@ -517,6 +789,7 @@ def write_reports(
             for field in (
                 "appLoadMs",
                 "documentLoadAndInitialRenderMs",
+                "selectedPageRenderMs",
                 "screenshotMs",
                 "totalMs",
             ):
@@ -637,6 +910,10 @@ def write_reports(
                         "documentLoadAndInitialRenderMsTotal"
                     ]
                     / sample_count,
+                    "averageSelectedPageRenderMs": summary[
+                        "selectedPageRenderMsTotal"
+                    ]
+                    / sample_count,
                     "averageScreenshotMs": summary["screenshotMsTotal"] / sample_count,
                     "averageTotalMs": summary["totalMsTotal"] / sample_count,
                     "effectPixelsTotal": summary["effectPixelsTotal"],
@@ -666,6 +943,7 @@ def write_reports(
         "browser": browser_performance_summary,
         "canvaskitSurface": effective_canvaskit_surface,
         "canvaskitSurfaceDiagnostics": browser_surface_diagnostics_summary,
+        "canvaskitReplayDiagnostics": browser_replay_diagnostics,
     }
     (output_root / "performance-summary.json").write_text(
         json.dumps(performance_summary, indent=2, ensure_ascii=False),
@@ -708,8 +986,8 @@ def write_reports(
         "",
         "## Sample Matrix",
         "",
-        "| Sample | Category | Native Outputs | Browser Outputs |",
-        "| --- | --- | --- | --- |",
+        "| Sample | Category | Page | Diagnostic Axes | Document Digest | Native Outputs | Browser Outputs |",
+        "| --- | --- | ---: | --- | --- | --- | --- |",
     ]
 
     browser_by_sample: dict[str, list[str]] = {}
@@ -730,7 +1008,19 @@ def write_reports(
         native_text = "<br>".join(f"`{path}`" for path in native_paths) or "-"
         browser_text = "<br>".join(f"`{repo_relative(path)}`" for path in browser_paths) or "-"
         lines.append(
-            f"| {sample['id']} | {sample['category']} | {native_text} | {browser_text} |"
+            "| "
+            + " | ".join(
+                [
+                    sample["id"],
+                    sample["category"],
+                    str(sample["page"]),
+                    ", ".join(sample["diagnosticAxes"]),
+                    f"`{sample['documentDigest']}`",
+                    native_text,
+                    browser_text,
+                ]
+            )
+            + " |"
         )
 
     if browser_data and browser_data.get("results"):
@@ -739,8 +1029,8 @@ def write_reports(
                 "",
                 "## Browser Performance",
                 "",
-                "| Sample | Backend | Profile | App Load ms | Document Load + Initial Render ms | Screenshot ms | Total ms | Effect Pixels | Effect Cache Hits | Effect Cache Misses | Effect Failures |",
-                "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+                "| Sample | Backend | Profile | Page | App Load ms | Document Load + Initial Render ms | Selected Page Render ms | Warm Replay ms | Warm Renderer ms | Screenshot ms | Total ms | Effect Pixels | Effect Cache Hits | Effect Cache Misses | Effect Failures |",
+                "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
             ]
         )
         for item in browser_data["results"]:
@@ -759,8 +1049,12 @@ def write_reports(
                         item.get("sampleId", "-"),
                         backend or "-",
                         item.get("profile", "-"),
+                        format_count(item.get("page")),
                         format_ms(timings.get("appLoadMs")),
                         format_ms(timings.get("documentLoadAndInitialRenderMs")),
+                        format_ms(timings.get("selectedPageRenderMs")),
+                        format_ms(timings.get("warmReplayMs")),
+                        format_ms(timings.get("warmRendererDurationMs")),
                         format_ms(timings.get("screenshotMs")),
                         format_ms(timings.get("totalMs")),
                         format_count(effect_diagnostics.get("preprocessedPixels")),
@@ -777,8 +1071,8 @@ def write_reports(
                 "",
                 "## Browser Performance Summary",
                 "",
-                "| Backend | Profile | Samples | Avg App Load ms | Avg Document Load + Initial Render ms | Avg Screenshot ms | Avg Total ms | Effect Pixels | Effect Cache Hits | Effect Cache Misses | Effect Failures |",
-                "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+                "| Backend | Profile | Samples | Avg App Load ms | Avg Document Load + Initial Render ms | Avg Selected Page Render ms | Avg Screenshot ms | Avg Total ms | Effect Pixels | Effect Cache Hits | Effect Cache Misses | Effect Failures |",
+                "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
             ]
         )
         for item in browser_performance_summary:
@@ -791,6 +1085,7 @@ def write_reports(
                         format_count(item.get("sampleCount")),
                         format_ms(item.get("averageAppLoadMs")),
                         format_ms(item.get("averageDocumentLoadAndInitialRenderMs")),
+                        format_ms(item.get("averageSelectedPageRenderMs")),
                         format_ms(item.get("averageScreenshotMs")),
                         format_ms(item.get("averageTotalMs")),
                         format_count(item.get("effectPixelsTotal")),
@@ -839,6 +1134,78 @@ def write_reports(
                     + " |"
                 )
 
+    replay_summary_rows = browser_replay_diagnostics.get("summaryByBackendProfile") or []
+    if replay_summary_rows:
+        lines.extend(
+            [
+                "",
+                "## CanvasKit Replay Diagnostics",
+                "",
+                f"- mode: `{browser_replay_diagnostics.get('mode', '-')}`",
+                f"- hard-gate violations: {browser_replay_diagnostics.get('hardGateViolationCount', 0)}",
+                "",
+                "| Backend | Profile | Captures | Items | Direct | Direct Required | Text Fallback | Unsupported | Compat Overlay | Hidden Overlay Violations | Runtime Errors | Unexpected Runtime Ops | Image Replay Failures |",
+                "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+            ]
+        )
+        for item in replay_summary_rows:
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        item.get("backend", "-"),
+                        item.get("profile", "-"),
+                        format_count(item.get("captureCount")),
+                        format_count(item.get("totalItems")),
+                        format_count(item.get("directItems")),
+                        format_count(item.get("directRequiredItems")),
+                        format_count(item.get("textFallbackItems")),
+                        format_count(item.get("unsupportedItems")),
+                        format_count(item.get("compatOverlayItems")),
+                        format_count(item.get("hiddenOverlayViolations")),
+                        format_count(item.get("runtimeRenderErrors")),
+                        format_count(item.get("runtimeUnexpectedUnsupportedOps")),
+                        format_count(item.get("runtimeImageReplayFailures")),
+                    ]
+                )
+                + " |"
+            )
+
+        lines.extend(
+            [
+                "",
+                "### Replay Diagnostic Inventory",
+                "",
+                "| Backend | Profile | Plan Statuses | Plan Reasons | Plan Features | Expected Runtime Ops | Unexpected Runtime Ops | Image Failure Reasons | Image Failure Sources |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            ]
+        )
+        for item in replay_summary_rows:
+            inventory_columns = []
+            for field in (
+                "planStatusCounts",
+                "planReasonCounts",
+                "planFeatureCounts",
+                "expectedUnsupportedOpCounts",
+                "unexpectedUnsupportedOpCounts",
+                "imageFailureReasonCounts",
+                "imageFailureSourceCounts",
+            ):
+                counts = item.get(field) or {}
+                inventory_columns.append(
+                    "<br>".join(
+                        f"`{reason}`: {count}" for reason, count in sorted(counts.items())
+                    )
+                    or "-"
+                )
+            lines.append(
+                "| "
+                + " | ".join(
+                    [item.get("backend", "-"), item.get("profile", "-"), *inventory_columns]
+                )
+                + " |"
+            )
+
     browser_canvaskit_readiness = (
         browser_data.get("canvaskitReadinessGate") if browser_data else None
     )
@@ -860,8 +1227,8 @@ def write_reports(
                 f"- failed: {summary.get('failed', 0)}",
                 f"- missing: {summary.get('missing', 0)}",
                 "",
-                "| Sample | Category | Backend | Profile | Active Backend | Canvas Owned | Surface Backend | Surface Fallback | Passed | Blockers | Expected Gaps | Unexpected Gaps | Diff Ratio | Expected Ink | Actual Ink | Min Ink | Ink Floor |",
-                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- |",
+                "| Sample | Category | Backend | Profile | Active Backend | Canvas Owned | Surface Backend | Surface Fallback | Passed | Blockers | Expected Gaps | Unexpected Gaps | Diff Ratio | Expected Ink | Actual Ink | Min Ink | Ink Floor | Cold ms | Warm Replay ms | Warm Renderer ms | Image Cache Pixels |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: |",
             ]
         )
         for item in browser_canvaskit_readiness.get("checks", []):
@@ -889,6 +1256,10 @@ def write_reports(
                         format_count(item.get("actualInkPixels")),
                         format_count(item.get("minimumInkPixels")),
                         "yes" if item.get("minimumInkBudgetPassed") else "no",
+                        format_ms(item.get("coldDocumentLoadAndInitialRenderMs")),
+                        format_ms((item.get("warmReplay") or {}).get("replayMs")),
+                        format_ms((item.get("warmReplay") or {}).get("rendererDurationMs")),
+                        format_count((item.get("warmReplay") or {}).get("imageCachePixels")),
                     ]
                 )
                 + " |"
@@ -913,11 +1284,12 @@ def write_reports(
                 f"- failed: {summary.get('failed', 0)}",
                 f"- missing: {summary.get('missing', 0)}",
                 f"- errors: {summary.get('errors', 0)}",
+                f"- identity mismatches: {summary.get('identityMismatches', 0)}",
                 "",
                 "### Target Backend Summary",
                 "",
-                "| Target Backend | Total | Compared | Passed | Failed | Missing | Errors | Worst Selected Diff Ratio | Worst Raw Diff Ratio | Worst Channel Delta |",
-                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+                "| Target Backend | Total | Compared | Passed | Failed | Missing | Errors | Identity Mismatches | Worst Selected Diff Ratio | Worst Raw Diff Ratio | Worst Channel Delta |",
+                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
             ]
         )
         for item in browser_backend_parity.get("summaryByTargetBackend", []):
@@ -934,6 +1306,7 @@ def write_reports(
                         format_count(item.get("failed")),
                         format_count(item.get("missing")),
                         format_count(item.get("errors")),
+                        format_count(item.get("identityMismatches")),
                         f"{worst_ratio:.6f}" if isinstance(worst_ratio, (int, float)) else "-",
                         f"{worst_raw_ratio:.6f}" if isinstance(worst_raw_ratio, (int, float)) else "-",
                         format_count(item.get("worstMaxChannelDelta")),
@@ -946,8 +1319,8 @@ def write_reports(
                 "",
                 "### Profile Summary",
                 "",
-                "| Profile | Total | Compared | Passed | Failed | Missing | Errors | Worst Selected Diff Ratio | Worst Raw Diff Ratio | Worst Channel Delta |",
-                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+                "| Profile | Total | Compared | Passed | Failed | Missing | Errors | Identity Mismatches | Worst Selected Diff Ratio | Worst Raw Diff Ratio | Worst Channel Delta |",
+                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
             ]
         )
         for item in browser_backend_parity.get("summaryByProfile", []):
@@ -964,6 +1337,7 @@ def write_reports(
                         format_count(item.get("failed")),
                         format_count(item.get("missing")),
                         format_count(item.get("errors")),
+                        format_count(item.get("identityMismatches")),
                         f"{worst_ratio:.6f}" if isinstance(worst_ratio, (int, float)) else "-",
                         f"{worst_raw_ratio:.6f}" if isinstance(worst_raw_ratio, (int, float)) else "-",
                         format_count(item.get("worstMaxChannelDelta")),
@@ -978,8 +1352,8 @@ def write_reports(
                     "",
                     "### Category Summary",
                     "",
-                    "| Category | Total | Compared | Passed | Failed | Missing | Errors | Worst Selected Diff Ratio | Worst Raw Diff Ratio | Worst Channel Delta |",
-                    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+                    "| Category | Total | Compared | Passed | Failed | Missing | Errors | Identity Mismatches | Worst Selected Diff Ratio | Worst Raw Diff Ratio | Worst Channel Delta |",
+                    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
                 ]
             )
             for item in category_summary:
@@ -996,9 +1370,44 @@ def write_reports(
                             format_count(item.get("failed")),
                             format_count(item.get("missing")),
                             format_count(item.get("errors")),
+                            format_count(item.get("identityMismatches")),
                             f"{worst_ratio:.6f}" if isinstance(worst_ratio, (int, float)) else "-",
                             f"{worst_raw_ratio:.6f}" if isinstance(worst_raw_ratio, (int, float)) else "-",
                             format_count(item.get("worstMaxChannelDelta")),
+                        ]
+                    )
+                    + " |"
+                )
+        diagnostic_axis_summary = (
+            browser_backend_parity.get("summaryByDiagnosticAxis") or []
+        )
+        if diagnostic_axis_summary:
+            lines.extend(
+                [
+                    "",
+                    "### Diagnostic Axis Summary",
+                    "",
+                    "| Axis | Total | Compared | Passed | Failed | Missing | Errors | Identity Mismatches | Worst Selected Diff Ratio |",
+                    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+                ]
+            )
+            for item in diagnostic_axis_summary:
+                worst_ratio = item.get("worstSelectedDiffRatio")
+                lines.append(
+                    "| "
+                    + " | ".join(
+                        [
+                            item.get("diagnosticAxis") or "-",
+                            format_count(item.get("total")),
+                            format_count(item.get("compared")),
+                            format_count(item.get("passed")),
+                            format_count(item.get("failed")),
+                            format_count(item.get("missing")),
+                            format_count(item.get("errors")),
+                            format_count(item.get("identityMismatches")),
+                            f"{worst_ratio:.6f}"
+                            if isinstance(worst_ratio, (int, float))
+                            else "-",
                         ]
                     )
                     + " |"
@@ -1104,6 +1513,7 @@ def write_reports(
                 f"- failed: {summary.get('failed', 0)}",
                 f"- missing: {summary.get('missing', 0)}",
                 f"- errors: {summary.get('errors', 0)}",
+                f"- identity mismatches: {summary.get('identityMismatches', 0)}",
                 "",
                 "### Profile Summary",
                 "",
@@ -1156,6 +1566,38 @@ def write_reports(
                             format_count(item.get("errors")),
                             f"{worst_ratio:.6f}" if isinstance(worst_ratio, (int, float)) else "-",
                             format_count(item.get("worstMaxChannelDelta")),
+                        ]
+                    )
+                    + " |"
+                )
+        diagnostic_axis_summary = parity_data.get("summaryByDiagnosticAxis") or []
+        if diagnostic_axis_summary:
+            lines.extend(
+                [
+                    "",
+                    "### Diagnostic Axis Summary",
+                    "",
+                    "| Axis | Total | Compared | Passed | Failed | Missing | Errors | Identity Mismatches | Worst Diff Ratio |",
+                    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+                ]
+            )
+            for item in diagnostic_axis_summary:
+                worst_ratio = item.get("worstSelectedDiffRatio")
+                lines.append(
+                    "| "
+                    + " | ".join(
+                        [
+                            item.get("diagnosticAxis") or "-",
+                            format_count(item.get("total")),
+                            format_count(item.get("compared")),
+                            format_count(item.get("passed")),
+                            format_count(item.get("failed")),
+                            format_count(item.get("missing")),
+                            format_count(item.get("errors")),
+                            format_count(item.get("identityMismatches")),
+                            f"{worst_ratio:.6f}"
+                            if isinstance(worst_ratio, (int, float))
+                            else "-",
                         ]
                     )
                     + " |"
@@ -1285,7 +1727,7 @@ def main() -> None:
         raise SystemExit("--readiness-only cannot be combined with --filter")
     ensure_dir(output_root)
 
-    manifest = load_manifest(manifest_path, args.filter, args.readiness_only)
+    manifest = load_manifest(manifest_path, args.filter, args.scope, args.readiness_only)
     manifest["_path"] = str(manifest_path)
     shutil.copy2(manifest_path, output_root / manifest_path.name)
 
@@ -1307,10 +1749,16 @@ def main() -> None:
     if not args.skip_native and not args.readiness_only:
         for sample in manifest["samples"]:
             print(f"\n[native] {sample['id']} ({sample['category']})", flush=True)
-            backends = capture_native_sample(sample, output_root, profiles)
+            backends = capture_native_sample(
+                sample, output_root, profiles, args.include_pdf
+            )
             native_results.append(
                 {
                     "sampleId": sample["id"],
+                    "category": sample["category"],
+                    "page": sample["page"],
+                    "documentDigest": sample["documentDigest"],
+                    "diagnosticAxes": sample["diagnosticAxes"],
                     "backends": backends,
                 }
             )
@@ -1324,6 +1772,7 @@ def main() -> None:
             output_root / "browser",
             args.browser_mode,
             args.filter,
+            args.scope,
             profiles,
             canvaskit_surface,
             args.readiness_only,
@@ -1343,9 +1792,8 @@ def main() -> None:
     )
     print(f"\n[baseline] complete: {output_root}", flush=True)
     if not browser_capture_passed:
-        raise SystemExit(
-            f"CanvasKit readiness gate failed; see {output_root / 'baseline-report.md'}"
-        )
+        failure = "CanvasKit readiness gate" if args.readiness_only else "renderer baseline contract"
+        raise SystemExit(f"{failure} failed; see {output_root / 'baseline-report.md'}")
 
 
 if __name__ == "__main__":

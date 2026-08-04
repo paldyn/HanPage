@@ -72,6 +72,83 @@ fn test_svg_draw_text_superscript_adjusts_baseline_and_size() {
     assert!(output.contains("y=\"94\""));
 }
 
+/// 주어진 글리프를 담은 `<text>` 줄에서 `textLength` 값을 뽑아낸다.
+fn text_length_of(output: &str, glyph: &str) -> f64 {
+    let needle = format!(">{glyph}</text>");
+    let line = output
+        .lines()
+        .find(|line| line.contains(needle.as_str()))
+        .unwrap_or_else(|| panic!("SVG 에 `{glyph}` <text> 가 있어야 함"));
+    let value = line
+        .split("textLength=\"")
+        .nth(1)
+        .unwrap_or_else(|| panic!("`{glyph}` 는 textLength 를 가져야 함: {line}"))
+        .split('"')
+        .next()
+        .unwrap_or_else(|| panic!("textLength 값이 닫히지 않음: {line}"));
+    value
+        .parse()
+        .unwrap_or_else(|_| panic!("textLength 는 수치여야 함: {line}"))
+}
+
+#[test]
+fn test_svg_draw_text_script_scales_text_length_by_glyph_size() {
+    // [#2771] 첨자 글리프는 본문의 0.7 배 크기로 그려진다. 그런데 폭 맞춤에 쓰는
+    // textLength 가 본문(base) advance 그대로면 lengthAdjust="spacingAndGlyphs"
+    // 가 0.7 배 글리프를 본문 폭까지 되늘려 1/0.7 ≈ 1.43 배 가로 확대가 난다.
+    // → textLength 도 0.7 배여야 한다.
+    let base_style = TextStyle {
+        font_size: 20.0,
+        font_family: "돋움".to_string(),
+        ..Default::default()
+    };
+    let mut base_renderer = SvgRenderer::new();
+    base_renderer.begin_page(800.0, 600.0);
+    base_renderer.draw_text("1", 10.0, 100.0, &base_style);
+    let base_length = text_length_of(base_renderer.output(), "1");
+    assert!(base_length > 0.0, "본문 숫자는 textLength 를 가져야 함");
+
+    for style in [
+        TextStyle {
+            superscript: true,
+            ..base_style.clone()
+        },
+        TextStyle {
+            subscript: true,
+            ..base_style.clone()
+        },
+    ] {
+        let mut renderer = SvgRenderer::new();
+        renderer.begin_page(800.0, 600.0);
+        renderer.draw_text("1", 10.0, 100.0, &style);
+        let script_length = text_length_of(renderer.output(), "1");
+        assert!(
+            (script_length - base_length * 0.7).abs() < 0.001,
+            "첨자 textLength 는 본문의 0.7 배여야 함: base={base_length}, script={script_length}"
+        );
+    }
+}
+
+#[test]
+fn test_svg_draw_text_non_script_text_length_is_unchanged() {
+    // [#2771] 배율 인자는 비첨자에서 **정확히 1.0** 이라 기존 golden textLength
+    // 값이 비트 단위로 보존된다. 레이아웃 advance 자체는 첨자에서도 본문 기준을
+    // 유지하므로(그리기 크기만 축소) 두 run 의 char_positions 는 동일하다.
+    let style = TextStyle {
+        font_size: 20.0,
+        font_family: "돋움".to_string(),
+        ..Default::default()
+    };
+    assert_eq!(style.script_advance_scale(), 1.0);
+
+    let mut renderer = SvgRenderer::new();
+    renderer.begin_page(800.0, 600.0);
+    renderer.draw_text("1", 10.0, 100.0, &style);
+    let length = text_length_of(renderer.output(), "1");
+    // `x * 1.0` 은 IEEE-754 상 반올림 없는 항등 연산이다.
+    assert_eq!(length * style.script_advance_scale(), length);
+}
+
 #[test]
 fn test_svg_draw_text_corner_quote_uses_halfwidth_text_length() {
     let mut renderer = SvgRenderer::new();
@@ -488,8 +565,36 @@ fn test_page_background_image_non_realpic_watermark_uses_legacy_opacity() {
         "non-RealPic PageBackground watermark should keep the image effect filter: {output}"
     );
     assert!(
-        output.contains("rhwp-img-bc-b-50c70"),
-        "non-RealPic PageBackground watermark should keep the brightness/contrast filter: {output}"
+        output.contains("rhwp-img-bc-b70c-50"),
+        "non-RealPic PageBackground watermark should keep the display brightness/contrast filter: {output}"
+    );
+}
+
+#[test]
+fn test_page_background_image_uses_display_brightness_contrast_order() {
+    let png = bmp_bytes_to_png_bytes(&make_minimal_bmp_2x2()).expect("BMP->PNG 변환 실패");
+    let image = PageBackgroundImage {
+        data: png,
+        fill_mode: ImageFillMode::Center,
+        // HWP5 공통 IR의 raw storage order. 화면에서는 bright=50, contrast=-15다.
+        brightness: -15,
+        contrast: 50,
+        effect: crate::model::image::ImageEffect::RealPic,
+    };
+    let bbox = BoundingBox::new(10.0, 20.0, 100.0, 50.0);
+    let mut renderer = SvgRenderer::new();
+    renderer.begin_page(200.0, 100.0);
+
+    renderer.render_page_background_image(&image, &bbox);
+
+    let output = renderer.output();
+    assert!(
+        output.contains("rhwp-img-bc-b50c-15"),
+        "쪽 배경은 raw ImageFill 순서가 아닌 화면 bright/contrast를 써야 한다: {output}"
+    );
+    assert!(
+        !output.contains("rhwp-img-bc-b-15c50"),
+        "raw 저장 순서를 화면 필터에 직접 넘기면 안 된다: {output}"
     );
 }
 
@@ -608,8 +713,8 @@ fn test_compute_image_crop_src_exam_kor_header() {
     assert!((sy - 0.0).abs() < 0.01);
     // 102366 / 75 = 1364.88
     assert!((sw - 1364.88).abs() < 0.01);
-    // 26580 / 75 = 354.4 (≈ 354 image height)
-    assert!((sh - 354.4).abs() < 0.01);
+    // imgDim 세로 범위가 디코딩 이미지 전체 높이에 대응한다.
+    assert!((sh - 354.0).abs() < 0.01);
 }
 
 #[test]
@@ -621,21 +726,21 @@ fn test_compute_image_crop_src_no_crop_full_image() {
     assert!((sy - 0.0).abs() < 0.01);
     // 174000 / 75 = 2320 (= image width)
     assert!((sw - 2320.0).abs() < 0.01);
-    assert!((sh - 354.4).abs() < 0.01);
+    assert!((sh - 354.0).abs() < 0.01);
 }
 
 #[test]
 fn test_compute_image_crop_src_offset_top_left() {
-    // 좌·상단을 잘라낸 케이스: top=ow/4, left=ow/4 → 우하단 75% 영역
-    let (sx, sy, sw, sh) =
-        compute_image_crop_src((1000, 500, 4000, 2500), Some((4000, 2500)), 400.0, 250.0);
-    // [Task #477] 75 HU/px 룰
-    // src_x = 1000/75 = 13.33, src_y = 500/75 = 6.67
-    // src_w = 3000/75 = 40, src_h = 2000/75 = 26.67
-    assert!((sx - 13.333).abs() < 0.01);
-    assert!((sy - 6.667).abs() < 0.01);
-    assert!((sw - 40.0).abs() < 0.01);
-    assert!((sh - 26.667).abs() < 0.01);
+    // 좌·상단을 잘라낸 케이스: top=oh/5, left=ow/4 → 우하단 영역.
+    // imgDim 부재 → 적응 폴백(#3239): right/bottom(4000, 2500)이 전체 좌표
+    // 범위 = 디코딩 400×250px 에 대응 (10 HU/px).
+    let (sx, sy, sw, sh) = compute_image_crop_src((1000, 500, 4000, 2500), None, 400.0, 250.0);
+    // src_x = 1000/10 = 100, src_y = 500/10 = 50
+    // src_w = 3000/10 = 300, src_h = 2000/10 = 200
+    assert!((sx - 100.0).abs() < 0.01);
+    assert!((sy - 50.0).abs() < 0.01);
+    assert!((sw - 300.0).abs() < 0.01);
+    assert!((sh - 200.0).abs() < 0.01);
 }
 
 #[test]
@@ -643,23 +748,61 @@ fn test_compute_image_crop_src_kwater_pi31() {
     // [Task #477] k-water-rfp.hwp pi=31 케이스 (회귀 정정 검증):
     // PNG (169 × 93 px) 가 이미 crop 적용 후 image — viewBox 가 image 전체와
     // 매칭해야 (좌측 일부만 보이는 결함 정정).
-    // crop=(0, 0, 12660, 6960), original 14119×7766 HU.
+    // crop=(0, 0, 12660, 6960), imgDim=12660×6960.
     let (sx, sy, sw, sh) =
-        compute_image_crop_src((0, 0, 12660, 6960), Some((14119, 7766)), 169.0, 93.0);
+        compute_image_crop_src((0, 0, 12660, 6960), Some((12660, 6960)), 169.0, 93.0);
     assert!((sx - 0.0).abs() < 0.01);
     assert!((sy - 0.0).abs() < 0.01);
-    // 12660 / 75 = 168.8 (≈ image width 169)
-    assert!((sw - 168.8).abs() < 0.01);
-    // 6960 / 75 = 92.8 (≈ image height 93)
-    assert!((sh - 92.8).abs() < 0.01);
+    assert!((sw - 169.0).abs() < 0.01);
+    assert!((sh - 93.0).abs() < 0.01);
+}
+
+#[test]
+fn test_compute_image_crop_src_issue2817_img_dim_scale() {
+    // issue2817 image2.png: 192×108 px, imgDim/crop 전체 범위 144000×81000.
+    // 고정 75 HU/px를 적용하면 1920×1080으로 계산되어 그림이 1/10만 표시된다.
+    let (sx, sy, sw, sh) =
+        compute_image_crop_src((0, 0, 144000, 81000), Some((144000, 81000)), 192.0, 108.0);
+    assert!((sx - 0.0).abs() < 0.01);
+    assert!((sy - 0.0).abs() < 0.01);
+    assert!((sw - 192.0).abs() < 0.01);
+    assert!((sh - 108.0).abs() < 0.01);
 }
 
 #[test]
 fn test_compute_image_crop_src_fallback_when_original_size_missing() {
-    // original_size_hu가 None 이어도 [Task #477] 75 HU/px 룰을 동일하게 적용.
+    // original_size_hu(imgDim) 부재 시 적응 폴백(#3239): crop right/bottom
+    // (102366, 26580)이 전체 좌표 범위 = 디코딩 2320×354px 에 대응한다고 본다.
+    // pre-#2990 skia 경로(image_conv.rs)와 동일한 해석 — crop 이 전체 범위를
+    // 가리키는 그림(대부분의 무-crop 저장)은 단위와 무관하게 정확하다.
     let (sx, sy, sw, sh) = compute_image_crop_src((0, 0, 102366, 26580), None, 2320.0, 354.0);
     assert!((sx - 0.0).abs() < 0.01);
     assert!((sy - 0.0).abs() < 0.01);
-    assert!((sw - 1364.88).abs() < 0.01);
-    assert!((sh - 354.4).abs() < 0.01);
+    assert!((sw - 2320.0).abs() < 0.01);
+    assert!((sh - 354.0).abs() < 0.01);
+}
+
+#[test]
+fn test_compute_image_crop_src_issue3239_non_96dpi_scan_fallback() {
+    // #3239 r22 회귀 재현 실측값: samples/issue3239 평가결과서 BIN0001.TIF —
+    // 200dpi 스캔(36 HU/px), 디코딩 1654×2340px, crop=(0,0,59520,84240),
+    // raw_picture_extra 9바이트로 imgDim 부재.
+    // 고정 75 룰이면 src=793.6×1123.2 로 과소 계산되어 좌상단만 2.08배
+    // 확대·절단 렌더된다. 적응 폴백은 전체 이미지를 그대로 돌려준다.
+    let (sx, sy, sw, sh) = compute_image_crop_src((0, 0, 59520, 84240), None, 1654.0, 2340.0);
+    assert!((sx - 0.0).abs() < 0.01);
+    assert!((sy - 0.0).abs() < 0.01);
+    assert!((sw - 1654.0).abs() < 0.01);
+    assert!((sh - 2340.0).abs() < 0.01);
+}
+
+#[test]
+fn test_compute_image_crop_src_last_resort_hu_rule() {
+    // crop right/bottom 이 무효(≤0)이고 imgDim 도 없으면 최후 폴백으로
+    // [Task #477] 75 HU/px 룰을 유지한다.
+    let (sx, sy, sw, sh) = compute_image_crop_src((-300, -150, 0, 0), None, 400.0, 250.0);
+    assert!((sx - -4.0).abs() < 0.01);
+    assert!((sy - -2.0).abs() < 0.01);
+    assert!((sw - 4.0).abs() < 0.01);
+    assert!((sh - 2.0).abs() < 0.01);
 }

@@ -630,6 +630,8 @@ fn validate_table(table: &Table, path: &str, blockers: &mut Vec<HmlSaveBlocker>)
         .collect::<Vec<_>>();
     let mut rebuilt = table.clone();
     rebuilt.rebuild_grid();
+    let max_cell_row = table.cells.iter().map(|c| c.row).max().unwrap_or(0);
+    let inflated_rows = table.row_count > max_cell_row.saturating_add(5);
     let omitted = table_attr_has_unrepresentable_bits(table)
         || table.page_break != TablePageBreak::CellBreak
         || !table.repeat_header
@@ -646,7 +648,7 @@ fn validate_table(table: &Table, path: &str, blockers: &mut Vec<HmlSaveBlocker>)
         || !table.raw_table_record_extra.is_empty()
         || table.row_sizes != expected_rows
         || table.cell_grid != rebuilt.cell_grid
-        || table.common.text_wrap != Default::default()
+        || inflated_rows
         || table
             .cells
             .windows(2)
@@ -668,9 +670,11 @@ fn validate_table(table: &Table, path: &str, blockers: &mut Vec<HmlSaveBlocker>)
 }
 
 fn validate_cell(cell: &Cell, path: &str, blockers: &mut Vec<HmlSaveBlocker>) {
+    // [#3189] cell.vertical_align 은 이제 PARALIST@VertAlign 으로 왕복하므로
+    // 더 이상 blocker 가 아니다 (Top/Bottom 셀도 저장 가능). 글상자
+    // (`validate_text_box`) 쪽 vertical_align 은 아직 방출 경로가 없어 그대로 둔다.
     let omitted = cell.list_header_width_ref != 0
         || cell.text_direction != 0
-        || cell.vertical_align != VerticalAlign::Center
         || !cell.apply_inner_margin
         || cell.is_header
         || !cell.raw_list_extra.is_empty()

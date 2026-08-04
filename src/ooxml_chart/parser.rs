@@ -9,7 +9,10 @@
 //! - `<c:valAx>`에서 `<c:axId>`와 `<c:axPos>` 수집 → axId→primary/secondary 매핑 생성
 //! - 파싱 완료 시 시리즈의 axis_ids를 primary/secondary 집합과 비교해 axis_group 지정
 
-use super::{BarGrouping, LegendPos, OoxmlChart, OoxmlChartType, OoxmlSeries, ScatterStyle};
+use super::{
+    BarGrouping, LegendPos, OfPieInfo, OfPieSplitType, OfPieType, OoxmlChart, OoxmlChartType,
+    OoxmlSeries, ScatterStyle, SeriesMarker, View3D,
+};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::collections::HashMap;
@@ -31,6 +34,9 @@ struct ParseState {
     in_solid_fill: bool, // a:solidFill
     in_ln: bool,         // a:ln (stroke)
     in_num_cache: bool,  // c:numCache — formatCode 파싱
+    // c:dPt(점별 속성) 블록 내부 — 점별 explosion 을 계열로 승격하지 않기 위한
+    // 문맥 게이트 (PR #2500 후속)
+    in_d_pt: bool,
     bar_dir: Option<BarDir>,
     // 현재 파싱 중인 plot 블록 (barChart/lineChart/pieChart) 안에 있는지
     cur_plot_type: Option<OoxmlChartType>,
@@ -192,26 +198,32 @@ fn handle_start(e: &quick_xml::events::BytesStart, chart: &mut OoxmlChart, st: &
             st.cur_plot_series_start = chart.series.len();
         }
         b"bar3DChart" => {
-            // 3D 막대 — 2D 근사(C1a #1453). barDir 핸들러가 col/bar를 그대로 채워
-            // 파싱 종료 후처리가 Column↔Bar를 확정한다. is_3d는 축 정책용(C1c).
+            // 3D 막대 — barDir 핸들러가 col/bar를 그대로 채워 파싱 종료 후처리가
+            // Column↔Bar를 확정한다. is_3d는 축 정책(C1c) + 투영 렌더(C2b v2).
             chart.chart_type = OoxmlChartType::Column;
             chart.is_3d = true;
+            // view3D 요소 없는 3D 차트 폴백 — view3D는 plotArea보다 앞이라
+            // 이미 파싱됐으면 덮어쓰지 않는다. (C2b #2278 v2)
+            chart.view3d.get_or_insert_with(View3D::default);
             st.cur_plot_type = Some(OoxmlChartType::Column);
             st.cur_plot_ax_ids.clear();
             st.cur_plot_series_start = chart.series.len();
         }
         b"pie3DChart" => {
-            // 3D 원형 — 단일 원형으로 2D 근사(C1a #1453). 입체감은 후속(C2).
+            // 3D 원형 — 투영 렌더(C2b v2). 타원비는 view3d.rot_x에서 유도.
             chart.chart_type = OoxmlChartType::Pie;
             chart.is_3d = true;
+            chart.view3d.get_or_insert_with(View3D::default);
             st.cur_plot_type = Some(OoxmlChartType::Pie);
             st.cur_plot_ax_ids.clear();
             st.cur_plot_series_start = chart.series.len();
         }
         b"ofPieChart" => {
-            // ofPie — 단일 원형으로 2D 근사(C1a #1453).
-            // 보조플롯(원형대원형의 2차 원, 원형대막대의 막대)은 후속(C2).
+            // ofPie — 주 원 + 보조플롯(원형대원형의 2차 원, 원형대가로막대형의
+            // 누적 막대) 렌더(C2b #2278 Stage 3). chart_type은 Pie 유지(#1453
+            // 라우팅 앵커), of_pie 필드 유무로 render_of_pie 분기.
             chart.chart_type = OoxmlChartType::Pie;
+            chart.of_pie = Some(OfPieInfo::default());
             st.cur_plot_type = Some(OoxmlChartType::Pie);
             st.cur_plot_ax_ids.clear();
             st.cur_plot_series_start = chart.series.len();
@@ -223,6 +235,103 @@ fn handle_start(e: &quick_xml::events::BytesStart, chart: &mut OoxmlChart, st: &
             st.cur_plot_ax_ids.clear();
             st.cur_plot_series_start = chart.series.len();
         }
+        b"stockChart" => {
+            // 주식형 (C2a #2277). 계열 역할은 XML 순서 규약(3계열=고/저/종,
+            // 4계열=시/고/저/종 — 코퍼스 실측), 표현은 hiLowLines/upDownBars로 결정.
+            chart.chart_type = OoxmlChartType::Stock;
+            st.cur_plot_type = Some(OoxmlChartType::Stock);
+            st.cur_plot_ax_ids.clear();
+            st.cur_plot_series_start = chart.series.len();
+        }
+        b"line3DChart" => {
+            // 코퍼스 27종에 없음 — 방어적 라우팅(placeholder 방지, C1a bar3D/pie3D
+            // 선례). 입체 표현은 C2b(#2278), 여기서는 2D 라인 근사 + is_3d(축 정책)만.
+            // lineChart와 동일하게 콤보의 주 타입은 덮지 않음. (C2a #2277 stage5)
+            if chart.chart_type == OoxmlChartType::Unknown {
+                chart.chart_type = OoxmlChartType::Line;
+            }
+            chart.is_3d = true;
+            chart.view3d.get_or_insert_with(View3D::default);
+            st.cur_plot_type = Some(OoxmlChartType::Line);
+            st.cur_plot_ax_ids.clear();
+            st.cur_plot_series_start = chart.series.len();
+        }
+        b"view3D" => {
+            // c:plotArea보다 먼저 온다(ECMA CT_Chart 시퀀스, 코퍼스 바이트 실측
+            // 908 < 1059) — 여기서 초기화해야 자식 rotX/rotY/…가 유실되지 않음.
+            // (C2b #2278 v2 설계 리뷰: plot arm 초기화는 값 전량 폐기 은폐 버그)
+            chart.view3d = Some(View3D::default());
+        }
+        b"rotX" => {
+            if let (Some(v3), Some(v)) = (chart.view3d.as_mut(), attr_f64(e)) {
+                v3.rot_x = v;
+            }
+        }
+        b"rotY" => {
+            if let (Some(v3), Some(v)) = (chart.view3d.as_mut(), attr_f64(e)) {
+                v3.rot_y = v;
+            }
+        }
+        b"perspective" => {
+            if let (Some(v3), Some(v)) = (chart.view3d.as_mut(), attr_f64(e)) {
+                v3.perspective = v;
+            }
+        }
+        b"rAngAx" => {
+            if let (Some(v3), Some(val)) = (chart.view3d.as_mut(), attr_val(e, "val")) {
+                v3.r_ang_ax = !matches!(val.as_str(), "0" | "false");
+            }
+        }
+        b"hPercent" => {
+            if let (Some(v3), Some(v)) = (chart.view3d.as_mut(), attr_f64(e)) {
+                v3.h_percent = v;
+            }
+        }
+        b"depthPercent" => {
+            if let (Some(v3), Some(v)) = (chart.view3d.as_mut(), attr_f64(e)) {
+                v3.depth_percent = v;
+            }
+        }
+        b"gapDepth" => {
+            // bar3D 전용 — 방(씬) 깊이 = 막대 깊이×(1+gap/100). (C2b #2278 v2)
+            if matches!(
+                st.cur_plot_type,
+                Some(OoxmlChartType::Column | OoxmlChartType::Bar)
+            ) {
+                if let Some(v) = attr_f64(e) {
+                    chart.gap_depth = Some(v);
+                }
+            }
+        }
+        b"hiLowLines" => {
+            // stock 고저선. lineChart에도 올 수 있는 요소라 Stock 게이트. (C2a #2277)
+            if st.cur_plot_type == Some(OoxmlChartType::Stock) {
+                chart.has_hi_low_lines = true;
+            }
+        }
+        b"upDownBars" => {
+            // stock 시가↔종가 캔들 (OHLC). (C2a #2277)
+            if st.cur_plot_type == Some(OoxmlChartType::Stock) {
+                chart.has_up_down_bars = true;
+            }
+        }
+        b"gapWidth" => {
+            // <c:upDownBars> 내부 캔들 폭(Stock 게이트) — C2a #2277.
+            // bar/bar3D plot의 동명 요소는 3D 두께 규칙 slot/(n_eff+gap/100)용
+            // 별도 필드로 저장(2D는 미사용) — C2b #2278 v2.
+            if st.cur_plot_type == Some(OoxmlChartType::Stock) {
+                if let Some(v) = attr_f64(e) {
+                    chart.up_down_gap_width = Some(v);
+                }
+            } else if matches!(
+                st.cur_plot_type,
+                Some(OoxmlChartType::Column | OoxmlChartType::Bar)
+            ) {
+                if let Some(v) = attr_f64(e) {
+                    chart.bar_gap_width = Some(v);
+                }
+            }
+        }
         b"scatterStyle" => {
             if let Some(val) = attr_val(e, "val") {
                 chart.scatter_style = match val.as_str() {
@@ -231,6 +340,45 @@ fn handle_start(e: &quick_xml::events::BytesStart, chart: &mut OoxmlChart, st: &
                     "smooth" | "smoothMarker" => ScatterStyle::SmoothMarker,
                     _ => ScatterStyle::Marker, // "marker"/"none"/미상
                 };
+            }
+        }
+        b"ofPieType" => {
+            if let (Some(of), Some(val)) = (chart.of_pie.as_mut(), attr_val(e, "val")) {
+                if val == "bar" {
+                    of.of_pie_type = OfPieType::Bar;
+                }
+            }
+        }
+        b"splitType" => {
+            // pos 외 형태(val/percent/cust)는 splitPos 해석이 달라 count 적용을
+            // 막는다 — 렌더에서 기본 정책 폴백. (PR #2500 후속)
+            if let (Some(of), Some(val)) = (chart.of_pie.as_mut(), attr_val(e, "val")) {
+                of.split_type = match val.as_str() {
+                    "pos" => OfPieSplitType::Pos,
+                    "val" => OfPieSplitType::Val,
+                    "percent" => OfPieSplitType::Percent,
+                    "cust" => OfPieSplitType::Cust,
+                    _ => OfPieSplitType::Auto,
+                };
+            }
+        }
+        b"splitPos" => {
+            if let (Some(of), Some(v)) = (chart.of_pie.as_mut(), attr_f64(e)) {
+                of.split_pos = Some(v);
+            }
+        }
+        b"secondPieSize" => {
+            if let (Some(of), Some(v)) = (chart.of_pie.as_mut(), attr_f64(e)) {
+                of.second_pie_size = v;
+            }
+        }
+        b"serLines" => {
+            // barChart(누적 계열선)에도 오는 요소 — Pie plot + of_pie 이중 게이트
+            // (hiLowLines의 Stock 게이트 선례)
+            if st.cur_plot_type == Some(OoxmlChartType::Pie) {
+                if let Some(of) = chart.of_pie.as_mut() {
+                    of.has_ser_lines = true;
+                }
             }
         }
         b"barDir" => {
@@ -259,16 +407,47 @@ fn handle_start(e: &quick_xml::events::BytesStart, chart: &mut OoxmlChart, st: &
             }
         }
         b"marker" => {
-            // plot 레벨 <c:marker val="0|1"/> (lineChart 직계 자식, Empty 이벤트)만 채택.
-            // 계열 내부 <c:marker>는 val 속성이 없는 래퍼(symbol/size)라 자연 배제되고,
-            // cur_series 게이트가 이중 방어. scatter는 scatterStyle이 담당하므로 Line 한정.
-            // 콤보의 lineChart에서도 설정될 수 있으나 render_combo는 미참조 — 무해. (C1d #2129)
-            if st.cur_plot_type == Some(OoxmlChartType::Line) && st.cur_series.is_none() {
+            if let Some(ser) = st.cur_series.as_mut() {
+                // 계열 내부 <c:marker> 래퍼 — symbol 자식이 없으면 자동 표식
+                // (stock 종가 실측: <c:marker><c:size val="7"/> 만). symbol이 오면
+                // 아래 b"symbol" arm이 None/Named로 덮어씀. (C2a #2277)
+                if ser.marker_symbol == SeriesMarker::NotSpecified {
+                    ser.marker_symbol = SeriesMarker::Auto;
+                }
+            } else if st.cur_plot_type == Some(OoxmlChartType::Line) {
+                // plot 레벨 <c:marker val="0|1"/> (lineChart 직계 자식, Empty 이벤트).
+                // scatter는 scatterStyle이 담당하므로 Line 한정. 콤보의 lineChart에서도
+                // 설정될 수 있으나 render_combo는 미참조 — 무해. (C1d #2129)
                 if let Some(val) = attr_val(e, "val") {
                     chart.line_markers = matches!(val.as_str(), "1" | "true");
                 }
             }
         }
+        b"symbol" => {
+            // 계열 내부 <c:marker><c:symbol val>. "none"=표식 억제(stock 시/고/저 실측),
+            // 그 외 명시 심볼. (C2a #2277)
+            if let Some(ser) = st.cur_series.as_mut() {
+                if let Some(val) = attr_val(e, "val") {
+                    ser.marker_symbol = if val == "none" {
+                        SeriesMarker::None
+                    } else {
+                        SeriesMarker::Named(val)
+                    };
+                }
+            }
+        }
+        b"explosion" => {
+            // 계열 레벨 쪼개진원형 (%) — 렌더는 2D 원형 경로만 반영. (C2b #2278)
+            // c:dPt 내부의 점별 explosion 은 계열 전체로 승격하지 않고 무시한다
+            // (점별 렌더 미지원 — PR #2500 후속).
+            if st.in_d_pt {
+                return;
+            }
+            if let (Some(ser), Some(v)) = (st.cur_series.as_mut(), attr_f64(e)) {
+                ser.explosion = Some(v);
+            }
+        }
+        b"dPt" => st.in_d_pt = true,
         b"ser" => {
             let mut ser = OoxmlSeries::default();
             if let Some(t) = st.cur_plot_type {
@@ -421,6 +600,7 @@ fn handle_end(name: &[u8], chart: &mut OoxmlChart, st: &mut ParseState) {
         b"tx" => st.in_tx = false,
         b"cat" => st.in_cat = false,
         b"val" => st.in_val = false,
+        b"dPt" => st.in_d_pt = false,
         b"xVal" => st.in_x_val = false,
         b"yVal" => st.in_y_val = false,
         b"title" => st.in_chart_title = false,
@@ -446,7 +626,7 @@ fn handle_end(name: &[u8], chart: &mut OoxmlChart, st: &mut ParseState) {
             }
         }
         b"barChart" | b"lineChart" | b"pieChart" | b"bar3DChart" | b"pie3DChart"
-        | b"ofPieChart" | b"scatterChart" => {
+        | b"ofPieChart" | b"scatterChart" | b"stockChart" | b"line3DChart" => {
             // plot 종료 — 이 plot에 속한 시리즈에 axIds 복사
             let start = st.cur_plot_series_start;
             for ser in chart.series.iter_mut().skip(start) {
@@ -466,6 +646,11 @@ fn attr_val(e: &quick_xml::events::BytesStart, key: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// `val` 속성을 f64로. view3D/gapDepth 등 수치 단일 속성 요소용. (C2b #2278 v2)
+fn attr_f64(e: &quick_xml::events::BytesStart) -> Option<f64> {
+    attr_val(e, "val").and_then(|s| s.parse().ok())
 }
 
 fn parse_rgb_hex(s: &str) -> Option<u32> {
@@ -593,6 +778,176 @@ mod tests {
         assert_eq!(c.legend_pos, LegendPos::Bottom);
     }
 
+    // --- C2b (#2278) v2: view3D / gapWidth / gapDepth 파싱 ---
+
+    #[test]
+    fn test_parse_view3d_fields() {
+        // 문서 순서 미러: c:view3D는 c:plotArea보다 **앞** (코퍼스 바이트 실측
+        // 908 < 1059). 값은 기본값과 다른 원형 코퍼스(rAngAx=0/rotX=30/rotY=0) —
+        // 막대 값(15/20)은 View3D::default()와 같아 초기화 순서 버그가 공허
+        // 통과한다 (v2 설계 리뷰 확정).
+        let xml = br#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart>
+<c:view3D><c:rAngAx val="0"/><c:rotX val="30"/><c:rotY val="0"/><c:perspective val="30"/><c:hPercent val="100"/><c:depthPercent val="100"/></c:view3D>
+<c:plotArea><c:pie3DChart><c:ser>
+  <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>3</c:v></c:pt></c:numCache></c:numRef></c:val>
+</c:ser></c:pie3DChart></c:plotArea></c:chart></c:chartSpace>"#;
+        let c = parse_chart_xml(xml).expect("parse OK");
+        let v = c.view3d.expect("view3D 파싱");
+        assert!(!v.r_ang_ax, "rAngAx=0 → false");
+        assert_eq!(v.rot_x, 30.0);
+        assert_eq!(v.rot_y, 0.0);
+        assert_eq!(v.perspective, 30.0);
+        assert_eq!(v.h_percent, 100.0);
+        assert_eq!(v.depth_percent, 100.0);
+    }
+
+    #[test]
+    fn test_parse_view3d_defaults_when_absent() {
+        // view3D 요소 없는 bar3D → plot arm 폴백(get_or_insert)으로 Office 관례
+        // 기본값(MS-OE376: 15/20/30/rAngAx=1 — XSD 기본 아님).
+        let xml3d = br#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea><c:bar3DChart><c:barDir val="col"/><c:ser><c:val><c:numCache><c:pt idx="0"><c:v>3</c:v></c:pt></c:numCache></c:val></c:ser></c:bar3DChart></c:plotArea></c:chart></c:chartSpace>"#;
+        let c = parse_chart_xml(xml3d).expect("parse OK");
+        let v = c.view3d.expect("3D plot이면 view3d Some");
+        assert!(v.r_ang_ax);
+        assert_eq!(v.rot_x, 15.0);
+        assert_eq!(v.rot_y, 20.0);
+        assert_eq!(v.perspective, 30.0);
+        // 2D 차트는 view3d 없음
+        let c2d = parse_chart_xml(BAR_XML.as_bytes()).expect("parse OK");
+        assert!(c2d.view3d.is_none(), "2D는 view3d None");
+    }
+
+    #[test]
+    fn test_parse_bar_gap_width_and_depth() {
+        // bar3DChart의 gapWidth/gapDepth → bar_gap_width/gap_depth.
+        // stock의 upDownBars>gapWidth(up_down_gap_width)와 필드 분리 — 무오염은
+        // 기존 test_parse_stock_ohlc(150 저장)와 본 테스트의 None 단언이 상호 가드.
+        let xml = br#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart>
+<c:view3D><c:rotX val="15"/><c:rotY val="20"/><c:perspective val="30"/><c:rAngAx val="1"/></c:view3D>
+<c:plotArea><c:bar3DChart><c:barDir val="col"/>
+<c:ser><c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>3</c:v></c:pt></c:numCache></c:numRef></c:val></c:ser>
+<c:gapWidth val="150"/><c:gapDepth val="150"/>
+</c:bar3DChart></c:plotArea></c:chart></c:chartSpace>"#;
+        let c = parse_chart_xml(xml).expect("parse OK");
+        assert_eq!(c.bar_gap_width, Some(150.0));
+        assert_eq!(c.gap_depth, Some(150.0));
+        assert_eq!(c.up_down_gap_width, None, "stock 필드 무오염");
+        assert!(c.view3d.expect("view3d").r_ang_ax);
+    }
+
+    // --- C2a (#2277): stock (주식형) 파싱 ---
+
+    /// 코퍼스 stock XML 미러: 시/고/저 계열은 `<c:marker><c:symbol val="none"/>`,
+    /// 종가만 marker 래퍼(size만, symbol 부재). HLC=hiLowLines만,
+    /// OHLC=+upDownBars(gapWidth 150).
+    fn stock_xml(with_up_down_bars: bool) -> String {
+        let open_ser = if with_up_down_bars {
+            r#"<c:ser><c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>시가</c:v></c:pt></c:strCache></c:strRef></c:tx>
+<c:marker><c:symbol val="none"/></c:marker>
+<c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>44</c:v></c:pt><c:pt idx="1"><c:v>32</c:v></c:pt></c:numCache></c:numRef></c:val></c:ser>"#
+        } else {
+            ""
+        };
+        let up_down = if with_up_down_bars {
+            r#"<c:upDownBars><c:gapWidth val="150"/><c:upBars/><c:downBars/></c:upDownBars>"#
+        } else {
+            ""
+        };
+        format!(
+            r#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea>
+<c:stockChart>
+{open_ser}
+<c:ser><c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>고가</c:v></c:pt></c:strCache></c:strRef></c:tx>
+<c:marker><c:symbol val="none"/></c:marker>
+<c:cat><c:strRef><c:strCache><c:pt idx="0"><c:v>1월</c:v></c:pt><c:pt idx="1"><c:v>2월</c:v></c:pt></c:strCache></c:strRef></c:cat>
+<c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>55</c:v></c:pt><c:pt idx="1"><c:v>57</c:v></c:pt></c:numCache></c:numRef></c:val></c:ser>
+<c:ser><c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>저가</c:v></c:pt></c:strCache></c:strRef></c:tx>
+<c:marker><c:symbol val="none"/></c:marker>
+<c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>11</c:v></c:pt><c:pt idx="1"><c:v>12</c:v></c:pt></c:numCache></c:numRef></c:val></c:ser>
+<c:ser><c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>종가</c:v></c:pt></c:strCache></c:strRef></c:tx>
+<c:marker><c:size val="7"/></c:marker>
+<c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>32</c:v></c:pt><c:pt idx="1"><c:v>35</c:v></c:pt></c:numCache></c:numRef></c:val></c:ser>
+<c:hiLowLines/>
+{up_down}
+<c:axId val="AX1"/><c:axId val="AX2"/>
+</c:stockChart>
+</c:plotArea></c:chart></c:chartSpace>"#
+        )
+    }
+
+    #[test]
+    fn test_parse_stock_hlc() {
+        let c = parse_chart_xml(stock_xml(false).as_bytes()).expect("parse OK");
+        assert_eq!(c.chart_type, OoxmlChartType::Stock);
+        assert!(c.has_hi_low_lines);
+        assert!(!c.has_up_down_bars);
+        assert_eq!(c.up_down_gap_width, None);
+        assert_eq!(c.series.len(), 3);
+        assert_eq!(c.series[0].name, "고가");
+        assert_eq!(c.series[0].series_type, OoxmlChartType::Stock);
+        assert_eq!(c.series[0].marker_symbol, SeriesMarker::None);
+        assert_eq!(c.series[1].marker_symbol, SeriesMarker::None);
+        assert_eq!(
+            c.series[2].marker_symbol,
+            SeriesMarker::Auto,
+            "종가 = marker 래퍼만(symbol 부재) → Auto"
+        );
+        assert_eq!(c.categories, vec!["1월", "2월"]);
+    }
+
+    #[test]
+    fn test_parse_stock_ohlc_up_down_bars() {
+        let c = parse_chart_xml(stock_xml(true).as_bytes()).expect("parse OK");
+        assert_eq!(c.chart_type, OoxmlChartType::Stock);
+        assert!(c.has_hi_low_lines);
+        assert!(c.has_up_down_bars);
+        assert_eq!(c.up_down_gap_width, Some(150.0));
+        assert_eq!(c.series.len(), 4);
+        assert_eq!(c.series[0].name, "시가");
+        assert_eq!(c.series[0].marker_symbol, SeriesMarker::None);
+        assert_eq!(c.series[3].marker_symbol, SeriesMarker::Auto);
+    }
+
+    #[test]
+    fn test_parse_line3d_routing() {
+        // line3DChart — 코퍼스 27종에 없음. 방어 라우팅(placeholder 방지, C1a
+        // bar3D/pie3D 선례): Line + is_3d(축 정책). 입체 표현은 C2b·2D 근사.
+        let xml = br#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea><c:line3DChart><c:grouping val="stacked"/><c:ser><c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>3</c:v></c:pt><c:pt idx="1"><c:v>4</c:v></c:pt></c:numCache></c:numRef></c:val></c:ser><c:axId val="A1"/></c:line3DChart></c:plotArea></c:chart></c:chartSpace>"#;
+        let c = parse_chart_xml(xml).expect("parse OK");
+        assert_eq!(c.chart_type, OoxmlChartType::Line);
+        assert!(c.is_3d);
+        assert_eq!(c.series.len(), 1);
+        assert_eq!(c.series[0].series_type, OoxmlChartType::Line);
+        assert_eq!(
+            c.line_grouping,
+            BarGrouping::Stacked,
+            "line3D의 grouping도 line_grouping 채택"
+        );
+        assert_eq!(
+            c.series[0].axis_ids,
+            vec!["A1".to_string()],
+            "plot 종료 시 axId 복사"
+        );
+    }
+
+    #[test]
+    fn test_parse_stock_no_line_marker_cross_talk() {
+        // 계열 내부 <c:marker>가 plot 레벨 line_markers를 오염하지 않음
+        let c = parse_chart_xml(stock_xml(true).as_bytes()).expect("parse OK");
+        assert!(!c.line_markers);
+    }
+
+    #[test]
+    fn test_parse_bar_gap_width_not_captured() {
+        // barChart의 <c:gapWidth>는 stock 캔들 폭(up_down_gap_width)과 무관 — Stock 게이트
+        let xml = r#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart>
+<c:plotArea><c:barChart><c:barDir val="col"/><c:gapWidth val="150"/><c:ser>
+  <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>3</c:v></c:pt></c:numCache></c:numRef></c:val>
+</c:ser></c:barChart></c:plotArea></c:chart></c:chartSpace>"#;
+        let c = parse_chart_xml(xml.as_bytes()).expect("parse OK");
+        assert_eq!(c.up_down_gap_width, None);
+    }
+
     #[test]
     fn test_parse_combo_dual_axis() {
         let xml = r#"<c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea>
@@ -678,11 +1033,101 @@ mod tests {
 
     #[test]
     fn test_parse_ofpie() {
-        // ofPieChart → Pie (원형대원형/원형대막대 → 단일 원형 근사)
+        // ofPieChart → Pie (chart_type 앵커 유지 — #1453 라우팅)
         let xml = br#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea><c:ofPieChart><c:ofPieType val="pie"/><c:ser><c:val><c:numCache><c:pt idx="0"><c:v>40</c:v></c:pt><c:pt idx="1"><c:v>25</c:v></c:pt><c:pt idx="2"><c:v>35</c:v></c:pt></c:numCache></c:val></c:ser></c:ofPieChart></c:plotArea></c:chart></c:chartSpace>"#;
         let c = parse_chart_xml(xml).expect("parse OK");
         assert_eq!(c.chart_type, OoxmlChartType::Pie);
         assert_eq!(c.series[0].values, vec![40.0, 25.0, 35.0]);
+    }
+
+    // --- C2b Stage 3 (#2278): ofPie 보조플롯 파라미터 ---
+
+    #[test]
+    fn test_parse_ofpie_info() {
+        // secondPieSize/serLines 포함 → of_pie Some + chart_type Pie 재확인
+        let xml = br#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea><c:ofPieChart><c:ofPieType val="pie"/><c:ser><c:val><c:numCache><c:pt idx="0"><c:v>40</c:v></c:pt><c:pt idx="1"><c:v>25</c:v></c:pt><c:pt idx="2"><c:v>35</c:v></c:pt></c:numCache></c:val></c:ser><c:serLines/><c:secondPieSize val="75"/></c:ofPieChart></c:plotArea></c:chart></c:chartSpace>"#;
+        let c = parse_chart_xml(xml).expect("parse OK");
+        assert_eq!(c.chart_type, OoxmlChartType::Pie);
+        let of = c.of_pie.expect("of_pie Some");
+        assert_eq!(of.of_pie_type, OfPieType::Pie);
+        assert_eq!(of.split_pos, None);
+        assert_eq!(of.second_pie_size, 75.0);
+        assert!(of.has_ser_lines);
+    }
+
+    #[test]
+    fn test_parse_ofpie_bar_type() {
+        let xml = br#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea><c:ofPieChart><c:ofPieType val="bar"/><c:ser><c:val><c:numCache><c:pt idx="0"><c:v>4</c:v></c:pt></c:numCache></c:val></c:ser></c:ofPieChart></c:plotArea></c:chart></c:chartSpace>"#;
+        let c = parse_chart_xml(xml).expect("parse OK");
+        assert_eq!(c.of_pie.expect("of_pie").of_pie_type, OfPieType::Bar);
+    }
+
+    #[test]
+    fn test_parse_ofpie_split_pos() {
+        let xml = br#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea><c:ofPieChart><c:ofPieType val="pie"/><c:splitPos val="3"/><c:ser><c:val><c:numCache><c:pt idx="0"><c:v>4</c:v></c:pt></c:numCache></c:val></c:ser></c:ofPieChart></c:plotArea></c:chart></c:chartSpace>"#;
+        let c = parse_chart_xml(xml).expect("parse OK");
+        assert_eq!(c.of_pie.expect("of_pie").split_pos, Some(3.0));
+    }
+
+    #[test]
+    fn test_parse_pie_explosion() {
+        // 쪼개진원형: 계열 레벨 c:explosion val="25" (코퍼스 dPt 0개)
+        let xml = br#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea><c:pieChart><c:ser><c:explosion val="25"/><c:val><c:numCache><c:pt idx="0"><c:v>4</c:v></c:pt><c:pt idx="1"><c:v>3</c:v></c:pt></c:numCache></c:val></c:ser></c:pieChart></c:plotArea></c:chart></c:chartSpace>"#;
+        let c = parse_chart_xml(xml).expect("parse OK");
+        assert_eq!(c.series[0].explosion, Some(25.0));
+        // 부재 시 None (2차원원형 등)
+        let xml2 = br#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea><c:pieChart><c:ser><c:val><c:numCache><c:pt idx="0"><c:v>4</c:v></c:pt></c:numCache></c:val></c:ser></c:pieChart></c:plotArea></c:chart></c:chartSpace>"#;
+        assert_eq!(
+            parse_chart_xml(xml2).expect("parse OK").series[0].explosion,
+            None
+        );
+    }
+
+    // --- PR #2500 후속: dPt 점별 explosion 비승격 + splitType 해석 ---
+
+    #[test]
+    fn test_dpt_explosion_not_promoted_to_series() {
+        // c:dPt 내부 점별 explosion — 점별 렌더 미지원 동안 계열 승격 금지
+        let xml = br#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea><c:pieChart><c:ser><c:dPt><c:idx val="1"/><c:explosion val="25"/></c:dPt><c:val><c:numCache><c:pt idx="0"><c:v>4</c:v></c:pt><c:pt idx="1"><c:v>3</c:v></c:pt></c:numCache></c:val></c:ser></c:pieChart></c:plotArea></c:chart></c:chartSpace>"#;
+        assert_eq!(
+            parse_chart_xml(xml).expect("parse OK").series[0].explosion,
+            None,
+            "dPt explosion 이 계열 전체로 승격되면 안 됨"
+        );
+        // 계열 레벨 explosion 은 dPt 공존 시에도 유지
+        let xml2 = br#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea><c:pieChart><c:ser><c:explosion val="10"/><c:dPt><c:idx val="1"/><c:explosion val="25"/></c:dPt><c:val><c:numCache><c:pt idx="0"><c:v>4</c:v></c:pt></c:numCache></c:val></c:ser></c:pieChart></c:plotArea></c:chart></c:chartSpace>"#;
+        assert_eq!(
+            parse_chart_xml(xml2).expect("parse OK").series[0].explosion,
+            Some(10.0),
+            "계열 레벨 explosion 은 유지"
+        );
+    }
+
+    #[test]
+    fn test_ofpie_split_type_parsed() {
+        let make = |ty: &str| {
+            let xml = format!(
+                r#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea><c:ofPieChart><c:ofPieType val="pie"/><c:splitType val="{ty}"/><c:splitPos val="3"/><c:ser><c:val><c:numCache><c:pt idx="0"><c:v>4</c:v></c:pt></c:numCache></c:val></c:ser></c:ofPieChart></c:plotArea></c:chart></c:chartSpace>"#
+            );
+            parse_chart_xml(xml.as_bytes())
+                .expect("parse OK")
+                .of_pie
+                .expect("of_pie")
+        };
+        assert_eq!(make("pos").split_type, OfPieSplitType::Pos);
+        assert_eq!(make("val").split_type, OfPieSplitType::Val);
+        assert_eq!(make("percent").split_type, OfPieSplitType::Percent);
+        assert_eq!(make("cust").split_type, OfPieSplitType::Cust);
+        // splitPos 값 자체는 형태와 무관하게 IR 에 보존 (해석은 렌더에서 게이트)
+        assert_eq!(make("val").split_pos, Some(3.0));
+    }
+
+    #[test]
+    fn test_parse_serlines_not_leaked_to_barchart() {
+        // barChart의 c:serLines(누적 계열선)는 of_pie로 새지 않음 (이중 게이트)
+        let xml = br#"<?xml version="1.0"?><c:chartSpace xmlns:c="x" xmlns:a="y"><c:chart><c:plotArea><c:barChart><c:barDir val="col"/><c:serLines/><c:ser><c:val><c:numCache><c:pt idx="0"><c:v>3</c:v></c:pt></c:numCache></c:val></c:ser></c:barChart></c:plotArea></c:chart></c:chartSpace>"#;
+        let c = parse_chart_xml(xml).expect("parse OK");
+        assert!(c.of_pie.is_none(), "barChart serLines가 of_pie 생성 금지");
     }
 
     // --- C1a Part B (#1453): 막대 누적 grouping 파싱 ---

@@ -37,7 +37,7 @@ git merge upstream/devel --no-commit --no-ff
 
 - `src/renderer/layout/table_layout.rs`
 - `tests/issue_1858_bottom_anchor_flush.rs`
-- `mydocs/tech/task_1858_manifestation2_investigation.md`
+- `mydocs/troubleshootings/bottom_anchor_declared_vs_rendered_height.md`
 
 중점 확인:
 
@@ -87,7 +87,7 @@ env CARGO_INCREMENTAL=0 cargo test --profile release-test --tests
 명령:
 
 ```bash
-python3 scripts/task1274_visual_sweep.py \
+python3 scripts/visual_sweep.py \
   --out output/pr1894-visual \
   --rhwp-bin target/debug/rhwp \
   --key pr1894-36389312 \

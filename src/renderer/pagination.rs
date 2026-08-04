@@ -164,15 +164,184 @@ pub struct MasterPageRef {
     pub master_page_index: usize,
 }
 
+/// 표 셀 안에 중첩된 머리말/꼬리말 컨트롤로 내려가는 경로 한 단계.
+///
+/// 최상위 문단 → 표 → 셀 → 셀 문단 순으로 내려간다. 여러 단계가 쌓이면
+/// 표 안의 표처럼 다중 중첩도 표현할 수 있다.
+#[derive(Debug, Clone)]
+pub struct HeaderFooterTableStep {
+    /// 바깥 controls 리스트에서 Table 컨트롤의 인덱스
+    pub table_control_index: usize,
+    /// 표 셀 인덱스
+    pub cell_index: usize,
+    /// 셀 내부 문단 인덱스
+    pub cell_para_index: usize,
+}
+
 /// 머리말/꼬리말 참조
 #[derive(Debug, Clone)]
 pub struct HeaderFooterRef {
-    /// Header/Footer 컨트롤이 있는 문단 인덱스
+    /// Header/Footer 컨트롤이 있는 (최상위) 문단 인덱스
     pub para_index: usize,
-    /// 해당 문단 내 컨트롤 인덱스
+    /// Header/Footer 컨트롤이 위치한 (가장 안쪽) controls 리스트 내 인덱스
     pub control_index: usize,
     /// Header/Footer 컨트롤이 속한 구역 인덱스 (구역 간 상속 시 원본 구역 추적용)
     pub source_section_index: usize,
+    /// 표 셀 안에 중첩된 경우의 경로. 비어 있으면 최상위 문단 직속 컨트롤.
+    ///
+    /// HWP 시험지(예: 수능 수학 선택과목 소책자)는 4쪽짜리 소책자의 4쪽 머리말을
+    /// 제목표(1x1 표) 셀 안에 정의하기도 한다. 이 경로가 없으면 그 머리말이
+    /// 수집되지 않아 4쪽 쪽번호가 2쪽 머리말로 대체돼 잘못 표시된다.
+    pub table_path: Vec<HeaderFooterTableStep>,
+}
+
+/// 표 셀 안에 중첩된 Header/Footer 컨트롤을 재귀적으로 수집한다.
+///
+/// `base_path` 는 바깥 문단에서 `table` 까지 내려온 경로(마지막 단계의 셀/문단은
+/// 이 함수 안에서 채운다). 수집된 항목은 최상위 문단 인덱스 `pi` 를 그대로 써서
+/// 페이지 매핑 정합성을 유지한다(PageHide 수집과 동일 규약).
+pub(crate) fn collect_nested_header_footer_controls(
+    table: &crate::model::table::Table,
+    pi: usize,
+    section_index: usize,
+    table_control_index: usize,
+    base_path: &[HeaderFooterTableStep],
+    hf_entries: &mut Vec<(usize, HeaderFooterRef, bool, HeaderFooterApply)>,
+) {
+    for (cell_idx, cell) in table.cells.iter().enumerate() {
+        for (cpi, cp) in cell.paragraphs.iter().enumerate() {
+            let mut path = base_path.to_vec();
+            path.push(HeaderFooterTableStep {
+                table_control_index,
+                cell_index: cell_idx,
+                cell_para_index: cpi,
+            });
+            for (cci, ctrl) in cp.controls.iter().enumerate() {
+                match ctrl {
+                    Control::Header(h) => {
+                        hf_entries.push((
+                            pi,
+                            HeaderFooterRef {
+                                para_index: pi,
+                                control_index: cci,
+                                source_section_index: section_index,
+                                table_path: path.clone(),
+                            },
+                            true,
+                            h.apply_to,
+                        ));
+                    }
+                    Control::Footer(f) => {
+                        hf_entries.push((
+                            pi,
+                            HeaderFooterRef {
+                                para_index: pi,
+                                control_index: cci,
+                                source_section_index: section_index,
+                                table_path: path.clone(),
+                            },
+                            false,
+                            f.apply_to,
+                        ));
+                    }
+                    Control::Table(inner) => {
+                        collect_nested_header_footer_controls(
+                            inner,
+                            pi,
+                            section_index,
+                            cci,
+                            &path,
+                            hf_entries,
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+/// `HeaderFooterRef` 가 가리키는 Header/Footer 컨트롤을 원본 문단 슬라이스에서 해석한다.
+/// `table_path` 를 따라 표 셀 안까지 내려간다.
+pub(crate) fn resolve_header_footer_control<'a>(
+    paragraphs: &'a [Paragraph],
+    hf_ref: &HeaderFooterRef,
+) -> Option<&'a Control> {
+    let mut para = paragraphs.get(hf_ref.para_index)?;
+    for step in &hf_ref.table_path {
+        let Control::Table(table) = para.controls.get(step.table_control_index)? else {
+            return None;
+        };
+        para = table
+            .cells
+            .get(step.cell_index)?
+            .paragraphs
+            .get(step.cell_para_index)?;
+    }
+    para.controls.get(hf_ref.control_index)
+}
+
+/// 쪽별 활성 머리말/꼬리말 선택기.
+///
+/// 등장한 컨트롤을 **종류별 칸에 나눠** 누적하고, 쓸 때 쪽 홀짝에 맞춰 고른다. 홀수/짝수
+/// 전용이 양 쪽보다 **더 구체적**이므로 우선한다 — 문서 안에서 어느 컨트롤이 먼저
+/// 등장했는지와 무관해야 한다.
+///
+/// 한 변수에 덮어쓰며 누적하면 "마지막에 일치한 것" 이 이기고, 그러면 양 쪽 머리말을
+/// 나중에 추가했다는 이유만으로 홀수 전용 머리말이 홀수 쪽에서 사라진다 (Task #3234).
+#[derive(Debug, Default, Clone)]
+pub struct ActiveHeaderFooter {
+    header_both: Option<HeaderFooterRef>,
+    header_even: Option<HeaderFooterRef>,
+    header_odd: Option<HeaderFooterRef>,
+    footer_both: Option<HeaderFooterRef>,
+    footer_even: Option<HeaderFooterRef>,
+    footer_odd: Option<HeaderFooterRef>,
+}
+
+impl ActiveHeaderFooter {
+    /// `page_last_para` 까지 등장한 컨트롤을 누적한다.
+    ///
+    /// 누적은 쪽을 넘어가며 유지된다 — 머리말은 정의된 문단이 나온 쪽부터 이후 쪽에도
+    /// 계속 적용되기 때문이다.
+    pub fn accumulate(
+        &mut self,
+        entries: &[(usize, HeaderFooterRef, bool, HeaderFooterApply)],
+        page_last_para: usize,
+    ) {
+        for (para_idx, hf_ref, is_header, apply_to) in entries {
+            if *para_idx > page_last_para {
+                continue;
+            }
+            let slot = match (is_header, apply_to) {
+                (true, HeaderFooterApply::Both) => &mut self.header_both,
+                (true, HeaderFooterApply::Even) => &mut self.header_even,
+                (true, HeaderFooterApply::Odd) => &mut self.header_odd,
+                (false, HeaderFooterApply::Both) => &mut self.footer_both,
+                (false, HeaderFooterApply::Even) => &mut self.footer_even,
+                (false, HeaderFooterApply::Odd) => &mut self.footer_odd,
+            };
+            *slot = Some(hf_ref.clone());
+        }
+    }
+
+    /// 쪽 번호에 대한 활성 (머리말, 꼬리말).
+    pub fn active(&self, page_number: u32) -> (Option<HeaderFooterRef>, Option<HeaderFooterRef>) {
+        let is_odd = page_number % 2 == 1;
+        let pick = |odd: &Option<HeaderFooterRef>,
+                    even: &Option<HeaderFooterRef>,
+                    both: &Option<HeaderFooterRef>| {
+            if is_odd {
+                odd.clone().or_else(|| both.clone())
+            } else {
+                even.clone().or_else(|| both.clone())
+            }
+        };
+        (
+            pick(&self.header_odd, &self.header_even, &self.header_both),
+            pick(&self.footer_odd, &self.footer_even, &self.footer_both),
+        )
+    }
 }
 
 /// 각주 출처 (본문 문단 또는 표 셀 내)
@@ -200,6 +369,18 @@ pub enum FootnoteSource {
     },
 }
 
+/// 한 각주를 물리 페이지 경계에서 나눈 line fragment.
+///
+/// `start_line..end_line`은 각주 안의 문단을 순서대로 compose한 뒤의 평탄 line index다.
+/// `end_line`은 exclusive다. 첫 fragment만 separator와 번호를 그린다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FootnoteFragment {
+    pub start_line: usize,
+    pub end_line: usize,
+    pub draw_separator: bool,
+    pub draw_number: bool,
+}
+
 /// 페이지에 배치되는 각주 참조
 #[derive(Debug, Clone)]
 pub struct FootnoteRef {
@@ -207,6 +388,8 @@ pub struct FootnoteRef {
     pub number: u16,
     /// 출처
     pub source: FootnoteSource,
+    /// `None`이면 각주 전체를 그린다.
+    pub fragment: Option<FootnoteFragment>,
 }
 
 /// 한 단(Column)에 배치될 콘텐츠
@@ -680,6 +863,7 @@ impl PaginationResult {
                         FootnoteRef {
                             number: f.number,
                             source,
+                            fragment: f.fragment,
                         }
                     })
                     .collect(),

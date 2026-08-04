@@ -63,16 +63,18 @@ Foundation  Typeset   Collab    Complete
 
 > The reason for completing the skeleton alone through v0.5.0 is simple — when the community arrives, the core architecture must already be solid so that direction does not drift.
 
-### v0.5.0 ~ v0.7.x — Foundation (current)
+## Milestones
+
+### v0.5.0 ~ v0.8.x — Foundation (current)
 
 > Reverse-engineering complete, read/write foundation established
 
 - HWP 5.0 / HWPX parser, rendering for paragraphs, tables, equations, images, charts
 - HML (HWPML 2.9/2.91) import: text, formatting, tables, rectangle text boxes, and supported equations; loss-safe HML/HWP/HWPX save
 - Pagination (multi-column split, table row split), headers/footers, master pages, footnotes
-- SVG export (CLI) + Canvas rendering (WASM/Web)
+- SVG/PNG/PDF export (CLI) + Canvas/CanvasKit rendering (WASM/Web)
 - Web editor + hwpctl-compatible API (30 Actions, Field API)
-- 1,100+ tests
+- 3,400+ Rust tests + studio unit/e2e/visual-regression CI
 
 > HML support is limited to HWPML 2.9/2.91 structures verified by the current real-file corpus.
 > Supported equations can be imported and edited; HML-origin documents can be saved back to HML
@@ -109,6 +111,7 @@ See the [roadmap document](mydocs/eng/report/rhwp-milestone.md) for details.
 ### Parsing
 - HWP 5.0 binary format (OLE2 Compound File)
 - HWPX (Open XML-based format)
+- HML (HWPML 2.9/2.91) — limited to corpus-verified structures
 - Sections, paragraphs, tables, textboxes, images, equations, charts
 - Header/footer, master pages, footnotes/endnotes
 
@@ -140,31 +143,20 @@ See the [roadmap document](mydocs/eng/report/rhwp-milestone.md) for details.
 
 ### Output
 - SVG export (CLI, legacy + layer replay)
-- Canvas rendering (WASM/Web)
-- HWP save path for native HWP editing and HWPX → HWP conversion
+- PNG export (native Skia, `--features native-skia`)
+- PDF export: SVG compatibility by default (`--text-as-paths`, byte-reproducible), native Skia direct opt-in (`--features native-skia`, `--backend direct`)
+- Canvas rendering (WASM/Web) + opt-in document-scoped Canvas2D/CanvasKit auto selection
+- Save: native HWP editing, semantics-preserving HWPX/HML save, HWPX → HWP conversion
 - Debug overlay (paragraph/table boundaries + indices + y-coordinates)
 
 ### Multi-Renderer Backends
-- `PageRenderTree` can be lowered into a `PageLayerTree` paint IR before backend replay.
-- P1 public surfaces are Rust native `DocumentCore::build_page_layer_tree(page)` and WASM `getPageLayerTree(page)`.
-- Layer JSON starts at `schemaVersion: 1`, uses `unit: "px"`, and uses `coordinateSystem: "page-top-left"` to match the existing page render coordinates.
-- Compatible schema changes should be additive; incompatible JSON shape changes require a schema version bump.
-- **Legacy SVG** remains the default compatibility output.
-- **Layered SVG** can be exercised with `RHWP_RENDER_PATH=layer-svg`.
-- The layered SVG path is a transition adapter that expands `PageLayerTree` back into the existing SVG renderer.
-- Browser/native Canvas paths render through `PageLayerTree` replay by default.
-- Legacy Canvas remains available through `renderPageCanvasLegacy` / `renderPageToCanvasLegacy` for parity checks.
-- P3 visual regression coverage runs `npm run e2e:render-diff:ci` in `rhwp-studio` to compare legacy Canvas and layer Canvas in Chromium; CI uploads render-diff artifacts and writes a summary.
-- The default render-diff fixtures cover basic text/table output, business-document layout, and treat-as-char object placement; override with `RHWP_RENDER_DIFF_FILES`, `RHWP_RENDER_DIFF_MAX_PAGES`, or `RHWP_RENDER_DIFF_ALL=1`.
-- P4 adds native-only `DocumentCore::render_page_png_native(page)` behind `--features native-skia`; it renders `PageLayerTree` to encoded PNG through `SkiaLayerRenderer`.
-- P5 adds native Skia equation replay from `EquationNode.layout_box`, so equations are no longer placeholder boxes in the PNG path.
-- P5 replays the existing equation layout tree directly; it does not add CanvasKit equation replay or native form replay.
-- P6 adds native Skia `RawSvg` fragment rasterization through `resvg`, with external file href loading disabled.
-- CI covers the native Skia path with `cargo test --features native-skia skia --lib`; the feature is not available on `wasm32` targets.
-- The initial native Skia path is a PNG raster backend with core image/equation/raw-svg replay; full CanvasKit glyph replay, exact native glyph replay, real document font blob extraction, complex text shaping, advanced image parity, and native form replay stay as follow-up work.
-- C ABI export is intentionally left for a later PR.
-- `ResourceArena` now supports interned image, static SVG, and font blob resources for guarded replay proof; broader document extraction and full resource transport remain follow-up work.
-- This phase establishes the frontend/backend boundary for later CanvasKit and fuller native Skia backends.
+- Shared paint IR: `PageRenderTree` → `PageLayerTree` (Rust `DocumentCore::build_page_layer_tree`, WASM `getPageLayerTree`) — `schemaVersion: 1`, compatible changes stay additive
+- Backends: legacy/layered SVG, Canvas2D, CanvasKit direct replay, native Skia PNG/direct PDF (`--features native-skia`)
+- Studio, browser extension/embed, and VS Code viewer surfaces keep Canvas2D as the compatibility default. An explicit Studio-family `?renderer=auto` request pins only documents with a complete, eligible bounded preflight and available required fonts to CanvasKit. Paragraph/control marks and preflight, initialization, resource-preparation, or runtime failures pin the whole revision to Canvas2D. `?renderer=canvas2d` and `?renderer=canvaskit` remain explicit overrides.
+- Text IR v2: font-blob-proof-gated GlyphRun/GlyphOutline sidecars — unproven cases always fall back to `TextRun` (compatibility contract)
+- Visual regression CI: render-diff (Canvas family + report-only PDF diff), shared replay-plane ordering (background → behindText → flow → inFrontOfText) across all four backends
+- Direct PDF uses the print profile and a CSS-px-to-PDF-point `72/96` transform. Lossy gradient/pattern/shadow/connector/image-adjustment payloads fail with guidance to use the SVG backend; only Raw SVG uses the bounded `--raster-dpi` fallback.
+- Selected direct/compatibility PDF rasters are hard-gated at 2%; the broader browser/compatibility PDF comparison remains report-only.
 
 ### Web Editor
 - Text editing (insert, delete, undo/redo)
@@ -179,8 +171,6 @@ See the [roadmap document](mydocs/eng/report/rhwp-milestone.md) for details.
 - Template data binding support
 
 ## npm Packages — Use in Your Web Project
-
-Current release: `@rhwp/core` / `@rhwp/editor` v0.7.18.
 
 ### Embed a Full Editor (3 lines)
 
@@ -241,7 +231,7 @@ New contributors: start with the [onboarding guide](mydocs/eng/manual/onboarding
 ```bash
 cargo build                    # Development build
 cargo build --release          # Release build
-cargo test                     # Run tests (1,100+ tests)
+cargo test                     # Run tests (3,400+ tests)
 ```
 
 ### WASM Build
@@ -276,6 +266,14 @@ rhwp export-svg sample.hwp -p 0                    # Export specific page (0-ind
 rhwp export-svg sample.hwp --debug-overlay         # Debug overlay (paragraph/table boundaries)
 ```
 
+### PNG / PDF Export
+
+```bash
+rhwp export-png sample.hwp -o out/                 # PNG (requires --features native-skia build)
+rhwp export-pdf sample.hwp -o out.pdf              # PDF (byte-reproducible)
+rhwp export-pdf sample.hwp --text-as-paths         # Text as vector paths (font-free)
+```
+
 ### Document Inspection
 
 ```bash
@@ -308,11 +306,14 @@ src/
 │   ├── layout/                # Layout (paragraph, table, shapes, cells)
 │   ├── pagination/            # Pagination engine
 │   ├── equation/              # Equation parser/layout/renderer
+│   ├── typeset.rs             # Typeset engine (main pagination)
 │   ├── svg.rs                 # SVG output
-│   └── web_canvas.rs          # Canvas output
-├── emf/                       # EMF parser + SVG converter (since v0.7.3)
-├── ooxml_chart/               # OOXML chart parser + SVG renderer (since v0.7.3)
-├── serializer/                # HWP file serializer (save)
+│   ├── web_canvas.rs          # Canvas output
+│   └── skia/                  # Native Skia PNG/PDF (--features native-skia)
+├── paint/                     # PageLayerTree paint IR + replay planes
+├── emf/                       # EMF parser + SVG converter
+├── ooxml_chart/               # OOXML chart parser + SVG renderer
+├── serializer/                # HWP/HWPX/HML serializer (save)
 └── wasm_api.rs                # WASM bindings
 
 rhwp-studio/                   # Web editor (TypeScript + Vite)
@@ -331,12 +332,14 @@ rhwp-safari/                   # Safari Web Extension
 rhwp-shared/                   # Shared code between browser extensions
 
 mydocs/                        # Project documentation (Korean)
-├── orders/                    # Daily task tracking
-├── plans/                     # Task plans and implementation specs
+├── orders/                    # Daily task tracking (archives/: past months)
+├── plans/                     # Task plans (archives/: completed)
+├── working/ report/           # Stage reports / final reports
+├── pr/                        # External PR review records (archives/)
 ├── feedback/                  # Code review feedback
-├── tech/                      # Technical documents
-└── manual/                    # Manuals and guides
-mydocs/eng/                    # English translations (2,200+ files)
+├── tech/ manual/              # Technical docs / guides
+└── troubleshootings/          # Troubleshooting records
+mydocs/eng/                    # English translations
 
 scripts/                       # Build & quality tools
 ├── metrics.sh                 # Code quality metrics collection
@@ -357,11 +360,11 @@ This project takes the opposite approach. A human **task director** maintains fu
 |--|-------------|-------------|
 | **Human role** | Accept AI output | Direct, review, decide |
 | **Planning** | None — "just build it" | Written plan → approval → execution |
-| **Quality gate** | Hope it works | 1,100+ tests + Clippy + CI + code review |
+| **Quality gate** | Hope it works | 3,400+ tests + Clippy + CI + code review |
 | **Debugging** | Ask AI to fix AI's bugs | Human diagnoses, AI implements fix |
 | **Architecture** | Emergent (accidental) | Deliberate (CQRS, dependency direction) |
-| **Documentation** | None | 2,200+ files of process records |
-| **Outcome** | Fragile, hard to maintain | Production-grade, 100K+ lines |
+| **Documentation** | None | 10,000+ files of process records |
+| **Outcome** | Fragile, hard to maintain | Production-grade, 450K+ lines |
 
 AI is a force multiplier, but a multiplier amplifies whatever process you already have. No process × AI = fast chaos. Good process × AI = extraordinary output.
 
@@ -379,7 +382,7 @@ Makes architectural decisions →    Executes with precision
 Judges quality & correctness  ←    Generates code, docs, tests
 ```
 
-The `mydocs/` directory (2,200+ files, English translations in `mydocs/eng/`) contains the complete development record: daily task logs, implementation plans, code review feedback, technical research documents, and debugging records.
+The `mydocs/` directory (10,000+ files, English translations in `mydocs/eng/`) contains the complete development record: daily task logs, implementation plans, code review feedback, technical research documents, and debugging records.
 
 > `mydocs/` is not documentation about the code — it is documentation about **how to build software with AI**. It is an open-source methodology.
 
@@ -389,14 +392,16 @@ The `mydocs/` directory (2,200+ files, English translations in `mydocs/eng/`) co
 
 ```
 local/task{N}  ──commit──commit──┐
-                                  ├─→ devel merge (grouped by related tasks)
-                                  ├─→ main merge + tag (release time)
+                                  ├─→ local/devel merge (per work unit)
+                                  ├─→ devel merge + push (after verification)
+                                  ├─→ main merge + tag (release time, PR-based)
 ```
 
 | Branch | Purpose |
 |--------|---------|
-| `main` | Release (tags: v0.5.0 etc.) |
-| `devel` | Development integration |
+| `main` | Release (tags: v0.8.0 etc.) |
+| `devel` | Development integration (remote push target) |
+| `local/devel` | Local working branch of devel |
 | `local/task{N}` | GitHub Issue-numbered task branch |
 
 ### Task Management

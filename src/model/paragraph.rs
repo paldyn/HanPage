@@ -1,6 +1,7 @@
 //! 문단 (Paragraph, CharRun, LineSeg, RangeTag)
 
 use super::control::Control;
+use serde::{Deserialize, Serialize};
 
 /// 문단 (HWPTAG_PARA_HEADER + 하위 레코드)
 #[derive(Debug, Default, Clone)]
@@ -57,8 +58,30 @@ pub struct Paragraph {
     pub numbering_restart: Option<NumberingRestart>,
 }
 
+/// 문단 스코프 메타데이터 — 문단 병합의 역연산(undo)에서 복원해야 하는 값들.
+///
+/// `split_at` 이 만드는 새 문단은 앞 문단(`self`)에서 파생되므로 이 값들을 재현할 수
+/// 없다. 사용자가 Enter 로 나눌 때는 앞 문단의 서식을 잇는 것이 옳지만, 병합의
+/// 역연산으로 쓰일 때는 사라진 뒷 문단의 원래 값이어야 한다. 병합 시 캡처해
+/// undo 에서 되돌린다 (Task #2342).
+///
+/// `char_count_msb` 는 여기 없다 — 저장기가 list scope 의 마지막 문단 여부로
+/// 재생성하므로(`serializer/body_text.rs` `char_count_raw`) 파생값이다.
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ParaMeta {
+    pub para_shape_id: u16,
+    pub style_id: u8,
+    pub column_type: ColumnBreakType,
+    pub raw_break_type: u8,
+    pub numbering_restart: Option<NumberingRestart>,
+    /// PARA_HEADER tail — instanceId 및 변경추적 suffix라 문단마다 고유하다.
+    pub raw_header_extra: Vec<u8>,
+    /// TAB 확장 데이터 — 문단 전체가 통째로 이동하므로 분할 없이 그대로 옮긴다.
+    pub tab_extended: Vec<[u16; 7]>,
+}
+
 /// 문단 번호 시작 방식
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum NumberingRestart {
     /// 이전 번호 목록에 이어 (다른 번호 체계 후 복귀 시 이전 카운터 복원)
     ContinuePrevious,
@@ -108,7 +131,7 @@ pub enum CtrlChar {
 }
 
 /// 단 나누기 종류
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub enum ColumnBreakType {
     #[default]
     None,
@@ -274,6 +297,13 @@ pub struct FieldRange {
     pub end_char_idx: usize,
     /// controls[] 배열 내 인덱스 (해당 Field 컨트롤 참조)
     pub control_idx: usize,
+    /// 같은 문단 내 짝을 이루는 `<hp:fieldEnd>` 자신의 `fieldid` 속성값 (0 이면 없음/생략).
+    ///
+    /// `fieldBegin` 의 `id`(문서 내 고유 ID, `Field::field_id` 로 보존)와 달리, `fieldEnd`
+    /// 자신의 `fieldid` 는 별개 값으로 관찰되며(HYPERLINK 등) IR 로 옮기지 않으면 직렬화 시
+    /// 항상 소실된다. 고아(다단락) fieldEnd 는 `OrphanFieldEnd::field_id` 로 이미 보존하므로,
+    /// 같은 문단 내 짝(matched) 경로에도 대칭적으로 보존한다.
+    pub end_field_id: u32,
 }
 
 /// 고아 FIELD_END (0x04) — 짝이 되는 FIELD_BEGIN 이 다른 문단에 있는
@@ -292,6 +322,26 @@ pub struct OrphanFieldEnd {
 }
 
 impl Paragraph {
+    /// `ctrl_data_records` 를 `controls` 길이에 맞춰 `None` 으로 패딩한다.
+    ///
+    /// [#3214] `ctrl_data_records[i]` 는 `controls[i]` 대응이지만, **두 배열의 길이가 항상
+    /// 같지는 않다**. CTRL_DATA 는 HWP5 바이너리 전용 레코드라 HWPX 파서는 이 배열을 채우지
+    /// 않고(`parser/hwpx` 에 적재 지점이 없다), HWP3 파서와 편집 커맨드만 쌍으로 관리한다.
+    /// 즉 HWPX 로 연 문서는 `ctrl_data_records.len() < controls.len()` 이 정상 상태다.
+    ///
+    /// 그런데 컨트롤 삽입 경로는 삽입 위치를 `controls` 기준으로 계산한 뒤 그 인덱스를 그대로
+    /// `ctrl_data_records.insert(idx, None)` 에 넘긴다. 두 길이가 어긋나 있으면
+    /// `insertion index (is N) should be <= len (is M)` 로 패닉하고, WASM 에서는 패닉이
+    /// 객체 borrow 를 오염시켜 이후 모든 호출이 `recursive use of an object` 로 실패한다.
+    ///
+    /// 인덱스 대응에 기대는 쓰기를 하기 전에 이 함수로 정렬한다. 삽입 **전에** 호출하면
+    /// `insert_idx <= ctrl_data_records.len()` 이 보장된다.
+    pub fn align_ctrl_data_records(&mut self) {
+        while self.ctrl_data_records.len() < self.controls.len() {
+            self.ctrl_data_records.push(None);
+        }
+    }
+
     pub(crate) fn is_split_movable_control(ctrl: &Control) -> bool {
         matches!(
             ctrl,
@@ -457,15 +507,65 @@ impl Paragraph {
     }
 
     /// char_offset 위치에 텍스트를 삽입한다.
+    /// 인라인 컨트롤(각주/미주/수식/새 번호 등, 8 code unit)을 char_offset 위치에 삽입할 때
+    /// 문단 메타데이터를 일괄 시프트한다.
+    ///
+    /// `char_offsets[safe_offset..]` 를 +8 하고, 삽입 지점(UTF-16) 이후의
+    /// `char_shapes.start_pos` 와 `range_tags.start/end` 도 +8 시프트한다. 종전에는
+    /// 각 삽입 경로가 char_offsets 만 밀고 char_shapes/range_tags 를 그대로 둬서, 삽입
+    /// 지점 이후 글자모양 run 경계가 텍스트와 어긋났다(글자모양 오염). `insert_text_at`
+    /// 의 시프트 규약과 동형이다.
+    pub(crate) fn shift_for_inline_control_insert(&mut self, char_offset: usize) {
+        if self.char_offsets.is_empty() {
+            return;
+        }
+        let text_len = self.text.chars().count();
+        let safe_offset = char_offset.min(text_len);
+        // 컨트롤이 삽입되는 UTF-16 위치 — char_offsets 시프트 전에 계산한다.
+        let insert_pos: u32 = if safe_offset < self.char_offsets.len() {
+            self.char_offsets[safe_offset]
+        } else {
+            let last_idx = self.char_offsets.len() - 1;
+            let last_w = self
+                .text
+                .chars()
+                .nth(last_idx)
+                .map(|c| if (c as u32) > 0xFFFF { 2 } else { 1 })
+                .unwrap_or(1);
+            self.char_offsets[last_idx] + last_w
+        };
+        for co in self.char_offsets[safe_offset..].iter_mut() {
+            *co += 8;
+        }
+        // 문단 시작(pos 0)에 고정된 첫 스타일은 유지(insert_text_at 과 동일).
+        for cs in &mut self.char_shapes {
+            if cs.start_pos > insert_pos || (cs.start_pos == insert_pos && cs.start_pos > 0) {
+                cs.start_pos += 8;
+            }
+        }
+        for rt in &mut self.range_tags {
+            if rt.start >= insert_pos {
+                rt.start += 8;
+            }
+            if rt.end >= insert_pos {
+                rt.end += 8;
+            }
+        }
+    }
+
     ///
     /// char_offset은 Rust 문자(char) 인덱스이다 (바이트 인덱스가 아님).
     /// 삽입 후 char_offsets, char_shapes, line_segs, char_count가 자동 갱신된다.
     ///
     /// char_offset이 text.chars().count()를 초과하면 인라인 컨트롤 뒤의
     /// 위치로 간주하여 올바른 UTF-16 위치에 삽입한다.
-    pub fn insert_text_at(&mut self, char_offset: usize, new_text: &str) {
+    ///
+    /// 반환값은 **실제로 삽입된 char 오프셋**이다. 위 컨트롤 갭 처리 때문에 요청 값과
+    /// 다를 수 있으므로, 삽입 뒤 위치를 알려야 하는 호출부는 요청 값이 아니라 이 값을
+    /// 기준으로 삼는다 (Task #3216).
+    pub fn insert_text_at(&mut self, char_offset: usize, new_text: &str) -> usize {
         if new_text.is_empty() {
-            return;
+            return char_offset.min(self.text.chars().count());
         }
 
         let text_chars: Vec<char> = self.text.chars().collect();
@@ -599,6 +699,8 @@ impl Paragraph {
 
         // 6. char_count 갱신
         self.char_count += new_chars.len() as u32;
+
+        effective_char_offset
     }
 
     /// char_offset 위치에서 count개의 문자를 삭제한다.
@@ -659,6 +761,14 @@ impl Paragraph {
                 cs.start_pos = utf16_start;
             }
         }
+        // [#3576] 클램핑으로 같은 start_pos 에 몰린 ref 를 정리한다. char_shapes 는
+        // start_pos 오름차순의 '서로 다른' 경계여야 하는데, 삭제 범위 안에 있던 ref 가
+        // 전부 utf16_start 로 클램핑되면 중복이 남는다. 그 상태에서 다시 텍스트를
+        // 삽입하면 뒤쪽(보조) 글자모양이 새 텍스트 일부를 덮어 의도하지 않은 크기·굵기로
+        // 렌더된다 — 양식 채우기의 전체삭제→재삽입 경로에서 발현했다.
+        // 첫 ref 를 남긴다: 삭제 범위 '앞' 의 주 글자모양이 앞에 오기 때문이다.
+        // (오름차순 불변식이 유지되므로 dedup_by_key 로 인접 중복만 보면 충분하다.)
+        self.char_shapes.dedup_by_key(|cs| cs.start_pos);
 
         // 4. line_segs: 삭제 범위 이후 → utf16_delta만큼 감소
         for ls in &mut self.line_segs {
@@ -707,10 +817,38 @@ impl Paragraph {
         actual_count
     }
 
+    /// 병합으로 사라질 문단의 스코프 메타데이터를 캡처한다 (undo 복원용).
+    pub fn capture_meta(&self) -> ParaMeta {
+        ParaMeta {
+            para_shape_id: self.para_shape_id,
+            style_id: self.style_id,
+            column_type: self.column_type,
+            raw_break_type: self.raw_break_type,
+            numbering_restart: self.numbering_restart,
+            raw_header_extra: self.raw_header_extra.clone(),
+            tab_extended: self.tab_extended.clone(),
+        }
+    }
+
+    /// 캡처한 메타데이터를 되돌린다 — 병합 undo 의 `split_at` 직후에 호출한다.
+    pub fn apply_meta(&mut self, meta: ParaMeta) {
+        self.para_shape_id = meta.para_shape_id;
+        self.style_id = meta.style_id;
+        self.column_type = meta.column_type;
+        self.raw_break_type = meta.raw_break_type;
+        self.numbering_restart = meta.numbering_restart;
+        self.raw_header_extra = meta.raw_header_extra;
+        self.tab_extended = meta.tab_extended;
+    }
+
     /// char_offset 위치에서 문단을 분할한다.
     ///
     /// 현재 문단은 char_offset 이전까지만 유지되고,
     /// char_offset 이후의 텍스트와 메타데이터로 새 문단을 생성하여 반환한다.
+    ///
+    /// 새 문단의 문단 모양·스타일·번호 시작 방식 등은 `self` 에서 상속된다 — Enter
+    /// 분할의 시맨틱이다. 병합의 역연산으로 쓰는 호출부는 `apply_meta` 로 사라진
+    /// 문단의 원래 값을 되돌려야 한다 (Task #2342).
     pub fn split_at(&mut self, char_offset: usize) -> Paragraph {
         let control_positions = self.split_logical_control_positions();
         let split_pos = self.split_text_pos_for_logical_offset(char_offset, &control_positions);
@@ -813,8 +951,15 @@ impl Paragraph {
             tag,
             ..Default::default()
         }];
+        // [Task #2299] 앞 절반은 원본 첫 LineSeg 의 vertical_pos 를 유지한다 —
+        // 분할해도 문단의 첫 줄 위치는 변하지 않고, 저장 vpos 가 단/쪽 리셋 인코딩인
+        // 문단(예: 다단 col1 첫 문단)을 분할해도 그 신호가 살아남아야 한다.
+        // 새 절반의 vpos=0 은 배치 전 placeholder 로, 호출측 recalc 가
+        // ignore_reset_at 으로 흐름에 연결한다.
+        let orig_vpos = orig_line_seg.as_ref().map(|o| o.vertical_pos).unwrap_or(0);
         self.line_segs = vec![LineSeg {
             text_start: 0,
+            vertical_pos: orig_vpos,
             line_height: lh,
             text_height: th,
             baseline_distance: bd,
@@ -843,8 +988,44 @@ impl Paragraph {
         }
         self.range_tags = kept_range_tags;
 
-        // 5-1. field_ranges 분할 (필드 control은 원래 문단에 유지)
-        self.field_ranges.retain(|fr| fr.end_char_idx <= split_pos);
+        // 5-1. field_ranges 분할
+        let mut new_field_ranges: Vec<FieldRange> = Vec::new();
+        let mut kept_field_ranges: Vec<FieldRange> = Vec::new();
+        // 5-1a. controls 분할 시 control_idx 리매핑을 위한 맵 (old → new)
+        let mut moved_control_idx_map: std::collections::HashMap<usize, usize> =
+            std::collections::HashMap::new();
+        for fr in &self.field_ranges {
+            if fr.start_char_idx >= split_pos {
+                // 완전히 새 문단 쪽 → 인덱스 조정 후 이관 (control_idx는 5-2에서 리매핑)
+                new_field_ranges.push(FieldRange {
+                    start_char_idx: fr.start_char_idx - split_pos,
+                    end_char_idx: fr.end_char_idx - split_pos,
+                    control_idx: fr.control_idx,
+                    end_field_id: fr.end_field_id,
+                });
+            } else if fr.end_char_idx <= split_pos {
+                // 완전히 원래 문단 쪽
+                kept_field_ranges.push(fr.clone());
+            } else {
+                // 경계에 걸친 필드: 원래 문단에서 종료
+                kept_field_ranges.push(FieldRange {
+                    start_char_idx: fr.start_char_idx,
+                    end_char_idx: split_pos,
+                    control_idx: fr.control_idx,
+                    end_field_id: fr.end_field_id,
+                });
+            }
+        }
+        self.field_ranges = kept_field_ranges;
+
+        // Field는 보이는 문자 오프셋에서 한 글자를 차지하지 않는다. 다만 새 문단으로
+        // 이관되는 FieldRange가 참조하는 Field control은 범위와 함께 이동해야 한다.
+        // 일반 이동형 컨트롤로 분류하면 split의 논리 offset 계산에 Field가 더해져
+        // ClickHere 복사/붙여넣기 경계가 한 글자씩 어긋난다.
+        let moved_field_control_indices: std::collections::HashSet<usize> = new_field_ranges
+            .iter()
+            .map(|field_range| field_range.control_idx)
+            .collect();
 
         // 5-2. controls 분할
         //
@@ -860,15 +1041,23 @@ impl Paragraph {
 
         for (ci, ctrl) in old_controls.into_iter().enumerate() {
             let data = old_ctrl_data.get(ci).cloned().flatten();
-            let move_to_new = Self::is_split_movable_control(&ctrl)
-                && control_positions.get(ci).copied().unwrap_or(usize::MAX) >= char_offset;
+            let move_to_new = (Self::is_split_movable_control(&ctrl)
+                && control_positions.get(ci).copied().unwrap_or(usize::MAX) >= char_offset)
+                || moved_field_control_indices.contains(&ci);
 
             if move_to_new {
+                moved_control_idx_map.insert(ci, new_controls.len());
                 new_controls.push(ctrl);
                 new_ctrl_data_records.push(data);
             } else {
                 kept_controls.push(ctrl);
                 kept_ctrl_data.push(data);
+            }
+        }
+        // field_ranges의 control_idx를 새 문단의 controls 배열에 맞게 리매핑
+        for fr in &mut new_field_ranges {
+            if let Some(&new_idx) = moved_control_idx_map.get(&fr.control_idx) {
+                fr.control_idx = new_idx;
             }
         }
         self.controls = kept_controls;
@@ -889,7 +1078,7 @@ impl Paragraph {
         self.control_mask =
             Self::compute_control_mask_for(&self.text, &self.controls, &self.field_ranges);
         let new_control_mask =
-            Self::compute_control_mask_for(&new_text, &new_controls, &Vec::new());
+            Self::compute_control_mask_for(&new_text, &new_controls, &new_field_ranges);
 
         Paragraph {
             text: new_text,
@@ -897,7 +1086,7 @@ impl Paragraph {
             char_shapes: new_char_shapes,
             line_segs: new_line_segs,
             range_tags: new_range_tags,
-            field_ranges: Vec::new(), // controls가 이동하지 않으므로 새 문단에는 필드 없음
+            field_ranges: new_field_ranges, // 새 문단으로 이관된 필드 범위
             orphan_field_ends: Vec::new(),
             char_count: new_char_count,
             para_shape_id: self.para_shape_id,
@@ -983,8 +1172,14 @@ impl Paragraph {
             ),
             _ => (400, 400, 320, 0, 0, LineSeg::TAG_SINGLE_SEGMENT_LINE),
         };
+        // [Task #2299] split_at 과 동일하게 호스트(self)의 원본 vertical_pos 를
+        // 유지한다 — 병합해도 문단 첫 줄 위치는 변하지 않으며, 0 placeholder 로
+        // 재생성하면 편집발 vpos 재계산이 이를 저장 단/쪽 리셋으로 오인해 병합
+        // 문단을 구역 상단 좌표에 동결시킨다 (밴드 내 range-delete 시 +1 팬텀 쪽).
+        let orig_vpos = orig_line_seg.as_ref().map(|o| o.vertical_pos).unwrap_or(0);
         self.line_segs = vec![LineSeg {
             text_start: 0,
+            vertical_pos: orig_vpos,
             line_height: lh,
             text_height: th,
             baseline_distance: bd,
@@ -1011,6 +1206,7 @@ impl Paragraph {
                 start_char_idx: fr.start_char_idx + self_text_len,
                 end_char_idx: fr.end_char_idx + self_text_len,
                 control_idx: fr.control_idx + ctrl_offset,
+                end_field_id: fr.end_field_id,
             });
         }
 
@@ -1025,8 +1221,12 @@ impl Paragraph {
                     .push(other.ctrl_data_records.get(i).cloned().flatten());
             }
             self.controls.extend(other.controls.iter().cloned());
-            self.control_mask |= other.control_mask;
         }
+        // control_mask는 tab/개행 등 텍스트 기반 비트(#1323 이후 확장분)도 포함하므로,
+        // other.controls가 비어 있어도 other.text의 tab/개행이 손실되지 않도록
+        // split_at과 동일하게 병합 후 상태 전체를 재계산한다.
+        self.control_mask =
+            Self::compute_control_mask_for(&self.text, &self.controls, &self.field_ranges);
 
         // 6. char_count 갱신: 텍스트 + 컨트롤(각 8 code unit) + 문단끝(1)
         //    split_at의 ctrl_code_units 계산과 정합. HWPX 직렬화가 char_count에서
@@ -1148,6 +1348,31 @@ impl Paragraph {
             } else {
                 1
             };
+            // [#3466] 자동번호(제어문자 0x12)는 8 코드 유닛을 점유하면서 가시 placeholder 를
+            // **한 글자 남긴다**(파서 두 경로 공통). 그래서 그 글자 뒤에는 8 갭이 남지 않고
+            // (8 − 1 = 7 → 7/8 = 0) 갭 분배에서 누락돼, 뒤따르는 컨트롤이 한 칸씩 앞당겨졌다
+            // — 수식 k 가 수식 k+1 자리로 가고 마지막 수식은 폴백으로 문단 끝에 붙었다.
+            //
+            // 판별자는 셋을 **모두** 요구한다. stride 8 하나로는 부족하다 — 탭도 가시 글자를
+            // 남기며 8 코드 유닛을 점유하지만(HWP5 `0x09`, HWPX `'\t'` 폭 8) `controls[]` 에는
+            // 들어가지 않으므로, stride 만 보면 탭이 컨트롤 자리를 가로채 반대 방향으로 어순이
+            // 깨진다.
+            //   (1) 이 글자의 stride 가 정확히 8 — 일반 글자는 자기 폭 + 8k 라 8 이 될 수 없다
+            //   (2) 그 글자가 자동번호 placeholder 인 공백
+            //   (3) 지금 자리를 기다리는 컨트롤이 번호 컨트롤
+            // (3) 덕분에 HWPX `newNum`(placeholder 없이 순수 8 갭)은 종전 경로를 그대로 탄다.
+            let pending_is_number_control = matches!(
+                self.controls.get(positions.len()),
+                Some(Control::AutoNumber(_) | Control::NewNumber(_))
+            );
+            if pending_is_number_control
+                && char_width == 1
+                && chars.get(i) == Some(&' ')
+                && next_off == current_off + 8
+            {
+                positions.push(i);
+                continue;
+            }
             if next_off > current_off + char_width {
                 let gap = next_off - current_off - char_width;
                 let n_ctrls = gap / 8;

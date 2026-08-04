@@ -130,10 +130,13 @@ fn parse_field_control(ctrl_id: u32, ctrl_data: &[u8]) -> Control {
         extra_properties,
         field_id,
         ctrl_id,
+        instance_id: None,
         ctrl_data_name: None,
         memo_index,
         memo_paragraphs: Vec::new(),
+        memo_text_direction: None,
         raw_parameters_xml: None,
+        guide_residue: None,
     })
 }
 
@@ -163,9 +166,18 @@ fn parse_table_control(ctrl_data: &[u8], child_records: &[Record]) -> Control {
     }
 
     // HWPTAG_TABLE 레코드 위치 찾기
+    //
+    // [#3528] **직계 자식 레벨**의 것만 본다. 종전에는 첫 HWPTAG_TABLE 을 그냥 집었는데,
+    // 캡션 문단 안에 표가 들어 있으면 그 표가 자기 HWPTAG_TABLE 을 더 앞에 방출한다
+    // (저장 순서: CTRL_TABLE → 캡션 → HWPTAG_TABLE → 셀). 그러면 캡션 범위가 거기서
+    // 끊겨 캡션 문단이 잘리고, 그 안의 표도 얕게 읽힌다.
+    //
+    // 직계 자식은 모두 CTRL_HEADER 바로 아래 레벨이므로(캡션 LIST_HEADER·HWPTAG_TABLE·
+    // 셀 LIST_HEADER 가 같은 레벨), 자식 레코드의 최소 레벨이 곧 직계 레벨이다.
+    let direct_level = child_records.iter().map(|r| r.level).min();
     let table_record_idx = child_records
         .iter()
-        .position(|r| r.tag_id == tags::HWPTAG_TABLE);
+        .position(|r| r.tag_id == tags::HWPTAG_TABLE && Some(r.level) == direct_level);
 
     // HWPTAG_TABLE 이전에 LIST_HEADER가 있으면 캡션
     if let Some(table_idx) = table_record_idx {
@@ -350,8 +362,11 @@ fn parse_cell(records: &[Record]) -> Cell {
     // 셀 속성 (표 82: 26바이트)
     cell.col = r.read_u16().unwrap_or(0);
     cell.row = r.read_u16().unwrap_or(0);
-    cell.col_span = r.read_u16().unwrap_or(1);
-    cell.row_span = r.read_u16().unwrap_or(1);
+    // 손상된 문서는 colSpan/rowSpan에 0을 기록할 수 있다. HWPX/HWP3 파서는
+    // 이미 .max(1)로 최소 1을 보장하므로 HWP5도 동일하게 정규화한다
+    // (0이면 이후 병합/렌더링 로직의 `row + row_span - 1` 계산이 언더플로한다).
+    cell.col_span = r.read_u16().unwrap_or(1).max(1);
+    cell.row_span = r.read_u16().unwrap_or(1).max(1);
     cell.width = r.read_u32().unwrap_or(0);
     cell.height = r.read_u32().unwrap_or(0);
 
@@ -487,7 +502,13 @@ fn parse_header_control(ctrl_data: &[u8], child_records: &[Record]) -> Control {
         }
     }
 
-    header.paragraphs = find_list_header_paragraphs(child_records);
+    let (layout, paragraphs) = find_list_header_layout_and_paragraphs(child_records);
+    header.list_attr = layout.list_attr;
+    header.text_width = layout.text_width;
+    header.text_height = layout.text_height;
+    header.text_ref = layout.text_ref;
+    header.num_ref = layout.num_ref;
+    header.paragraphs = paragraphs;
 
     Control::Header(Box::new(header))
 }
@@ -511,7 +532,13 @@ fn parse_footer_control(ctrl_data: &[u8], child_records: &[Record]) -> Control {
         }
     }
 
-    footer.paragraphs = find_list_header_paragraphs(child_records);
+    let (layout, paragraphs) = find_list_header_layout_and_paragraphs(child_records);
+    footer.list_attr = layout.list_attr;
+    footer.text_width = layout.text_width;
+    footer.text_height = layout.text_height;
+    footer.text_ref = layout.text_ref;
+    footer.num_ref = layout.num_ref;
+    footer.paragraphs = paragraphs;
 
     Control::Footer(Box::new(footer))
 }
@@ -612,6 +639,10 @@ fn parse_auto_number(ctrl_data: &[u8]) -> Control {
             3 => AutoNumberType::Picture,
             4 => AutoNumberType::Table,
             5 => AutoNumberType::Equation,
+            // 6 = 총 쪽수 ('전체 쪽 번호' 필드). exam_eng.hwp 실측: 꼬리말 쪽번호 상자의
+            // 두 번째 atno가 attr&0x0F=6 으로 인코딩됨. 과거엔 fallback으로 Page 취급되어
+            // 현재 쪽번호가 두 번 표시되는 버그가 있었다.
+            6 => AutoNumberType::TotalPage,
             _ => AutoNumberType::Page,
         };
         an.format = ((attr >> 4) & 0xFF) as u8; // bit 4~11: 번호 모양 (표 134)
@@ -638,6 +669,7 @@ fn parse_new_number(ctrl_data: &[u8]) -> Control {
             3 => AutoNumberType::Picture,
             4 => AutoNumberType::Table,
             5 => AutoNumberType::Equation,
+            6 => AutoNumberType::TotalPage,
             _ => AutoNumberType::Page,
         };
         nn.number = r.read_u16().unwrap_or(0);
@@ -776,6 +808,55 @@ fn find_list_header_paragraphs(
     Vec::new()
 }
 
+/// 머리말/꼬리말 LIST_HEADER 레코드 페이로드.
+///
+/// [#2648] `find_list_header_paragraphs` 는 레코드 뒤의 문단만 파싱하고 레코드
+/// 자체의 페이로드(list_attr/text_width/text_height/text_ref/num_ref)는 읽지
+/// 않았다. 직렬화(`build_header_footer_list_header`, serializer/control.rs)는
+/// 이 값들을 무조건 사용하므로 저장 왕복마다 0 으로 뭉개졌다. 바이트 레이아웃은
+/// 그 직렬화 함수의 역이다:
+/// u16 para_count | u32 list_attr | u16(예약) | u32 text_width | u32 text_height
+/// | u8 text_ref | u8 num_ref | u16 ext_flags | [u8;14] 예약
+struct HeaderFooterListLayoutFields {
+    list_attr: u32,
+    text_width: u32,
+    text_height: u32,
+    text_ref: u8,
+    num_ref: u8,
+}
+
+fn find_list_header_layout_and_paragraphs(
+    child_records: &[Record],
+) -> (
+    HeaderFooterListLayoutFields,
+    Vec<crate::model::paragraph::Paragraph>,
+) {
+    let mut layout = HeaderFooterListLayoutFields {
+        list_attr: 0,
+        text_width: 0,
+        text_height: 0,
+        text_ref: 0,
+        num_ref: 0,
+    };
+    let mut idx = 0;
+    while idx < child_records.len() {
+        if child_records[idx].tag_id == tags::HWPTAG_LIST_HEADER {
+            let mut r = ByteReader::new(&child_records[idx].data);
+            let _para_count = r.read_u16().unwrap_or(0);
+            layout.list_attr = r.read_u32().unwrap_or(0);
+            let _reserved = r.read_u16().unwrap_or(0);
+            layout.text_width = r.read_u32().unwrap_or(0);
+            layout.text_height = r.read_u32().unwrap_or(0);
+            layout.text_ref = r.read_u8().unwrap_or(0);
+            layout.num_ref = r.read_u8().unwrap_or(0);
+            let paragraphs = parse_paragraph_list(&child_records[idx + 1..]);
+            return (layout, paragraphs);
+        }
+        idx += 1;
+    }
+    (layout, Vec::new())
+}
+
 // ============================================================
 // 수식 ('eqed')
 // ============================================================
@@ -801,8 +882,11 @@ fn parse_equation_control(ctrl_data: &[u8], child_records: &[Record]) -> Control
         let data = &eq_rec.data;
         let mut r = ByteReader::new(data);
 
-        // attr: u32 (4바이트) — bit0: 스크립트 범위
-        let _attr = r.read_u32().unwrap_or(0);
+        // attr: u32 (4바이트) — bit0: lineMode (0=글자단위/CHAR, 1=줄단위/LINE)
+        // `attr`/`eqedit` 두 필드가 동일한 값을 보관하므로 함께 채운다.
+        let raw_attr = r.read_u32().unwrap_or(0);
+        equation.attr = raw_attr;
+        equation.eqedit = raw_attr;
 
         // script: WCHAR 문자열 (길이 접두 UTF-16LE)
         if let Ok(script) = r.read_hwp_string() {

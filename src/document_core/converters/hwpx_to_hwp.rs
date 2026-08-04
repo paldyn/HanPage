@@ -20,7 +20,7 @@ use std::collections::BTreeSet;
 
 use crate::model::bin_data::{BinDataContent, BinDataStatus, BinDataType};
 use crate::model::control::Control;
-use crate::model::document::{Document, Section, SectionDef};
+use crate::model::document::{Document, HwpVersion, Section, SectionDef};
 use crate::model::image::Picture;
 use crate::model::paragraph::Paragraph;
 use crate::model::shape::{common_obj_offsets, ShapeObject, TextBox};
@@ -52,7 +52,6 @@ pub struct AdapterReport {
     /// HWPX 표 TABLE record row-size payload 를 행별 셀 수로 보강한 횟수
     pub table_record_row_sizes_materialized: u32,
     /// HWPX 표 TABLE record trailing zone/count payload 를 한컴 저장 관례로 보강한 횟수
-    pub table_record_extra_materialized: u32,
     /// `cell.list_attr bit 16` 보강 횟수 (Stage 3)
     pub cells_list_attr_bit16_set: u32,
     /// HWPX 출처 셀 LIST_HEADER width_ref/raw_list_extra materialize 횟수
@@ -61,6 +60,8 @@ pub struct AdapterReport {
     pub border_fills_no_fill_normalized: u32,
     /// HWPX 출처 FileHeader를 HWP5 compressed 저장 관례로 보정한 횟수
     pub file_header_compression_normalized: u32,
+    /// [#3706] HWP3 출처 FileHeader 버전(major=3)을 HWP5 버전으로 실체화한 횟수
+    pub file_header_version_materialized: u32,
     /// HWPX 출처 DocProperties.section_count 보정 횟수
     pub doc_properties_section_count_normalized: u32,
     /// HWPX embedded BinData metadata 보정 횟수
@@ -103,6 +104,11 @@ pub struct AdapterReport {
     pub master_page_autonum_placeholder_removed: u32,
     /// HWPX 바탕쪽 line shape rendering matrix를 HWP5 size ratio contract로 보정한 횟수
     pub master_page_line_rendering_size_ratio_materialized: u32,
+    /// [#2767] 캡션이 있는 그림(gso `$pic`) CTRL_HEADER 의 한컴 캡션 비트(bit 29,
+    /// 0x2000_0000) 보강 횟수. 표는 이미 `materialize_table_ctrl_header_attr` 로
+    /// 보강되지만 그림은 빠져 있었다(전 코퍼스 실측 80/80 이 개체 종류와 무관하게
+    /// 이 비트를 요구).
+    pub picture_caption_common_attr_materialized: u32,
 }
 
 impl AdapterReport {
@@ -125,11 +131,11 @@ impl AdapterReport {
                 + self.table_ctrl_header_attr_materialized
                 + self.table_record_attr_materialized
                 + self.table_record_row_sizes_materialized
-                + self.table_record_extra_materialized
                 + self.cells_list_attr_bit16_set
                 + self.cells_list_header_contract_materialized
                 + self.border_fills_no_fill_normalized
                 + self.file_header_compression_normalized
+                + self.file_header_version_materialized
                 + self.doc_properties_section_count_normalized
                 + self.bin_data_metadata_normalized
                 + self.bin_data_order_materialized
@@ -150,7 +156,8 @@ impl AdapterReport {
                 + self.autonum_fwspace_char_shape_offsets_materialized
                 + self.header_footer_fwspace_control_materialized
                 + self.master_page_autonum_placeholder_removed
-                + self.master_page_line_rendering_size_ratio_materialized)
+                + self.master_page_line_rendering_size_ratio_materialized
+                + self.picture_caption_common_attr_materialized)
                 > 0
     }
 }
@@ -175,9 +182,20 @@ impl AdapterReport {
 /// 정확한 vpos 가 채워져 있어 추가 사전계산이 불필요. 직렬화 → 재로드 시에도 vpos 가 그대로
 /// 보존된다 (정수 필드 라운드트립).
 pub fn convert_hwpx_to_hwp_ir(doc: &mut Document) -> AdapterReport {
+    convert_to_hwp_ir(doc)
+}
+
+/// HWPX/HWP3 출처 IR 을 HWP 직렬화기가 기대하는 형태로 정규화한다.
+///
+/// 한컴 HWP5 스트림은 출처와 관계없이 구역당 `PAGE_BORDER_FILL` 레코드 세 개를
+/// 요구한다. HWPX 원본의 단일 BOTH XML 구조 보존은 이 변환을 생략하는 대신,
+/// `DocumentCore` HWP export 경계에서 저장 뒤 PBF overlay를 되돌려 보장한다.
+fn convert_to_hwp_ir(doc: &mut Document) -> AdapterReport {
     let mut report = AdapterReport::new();
 
     normalize_file_header_for_hwp(doc, &mut report);
+    normalize_page_border_fills_for_hwp(doc);
+    normalize_picture_geometry_for_hwp(doc);
     normalize_doc_properties_for_hwp(doc, &mut report);
     materialize_hwp5_bin_data_order(doc, &mut report);
     normalize_bin_data_for_hwp(doc, &mut report);
@@ -384,11 +402,20 @@ fn collect_bin_order_from_control(
     match ctrl {
         Control::Picture(pic) => {
             push_bin_order(pic.image_attr.bin_data_id, bin_count, order, seen);
+            // [#2736] 그림 캡션 문단도 순회한다. 표 캡션(아래 arm)·도형 캡션
+            // (collect_bin_order_from_shape)은 이미 방문하는데 그림 캡션만 빠져 있어,
+            // 같은 캡션 컨테이너인데 소유 개체 종류에 따라 순회 여부가 갈렸다.
+            if let Some(caption) = &pic.caption {
+                collect_bin_order_from_paragraphs(&caption.paragraphs, bin_count, order, seen);
+            }
         }
         Control::Shape(shape) => collect_bin_order_from_shape(shape, bin_count, order, seen),
         Control::Table(table) => {
             for cell in &table.cells {
                 collect_bin_order_from_paragraphs(&cell.paragraphs, bin_count, order, seen);
+            }
+            if let Some(caption) = &table.caption {
+                collect_bin_order_from_paragraphs(&caption.paragraphs, bin_count, order, seen);
             }
         }
         Control::Header(header) => {
@@ -402,6 +429,9 @@ fn collect_bin_order_from_control(
         }
         Control::Endnote(endnote) => {
             collect_bin_order_from_paragraphs(&endnote.paragraphs, bin_count, order, seen);
+        }
+        Control::HiddenComment(comment) => {
+            collect_bin_order_from_paragraphs(&comment.paragraphs, bin_count, order, seen);
         }
         _ => {}
     }
@@ -437,6 +467,9 @@ fn collect_bin_order_from_shape(
         if let Some(text_box) = &drawing.text_box {
             collect_bin_order_from_paragraphs(&text_box.paragraphs, bin_count, order, seen);
         }
+        if let Some(caption) = &drawing.caption {
+            collect_bin_order_from_paragraphs(&caption.paragraphs, bin_count, order, seen);
+        }
     }
 }
 
@@ -465,11 +498,21 @@ fn remap_bin_refs_in_control(ctrl: &mut Control, remap: &[u16]) {
     match ctrl {
         Control::Picture(pic) => {
             pic.image_attr.bin_data_id = remap_bin_ref(pic.image_attr.bin_data_id, remap);
+            // [#2736] 그림 캡션 문단 안의 그림도 리맵해야 한다. 미방문 시 캡션 안 그림의
+            // bin_data_id 가 재정렬 이전 번호로 남아 엉뚱한 이미지로 해석된다 —
+            // 표 캡션에 대한 동형 결함이 이미 table_caption_picture_bin_ref_is_remapped
+            // 로 회귀 고정돼 있고, 그림 캡션이 그 미수정 형제였다.
+            if let Some(caption) = &mut pic.caption {
+                remap_bin_refs_in_paragraphs(&mut caption.paragraphs, remap);
+            }
         }
         Control::Shape(shape) => remap_bin_refs_in_shape(shape, remap),
         Control::Table(table) => {
             for cell in &mut table.cells {
                 remap_bin_refs_in_paragraphs(&mut cell.paragraphs, remap);
+            }
+            if let Some(caption) = &mut table.caption {
+                remap_bin_refs_in_paragraphs(&mut caption.paragraphs, remap);
             }
         }
         Control::Header(header) => remap_bin_refs_in_paragraphs(&mut header.paragraphs, remap),
@@ -478,6 +521,12 @@ fn remap_bin_refs_in_control(ctrl: &mut Control, remap: &[u16]) {
             remap_bin_refs_in_paragraphs(&mut footnote.paragraphs, remap)
         }
         Control::Endnote(endnote) => remap_bin_refs_in_paragraphs(&mut endnote.paragraphs, remap),
+        // [#2767] adapt 워크·border-fill 워크는 이미 HiddenComment 를 방문한다
+        // (#2467 근거). remap 워크만 빠져 있어 숨은설명 안 그림이 재정렬 후
+        // 엉뚱한 이미지를 가리키는 채로 남았다.
+        Control::HiddenComment(comment) => {
+            remap_bin_refs_in_paragraphs(&mut comment.paragraphs, remap)
+        }
         _ => {}
     }
 }
@@ -486,6 +535,12 @@ fn remap_bin_refs_in_shape(shape: &mut ShapeObject, remap: &[u16]) {
     match shape {
         ShapeObject::Picture(pic) => {
             pic.image_attr.bin_data_id = remap_bin_ref(pic.image_attr.bin_data_id, remap);
+            // [#2767] 그룹 내부 그림(ShapeObject::Picture)은 drawing_mut()이 항상
+            // None 이라(모델상 DrawingObjAttr 를 갖지 않음) 아래 공통 캡션 remap
+            // 경로를 타지 않는다. Picture 자신의 caption 필드를 직접 재귀해야 한다.
+            if let Some(caption) = &mut pic.caption {
+                remap_bin_refs_in_paragraphs(&mut caption.paragraphs, remap);
+            }
         }
         ShapeObject::Ole(ole) => {
             if let Ok(id) = u16::try_from(ole.bin_data_id) {
@@ -504,6 +559,9 @@ fn remap_bin_refs_in_shape(shape: &mut ShapeObject, remap: &[u16]) {
         remap_bin_ref_in_fill(&mut drawing.fill, remap);
         if let Some(text_box) = &mut drawing.text_box {
             remap_bin_refs_in_paragraphs(&mut text_box.paragraphs, remap);
+        }
+        if let Some(caption) = &mut drawing.caption {
+            remap_bin_refs_in_paragraphs(&mut caption.paragraphs, remap);
         }
     }
 }
@@ -528,6 +586,221 @@ fn remap_bin_ref(id: u16, remap: &[u16]) -> u16 {
 /// 임시 헤더를 만든다. 그러나 HWP 저장기는 이 값을 그대로 사용해 DocInfo/BodyText/BinData
 /// 스트림 압축 여부를 결정한다. Stage30 probe의 공통 기준선도 압축 플래그를 켠 상태였으므로,
 /// HWPX -> HWP 저장 adapter는 HWP5 compressed 헤더를 명시적으로 materialize해야 한다.
+/// 개체 요소 속성에 대한 가변 접근 — 도형 종류마다 보관 위치가 달라 한 곳에 모은다.
+fn shape_attr_mut(
+    obj: &mut crate::model::shape::ShapeObject,
+) -> Option<&mut crate::model::shape::ShapeComponentAttr> {
+    use crate::model::shape::ShapeObject as S;
+    Some(match obj {
+        S::Line(s) => &mut s.drawing.shape_attr,
+        S::Rectangle(s) => &mut s.drawing.shape_attr,
+        S::Ellipse(s) => &mut s.drawing.shape_attr,
+        S::Arc(s) => &mut s.drawing.shape_attr,
+        S::Polygon(s) => &mut s.drawing.shape_attr,
+        S::Curve(s) => &mut s.drawing.shape_attr,
+        S::Group(g) => &mut g.shape_attr,
+        S::Picture(p) => &mut p.shape_attr,
+        S::Chart(c) => &mut c.drawing.shape_attr,
+        S::Ole(o) => &mut o.drawing.shape_attr,
+    })
+}
+
+/// [#3676] 그림 개체의 사각형 4점과 자르기 정보가 비어 있으면 크기에서 채운다.
+///
+/// `HWPTAG_SHAPE_COMPONENT_PICTURE` 는 개체의 네 꼭짓점을 (x,y) 쌍 4개로 담는다.
+/// 한컴이 저장한 문서는 `(0,0) (w,0) (w,h) (0,h)` 형태이고 자르기 우/하단에 원본
+/// 크기가 들어간다. HWP3 파서는 이 값들을 채우지 않아 **전부 0** 으로 나갔고,
+/// 크기 0 짜리 그림이 든 문서를 한컴이 거부했다(그림 1개짜리 34KB 문서도 거부 —
+/// 문서 크기가 아니라 그림 유무가 판별자).
+///
+/// 크기는 `SHAPE_COMPONENT` 가 이미 갖고 있다(현재 폭/높이). 그것으로 사각형을
+/// 만들고, 자르기는 원본 크기 기준 전체 영역으로 둔다. 이미 채워진 그림은
+/// 건드리지 않으므로 HWPX·HWP5 경로는 무영향이다.
+fn normalize_picture_geometry_for_hwp(doc: &mut Document) {
+    fn fill(pic: &mut crate::model::image::Picture) {
+        // `SHAPE_COMPONENT` 의 local file version. 한컴 저장본은 1, HWP3 변환본은 0 이다
+        // (같은 그림의 바이트 대조로 확인). 기하와 무관하게 항상 맞춘다.
+        if pic.shape_attr.local_file_version == 0 {
+            pic.shape_attr.local_file_version = 1;
+        }
+        if pic.border_x.iter().any(|&v| v != 0) || pic.border_y.iter().any(|&v| v != 0) {
+            return;
+        }
+        let w = if pic.shape_attr.current_width > 0 {
+            pic.shape_attr.current_width as i32
+        } else {
+            pic.common.width as i32
+        };
+        let h = if pic.shape_attr.current_height > 0 {
+            pic.shape_attr.current_height as i32
+        } else {
+            pic.common.height as i32
+        };
+        if w <= 0 || h <= 0 {
+            return;
+        }
+        // `border_x`/`border_y` 는 이름과 달리 **디스크의 8개 스칼라를 앞뒤로 나눈
+        // 것**이다. 실제 저장 순서는 (x,y) 쌍 4개다 — HWPX 파서가 같은 규약을
+        // 문서화해 두었다(`parser/hwpx/section.rs`). 한컴 저장본 실측도 같다:
+        // 원본 그림 하나가 `(0,0) (w,0) (w,h) (0,h)` 로 들어 있다.
+        pic.border_x = [0, 0, w, 0];
+        pic.border_y = [w, h, 0, h];
+        if pic.crop.right == 0 && pic.crop.bottom == 0 {
+            let ow = if pic.shape_attr.original_width > 0 {
+                pic.shape_attr.original_width as i32
+            } else {
+                w
+            };
+            let oh = if pic.shape_attr.original_height > 0 {
+                pic.shape_attr.original_height as i32
+            } else {
+                h
+            };
+            pic.crop.right = ow;
+            pic.crop.bottom = oh;
+        }
+    }
+    // HWP3 파서는 아래 컨테이너에 실제로 문단을 만든다: 표 셀/캡션, 그림·그리기
+    // 개체 캡션, 글상자, 숨은설명, 머리말·꼬리말·각주·미주, 바탕쪽. 어느 하나라도
+    // 빠뜨리면 그 안의 그림 또는 도형만 HWP5 계약(geometry/local-file-version)을
+    // 잃고, 한컴은 문서 전체를 거부할 수 있다. 각 변환 단계가 독자 walker를 조금씩
+    // 달리 두지 않도록 여기서는 모든 paragraph container를 하나의 재귀로 방문한다.
+    fn walk_paragraphs(paragraphs: &mut [Paragraph]) {
+        for para in paragraphs {
+            walk_controls(&mut para.controls);
+        }
+    }
+
+    fn walk_caption(caption: &mut crate::model::shape::Caption) {
+        walk_paragraphs(&mut caption.paragraphs);
+    }
+
+    fn walk_master_pages(master_pages: &mut [crate::model::header_footer::MasterPage]) {
+        for master_page in master_pages {
+            walk_paragraphs(&mut master_page.paragraphs);
+        }
+    }
+
+    fn walk_drawing(drawing: &mut crate::model::shape::DrawingObjAttr) {
+        if let Some(text_box) = &mut drawing.text_box {
+            walk_paragraphs(&mut text_box.paragraphs);
+        }
+        if let Some(caption) = &mut drawing.caption {
+            walk_caption(caption);
+        }
+    }
+
+    fn walk_shape(shape: &mut ShapeObject) {
+        // local file version 은 그림뿐 아니라 **모든 개체 요소**가 1 이어야 한다.
+        // 한컴 저장본은 예외 없이 1 이고, HWP3 변환본은 도형(`$con`/`$rec` 등)만
+        // 0 으로 남아 문서 전체가 거부됐다(그림만 고쳤을 때 20건 중 2건 잔존).
+        if let Some(attr) = shape_attr_mut(shape) {
+            if attr.local_file_version == 0 {
+                attr.local_file_version = 1;
+            }
+        }
+
+        match shape {
+            ShapeObject::Picture(pic) => {
+                fill(pic);
+                if let Some(caption) = &mut pic.caption {
+                    walk_caption(caption);
+                }
+            }
+            ShapeObject::Group(group) => {
+                for child in &mut group.children {
+                    walk_shape(child);
+                }
+                if let Some(caption) = &mut group.caption {
+                    walk_caption(caption);
+                }
+            }
+            // Chart/OLE은 DrawingObjAttr의 caption과 별개로 HWP3 parser가 채우는
+            // own caption을 가진다. 특히 HWP3 OLE fixup은 picture caption을
+            // `ole.caption`으로 옮긴다. 둘 다 누락하면 0 geometry picture가 남는다.
+            ShapeObject::Chart(chart) => {
+                walk_drawing(&mut chart.drawing);
+                if let Some(caption) = &mut chart.caption {
+                    walk_caption(caption);
+                }
+            }
+            ShapeObject::Ole(ole) => {
+                walk_drawing(&mut ole.drawing);
+                if let Some(caption) = &mut ole.caption {
+                    walk_caption(caption);
+                }
+            }
+            _ => {
+                // Line/Rectangle/Ellipse/Arc/Polygon/Curve의 text box와 caption은
+                // 모두 동일한 paragraph container이므로 같은 walker로 재귀한다.
+                if let Some(drawing) = shape.drawing_mut() {
+                    walk_drawing(drawing);
+                }
+            }
+        }
+    }
+
+    fn walk_controls(controls: &mut [Control]) {
+        for control in controls {
+            match control {
+                Control::Picture(pic) => {
+                    fill(pic);
+                    if let Some(caption) = &mut pic.caption {
+                        walk_caption(caption);
+                    }
+                }
+                Control::Shape(shape) => walk_shape(shape),
+                Control::Table(table) => {
+                    for cell in &mut table.cells {
+                        walk_paragraphs(&mut cell.paragraphs);
+                    }
+                    if let Some(caption) = &mut table.caption {
+                        walk_caption(caption);
+                    }
+                }
+                Control::Header(header) => walk_paragraphs(&mut header.paragraphs),
+                Control::Footer(footer) => walk_paragraphs(&mut footer.paragraphs),
+                Control::Footnote(footnote) => walk_paragraphs(&mut footnote.paragraphs),
+                Control::Endnote(endnote) => walk_paragraphs(&mut endnote.paragraphs),
+                Control::HiddenComment(comment) => walk_paragraphs(&mut comment.paragraphs),
+                // HWPX memo field와 HWP3의 SectionDef control도 문단을 품을 수 있다.
+                // 본문 SectionDef와는 별개 IR 인스턴스이므로 여기서도 안전하게 덮는다.
+                Control::Field(field) => walk_paragraphs(&mut field.memo_paragraphs),
+                Control::SectionDef(section_def) => {
+                    walk_master_pages(&mut section_def.master_pages)
+                }
+                _ => {}
+            }
+        }
+    }
+
+    for section in doc.sections.iter_mut() {
+        walk_paragraphs(&mut section.paragraphs);
+        walk_master_pages(&mut section.section_def.master_pages);
+    }
+}
+
+/// [#3676] HWP 저장 구역마다 `HWPTAG_PAGE_BORDER_FILL` 을 **3개** 채운다
+/// (양쪽/짝수쪽/홀수쪽).
+///
+/// 한컴이 저장한 문서와 rhwp 의 HWP5 왕복본은 예외 없이 3개다. HWP3 파서는
+/// `extra_page_border_fills` 를 채우지 않아 **1개만** 나갔고, 그 스트림을 정상 파일에
+/// 이식하면 한컴이 파일을 거부한다(스트림 단위 이분 탐색으로 확인 — DocInfo 이식은
+/// 정상 열림, BodyText/Section0 이식만 거부).
+///
+/// 세 레코드는 한컴 원본에서도 내용이 완전히 동일하다(attr·간격 모두 같음) — 구분
+/// 플래그가 아니라 **개수 자체가 규격**이므로 첫 레코드를 복제해 채운다.
+/// HWPX 는 실제 문서에서 BOTH 하나만 갖는 것이 보통이지만, HWP 출력에도 같은 세 record가
+/// 필요하다. HWPX live IR 원형은 호출 경계에서 해당 overlay를 복원한다.
+fn normalize_page_border_fills_for_hwp(doc: &mut Document) {
+    for section in doc.sections.iter_mut() {
+        let sd = &mut section.section_def;
+        while sd.extra_page_border_fills.len() < 2 {
+            sd.extra_page_border_fills.push(sd.page_border_fill.clone());
+        }
+    }
+}
+
 fn normalize_file_header_for_hwp(doc: &mut Document, report: &mut AdapterReport) {
     let mut changed = false;
 
@@ -538,6 +811,33 @@ fn normalize_file_header_for_hwp(doc: &mut Document, report: &mut AdapterReport)
 
     if doc.header.flags & 0x01 == 0 {
         doc.header.flags |= 0x01;
+        changed = true;
+    }
+
+    // [#3706, #3676 후속] HWP3 파서는 HWP5 컨테이너용 버전(5.0.3.0)을 `raw_data` 바이트
+    // (32..36 = revision/build/minor/major)에만 기록하고, 필드 `version` 은
+    // major=3 (메모리 전용 표시)으로 남긴다 — `serialize_file_header` 가
+    // raw_data 를 우선 쓰는 것을 전제한 설계다 (`parser/hwp3/mod.rs`).
+    // 그런데 본 함수가 아래에서 raw_data 를 버리므로 직렬화가 필드 경로로
+    // 떨어져 HWP5 컨테이너에 버전 3 이 기록됐다(규격 위반 — 한컴 저장본은
+    // 예외 없이 5.x). 버리기 전에 raw_data 의 5.x 버전을 필드로 회수하고,
+    // 회수할 수 없으면 파서 기본값 5.0.3.0 으로 실체화한다.
+    // 이미 5.x 인 경로(HWPX 파서는 5.1.0.0 을 필드에 직접 기록)는 무변경.
+    if doc.header.version.major < 5 {
+        let salvaged = doc
+            .header
+            .raw_data
+            .as_deref()
+            .filter(|raw| raw.len() >= 36 && raw[35] >= 5)
+            .map(|raw| (raw[35], raw[34], raw[33], raw[32]));
+        let (major, minor, build, revision) = salvaged.unwrap_or((5, 0, 3, 0));
+        doc.header.version = HwpVersion {
+            major,
+            minor,
+            build,
+            revision,
+        };
+        report.file_header_version_materialized += 1;
         changed = true;
     }
 
@@ -705,6 +1005,14 @@ fn collect_object_border_fill_refs(doc: &Document) -> std::collections::HashSet<
         for para in &section.paragraphs {
             collect_object_border_fill_refs_from_paragraph(para, &mut refs);
         }
+        // 바탕쪽(master page) 문단 안 개체 참조도 수집한다. bin 워크
+        // (materialize_hwp5_bin_data_order, remap_bin_refs_in_doc)와 adapt 워크가
+        // 이미 바탕쪽을 순회하는데 이 collect 워크만 빠져 있었다.
+        for master_page in &section.section_def.master_pages {
+            for para in &master_page.paragraphs {
+                collect_object_border_fill_refs_from_paragraph(para, &mut refs);
+            }
+        }
     }
     refs
 }
@@ -717,6 +1025,48 @@ fn collect_object_border_fill_refs_from_paragraph(
         match ctrl {
             Control::Table(table) => collect_table_border_fill_refs(table, refs),
             Control::Shape(shape) => collect_object_border_fill_refs_from_shape(shape, refs),
+            // [#2736] 그림 캡션 문단 안 개체 참조도 수집한다. `Control::Picture` arm 자체가
+            // 없어 표 캡션(collect_table_border_fill_refs)·도형 캡션
+            // (collect_object_border_fill_refs_from_shape)과 달리 그림 캡션만 빠져 있었고,
+            // 미수집 시 normalize_paragraph_char_border_fills 가드가 실패해 캡션 안 개체
+            // 채우기가 no-fill 로 정규화된다(#2467 과 동일 메커니즘).
+            Control::Picture(pic) => {
+                if let Some(caption) = &pic.caption {
+                    for p in &caption.paragraphs {
+                        collect_object_border_fill_refs_from_paragraph(p, refs);
+                    }
+                }
+            }
+            // 각주/미주/숨은설명 문단 안의 개체도 border_fill 을 참조할 수 있다.
+            // 이 참조가 수집되지 않으면 normalize_paragraph_char_border_fills 의
+            // 가드가 실패해, 문단 char-border 와 공유된 border_fill 이 no-fill 로
+            // 정규화되어 컨테이너 안 개체의 채우기가 유실된다(#2467 adapt 워크와 동형).
+            Control::Footnote(footnote) => {
+                for p in &footnote.paragraphs {
+                    collect_object_border_fill_refs_from_paragraph(p, refs);
+                }
+            }
+            Control::Endnote(endnote) => {
+                for p in &endnote.paragraphs {
+                    collect_object_border_fill_refs_from_paragraph(p, refs);
+                }
+            }
+            Control::HiddenComment(comment) => {
+                for p in &comment.paragraphs {
+                    collect_object_border_fill_refs_from_paragraph(p, refs);
+                }
+            }
+            // 머리말/꼬리말 문단 안 개체도 다른 워크(bin order/remap, adapt)와 동일하게 순회.
+            Control::Header(header) => {
+                for p in &header.paragraphs {
+                    collect_object_border_fill_refs_from_paragraph(p, refs);
+                }
+            }
+            Control::Footer(footer) => {
+                for p in &footer.paragraphs {
+                    collect_object_border_fill_refs_from_paragraph(p, refs);
+                }
+            }
             _ => {}
         }
     }
@@ -729,6 +1079,13 @@ fn collect_object_border_fill_refs_from_shape(
     if let Some(drawing) = shape.drawing() {
         if let Some(text_box) = &drawing.text_box {
             for para in &text_box.paragraphs {
+                collect_object_border_fill_refs_from_paragraph(para, refs);
+            }
+        }
+        // 도형 캡션 문단 안 개체 참조도 수집(bin order/remap 워크와 동형).
+        // #2483 은 표 캡션을 다뤘고, 이 도형 drawing.caption 은 별개 경로다.
+        if let Some(caption) = &drawing.caption {
+            for para in &caption.paragraphs {
                 collect_object_border_fill_refs_from_paragraph(para, refs);
             }
         }
@@ -755,6 +1112,12 @@ fn collect_table_border_fill_refs(table: &Table, refs: &mut std::collections::Ha
             refs.insert(cell.border_fill_id);
         }
         for para in &cell.paragraphs {
+            collect_object_border_fill_refs_from_paragraph(para, refs);
+        }
+    }
+    // 표 캡션 문단 안의 개체 참조도 수집(#2467 과 동일 근거).
+    if let Some(caption) = &table.caption {
+        for para in &caption.paragraphs {
             collect_object_border_fill_refs_from_paragraph(para, refs);
         }
     }
@@ -826,10 +1189,33 @@ fn adapt_paragraph_with_context(
                 ParagraphContext::HeaderFooter,
             ),
             Control::Picture(pic) => {
-                adapt_picture_href_ctrl_data(pic, &mut ctrl_data_records[idx], report)
+                adapt_picture_href_ctrl_data(pic, &mut ctrl_data_records[idx], report);
+                // [#2736] 그림 캡션 문단도 보강한다. 표 캡션은 adapt_table_with_context 가
+                // 이미 보강하고, bin order/remap·border_fill 수집 워크는 캡션을 순회하는데
+                // adapt 워크만 그림 캡션을 건너뛰었다. 실측(samples/hwpx/aift.hwpx): 본문
+                // 921/921·표 캡션 2/2 가 방문되는 동안 그림 캡션 9/9 전부 미방문.
+                // 미방문 시 캡션 안 그림 href·표 raw_ctrl_data·수식 보정이 물질화되지 않고
+                // 문단 header tail 도 10바이트로 남아 PARA_HEADER 가 22/24 로 섞인다.
+                if let Some(caption) = &mut pic.caption {
+                    adapt_paragraphs_with_context(&mut caption.paragraphs, report, context);
+                }
+                materialize_picture_caption_common_attr(pic, report);
             }
             Control::Shape(shape) => adapt_shape_with_context(shape, report, context),
             Control::Equation(eq) => adapt_equation(eq, report),
+            // 각주/미주/숨은설명 문단도 body 문단과 동일하게 보강해야 한다.
+            // bin 참조 수집·리맵 워크(collect_bin_order/remap_bin_refs)는 이미 이들을
+            // 재귀하므로 adapt 워크만 빠져 있으면, 이 안의 그림 href·표 ctrl_data 등이
+            // 물질화되지 않고 HWPX→HWP 변환 시 유실된다.
+            Control::Footnote(footnote) => {
+                adapt_paragraphs_with_context(&mut footnote.paragraphs, report, context)
+            }
+            Control::Endnote(endnote) => {
+                adapt_paragraphs_with_context(&mut endnote.paragraphs, report, context)
+            }
+            Control::HiddenComment(comment) => {
+                adapt_paragraphs_with_context(&mut comment.paragraphs, report, context)
+            }
             _ => {}
         }
     }
@@ -1162,6 +1548,14 @@ fn adapt_shape_with_context(
             materialize_text_box_hwp5_envelope(text_box, report);
             adapt_paragraphs_with_context(&mut text_box.paragraphs, report, context);
         }
+        // [#2736] 도형 캡션 문단도 보강한다. `DrawingObjAttr` 를 공유하는 사각형·타원·선·호·
+        // 다각형·곡선·글상자·묶음·차트·OLE 이 한 번에 덮인다. 형제 워크
+        // (collect_bin_order_from_shape / remap_bin_refs_in_shape /
+        // collect_object_border_fill_refs_from_shape)는 셋 다 이미 drawing.caption 을
+        // 순회하는데 adapt 워크만 빠져 있었다.
+        if let Some(caption) = &mut drawing.caption {
+            adapt_paragraphs_with_context(&mut caption.paragraphs, report, context);
+        }
     }
 
     if let ShapeObject::Group(group) = shape {
@@ -1386,7 +1780,6 @@ fn adapt_table_with_context(
         materialize_table_outer_margin(table, report);
         materialize_table_record_attr(table, report);
         materialize_table_record_row_sizes(table, report);
-        materialize_table_record_extra(table, report);
         materialize_table_ctrl_header_attr(table, report);
 
         table.raw_ctrl_data = serialize_common_obj_attr(&table.common);
@@ -1414,6 +1807,12 @@ fn adapt_table_with_context(
         for cpara in &mut cell.paragraphs {
             adapt_paragraph_with_context(cpara, report, context);
         }
+    }
+
+    // 표 캡션 문단도 보강한다(#2443 에서 캡션이 bin 리맵 대상임이 확인됨).
+    // 누락 시 캡션 안의 그림 href·중첩 표 ctrl_data 등이 물질화되지 않는다.
+    if let Some(caption) = &mut table.caption {
+        adapt_paragraphs_with_context(&mut caption.paragraphs, report, context);
     }
 }
 
@@ -1527,22 +1926,25 @@ fn materialize_table_record_row_sizes(table: &mut Table, report: &mut AdapterRep
     }
 }
 
-fn materialize_table_record_extra(table: &mut Table, report: &mut AdapterReport) {
-    if table.raw_table_record_extra.is_empty() {
-        table.raw_table_record_extra = vec![0, 0];
-        report.table_record_extra_materialized += 1;
-    }
-}
-
 fn materialize_table_ctrl_header_attr(table: &mut Table, report: &mut AdapterReport) {
-    const HWPX_TABLE_FLOW_WITH_TEXT_BIT: u32 = 0x0000_2000;
     const HWPX_TABLE_NUMBERING_BIT: u32 = 0x0800_0000;
     const HWP5_TABLE_CAPTION_COMMON_ATTR_BIT: u32 = 0x2000_0000;
 
     let before = table.common.attr;
-    let mut attr = pack_common_attr_bits(&table.common)
-        | HWPX_TABLE_FLOW_WITH_TEXT_BIT
-        | HWPX_TABLE_NUMBERING_BIT;
+    // [#3834] 자리차지 비트(bit 13)는 `pack_common_attr_bits` 가 IR 에서 만든다. 종전
+    // 무조건 OR 은 원본 `flowWithText="0"` 를 파괴했다 — HWPX 는 이 속성을 항상 명시
+    // 하므로(코퍼스 119문서 표 560개, 누락 0) 파서 기본값을 메울 필요가 없다. 한글
+    // 2022 도 같은 변환에서 `0` 을 그대로 둔다 — HWPX 를 열어 HWP 로 저장한 실측에서
+    // 13문서 표 84개 전부 보존, 정규화 0건(`tools/hangul_flowwithtext_oracle.py`).
+    // #2697 의 표 번호 비트 무조건 OR 과 같은 계열이다.
+    let mut attr = pack_common_attr_bits(&table.common);
+    // [#2697] 파서(materialize_hwpx_table_attrs)와 동일 게이트: "표 번호" 비트는
+    // numberingType 이 실제로 TABLE 일 때만 세운다. 종전 무조건 OR 은 numberingType=
+    // "PICTURE"/"NONE" 표를 HWP5 저장 시 표 번호 범주로 되돌려, 파서가 #2697 에서
+    // 제거한 IR 모순(numbering_type=Picture ↔ attr=TABLE)을 변환 계층이 재도입했다.
+    if table.common.numbering_type == crate::model::shape::ObjectNumberingType::Table {
+        attr |= HWPX_TABLE_NUMBERING_BIT;
+    }
     if table.caption.is_some() {
         attr |= HWP5_TABLE_CAPTION_COMMON_ATTR_BIT;
     }
@@ -1550,6 +1952,27 @@ fn materialize_table_ctrl_header_attr(table: &mut Table, report: &mut AdapterRep
 
     if table.common.attr != before {
         report.table_ctrl_header_attr_materialized += 1;
+    }
+}
+
+/// [#2767] 캡션이 있는 그림(gso `$pic`) CTRL_HEADER 의 한컴 캡션 비트(bit 29) 보강.
+///
+/// 전 코퍼스 실측(`samples/**/*.hwp`, 한컴 저작 원본): 캡션 동반 gso 80개(그림 42,
+/// 사각형 33, 연결선 3, OLE 2) 전부 bit 29=1, 캡션 없는 gso 2,674개 전부 bit 29=0.
+/// 개체 종류와 무관하게 캡션 유무만으로 결정된다. HWPX 출처 그림의
+/// `common.attr` 는 파서(`pack_hwpx_common_obj_attr`)가 이미 non-zero로 채우고
+/// 직렬화기가 verbatim 기록하므로, 표처럼 `pack_common_attr_bits(...)`로
+/// **recompute** 하지 않고 비트만 **OR** 한다 — recompute 하면 표 전용 비트를
+/// 그림에 강제로 얹는 회귀가 된다. 멱등: 비트가 이미 켜져 있으면 카운트하지 않음.
+///
+/// 도형(`$rec`/`$con`)·OLE 캡션은 범위 밖이다 — 직렬화기(`serializer/control.rs`)가
+/// 도형 캡션 레코드 자체를 아직 출력하지 않아, 레코드 없이 비트만 켜면 자기모순
+/// 레코드가 된다(별도 후속 과제).
+fn materialize_picture_caption_common_attr(pic: &mut Picture, report: &mut AdapterReport) {
+    const HWP5_GSO_CAPTION_COMMON_ATTR_BIT: u32 = 0x2000_0000;
+    if pic.caption.is_some() && pic.common.attr & HWP5_GSO_CAPTION_COMMON_ATTR_BIT == 0 {
+        pic.common.attr |= HWP5_GSO_CAPTION_COMMON_ATTR_BIT;
+        report.picture_caption_common_attr_materialized += 1;
     }
 }
 
@@ -1587,6 +2010,22 @@ fn adapt_cell_list_attr(cell: &mut Cell, report: &mut AdapterReport) {
 /// 마커가 사라지며 그 문서는 진짜 native HWP5 가 되므로 시멘틱이 자기일관적이다.
 pub const HWPX_ORIGIN_STREAM_PATH: &str = "/RhwpHwpxOrigin";
 
+/// [#3707] HWP3 출처 마커. `RhwpHwpxOrigin` 과 같은 방식이다.
+///
+/// HWP3 파싱은 `apply_hwp3_origin_fixup` 으로 `margin_bottom` 에서 1600 HU(21.3px)를
+/// 빼 한글97 의 마지막 줄 tolerance 를 모방한다. 그 보정은 IR 에만 있고 저장 파일의
+/// 여백은 원본 그대로다(그래야 한컴이 보는 기하가 원본과 같다). 그런데 재파싱 때
+/// 보정을 다시 걸지 판단하는 조건이 **문단 대비 모양 비율**이라, 저장하며 문단마다
+/// 모양이 생성돼 비율이 임계를 넘으면 보정이 사라진다(실측: ps 0.707 · cs 1.115 vs
+/// 임계 0.05 / 0.15).
+///
+/// 그 21.3px 만큼 미주 단 가용이 줄어 단 전환이 일찍 걸리고, 2단 미주의 왼쪽 단이
+/// 조기에 닫혀 미주가 다음 쪽으로 밀린다(SO-SUEOP 44쪽). 한컴은 원본·왕복본 모두
+/// 두 단을 고르게 채우므로 보정이 유지되는 쪽이 정답지와 맞는다.
+///
+/// 저장 여백을 줄이는 대신 **출처만 기록**해 재파싱이 보정을 결정론적으로 되건다.
+pub const HWP3_ORIGIN_STREAM_PATH: &str = "/RhwpHwp3Origin";
+
 /// `source_format` 검사 후 어댑터를 호출하는 보조 함수.
 ///
 /// 호출자: `DocumentCore::export_hwp_with_adapter()` (Stage 5 에서 추가).
@@ -1605,13 +2044,393 @@ pub fn convert_if_hwpx_source(doc: &mut Document, source_format: FileFormat) -> 
         doc.extra_streams
             .push((HWPX_ORIGIN_STREAM_PATH.to_string(), b"1".to_vec()));
     }
-    convert_hwpx_to_hwp_ir(doc)
+    // [#3707] HWP3 출처 마커 — 재파싱이 쪽나눔 허용치를 되돌릴 수 있게 한다.
+    // HWP3 파서가 세우는 `pagination_bottom_tolerance`(1600 HU)는 렌더러 내부 값이라
+    // 저장 파일에 남지 않는다. 마커로 출처만 기록해 재파싱이 결정론적으로 복원한다.
+    if matches!(source_format, FileFormat::Hwp3)
+        && !doc
+            .extra_streams
+            .iter()
+            .any(|(p, _)| p == HWP3_ORIGIN_STREAM_PATH)
+    {
+        doc.extra_streams
+            .push((HWP3_ORIGIN_STREAM_PATH.to_string(), b"1".to_vec()));
+    }
+    convert_to_hwp_ir(doc)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::paragraph::CharShapeRef;
+
+    /// [#3676] HWP3 parser가 실제로 만드는 그림/도형/표 캡션과 HiddenComment, 그리고
+    /// 공통 adapter가 다루는 바탕쪽 글상자를 모두 건너 문단 직속 그림만 보정하면,
+    /// 한컴은 그 하나의 0 geometry를 이유로 문서 전체를 거부할 수 있다. 중첩 그림도
+    /// geometry·crop·local file version 계약을 정확히 받아야 한다.
+    #[test]
+    fn hwp3_nested_caption_hidden_comment_and_master_page_pictures_are_normalized() {
+        use crate::model::control::HiddenComment;
+        use crate::model::header_footer::MasterPage;
+        use crate::model::shape::{
+            Caption, ChartShape, GroupShape, OleShape, RectangleShape, TextBox,
+        };
+
+        fn hwp3_picture(
+            current_width: u32,
+            current_height: u32,
+            original_width: u32,
+            original_height: u32,
+        ) -> Picture {
+            Picture {
+                common: crate::model::shape::CommonObjAttr {
+                    width: current_width,
+                    height: current_height,
+                    ..Default::default()
+                },
+                shape_attr: crate::model::shape::ShapeComponentAttr {
+                    current_width,
+                    current_height,
+                    original_width,
+                    original_height,
+                    // HWP3 파서는 0으로 남긴다. adapter가 한컴 HWP5 contract인
+                    // 정확한 값 1로 보정해야 한다.
+                    local_file_version: 0,
+                    ..Default::default()
+                },
+                ..Default::default()
+            }
+        }
+
+        fn assert_hancom_picture_contract(
+            picture: &Picture,
+            width: i32,
+            height: i32,
+            original_width: i32,
+            original_height: i32,
+        ) {
+            assert_eq!(picture.border_x, [0, 0, width, 0]);
+            assert_eq!(picture.border_y, [width, height, 0, height]);
+            assert_eq!(picture.crop.left, 0);
+            assert_eq!(picture.crop.top, 0);
+            assert_eq!(picture.crop.right, original_width);
+            assert_eq!(picture.crop.bottom, original_height);
+            assert_eq!(picture.shape_attr.local_file_version, 1);
+        }
+
+        // HWP3 picture caption 안의 또 다른 picture. 기존 walker는 이 문단을
+        // 방문하지 않아 inner picture가 모두 0으로 남았다.
+        let mut picture_caption_para = Paragraph::default();
+        picture_caption_para
+            .controls
+            .push(Control::Picture(Box::new(hwp3_picture(120, 80, 240, 160))));
+        let outer_picture = Picture {
+            caption: Some(Caption {
+                paragraphs: vec![picture_caption_para],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        // HWP3 drawing caption → group caption → table caption → HiddenComment
+        // 경로. 이들 모두 parse_paragraph_list가 반환하는 실제 paragraph container다.
+        let mut hidden_comment_para = Paragraph::default();
+        hidden_comment_para
+            .controls
+            .push(Control::Picture(Box::new(hwp3_picture(101, 202, 303, 404))));
+        let mut table_caption_para = Paragraph::default();
+        table_caption_para
+            .controls
+            .push(Control::HiddenComment(Box::new(HiddenComment {
+                paragraphs: vec![hidden_comment_para],
+            })));
+        let mut group_caption_para = Paragraph::default();
+        group_caption_para
+            .controls
+            .push(Control::Table(Box::new(Table {
+                caption: Some(Caption {
+                    paragraphs: vec![table_caption_para],
+                    ..Default::default()
+                }),
+                ..Default::default()
+            })));
+        let mut drawing_caption_para = Paragraph::default();
+        drawing_caption_para
+            .controls
+            .push(Control::Shape(Box::new(ShapeObject::Group(GroupShape {
+                caption: Some(Caption {
+                    paragraphs: vec![group_caption_para],
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }))));
+        let mut rectangle = RectangleShape::default();
+        rectangle.drawing.caption = Some(Caption {
+            paragraphs: vec![drawing_caption_para],
+            ..Default::default()
+        });
+
+        // Chart는 DrawingObjAttr과 별도로 own caption을 보존한다.
+        let mut chart_caption_para = Paragraph::default();
+        chart_caption_para
+            .controls
+            .push(Control::Picture(Box::new(hwp3_picture(55, 44, 110, 88))));
+        let chart = ChartShape {
+            caption: Some(Caption {
+                paragraphs: vec![chart_caption_para],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        // 공통 adapter의 바탕쪽 OLE 글상자는 DrawingObjAttr 공통 text_box 경로를 쓴다.
+        let mut master_page_text_box_para = Paragraph::default();
+        master_page_text_box_para
+            .controls
+            .push(Control::Picture(Box::new(hwp3_picture(70, 60, 140, 120))));
+        let mut ole = OleShape::default();
+        ole.drawing.text_box = Some(TextBox {
+            paragraphs: vec![master_page_text_box_para],
+            ..Default::default()
+        });
+        // HWP3 OLE fixup은 picture caption을 이 own caption 필드에 옮긴다.
+        let mut ole_caption_para = Paragraph::default();
+        ole_caption_para
+            .controls
+            .push(Control::Picture(Box::new(hwp3_picture(45, 35, 90, 70))));
+        ole.caption = Some(Caption {
+            paragraphs: vec![ole_caption_para],
+            ..Default::default()
+        });
+        let master_page = MasterPage {
+            paragraphs: vec![Paragraph {
+                controls: vec![Control::Shape(Box::new(ShapeObject::Ole(Box::new(ole))))],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let mut doc = Document {
+            sections: vec![Section {
+                paragraphs: vec![Paragraph {
+                    controls: vec![
+                        Control::Picture(Box::new(outer_picture)),
+                        Control::Shape(Box::new(ShapeObject::Rectangle(rectangle))),
+                        Control::Shape(Box::new(ShapeObject::Chart(Box::new(chart)))),
+                    ],
+                    ..Default::default()
+                }],
+                section_def: SectionDef {
+                    master_pages: vec![master_page],
+                    ..Default::default()
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        convert_if_hwpx_source(&mut doc, FileFormat::Hwp3);
+
+        // adapter는 본문 첫 문단에 SectionDef control을 앞에 삽입하므로, 고정
+        // control index 대신 대상 타입을 찾는다.
+        let outer_picture = doc.sections[0].paragraphs[0]
+            .controls
+            .iter()
+            .find_map(|control| match control {
+                Control::Picture(picture) => Some(picture.as_ref()),
+                _ => None,
+            })
+            .expect("outer picture expected");
+        let Control::Picture(caption_picture) =
+            &outer_picture.caption.as_ref().unwrap().paragraphs[0].controls[0]
+        else {
+            panic!("picture expected inside HWP3 picture caption");
+        };
+        assert_hancom_picture_contract(caption_picture, 120, 80, 240, 160);
+
+        let rectangle = doc.sections[0].paragraphs[0]
+            .controls
+            .iter()
+            .find_map(|control| match control {
+                Control::Shape(shape) => match shape.as_ref() {
+                    ShapeObject::Rectangle(rectangle) => Some(rectangle),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .expect("rectangle expected");
+        let Control::Shape(group) =
+            &rectangle.drawing.caption.as_ref().unwrap().paragraphs[0].controls[0]
+        else {
+            panic!("group expected in drawing caption");
+        };
+        let ShapeObject::Group(group) = group.as_ref() else {
+            panic!("group shape expected");
+        };
+        assert_eq!(group.shape_attr.local_file_version, 1);
+        let Control::Table(table) = &group.caption.as_ref().unwrap().paragraphs[0].controls[0]
+        else {
+            panic!("table expected in group caption");
+        };
+        let Control::HiddenComment(comment) =
+            &table.caption.as_ref().unwrap().paragraphs[0].controls[0]
+        else {
+            panic!("HiddenComment expected in table caption");
+        };
+        let Control::Picture(hidden_comment_picture) = &comment.paragraphs[0].controls[0] else {
+            panic!("picture expected inside HiddenComment");
+        };
+        assert_hancom_picture_contract(hidden_comment_picture, 101, 202, 303, 404);
+
+        let chart = doc.sections[0].paragraphs[0]
+            .controls
+            .iter()
+            .find_map(|control| match control {
+                Control::Shape(shape) => match shape.as_ref() {
+                    ShapeObject::Chart(chart) => Some(chart.as_ref()),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .expect("chart expected");
+        let Control::Picture(chart_caption_picture) =
+            &chart.caption.as_ref().unwrap().paragraphs[0].controls[0]
+        else {
+            panic!("picture expected inside chart caption");
+        };
+        assert_hancom_picture_contract(chart_caption_picture, 55, 44, 110, 88);
+
+        let Control::Shape(ole) =
+            &doc.sections[0].section_def.master_pages[0].paragraphs[0].controls[0]
+        else {
+            panic!("OLE expected in master page");
+        };
+        let ShapeObject::Ole(ole) = ole.as_ref() else {
+            panic!("OLE shape expected");
+        };
+        let Control::Picture(master_page_picture) =
+            &ole.drawing.text_box.as_ref().unwrap().paragraphs[0].controls[0]
+        else {
+            panic!("picture expected inside master-page OLE text box");
+        };
+        assert_hancom_picture_contract(master_page_picture, 70, 60, 140, 120);
+        let Control::Picture(ole_caption_picture) =
+            &ole.caption.as_ref().unwrap().paragraphs[0].controls[0]
+        else {
+            panic!("picture expected inside HWP3 OLE caption");
+        };
+        assert_hancom_picture_contract(ole_caption_picture, 45, 35, 90, 70);
+    }
+
+    #[test]
+    fn border_fill_refs_collected_inside_footnote_and_caption() {
+        use crate::model::footnote::Footnote;
+        use crate::model::shape::Caption;
+
+        // 각주 문단 안 표의 border_fill 이 수집돼야 한다(종전엔 각주 미재귀로 누락).
+        let mut fn_para = Paragraph::default();
+        fn_para.controls.push(Control::Table(Box::new(Table {
+            border_fill_id: 7,
+            ..Default::default()
+        })));
+        let mut footnote = Footnote::default();
+        footnote.paragraphs.push(fn_para);
+        let mut para = Paragraph::default();
+        para.controls.push(Control::Footnote(Box::new(footnote)));
+        let mut doc = Document::default();
+        doc.sections.push(Section {
+            paragraphs: vec![para],
+            ..Default::default()
+        });
+        let refs = collect_object_border_fill_refs(&doc);
+        assert!(refs.contains(&7), "각주 안 표의 border_fill 이 수집돼야 함");
+
+        // 표 캡션 문단 안 표의 border_fill 도 수집돼야 한다.
+        let mut cap_para = Paragraph::default();
+        cap_para.controls.push(Control::Table(Box::new(Table {
+            border_fill_id: 9,
+            ..Default::default()
+        })));
+        let mut caption = Caption::default();
+        caption.paragraphs.push(cap_para);
+        let mut tpara = Paragraph::default();
+        tpara.controls.push(Control::Table(Box::new(Table {
+            border_fill_id: 1,
+            caption: Some(caption),
+            ..Default::default()
+        })));
+        let mut doc2 = Document::default();
+        doc2.sections.push(Section {
+            paragraphs: vec![tpara],
+            ..Default::default()
+        });
+        let refs2 = collect_object_border_fill_refs(&doc2);
+        assert!(
+            refs2.contains(&9),
+            "표 캡션 안 표의 border_fill 이 수집돼야 함"
+        );
+    }
+
+    #[test]
+    fn border_fill_refs_collected_inside_header_masterpage_and_shape_caption() {
+        use crate::model::header_footer::{Header, MasterPage};
+        use crate::model::shape::{Caption, RectangleShape, ShapeObject};
+
+        let table_para = |bf: u16| {
+            let mut p = Paragraph::default();
+            p.controls.push(Control::Table(Box::new(Table {
+                border_fill_id: bf,
+                ..Default::default()
+            })));
+            p
+        };
+
+        // 머리말 안 표
+        let mut header = Header::default();
+        header.paragraphs.push(table_para(11));
+        let mut hpara = Paragraph::default();
+        hpara.controls.push(Control::Header(Box::new(header)));
+        let mut doc = Document::default();
+        doc.sections.push(Section {
+            paragraphs: vec![hpara],
+            ..Default::default()
+        });
+        assert!(
+            collect_object_border_fill_refs(&doc).contains(&11),
+            "머리말 안 표의 border_fill 이 수집돼야 함"
+        );
+
+        // 바탕쪽(master page) 안 표
+        let mut mp = MasterPage::default();
+        mp.paragraphs.push(table_para(13));
+        let mut sec = Section::default();
+        sec.section_def.master_pages.push(mp);
+        let mut doc2 = Document::default();
+        doc2.sections.push(sec);
+        assert!(
+            collect_object_border_fill_refs(&doc2).contains(&13),
+            "바탕쪽 안 표의 border_fill 이 수집돼야 함"
+        );
+
+        // 도형 캡션 안 표
+        let mut caption = Caption::default();
+        caption.paragraphs.push(table_para(15));
+        let mut rect = RectangleShape::default();
+        rect.drawing.caption = Some(caption);
+        let mut spara = Paragraph::default();
+        spara
+            .controls
+            .push(Control::Shape(Box::new(ShapeObject::Rectangle(rect))));
+        let mut doc3 = Document::default();
+        doc3.sections.push(Section {
+            paragraphs: vec![spara],
+            ..Default::default()
+        });
+        assert!(
+            collect_object_border_fill_refs(&doc3).contains(&15),
+            "도형 캡션 안 표의 border_fill 이 수집돼야 함"
+        );
+    }
 
     #[test]
     fn empty_doc_normalizes_file_header_once() {
@@ -1669,6 +2488,11 @@ mod tests {
                 width: 47697,
                 height: 3525,
                 z_order: 26,
+                // [#3834] 계약값 bit 13 은 IR 의 이 필드에서 나온다. 원본 한컴 표가 자리차지
+                // 이므로 픽스처도 켠다 — 종전에는 어댑터가 무조건 OR 해 IR 과 무관했다.
+                flow_with_text: true,
+                // HWPX 파서는 표 기본 numberingType 을 TABLE 로 채운다 (section.rs).
+                numbering_type: crate::model::shape::ObjectNumberingType::Table,
                 ..Default::default()
             },
             outer_margin_left: 283,
@@ -1684,7 +2508,8 @@ mod tests {
 
         assert_eq!(table.raw_table_record_attr, 0x0400_000e);
         assert_eq!(table.row_sizes, vec![3]);
-        assert_eq!(table.raw_table_record_extra, vec![0, 0]);
+        // [#3570] 한컴은 zone 개수까지만 쓰고 끝낸다 — 여분 2바이트를 넣지 않는다.
+        assert!(table.raw_table_record_extra.is_empty());
         assert_eq!(
             u32::from_le_bytes(
                 table.raw_ctrl_data[common_obj_offsets::FLAGS]
@@ -1780,6 +2605,10 @@ mod tests {
                 width: 47152,
                 height: 14976,
                 z_order: 6,
+                // [#3834] 계약값 bit 13 의 출처 — 위 표와 같다.
+                flow_with_text: true,
+                // HWPX 파서는 표 기본 numberingType 을 TABLE 로 채운다 (section.rs).
+                numbering_type: crate::model::shape::ObjectNumberingType::Table,
                 ..Default::default()
             },
             outer_margin_left: 141,
@@ -1808,6 +2637,106 @@ mod tests {
                     .unwrap(),
             ),
             0x282a_2311
+        );
+    }
+
+    #[test]
+    fn picture_numbering_table_keeps_category_on_hwp_save() {
+        // [#2697] HWPX 파서는 numberingType="PICTURE" 표에 TABLE 번호 비트(0x0800_0000)를
+        // 세우지 않는다. HWP5 저장 어댑터도 같은 게이트를 따라야 한다 — 종전 무조건 OR 은
+        // 그림 번호 캡션 표를 표 번호 범주로 되돌려 파서가 만든 IR 계약과 모순됐다.
+        use crate::model::shape::ObjectNumberingType;
+
+        let mut table = Table {
+            row_count: 1,
+            col_count: 1,
+            cells: vec![Cell {
+                col: 0,
+                row: 0,
+                col_span: 1,
+                row_span: 1,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        table.common.numbering_type = ObjectNumberingType::Picture;
+
+        let mut report = AdapterReport::new();
+        adapt_table(&mut table, &mut report);
+
+        assert_eq!(
+            table.common.attr & 0x0800_0000,
+            0,
+            "PICTURE 번호 표에 TABLE 번호 비트가 서면 IR 모순: {:#010x}",
+            table.common.attr
+        );
+        let flags = u32::from_le_bytes(
+            table.raw_ctrl_data[common_obj_offsets::FLAGS]
+                .try_into()
+                .unwrap(),
+        );
+        assert_eq!(
+            flags & 0x0800_0000,
+            0,
+            "raw_ctrl_data 에도 TABLE 번호 비트가 없어야 함: {flags:#010x}"
+        );
+    }
+
+    #[test]
+    fn none_numbering_table_keeps_category_on_hwp_save() {
+        // numberingType="NONE"(번호 매김 제외) 표도 저장 시 표 번호 범주로 승격되면 안 된다.
+        let mut table = Table {
+            row_count: 1,
+            col_count: 1,
+            cells: vec![Cell {
+                col: 0,
+                row: 0,
+                col_span: 1,
+                row_span: 1,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        // Table::default() 의 common.numbering_type 은 None.
+
+        let mut report = AdapterReport::new();
+        adapt_table(&mut table, &mut report);
+
+        assert_eq!(
+            table.common.attr & 0x0800_0000,
+            0,
+            "NONE 번호 표에 TABLE 번호 비트가 서면 안 됨: {:#010x}",
+            table.common.attr
+        );
+    }
+
+    #[test]
+    fn table_numbering_table_still_sets_numbering_bit() {
+        // 회귀 가드: 기본 표(numberingType="TABLE")는 종전대로 표 번호 비트를 유지한다.
+        use crate::model::shape::ObjectNumberingType;
+
+        let mut table = Table {
+            row_count: 1,
+            col_count: 1,
+            cells: vec![Cell {
+                col: 0,
+                row: 0,
+                col_span: 1,
+                row_span: 1,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        table.common.numbering_type = ObjectNumberingType::Table;
+
+        let mut report = AdapterReport::new();
+        adapt_table(&mut table, &mut report);
+
+        assert_eq!(
+            table.common.attr & 0x0800_0000,
+            0x0800_0000,
+            "TABLE 번호 표는 표 번호 비트를 유지해야 함: {:#010x}",
+            table.common.attr
         );
     }
 
@@ -2003,6 +2932,267 @@ mod tests {
     }
 
     #[test]
+    fn picture_href_materializes_inside_footnote_and_caption() {
+        use crate::model::footnote::Footnote;
+        use crate::model::shape::Caption;
+
+        // 각주 문단 안의 그림 href 가 물질화되어야 한다(종전엔 adapt 워크가
+        // 각주를 재귀하지 않아 유실).
+        let mut fn_inner = Paragraph::default();
+        fn_inner.controls.push(Control::Picture(Box::new(Picture {
+            href: Some("http://www.korea.kr;1;0;0;".to_string()),
+            ..Default::default()
+        })));
+        let mut footnote = Footnote::default();
+        footnote.paragraphs.push(fn_inner);
+        let mut para = Paragraph::default();
+        para.controls.push(Control::Footnote(Box::new(footnote)));
+
+        let mut report = AdapterReport::new();
+        adapt_paragraph(&mut para, &mut report);
+        assert_eq!(report.picture_href_ctrl_data_materialized, 1);
+        let Control::Footnote(fnote) = &para.controls[0] else {
+            panic!("expected footnote control");
+        };
+        assert_eq!(
+            fnote.paragraphs[0].ctrl_data_records[0]
+                .as_ref()
+                .unwrap()
+                .len(),
+            76
+        );
+
+        // 표 캡션 문단 안의 그림 href 도 물질화되어야 한다.
+        let mut cap_inner = Paragraph::default();
+        cap_inner.controls.push(Control::Picture(Box::new(Picture {
+            href: Some("http://www.korea.kr;1;0;0;".to_string()),
+            ..Default::default()
+        })));
+        let mut caption = Caption::default();
+        caption.paragraphs.push(cap_inner);
+        let mut tpara = Paragraph::default();
+        tpara.controls.push(Control::Table(Box::new(Table {
+            caption: Some(caption),
+            ..Default::default()
+        })));
+
+        let mut treport = AdapterReport::new();
+        adapt_paragraph(&mut tpara, &mut treport);
+        assert_eq!(treport.picture_href_ctrl_data_materialized, 1);
+        let Control::Table(tbl) = &tpara.controls[0] else {
+            panic!("expected table control");
+        };
+        let cap = tbl.caption.as_ref().unwrap();
+        assert_eq!(
+            cap.paragraphs[0].ctrl_data_records[0]
+                .as_ref()
+                .unwrap()
+                .len(),
+            76
+        );
+    }
+
+    /// [#2736] adapt 워크가 그림 캡션·도형 캡션 문단을 방문하는지.
+    ///
+    /// 표 캡션은 `adapt_table_with_context` 가 이미 보강하고, bin order/remap·
+    /// border_fill 수집 워크도 캡션을 순회하는데 adapt 워크만 그림/도형 캡션을
+    /// 건너뛰어 캡션 안 그림의 href 가 HWP 저장 시 유실됐다.
+    #[test]
+    fn picture_href_materializes_inside_picture_and_shape_caption() {
+        use crate::model::shape::{Caption, RectangleShape, ShapeObject};
+
+        let href_caption = || {
+            let mut inner = Paragraph::default();
+            inner.controls.push(Control::Picture(Box::new(Picture {
+                href: Some("http://www.korea.kr;1;0;0;".to_string()),
+                ..Default::default()
+            })));
+            Caption {
+                paragraphs: vec![inner],
+                ..Default::default()
+            }
+        };
+
+        // 그림 캡션 문단 안의 그림 href
+        let mut ppara = Paragraph::default();
+        ppara.controls.push(Control::Picture(Box::new(Picture {
+            caption: Some(href_caption()),
+            ..Default::default()
+        })));
+
+        let mut preport = AdapterReport::new();
+        adapt_paragraph(&mut ppara, &mut preport);
+        assert_eq!(
+            preport.picture_href_ctrl_data_materialized, 1,
+            "그림 캡션 문단 안 그림의 href 가 물질화돼야 함(캡션 문단 미방문)"
+        );
+        let Control::Picture(pic) = &ppara.controls[0] else {
+            panic!("expected picture control");
+        };
+        let pcap = pic.caption.as_ref().unwrap();
+        assert_eq!(
+            pcap.paragraphs[0].ctrl_data_records[0]
+                .as_ref()
+                .unwrap()
+                .len(),
+            76
+        );
+
+        // 도형 캡션 문단 안의 그림 href (DrawingObjAttr 공유 → 묶음·차트·OLE 동시 적용)
+        let mut rect = RectangleShape::default();
+        rect.drawing.caption = Some(href_caption());
+        let mut spara = Paragraph::default();
+        spara
+            .controls
+            .push(Control::Shape(Box::new(ShapeObject::Rectangle(rect))));
+
+        let mut sreport = AdapterReport::new();
+        adapt_paragraph(&mut spara, &mut sreport);
+        assert_eq!(
+            sreport.picture_href_ctrl_data_materialized, 1,
+            "도형 캡션 문단 안 그림의 href 가 물질화돼야 함(캡션 문단 미방문)"
+        );
+        let Control::Shape(shape) = &spara.controls[0] else {
+            panic!("expected shape control");
+        };
+        let scap = shape.drawing().unwrap().caption.as_ref().unwrap();
+        assert_eq!(
+            scap.paragraphs[0].ctrl_data_records[0]
+                .as_ref()
+                .unwrap()
+                .len(),
+            76
+        );
+    }
+
+    /// [#2736] 그림 캡션 문단 안 그림의 `bin_data_id` 리맵 — 표 캡션에 대한 동형
+    /// 회귀(`table_caption_picture_bin_ref_is_remapped`)의 미수정 형제였다.
+    #[test]
+    fn picture_caption_picture_bin_ref_is_remapped() {
+        use crate::model::image::Picture;
+        use crate::model::shape::Caption;
+
+        let mut inner_pic = Picture::default();
+        inner_pic.image_attr.bin_data_id = 1;
+        let mut cap_para = Paragraph::default();
+        cap_para
+            .controls
+            .push(Control::Picture(Box::new(inner_pic)));
+        let mut outer = Picture::default();
+        outer.image_attr.bin_data_id = 2;
+        outer.caption = Some(Caption {
+            paragraphs: vec![cap_para],
+            ..Default::default()
+        });
+        let mut ctrl = Control::Picture(Box::new(outer));
+
+        // remap: bin id 1 → 2, 2 → 1
+        let remap = vec![0u16, 2, 1];
+        remap_bin_refs_in_control(&mut ctrl, &remap);
+
+        let Control::Picture(outer) = &ctrl else {
+            panic!("expected picture");
+        };
+        assert_eq!(outer.image_attr.bin_data_id, 1);
+        let caption = outer.caption.as_ref().unwrap();
+        let Control::Picture(inner) = &caption.paragraphs[0].controls[0] else {
+            panic!("expected caption picture");
+        };
+        assert_eq!(
+            inner.image_attr.bin_data_id, 2,
+            "그림 캡션 안 그림의 bin_data_id 가 remap 되지 않음(캡션 문단 미방문)"
+        );
+    }
+
+    /// [#2736] 그림 캡션 문단 안 개체의 `border_fill` 참조 수집 —
+    /// `collect_object_border_fill_refs_from_paragraph` 에 `Control::Picture` arm 이
+    /// 아예 없어 표 캡션·도형 캡션과 달리 그림 캡션만 빠져 있었다.
+    #[test]
+    fn border_fill_refs_collected_inside_picture_caption() {
+        use crate::model::image::Picture;
+        use crate::model::shape::Caption;
+
+        let mut cap_para = Paragraph::default();
+        cap_para.controls.push(Control::Table(Box::new(Table {
+            border_fill_id: 17,
+            ..Default::default()
+        })));
+        let mut pic = Picture::default();
+        pic.caption = Some(Caption {
+            paragraphs: vec![cap_para],
+            ..Default::default()
+        });
+        let mut para = Paragraph::default();
+        para.controls.push(Control::Picture(Box::new(pic)));
+
+        let mut doc = Document::default();
+        doc.sections.push(Section {
+            paragraphs: vec![para],
+            ..Default::default()
+        });
+
+        assert!(
+            collect_object_border_fill_refs(&doc).contains(&17),
+            "그림 캡션 안 표의 border_fill 이 수집돼야 함"
+        );
+    }
+
+    /// [#2736] 실파일 회귀 — 한컴 산출 `aift.hwpx` 의 그림 캡션 문단 9개가 adapt 워크의
+    /// 방문 표식(`materialize_para_header_tail` 의 12바이트 header tail)을 받는지.
+    ///
+    /// 수정 전 실측: 본문 921/921·표 캡션 2/2 는 12바이트, 그림 캡션 9/9 는 파서가 넣은
+    /// 10바이트 그대로 — 직렬화 시 캡션 문단만 PARA_HEADER 22바이트로 갈렸다.
+    #[test]
+    fn aift_picture_caption_paragraphs_are_adapted() {
+        fn count_picture_caption_paragraphs(
+            para: &Paragraph,
+            total: &mut usize,
+            tail12: &mut usize,
+        ) {
+            for ctrl in &para.controls {
+                match ctrl {
+                    Control::Picture(pic) => {
+                        if let Some(caption) = &pic.caption {
+                            for p in &caption.paragraphs {
+                                *total += 1;
+                                if p.raw_header_extra.len() >= 12 {
+                                    *tail12 += 1;
+                                }
+                            }
+                        }
+                    }
+                    Control::Table(table) => {
+                        for cell in &table.cells {
+                            for p in &cell.paragraphs {
+                                count_picture_caption_paragraphs(p, total, tail12);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let data = std::fs::read("samples/hwpx/aift.hwpx").expect("sample exists");
+        let mut core = crate::document_core::DocumentCore::from_bytes(&data).expect("parse hwpx");
+        convert_hwpx_to_hwp_ir(core.document_mut());
+
+        let mut total = 0usize;
+        let mut tail12 = 0usize;
+        for section in &core.document().sections {
+            for para in &section.paragraphs {
+                count_picture_caption_paragraphs(para, &mut total, &mut tail12);
+            }
+        }
+
+        assert_eq!(total, 9, "aift.hwpx 의 그림 캡션 문단 수");
+        assert_eq!(
+            tail12, total,
+            "그림 캡션 문단이 adapt 워크의 방문 표식(header tail 12바이트)을 받아야 함"
+        );
+    }
+
+    #[test]
     fn table_layout_ctrl_data_materializes_for_three_by_two_row_break_table() {
         let mut para = Paragraph::default();
         para.controls.push(Control::Table(Box::new(Table {
@@ -2192,12 +3382,12 @@ mod tests {
             assert!(!table.raw_ctrl_data.is_empty());
             assert_eq!(table.raw_table_record_attr & 0x04, 0x04);
             assert_eq!(table.row_sizes, vec![1]);
-            assert_eq!(table.raw_table_record_extra, vec![0, 0]);
+            // [#3570] 한컴은 zone 개수까지만 쓰고 끝낸다 — 여분 2바이트 없음.
+            assert!(table.raw_table_record_extra.is_empty());
             assert_eq!(table.cells[0].raw_list_extra.len(), 13);
         }
 
         assert_eq!(report.tables_ctrl_data_synthesized, 2);
-        assert_eq!(report.table_record_extra_materialized, 2);
         assert_eq!(report.cells_list_header_contract_materialized, 2);
     }
 
@@ -2740,5 +3930,202 @@ mod tests {
         );
         assert_eq!(para.char_shapes[1].start_pos, 9);
         assert_eq!(para.char_shapes[2].start_pos, 16);
+    }
+
+    /// [bin remap 회귀] HWPX→HWP 변환의 BinData 재정렬 시 표 캡션 문단 안의 그림
+    /// bin_data_id 가 remap 되지 않아 캡션 그림이 엉뚱한 이미지로 해석되던 결함.
+    #[test]
+    fn table_caption_picture_bin_ref_is_remapped() {
+        use crate::model::image::Picture;
+        use crate::model::shape::Caption;
+        use crate::model::table::Table;
+
+        let mut pic = Picture::default();
+        pic.image_attr.bin_data_id = 1;
+        let mut cap_para = Paragraph::default();
+        cap_para.controls.push(Control::Picture(Box::new(pic)));
+        let mut table = Table::default();
+        table.caption = Some(Caption {
+            paragraphs: vec![cap_para],
+            ..Default::default()
+        });
+        let mut ctrl = Control::Table(Box::new(table));
+
+        // remap: bin id 1 → 2
+        let remap = vec![0u16, 2, 1];
+        remap_bin_refs_in_control(&mut ctrl, &remap);
+
+        let Control::Table(table) = &ctrl else {
+            panic!("expected table");
+        };
+        let caption = table.caption.as_ref().unwrap();
+        let Control::Picture(pic) = &caption.paragraphs[0].controls[0] else {
+            panic!("expected caption picture");
+        };
+        assert_eq!(
+            pic.image_attr.bin_data_id, 2,
+            "표 캡션 그림의 bin_data_id 가 remap 되지 않음(캡션 문단 미방문)"
+        );
+    }
+
+    // ---------- #2767 결함 A — 그림 캡션 gso CTRL_HEADER 캡션 비트 ----------
+
+    #[test]
+    fn picture_caption_common_attr_bit_is_or_ed_in_when_caption_present() {
+        let mut para = Paragraph::default();
+        let pic = Picture {
+            common: crate::model::shape::CommonObjAttr {
+                // 실측(이슈 §A-2)에서 확인한 파서 값 — 캡션 비트 이전에 이미 non-zero.
+                attr: 0x042A_2211,
+                ..Default::default()
+            },
+            caption: Some(crate::model::shape::Caption::default()),
+            ..Default::default()
+        };
+        para.controls.push(Control::Picture(Box::new(pic)));
+
+        let mut report = AdapterReport::new();
+        adapt_paragraph(&mut para, &mut report);
+
+        let Control::Picture(pic) = &para.controls[0] else {
+            panic!("Picture control expected");
+        };
+        assert_eq!(
+            pic.common.attr, 0x242A_2211,
+            "캡션이 있으면 bit 29 가 OR 되어야 함(recompute 아님)"
+        );
+        assert_eq!(report.picture_caption_common_attr_materialized, 1);
+
+        // 멱등: 다시 적용해도 카운트가 늘지 않아야 함.
+        let mut second = AdapterReport::new();
+        adapt_paragraph(&mut para, &mut second);
+        assert_eq!(second.picture_caption_common_attr_materialized, 0);
+    }
+
+    #[test]
+    fn picture_caption_common_attr_bit_untouched_without_caption() {
+        let mut para = Paragraph::default();
+        let pic = Picture {
+            common: crate::model::shape::CommonObjAttr {
+                attr: 0x042A_2211,
+                ..Default::default()
+            },
+            caption: None,
+            ..Default::default()
+        };
+        para.controls.push(Control::Picture(Box::new(pic)));
+
+        let mut report = AdapterReport::new();
+        adapt_paragraph(&mut para, &mut report);
+
+        let Control::Picture(pic) = &para.controls[0] else {
+            panic!("Picture control expected");
+        };
+        assert_eq!(
+            pic.common.attr, 0x042A_2211,
+            "캡션이 없으면 bit 29 를 켜면 안 됨(거짓양성 방지)"
+        );
+        assert_eq!(report.picture_caption_common_attr_materialized, 0);
+    }
+
+    // ---------- #2767 결함 B(잔여) — HiddenComment · 그룹 내부 그림 캡션 remap ----------
+
+    #[test]
+    fn hidden_comment_picture_bin_ref_is_remapped() {
+        let inner_pic = Picture {
+            image_attr: crate::model::image::ImageAttr {
+                bin_data_id: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut inner_para = Paragraph::default();
+        inner_para
+            .controls
+            .push(Control::Picture(Box::new(inner_pic)));
+        let comment = crate::model::control::HiddenComment {
+            paragraphs: vec![inner_para],
+        };
+        let mut ctrl = Control::HiddenComment(Box::new(comment));
+
+        // remap[1] = 2 : bin_data_id 1 을 2 로 재배치.
+        let remap = vec![0u16, 2, 1];
+        remap_bin_refs_in_control(&mut ctrl, &remap);
+
+        let Control::HiddenComment(comment) = &ctrl else {
+            panic!("HiddenComment control expected");
+        };
+        let Control::Picture(pic) = &comment.paragraphs[0].controls[0] else {
+            panic!("Picture control expected inside HiddenComment");
+        };
+        assert_eq!(
+            pic.image_attr.bin_data_id, 2,
+            "숨은설명 안 그림의 bin_data_id 도 재정렬 remap 을 반영해야 함"
+        );
+    }
+
+    #[test]
+    fn grouped_picture_caption_bin_ref_is_remapped() {
+        // ShapeObject::Picture(그룹 내부 그림)는 drawing_mut()이 None 이라 공통
+        // caption remap 경로를 타지 않는다 — Picture 자신의 caption 을 직접 재귀해야 함.
+        let inner_pic = Picture {
+            image_attr: crate::model::image::ImageAttr {
+                bin_data_id: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut caption_para = Paragraph::default();
+        caption_para
+            .controls
+            .push(Control::Picture(Box::new(inner_pic)));
+        let grouped_pic = Picture {
+            caption: Some(crate::model::shape::Caption {
+                paragraphs: vec![caption_para],
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let mut shape = ShapeObject::Picture(Box::new(grouped_pic));
+
+        let remap = vec![0u16, 2, 1];
+        remap_bin_refs_in_shape(&mut shape, &remap);
+
+        let ShapeObject::Picture(pic) = &shape else {
+            panic!("Picture shape expected");
+        };
+        let caption = pic.caption.as_ref().expect("caption preserved");
+        let Control::Picture(inner) = &caption.paragraphs[0].controls[0] else {
+            panic!("Picture control expected inside caption");
+        };
+        assert_eq!(
+            inner.image_attr.bin_data_id, 2,
+            "그룹 내부 그림 캡션 안 그림의 bin_data_id 도 재정렬 remap 을 반영해야 함"
+        );
+    }
+
+    #[test]
+    fn hidden_comment_picture_is_collected_into_bin_order() {
+        use crate::model::control::HiddenComment;
+        use crate::model::image::Picture;
+        use std::collections::BTreeSet;
+
+        let mut pic = Picture::default();
+        pic.image_attr.bin_data_id = 2;
+        let mut comment_para = Paragraph::default();
+        comment_para.controls.push(Control::Picture(Box::new(pic)));
+        let ctrl = Control::HiddenComment(Box::new(HiddenComment {
+            paragraphs: vec![comment_para],
+        }));
+
+        let mut order = Vec::new();
+        let mut seen = BTreeSet::new();
+        collect_bin_order_from_control(&ctrl, 2, &mut order, &mut seen);
+
+        assert_eq!(
+            order,
+            vec![2],
+            "숨은설명 안 그림의 bin_data_id 가 순서 수집에서 누락됨(숨은설명 문단 미방문)"
+        );
     }
 }

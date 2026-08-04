@@ -1,5 +1,10 @@
 const PROTOCOL_VERSION = 1;
-const CAPABILITIES = ['transferable-array-buffer', 'hml-export'];
+const CAPABILITIES = [
+  'transferable-array-buffer',
+  'hml-export',
+  'renderer-diagnostics-v1',
+  'notify-saved-v1',
+];
 const LONG_RUNNING_METHODS = new Set([
   'loadFile', 'exportHwp', 'exportHwpVerify', 'exportHwpx', 'exportHml',
 ]);
@@ -59,6 +64,7 @@ export class EditorTransport {
     this._nextId = 0;
     this._pending = new Map();
     this._port = null;
+    this._peerCapabilities = new Set();
     this._legacy = false;
     this._destroyed = false;
     this._onLegacyMessage = (event) => this._handleLegacyMessage(event);
@@ -104,6 +110,10 @@ export class EditorTransport {
     });
   }
 
+  supports(capability) {
+    return this._peerCapabilities.has(capability);
+  }
+
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
@@ -134,6 +144,7 @@ export class EditorTransport {
         && message.sessionId === this._sessionId
         && message.capabilities?.includes('transferable-array-buffer')) {
       clearTimeout(this._connectTimer);
+      this._peerCapabilities = new Set(message.capabilities);
       const resolve = this._connectResolve;
       this._connectResolve = null;
       this._connectReject = null;
@@ -218,6 +229,7 @@ export class EditorTransport {
     this._port?.close();
     this._port = null;
     this._legacy = true;
+    this._peerCapabilities.clear();
     this._window.addEventListener('message', this._onLegacyMessage);
     const resolve = this._connectResolve;
     this._connectResolve = null;

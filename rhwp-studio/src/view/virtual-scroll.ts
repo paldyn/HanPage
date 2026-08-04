@@ -3,6 +3,11 @@ import type { PageInfo } from '@/core/types';
 /** 그리드 모드 전환 줌 임계값 */
 const GRID_ZOOM_THRESHOLD = 0.5;
 
+/** [#3591] 가로 팬 여백 = clamp(창 폭 × 비율, 하한, 상한). 상한이 큰 화면에서의 증가를 끊는다. */
+const PAN_SPACE_RATIO = 0.25;
+const MIN_PAN_SPACE = 80;
+const MAX_PAN_SPACE = 240;
+
 export class VirtualScroll {
   private pageOffsets: number[] = [];
   private pageHeights: number[] = [];
@@ -33,6 +38,7 @@ export class VirtualScroll {
     } else {
       this.layoutSingleColumn();
     }
+    this.applyHorizontalPanSpace(viewportWidth);
   }
 
   /** 단일 열 배치 (기존 동작) */
@@ -91,6 +97,46 @@ export class VirtualScroll {
     this.totalWidth = Math.max(gridWidth + marginLeft * 2, viewportWidth);
   }
 
+  /**
+   * [#3591] 가로 팬 여백을 계산한다.
+   *
+   * 종전에는 편측 여백이 창 폭 100% 라, 스크롤 영역의 대부분이 빈 공간이었고
+   * 창이 커질수록(4K 최대화 등) 함께 커졌다 — 화면이 클수록 문서는 작아 보이는데
+   * 빈 스크롤만 길어지는 반대 동작이었다.
+   *
+   * 정책: 콘텐츠가 창 안에 들어가면 팬이 필요 없으므로 0(브라우저 자연 중앙 정렬
+   * 회복). 창보다 넓은 광폭 문서에만 창 폭의 일부를 여유로 주되, 상한이 화면 크기
+   * 증가를 끊는다.
+   */
+  private horizontalPanSpace(viewportWidth: number, contentWidth: number): number {
+    // 그리드는 layoutGrid 의 marginLeft 가 이미 중앙을 잡고, base 가 항상 창 폭 이상
+    // (`max(gridWidth + marginLeft*2, viewportWidth)`)이라 팬 조건이 경계에서 참이 될 수
+    // 있다. 그리드 첫 진입(zoom 0.5)에서만 팬이 붙어 스크롤 여지가 생기고 문서가 중앙에서
+    // 밀리는 현상이 그것이다. 그리드에는 팬을 주지 않는다.
+    if (this.gridMode) return 0;
+    if (contentWidth <= viewportWidth) return 0;
+    const ratio = viewportWidth * PAN_SPACE_RATIO;
+    return Math.min(Math.max(ratio, MIN_PAN_SPACE), MAX_PAN_SPACE);
+  }
+
+  private applyHorizontalPanSpace(viewportWidth: number): void {
+    if (viewportWidth <= 0) return;
+    const baseWidth = this.totalWidth;
+    const pan = this.horizontalPanSpace(viewportWidth, baseWidth);
+    if (pan <= 0) {
+      // 팬 없음: 단일 열은 CSS 중앙 정렬(-1)을 그대로 두고, 그리드는 자체
+      // marginLeft 가 이미 중앙을 잡는다. totalWidth 도 baseWidth 그대로다.
+      return;
+    }
+    this.pageLefts = this.pageLefts.map((left, pageIdx) => {
+      const resolved = left >= 0
+        ? left
+        : (baseWidth - (this.pageWidths[pageIdx] ?? 0)) / 2;
+      return resolved + pan;
+    });
+    this.totalWidth = baseWidth + pan * 2;
+  }
+
   /** 뷰포트에 보이는 페이지 인덱스 목록을 반환한다 */
   getVisiblePages(scrollY: number, viewportHeight: number): number[] {
     const vpTop = scrollY;
@@ -130,6 +176,15 @@ export class VirtualScroll {
   }
 
   /** 특정 문서 Y 좌표가 속하는 페이지 인덱스를 반환한다 */
+  /**
+   * Y 가 속한 행의 **마지막** 쪽 인덱스.
+   *
+   * 그리드 모드에서 한 행의 모든 쪽은 같은 offset 을 가지므로(layoutGrid),
+   * 뒤에서부터 스캔하는 이 함수는 그 행의 최대 인덱스를 돌려준다.
+   * `getPageAtPoint` 가 X 로 좁히기 위한 스캔 끝점으로 쓴다.
+   *
+   * "현재 쪽" 이 필요하면 [`getRowFirstPageAtY`] 를 쓸 것 — [#2560].
+   */
   getPageAtY(docY: number): number {
     for (let i = this.pageOffsets.length - 1; i >= 0; i--) {
       if (docY >= this.pageOffsets[i]) {
@@ -137,6 +192,25 @@ export class VirtualScroll {
       }
     }
     return 0;
+  }
+
+  /**
+   * Y 가 속한 행의 **첫** 쪽 인덱스 — 사람이 말하는 "현재 쪽".
+   *
+   * 단일 컬럼 모드에서는 `getPageAtY` 와 동치다.
+   */
+  getRowFirstPageAtY(docY: number): number {
+    const rowLastIdx = this.getPageAtY(docY);
+    if (!this.gridMode) return rowLastIdx;
+    const rowOffset = this.pageOffsets[rowLastIdx];
+    let rowFirst = rowLastIdx;
+    while (rowFirst > 0 && this.pageOffsets[rowFirst - 1] === rowOffset) rowFirst--;
+    return rowFirst;
+  }
+
+  /** 한 행에 놓이는 쪽 수. 단일 컬럼 모드는 1. */
+  get pagesPerRow(): number {
+    return this.gridMode ? this.columns : 1;
   }
 
   /**
@@ -212,6 +286,10 @@ export class VirtualScroll {
 
   getTotalWidth(): number {
     return this.totalWidth;
+  }
+
+  getCenteredScrollLeft(viewportWidth: number): number {
+    return Math.max(0, (this.totalWidth - viewportWidth) / 2);
   }
 
   isGridMode(): boolean {

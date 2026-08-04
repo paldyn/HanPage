@@ -473,6 +473,11 @@ impl DocumentCore {
             let had_caption = pic.caption.is_some();
             let caption_created = Self::apply_picture_props_inner(pic, props_json);
             let now_tac = pic.common.treat_as_char;
+            // tac 토글이 enum 에만 반영되고 packed attr 이 낡으면 직렬화가 옛 앵커를
+            // 되살린다 — 여기서 즉시 동기화 (migrate 경로는 rel_to 갱신 후 재동기화).
+            crate::document_core::converters::common_obj_attr_writer::sync_anchor_bits(
+                &mut pic.common,
+            );
             (
                 caption_created,
                 had_caption && pic.caption.is_none(),
@@ -543,10 +548,20 @@ impl DocumentCore {
             }
         }
         if reflow_text_para_after_floating {
+            // [Task #2299] 리셋 판별용 — reflow 이전 저장 흐름 end 캡처.
+            let stored_end_for_reset = crate::renderer::composer::paragraph_flow_end(
+                &self.document.sections[section_idx].paragraphs[parent_para_idx],
+            );
             self.reflow_paragraph(section_idx, parent_para_idx);
+            let doc_hwp3_layout = self.document.layout_profile().hwp3_layout();
             crate::renderer::composer::recalculate_section_vpos(
                 &mut self.document.sections[section_idx].paragraphs,
                 parent_para_idx,
+                None,
+                stored_end_for_reset,
+                &self.styles,
+                self.dpi,
+                doc_hwp3_layout,
             );
         }
         // 캡션 생성/삭제 시 AutoNumber 재할당. 생성 path 는 문단 placeholder 도 보강한다.
@@ -652,7 +667,30 @@ impl DocumentCore {
                     ))
                 }
             };
+            // [Task #1151 v2] 본문 picture setter(set_picture_properties_native) 와 동일하게,
+            // treatAsChar false→true/true→false 전환 시 앵커 문단의 line_segs 도 갱신해야
+            // 한다. 머리말/꼬리말 경로는 이 마이그레이션이 누락되어 있었음 — tac on 시
+            // 그림 높이가 줄 높이에 반영되지 않아 렌더 시 그림이 겹치거나 잘림.
+            let was_tac = pic.common.treat_as_char;
             caption_created = Self::apply_picture_props_inner(pic, props_json);
+            let now_tac = pic.common.treat_as_char;
+            // 본문 setter 와 같은 이유로 여기서도 packed attr 을 동기화한다 —
+            // 머리말/꼬리말 경로도 같은 tac 토글 마이그레이션을 수행한다 (Issue #3781).
+            crate::document_core::converters::common_obj_attr_writer::sync_anchor_bits(
+                &mut pic.common,
+            );
+            if !was_tac && now_tac {
+                if let crate::model::control::Control::Picture(pic_box) =
+                    &mut inner_para.controls[inner_control_idx]
+                {
+                    Self::migrate_picture_floating_to_inline(
+                        &mut inner_para.line_segs,
+                        pic_box.as_mut(),
+                    );
+                }
+            } else if was_tac && !now_tac {
+                Self::migrate_empty_picture_para_inline_to_floating(inner_para);
+            }
         }
         if caption_created {
             return Err(HwpError::RenderError(
@@ -674,7 +712,7 @@ impl DocumentCore {
     ///
     /// 한컴 2022 산출물 (`samples/tac-verify/scenario-{a,b,c,d}-after.hwp`) 분석
     /// 결과: floating picture 의 `treat_as_char` 가 false→true 로 토글될 때
-    /// 한컴은 다음만 갱신한다 (자세한 분석: `mydocs/tech/hancom_picture_tac_toggle.md`).
+    /// 한컴은 다음만 갱신한다 (자세한 분석: `mydocs/tech/investigations/issue-1151/hancom_picture_tac_toggle.md`).
     ///
     /// Picture 자체: `horz_rel_to = Para`, `vert_rel_to = Para`,
     /// `horizontal_offset = 0`, `vertical_offset = 0`. (`treat_as_char = true` 와 attr
@@ -697,6 +735,9 @@ impl DocumentCore {
         pic.common.vert_rel_to = VertRelTo::Para;
         pic.common.horizontal_offset = 0;
         pic.common.vertical_offset = 0;
+        // stale packed attr 동기화 — 없으면 바이너리 왕복에서 Paper 앵커 부활
+        // (treatAsChar=1 + PAPER 모순 → 한글 렌더 깨짐, Issue #3781 실측).
+        crate::document_core::converters::common_obj_attr_writer::sync_anchor_bits(&mut pic.common);
 
         let picture_height_hu = pic.common.height as i32;
         let baseline = (picture_height_hu as f64 * 0.85).round() as i32;
@@ -1280,7 +1321,7 @@ impl DocumentCore {
         let storage_id = self.document.next_bin_data_storage_id();
         self.document.bin_data_content.push(BinDataContent {
             id: storage_id,
-            data: image_data.to_vec(),
+            data: crate::model::bin_data::BinDataBytes::from_shared(image_data.to_vec()),
             extension: extension.to_string(),
         });
         // attr: bits 0-3=1(Embedding), bits 4-5=0(Default), bits 8-9=1(Success)
@@ -1297,6 +1338,8 @@ impl DocumentCore {
             extension: Some(extension.to_string()),
         });
         self.document.doc_info.raw_stream = None; // DocInfo 재직렬화
+                                                  // [#3315] 여기서 bin_data_epoch 를 올리지 않는다 — 새 id 를 덧붙일 뿐 기존
+                                                  // id→바이트는 그대로다. 올리면 무관한 그림의 소비자 캐시까지 함께 버려진다.
         position_id
     }
 
@@ -1479,6 +1522,20 @@ impl DocumentCore {
             right: (natural_width_px * 75) as i32,
             bottom: (natural_height_px * 75) as i32,
         };
+        // [#3719 §6-5] crop 이 기준으로 삼는 전체 좌표 범위를 IR 에도 남긴다.
+        //
+        // 종전에는 `img_dim` 을 기본값 (0,0) 으로 두었는데, HWP5 직렬화기는 그 경우
+        // `crop.right/bottom` 을 원본 크기 자리에 기록하고(control.rs 의 #1929 폴백)
+        // HWP5 파서는 그 값을 다시 `img_dim` 으로 적재한다. 그래서 **삽입 직후 IR 과
+        // 저장본 재파싱 IR 이 항상 이 한 필드만큼 어긋났다** — `edit insert-image
+        // --verify` 가 정상 삽입에도 exit 3 을 내는 형태였다(실측 diffCount=1,
+        // `imgDim: expected=(0,0) actual=(3000,1500)`).
+        //
+        // 값은 직렬화기가 이미 쓰던 것과 같고, 렌더러의 폴백(`compute_image_crop_src`
+        // 는 imgDim 이 없으면 crop.right/bottom 을 같은 자리에 쓴다)과도 같은 배율이라
+        // 그림이 놓이는 결과는 바뀌지 않는다. HWPX 산출은 종전 `imgDim 0/0` 대신 실제
+        // 좌표 범위를 얻는다(HWP5 산출과의 비대칭 해소).
+        let img_dim = ((natural_width_px * 75), (natural_height_px * 75));
         let image_attr = ImageAttr {
             bin_data_id: position_id,
             brightness: 0,
@@ -1527,6 +1584,7 @@ impl DocumentCore {
                     border_x: bx,
                     border_y: by,
                     crop,
+                    img_dim,
                     image_attr,
                     ..Default::default()
                 };
@@ -1603,6 +1661,7 @@ impl DocumentCore {
                 border_x: bx,
                 border_y: by,
                 crop,
+                img_dim,
                 image_attr,
                 ..Default::default()
             };
@@ -1685,6 +1744,7 @@ impl DocumentCore {
             border_x: bx,
             border_y: by,
             crop,
+            img_dim,
             image_attr,
             ..Default::default()
         };
@@ -2092,7 +2152,7 @@ mod issue_1151_cell_picture_insert_tests {
 
         core.set_picture_properties_native(0, 0, ctrl_idx, r#"{"treatAsChar":true}"#)
             .expect("dropped picture becomes treat-as-char");
-        core.split_paragraph_native(0, 0, logical_offset)
+        core.split_paragraph_native(0, 0, logical_offset, None)
             .expect("Enter after dropped picture");
 
         assert_eq!(
@@ -2360,7 +2420,7 @@ mod issue_1151_cell_picture_insert_tests {
             .expect("fixture 읽기 실패 samples/투명도0-50.hwp");
         let mut core = DocumentCore::from_bytes(&data).expect("parse samples/투명도0-50.hwp");
 
-        core.split_paragraph_native(0, 0, 2)
+        core.split_paragraph_native(0, 0, 2, None)
             .expect("두 번째 TAC 그림 뒤 Enter");
 
         assert_eq!(
@@ -3912,7 +3972,7 @@ mod bindata_storage_id_collision_tests {
         );
         core.document.bin_data_content.push(BinDataContent {
             id: 2,
-            data: EXISTING_IMAGE.to_vec(),
+            data: EXISTING_IMAGE.to_vec().into(),
             extension: "png".to_string(),
         });
         core.document.doc_info.bin_data_list.push(BinData {
@@ -3991,12 +4051,15 @@ mod bindata_storage_id_collision_tests {
         );
         let by_position = &core.document.bin_data_content[(new_bin_id - 1) as usize];
         assert_eq!(
-            by_position.data,
+            by_position.data.load(),
             minimal_png(),
             "위치 기반 조회로 신규 그림 데이터가 나와야 함"
         );
         // 기존 이미지 데이터 불변
-        assert_eq!(core.document.bin_data_content[0].data, EXISTING_IMAGE);
+        assert_eq!(
+            core.document.bin_data_content[0].data.load(),
+            EXISTING_IMAGE
+        );
     }
 
     #[test]
@@ -4021,14 +4084,14 @@ mod bindata_storage_id_collision_tests {
 
         let saved = core.export_hwp_with_adapter().expect("export_hwp");
         let reloaded = DocumentCore::from_bytes(&saved).expect("재로드");
-        let datas: Vec<&[u8]> = reloaded
+        let datas: Vec<Vec<u8>> = reloaded
             .document()
             .bin_data_content
             .iter()
-            .map(|c| c.data.as_slice())
+            .map(|c| c.data.load())
             .collect();
         assert!(
-            datas.contains(&EXISTING_IMAGE),
+            datas.iter().any(|d| &d[..] == EXISTING_IMAGE),
             "저장 왕복 후 기존 이미지가 소실됨 (스트림 이름 충돌): {:?}",
             reloaded
                 .document()
@@ -4038,7 +4101,7 @@ mod bindata_storage_id_collision_tests {
                 .collect::<Vec<_>>()
         );
         assert!(
-            datas.iter().any(|d| *d == minimal_png().as_slice()),
+            datas.iter().any(|d| &d[..] == minimal_png().as_slice()),
             "저장 왕복 후 신규 이미지가 소실됨"
         );
     }

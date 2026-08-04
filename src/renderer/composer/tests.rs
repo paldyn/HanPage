@@ -1,6 +1,63 @@
 use super::*;
 use crate::model::paragraph::{CharShapeRef, LineSeg, Paragraph};
 
+/// [#2632] `recompose_for_body_width` 는 `recompose_for_cell_width` 의 superset
+/// (`restyle_fallback_runs_by_char_shapes` 를 추가로 적용)이다. line_segs 가
+/// 없는(NO_LS) 본문 문단에서 글자모양이 섞여 있으면, compose_lines fallback 이
+/// 만든 단일 run 을 body 래퍼만 char shape 별로 재분할한다.
+/// HeightMeasurer(측정)가 cell 래퍼를 쓰던 종전엔 이 재분할이 빠져
+/// typeset/render 와 다른 값으로 측정됐다 — 그 근본 메커니즘을 여기서 고정한다.
+#[test]
+fn body_recompose_splits_fallback_run_by_char_shapes_but_cell_recompose_does_not() {
+    let para = Paragraph {
+        text: "abcdefghij".to_string(),
+        char_offsets: (0..10).collect(),
+        char_count: 11,
+        char_shapes: vec![
+            CharShapeRef {
+                start_pos: 0,
+                char_shape_id: 0,
+            },
+            CharShapeRef {
+                start_pos: 5,
+                char_shape_id: 1,
+            },
+        ],
+        // line_segs 가 비어 있어 compose_lines 의 CHARS_PER_LINE fallback 경로를 탄다.
+        ..Default::default()
+    };
+    let styles = crate::renderer::style_resolver::ResolvedStyleSet::default();
+    // 문단 폭 안에 다 들어가도록 충분히 넓게 잡아 줄바꿈 자체는 문제되지 않게 한다.
+    let inner_width_px = 2000.0;
+
+    let mut cell_variant = compose_paragraph(&para);
+    recompose_for_cell_width(&mut cell_variant, &para, inner_width_px, &styles);
+    let cell_run_ids: Vec<u32> = cell_variant.lines[0]
+        .runs
+        .iter()
+        .map(|r| r.char_style_id)
+        .collect();
+
+    let mut body_variant = compose_paragraph(&para);
+    recompose_for_body_width(&mut body_variant, &para, inner_width_px, &styles);
+    let body_run_ids: Vec<u32> = body_variant.lines[0]
+        .runs
+        .iter()
+        .map(|r| r.char_style_id)
+        .collect();
+
+    assert_eq!(
+        cell_run_ids,
+        vec![0],
+        "cell 래퍼는 재분할하지 않아 fallback 단일 run(스타일 0)이 그대로 남아야 함"
+    );
+    assert_eq!(
+        body_run_ids,
+        vec![0, 1],
+        "body 래퍼는 restyle_fallback_runs_by_char_shapes 로 재분할해 두 글자모양이 드러나야 함"
+    );
+}
+
 /// 단일 줄, 단일 스타일 문단
 #[test]
 fn test_compose_single_line_single_style() {
@@ -1105,5 +1162,129 @@ fn test_expand_hancom_relationship_line_pua_to_box_drawing() {
     assert_eq!(
         out, "┌└─",
         "한컴 관계도 PUA 선문자는 공개 폰트 환경에서 두부가 아닌 box drawing 문자로 표시되어야 함"
+    );
+}
+
+/// #3486 — legacy 한컴 제품명은 raw HWP의 옛자모를 보존하면서 PDF와 같은
+/// 현대 product spelling으로만 표시한다. 보통 옛한글 낱말은 건드리지 않는다.
+#[test]
+fn legacy_hancom_product_names_use_display_projection_only() {
+    let text = "ᄒᆞᆫ글, ᄒᆞᆫ메일, ᄒᆞᆫ팩스, ᄒᆞᆫ소프트, ᄒᆞᆫ겨울";
+    let char_count = text.chars().count();
+    let para = Paragraph {
+        text: text.to_string(),
+        char_offsets: (0..char_count as u32).collect(),
+        char_count: char_count as u32 + 1,
+        char_shapes: vec![CharShapeRef {
+            start_pos: 0,
+            char_shape_id: 0,
+        }],
+        line_segs: vec![LineSeg {
+            text_start: 0,
+            line_height: 400,
+            baseline_distance: 320,
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+
+    let composed = compose_paragraph(&para);
+    let run = &composed.lines[0].runs[0];
+    assert_eq!(run.text, text, "원문 IR은 바꾸지 않는다");
+    assert_eq!(
+        run.display_text.as_deref(),
+        Some("한글, 한메일, 한팩스, 한소프트, ᄒᆞᆫ겨울"),
+        "닫힌 legacy 제품명 어휘만 한컴 PDF 표기처럼 투영한다"
+    );
+}
+
+/// #3486 — 제품명은 HWP line-seg나 글자모양 경계에서 나뉠 수 있다. `ᄒᆞᆫ`과
+/// 뒤의 `글`이 다른 run이어도 첫 run에만 `한`을 투영해 model offset은 유지한다.
+#[test]
+fn legacy_hancom_product_projection_survives_line_boundary() {
+    let text = "ᄒᆞᆫ글";
+    let para = Paragraph {
+        text: text.to_string(),
+        char_offsets: vec![0, 1, 2, 3],
+        char_count: 5,
+        char_shapes: vec![CharShapeRef {
+            start_pos: 0,
+            char_shape_id: 0,
+        }],
+        line_segs: vec![
+            LineSeg {
+                text_start: 0,
+                line_height: 400,
+                baseline_distance: 320,
+                ..Default::default()
+            },
+            LineSeg {
+                text_start: 3,
+                line_height: 400,
+                baseline_distance: 320,
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+
+    let composed = compose_paragraph(&para);
+    assert_eq!(composed.lines.len(), 2);
+    assert_eq!(composed.lines[0].runs[0].text, "ᄒᆞᆫ");
+    assert_eq!(
+        composed.lines[0].runs[0].display_text.as_deref(),
+        Some("한")
+    );
+    assert_eq!(composed.lines[1].runs[0].text, "글");
+    assert_eq!(composed.lines[1].runs[0].display_text, None);
+}
+
+/// [#2244] KBU=1(글자 단위) 줄바꿈에서 행두 금칙 문자 retraction —
+/// 새 줄이 마침표로 시작하지 않도록 직전 글자를 함께 이월한다.
+/// 한컴 2024 저장 오라클: "…하여 적용한 | 다.111…" (LINE_SEG [...,128] —
+/// '다'(128) 앞에서 분리, '.'(129) 고립 금지).
+#[test]
+fn test_kbu1_line_start_forbidden_retraction() {
+    let styles = make_styles_with_font_size(16.0);
+    let line = ComposedLine {
+        runs: vec![ComposedTextRun {
+            text: "적용한다.111111".to_string(),
+            char_style_id: 0,
+            lang_index: 0,
+            char_overlap: None,
+            footnote_marker: None,
+            display_text: None,
+        }],
+        line_height: 400,
+        baseline_distance: 320,
+        segment_width: 0,
+        column_start: 0,
+        line_spacing: 0,
+        has_line_break: false,
+        char_start: 0,
+    };
+    // 한글 4자(64px)는 들어가고 '.'에서 초과하는 폭 → 수정 전엔 둘째 줄이
+    // "."로 시작 ("적용한다 | .111111"), 수정 후엔 '다' 동반 이월.
+    let frags = split_composed_line_by_width(&line, 68.0, 68.0, &styles, true, 0.0);
+    assert!(
+        frags.len() >= 2,
+        "두 줄 이상으로 분할되어야 함: {:?}",
+        frags.len()
+    );
+    let line2_text: String = frags[1].runs.iter().map(|r| r.text.as_str()).collect();
+    assert!(
+        !line2_text.starts_with('.'),
+        "새 줄이 행두 금칙 '.'로 시작하면 안 됨 (한컴: 직전 글자 동반 이월): {:?}",
+        line2_text
+    );
+    assert!(
+        line2_text.starts_with("다."),
+        "한컴 오라클 정합: 둘째 줄은 '다.'로 시작해야 함: {:?}",
+        line2_text
+    );
+    // char_start 정합: 둘째 줄 시작 = '다' 위치(3)
+    assert_eq!(
+        frags[1].char_start, 3,
+        "retraction 후 char_start 는 '다' 위치"
     );
 }
