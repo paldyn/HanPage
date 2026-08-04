@@ -41,7 +41,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # --- WASM 빌드 (copy-wasm 이 ../pkg/ 를 참조하므로 선행 필수) ---
       # [Task #4 후속] rust-toolchain.toml 과 동일하게 1.93.1 핀. @stable(부동) 은
