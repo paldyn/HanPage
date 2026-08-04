@@ -2858,7 +2858,7 @@ dependencies = [
 
 [[package]]
 name = "rhwp-desktop"
-version = "0.7.18"
+version = "0.8.2"
 dependencies = [
  "serde",
  "serde_json",

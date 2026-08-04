@@ -1,3 +1,8 @@
+# [#51] 엔진 0.8.2 부터 저장소 루트 Cargo.toml 에 [workspace] 가 생겼다. 이 빈 테이블이
+# 없으면 cargo 가 데스크톱 크레이트를 루트 워크스페이스 멤버로 흡수하려다 실패한다.
+# 데스크톱은 자체 Cargo.lock 으로 재현 빌드하는 독립 앱이므로 별도 워크스페이스로 둔다.
+[workspace]
+
 [package]
 name = "rhwp-desktop"
 version = "0.8.2"
