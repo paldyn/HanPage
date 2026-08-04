@@ -138,7 +138,12 @@ export function initDesktopBridge(deps?: DesktopBridgeDeps): void {
   const listen = tauriListen();
   if (listen) {
     // 웜 스타트: 이미 실행 중인 창에 새 문서가 큐잉되면 알림 받아 드레인.
+    // [#50] listen() 등록은 비동기다. 위 drainPending() 과 등록 완료 사이에 도착한
+    // EVT_DOCS_READY 는 수신자가 없어 유실되고, 문서가 큐에 남아 영영 열리지 않는다
+    // (macOS 파일 연결 더블클릭이 이 구간에 걸린다). 등록 직후 한 번 더 드레인한다.
     void listen(EVT_DOCS_READY, () => {
+      void drainPending();
+    }).then(() => {
       void drainPending();
     });
     // 네이티브 메뉴 → 스튜디오 커맨드.

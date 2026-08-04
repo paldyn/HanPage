@@ -21,7 +21,7 @@
 //   (`rhwp-studio/src/core/desktop-bridge.ts`)로, 브라우저에서는 완전한 no-op 이다.
 
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 
 use serde::Serialize;
 // 네이티브 메뉴는 macOS 시스템 메뉴바 전용(이슈 #7). 비-macOS 는 메뉴 미부착.
@@ -58,8 +58,13 @@ enum SaveOutcome {
 
 /// 파일 연결/최근 문서로 열린 문서를 웹뷰가 가져갈 때까지 보관하는 큐.
 /// (콜드 스타트 시 웹뷰가 준비되기 전에 도착한 문서를 잃지 않기 위함.)
-#[derive(Default)]
-struct PendingDocuments(Mutex<Vec<OpenedFile>>);
+///
+/// [#50] Tauri managed state 가 아니라 **프로세스 전역**으로 둔다. macOS 는 파일 연결
+/// 더블클릭을 `RunEvent::Opened` 로 전달하는데, 콜드 스타트에서는 이 이벤트가
+/// `setup()` 의 `app.manage(..)` 보다 먼저 도착할 수 있다(실측: 웹뷰 생성 816ms 전).
+/// 예전 구현은 `try_state()` 가 `None` 이면 문서를 조용히 버려서, 더블클릭으로 연 문서가
+/// 영영 열리지 않았다. 전역 큐는 프로그램 시작 시점부터 존재하므로 순서와 무관하다.
+static PENDING_DOCUMENTS: LazyLock<Mutex<Vec<OpenedFile>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
 /// 최근 문서 메뉴 항목. 네이티브 메뉴(macOS) 표시 전용.
 #[cfg(target_os = "macos")]
@@ -124,11 +129,11 @@ fn load_recent(app: &tauri::AppHandle) -> Vec<RecentEntry> {
 /// 문서를 펜딩 큐에 넣고 최근 목록에 등록한 뒤 웹뷰에 도착 신호를 보낸다.
 fn queue_document(app: &tauri::AppHandle, file: OpenedFile) {
     record_recent(app, &file.path, &file.name);
-    if let Some(state) = app.try_state::<PendingDocuments>() {
-        if let Ok(mut q) = state.0.lock() {
-            q.push(file);
-        }
+    if let Ok(mut q) = PENDING_DOCUMENTS.lock() {
+        q.push(file);
     }
+    // 웹뷰가 이미 떠 있으면(웜 스타트) 즉시 알린다. 아직 없으면(콜드 스타트) 웹뷰가
+    // 초기화 시 `cmd_take_pending_documents` 로 직접 가져가므로 유실되지 않는다.
     let _ = app.emit(EVT_DOCS_READY, ());
 }
 
@@ -294,9 +299,8 @@ async fn cmd_save_document(
 
 /// 펜딩 큐를 비우고 반환한다(웹뷰가 init 시점·도착 신호 수신 시 호출).
 #[tauri::command]
-fn cmd_take_pending_documents(state: tauri::State<'_, PendingDocuments>) -> Vec<OpenedFile> {
-    state
-        .0
+fn cmd_take_pending_documents() -> Vec<OpenedFile> {
+    PENDING_DOCUMENTS
         .lock()
         .map(|mut q| std::mem::take(&mut *q))
         .unwrap_or_default()
@@ -402,7 +406,6 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
-            app.manage(PendingDocuments::default());
             // [Task #26] 시작 시 백그라운드 업데이트 확인(조용히; 새 버전이면 알림).
             #[cfg(desktop)]
             {
