@@ -14,7 +14,7 @@ SDK는 지원되는 Studio와 `MessageChannel` v1을 협상해 binary를 transfe
 호스트와 `studioUrl`은 HTTP(S) origin만 지원합니다. `file:`, `data:`, 브라우저 확장처럼
 origin이 `null`이거나 불투명한 환경의 연결은 SDK와 Studio 양쪽에서 거부합니다.
 
-> **[온라인 데모](https://edwardkim.github.io/rhwp/)** 에서 먼저 체험해보세요.
+> **[온라인 데모](https://hanpage.paldyn.com/)** 에서 먼저 체험해보세요.
 
 ## 설치
 
@@ -78,7 +78,7 @@ const editor = await createEditor(document.getElementById('editor'));
 
 | 옵션 | 기본값 | 설명 |
 |------|--------|------|
-| `studioUrl` | `https://edwardkim.github.io/rhwp/` | rhwp-studio HTTP(S) URL. opaque origin은 지원하지 않음 |
+| `studioUrl` | `https://hanpage.paldyn.com/` | rhwp-studio HTTP(S) URL. opaque origin은 지원하지 않음 |
 | `width` | `'100%'` | iframe 너비 |
 | `height` | `'100%'` | iframe 높이 |
 | `renderer` | `'canvas2d'` | 문서 단위 renderer 요청. `auto`, `canvas2d`, `canvaskit` 중 하나 |
@@ -338,7 +338,7 @@ iframe 안의 rhwp-studio에는 **개발 모드 전용 디버깅 헬퍼** `rhwpD
 rhwpDev.help();   // 사용법 안내
 ```
 
-> **주의:** rhwp-studio가 DEV 모드(vite dev server)로 빌드된 경우에만 `rhwpDev`가 등록됩니다. 프로덕션 빌드(기본 호스팅 URL `https://edwardkim.github.io/rhwp/`)에는 포함되지 않습니다. 디버깅 도구가 필요하면 셀프 호스팅 환경에서 `vite dev` 모드로 실행하세요.
+> **주의:** rhwp-studio가 DEV 모드(vite dev server)로 빌드된 경우에만 `rhwpDev`가 등록됩니다. 프로덕션 빌드(기본 호스팅 URL `https://hanpage.paldyn.com/`)에는 포함되지 않습니다. 디버깅 도구가 필요하면 셀프 호스팅 환경에서 `vite dev` 모드로 실행하세요.
 
 ### 주요 메서드
 
@@ -461,7 +461,7 @@ HWP 문서에서 사용된 한컴 전용 폰트(한컴바탕, HY명조 등)는 �
 
 ## 셀프 호스팅
 
-기본적으로 `https://edwardkim.github.io/rhwp/`에 호스팅된 에디터를 사용합니다.
+기본적으로 `https://hanpage.paldyn.com/`에 호스팅된 에디터를 사용합니다.
 자체 서버에서 호스팅하려면:
 
 ```bash
@@ -539,7 +539,7 @@ const editor = await createEditor('#editor', {
 | TypeScript | Apache-2.0 |
 | Vite | MIT |
 
-전체 목록: [THIRD_PARTY_LICENSES.md](https://github.com/edwardkim/rhwp/blob/main/THIRD_PARTY_LICENSES.md)
+전체 목록: [THIRD_PARTY_LICENSES.md](https://github.com/paldyn/HanPage/blob/main/THIRD_PARTY_LICENSES.md)
 
 > 모든 의존성은 MIT 라이선스와 호환됩니다.
 

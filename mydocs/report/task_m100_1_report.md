@@ -1,92 +1,147 @@
-# Task m100-1: HWP3 convert_para_shape() border_connection 배선 누락 수정
+# Task #1 최종 결과 보고서 — HanPage 데스크톱 앱 (Tauri 1단계)
 
-## 배경
+- **이슈**: [#1](https://github.com/edwardkim/rhwp/issues/1) (M100, v1.0.0)
+- **브랜치**: `local/task1` (base `main`)
+- **계획서**: `mydocs/plans/task_m100_1.md`(수행), `task_m100_1_impl.md`(구현),
+  `task_m100_1_impl_v2.md`(Stage 4 개정 — Windows + CI)
+- **단계 보고서**: `mydocs/working/task_m100_1_stage{1,2,3,4}.md`
+- **일자**: 2026-05-30
+- **결과**: 4 Stage 전체 완료. macOS `.dmg` 로컬 산출 + Windows NSIS CI 자동 빌드 파이프라인 구축.
 
-`#2968`(shade_color 누락), `#2521`(위/아래첨자 attr 매핑 누락) 수정과 동일한 방법론을
-`convert_para_shape()`(`src/parser/hwp3/mod.rs`)와 `convert_style()`에 적용했다. 즉,
-HWP3 바이너리 레코드를 읽어들인 struct의 각 필드가 공통 IR(`Document` 모델)까지
-실제로 배선되는지, 아니면 struct에는 읽혔지만 IR 변환 지점에서 조용히 누락되는지를
-필드 단위로 대조했다.
+---
 
-## 결과 요약
+## 1. 목표 및 불변 제약
 
-- `convert_para_shape()`: 결함 발견 → 수정 완료 (이슈 [#2976](https://github.com/edwardkim/rhwp/issues/2976))
-- `convert_style()`: 대조 결과 clean. 이름, 다음 스타일 참조, lang font, para-shape-ref,
-  char-shape-ref 모두 IR로 정상 배선되어 있음을 확인.
+기존 **rhwp-studio**(웹) 빌드 산출물 + WASM 엔진을 **Tauri v2** 셸로 감싸 데스크톱 앱
+(표시명 **HanPage**)을 만든다. 엔진(WASM)은 **무수정**.
 
-## 발견한 결함
+**최우선 불변 제약**: "깃헙페이지에 영향가지않게 그냥 데스크톱 앱으로만." → rhwp-studio 에
+추가하는 모든 코드는 브라우저에서 **완전한 no-op(web-inert)** 이며, GitHub Pages 배포
+산출물·트리거에 일절 영향을 주지 않는다.
 
-`src/parser/hwp3/records.rs`의 `Hwp3ParaShape`는 `border_connection: u8` 필드와
-이를 bool로 해석하는 접근자 `border_connection() -> bool`(약 396~397행)을 갖고 있다.
+---
 
-```rust
-pub fn border_connection(&self) -> bool {
-    self.border_connection == 1
-}
-```
-
-그런데 `convert_para_shape()`(`src/parser/hwp3/mod.rs` 288행~)는 `margin_left`,
-`margin_right`, `indent`, `line_spacing`, `margin_bottom`, `margin_top`, `align`,
-`tabs`는 모두 IR로 옮기지만 `border_connection`은 어디에도 사용하지 않았다.
-
-IR 쪽에서 "문단 테두리를 인접 문단과 연결해서 그릴지" 플래그는 이미 확립된 규약으로
-`ParaShape.attr1`의 bit 28에 인코딩된다.
-
-- `src/serializer/hwpx/header.rs:1101` — HWPX 내보내기 시 이 비트를 읽어 `connect` 속성으로 씀
-- `src/document_core/commands/formatting.rs:800` — 편집 커맨드에서 같은 비트를 읽음
-- `src/model/style.rs:909, 1004` — `ParaShapeMods.border_connect`가 같은 비트를 세팅
-
-즉 IR과 그 소비자들은 이미 완성되어 있었는데 HWP3 파서만 이 비트를 채우지 않아,
-HWP3(.hwp) 문서에서 문단 테두리를 인접 문단과 연결하도록 설정한 경우 그 정보가
-파싱 단계에서 항상 소실되고 있었다. `convert_char_shape()`가 과거 위/아래첨자
-접근자는 있었지만 attr 매핑이 빠져 있던 결함(#2521)과 정확히 같은 패턴이다.
-
-## 영향
-
-HWP3(.hwp) 문서에서 문단 테두리를 "연결"로 설정한 경우, rhwp로 파싱한 결과(및 이를
-HWPX로 재저장한 결과)에서는 항상 연결되지 않은 것으로 처리된다. 문단 테두리를 사용하는
-옛 HWP3 문서(표 유사 레이아웃, 강조 박스 등)에서 렌더링·재저장 시 테두리가 문단
-경계마다 끊어져 보이는 시각적 회귀가 발생한다.
-
-## 수정 내용
-
-`convert_para_shape()`에 아래 3줄을 추가했다.
-
-```rust
-if hwp3_ps.border_connection() {
-    ps.attr1 |= 1 << 28;
-}
-```
-
-기존에 이미 존재하던 접근자를 그대로 호출해 IR의 확립된 비트 규약에 맞춰 배선하는
-최소 수정이며, 다른 로직·스케일 변환에는 영향을 주지 않는다.
-
-## 테스트 (red → green)
-
-`src/parser/hwp3/mod.rs`의 `tests` 모듈에
-`test_convert_para_shape_wires_border_connection_into_attr1_bit28`을 추가했다.
-
-- **Red (수정 전)**: `Hwp3ParaShape { border_connection: 1, .. }`을
-  `convert_para_shape()`에 넣으면 반환된 `ParaShape.attr1`의 bit 28이 0으로 남아
-  `assert_eq!((ps.attr1 >> 28) & 1, 1, ...)`가 실패했다.
-- **Green (수정 후)**: 동일 입력에 대해 bit 28이 1로 세팅되어 통과.
+## 2. 아키텍처
 
 ```
-running 1 test
-test parser::hwp3::tests::test_convert_para_shape_wires_border_connection_into_attr1_bit28 ... ok
+┌──────────────────────────── HanPage.app (Tauri v2) ────────────────────────────┐
+│  Rust 백엔드 (rhwp-desktop/src-tauri)        OS 웹뷰 (wry)                        │
+│  ─────────────────────────────────────       ───────────────────────────────    │
+│  • cmd_open_document  (네이티브 dialog)  ◀── invoke ── rhwp-studio (WASM 엔진)    │
+│  • cmd_save_document  (네이티브 dialog)                 + canvaskit 렌더          │
+│  • cmd_take_pending_documents                          desktop-bridge.ts(web-inert)│
+│  • 파일 연결: macOS Opened / Win·Linux argv ── emit ──▶ 펜딩 드레인·메뉴 dispatch  │
+│  • 네이티브 메뉴(파일/편집/보기) ─── emit(EVT_MENU) ──▶ dispatcher.dispatch(id)    │
+│  • 최근 문서(store) · 창 상태(window-state)                                        │
+└────────────────────────────────────────────────────────────────────────────────┘
+        frontendDist = ../../rhwp-studio/dist  (데스크톱 빌드: PWA off, base ./)
 ```
 
-## 검증
+**핵심 설계**:
+- **web-inert 브리지**(`rhwp-studio/src/core/desktop-bridge.ts`): `@tauri-apps/*` npm 의존을
+  **일절 import 하지 않고** `window.__TAURI__`(전역, `withGlobalTauri: true`)만 사용. 브라우저에선
+  `__TAURI_INTERNALS__` 가드로 즉시 return → no-op. 웹 번들에 Tauri 코드 정적/동적 모두 미포함.
+- **파일 IO 전부 Rust**: dialog(`tauri-plugin-dialog`) + `std::fs`. JS ACL 권한 불필요
+  (앱 자체 command 는 Tauri v2 ACL 대상이 아님) → `capabilities` = `core:default` 유지.
+- **파일 핸드오프 2경로**: (a) 메뉴/dialog 열기 = 바이트 직접 반환, (b) 파일 연결/최근 문서/argv
+  = Rust 펜딩 큐(`Mutex<Vec>`) 적재 + 도착 신호(emit) → 프런트 드레인(콜드/웜 스타트 모두 안전).
+- **빌드 격리**: 루트 `Cargo.toml` 에 `[workspace]` 없음 → `src-tauri` 는 독립 크레이트.
+  루트/WASM `cargo build` 그래프에 tauri 계열 의존이 **일절 새지 않음**.
 
-- `cargo check --lib` — 통과 (경고 없음)
-- `cargo test --lib test_convert_para_shape_wires_border_connection_into_attr1_bit28` — 통과
-- `rustfmt --edition 2021 src/parser/hwp3/mod.rs` — 적용 완료
+---
 
-## 변경 파일
+## 3. 단계별 요약
 
-- `src/parser/hwp3/mod.rs` (로직 3줄 + 회귀 테스트)
+| Stage | 내용 | 핵심 산출 |
+|-------|------|----------|
+| **1** | Tauri 스캐폴드 + rhwp-studio dist 로드 | `rhwp-desktop/` 골격, `vite.config` PWA 분기(`VITE_TARGET=desktop`), 워크스페이스 격리 |
+| **2** | 네이티브 열기/저장 dialog + web-inert 브리지 | `cmd_open/save_document`, `desktop-bridge.ts`, `file.ts` C2/C3 분기 |
+| **3** | 파일 연결 + 메뉴바 + 최근 문서 + 창 상태 | `fileAssociations`, 네이티브 메뉴(커맨드 위임), store/window-state/single-instance, 펜딩 큐 |
+| **4** | 멀티플랫폼 번들 + Pages 격리 | macOS `.dmg`(로컬), Windows NSIS CI(`desktop-release.yml`), `paths-ignore` 가드 |
 
-## 이슈/PR
+> Stage 2~4 는 구현계획서 §2 대비 **의존성 정련**(deviation, 승인): `@tauri-apps` npm·
+> `tauri-plugin-fs` 미도입, `window.__TAURI__` 전역 + Rust `std::fs` 채택 → rhwp-studio
+> `package.json` **무변경** = 최대 web-inert.
 
-- 이슈: https://github.com/edwardkim/rhwp/issues/2976
-- PR: (커밋 후 생성)
+---
+
+## 4. 생성 / 수정 파일 (전체)
+
+**신규**
+- `rhwp-desktop/**` (디렉터리 전체: `package.json`, `src-tauri/{Cargo.toml, tauri.conf.json, src/lib.rs, capabilities/, icons/}`)
+- `rhwp-studio/src/core/desktop-bridge.ts` (web-inert 브리지)
+- `.github/workflows/desktop-release.yml` (멀티플랫폼 번들 CI)
+
+**수정 (rhwp-studio — 웹 동작 불변)**
+- `rhwp-studio/vite.config.ts` (PWA `VITE_TARGET` 분기)
+- `rhwp-studio/package.json` (`build:desktop` 스크립트 추가)
+- `rhwp-studio/src/main.ts` (`initDesktopBridge(deps)` 1지점)
+- `rhwp-studio/src/command/commands/file.ts` (open/save/save-as web-inert 가드 분기)
+
+**수정 (인프라)**
+- `.github/workflows/deploy-pages.yml` (`paths-ignore: rhwp-desktop/**`)
+
+**커밋 제외**(의도): `rhwp-studio/public/rhwp.js` (copy-wasm 재동기화 — 매 Stage revert).
+
+---
+
+## 5. Pages 무영향 종합 증빙
+
+| 항목 | 웹(브라우저) | 데스크톱(Tauri) |
+|------|-------------|----------------|
+| `initDesktopBridge()` | `__TAURI_INTERNALS__` 가드 → **no-op** | 핸들러·드레인·리스너 등록 |
+| `@tauri-apps` npm 의존 | **없음**(전역만) | 〃 |
+| 웹 번들 Tauri 코드 | **dist 내 0건** | 〃 |
+| rhwp-studio `package.json` 런타임 의존 | **무변경** | 〃 |
+| 웹 빌드(`npm run build`) | `tsc` 클린·109 모듈·**PWA on** | 데스크톱: PWA off |
+| 루트/WASM cargo 그래프 | tauri 계열 **전부 부재** | src-tauri 독립 크레이트 |
+| `deploy-pages.yml` | `rhwp-desktop/**` paths-ignore | 〃 |
+| 워크플로 트리거 | Pages=`main` push | 데스크톱=`desktop-v*` 태그(분리) |
+| 엔진 식별자 | crate `rhwp`/`@rhwp/*`/Edward Kim 저작권 **불변** | 〃 |
+
+---
+
+## 6. 검증 종합
+
+- **웹 빌드**: `tsc` 클린, 109 모듈, PWA 산출(sw.js/workbox/manifest), dist 내 `@tauri-apps` **0건**.
+- **데스크톱 빌드**: `tsc` 클린, PWA off, base `./`.
+- **macOS 번들**: `tauri build` exit 0, `HanPage_0.7.13_aarch64.dmg`(35M) + `HanPage.app` 생성.
+- **Rust**: `cargo build`/`cargo clippy` 클린(경고 0), 플러그인 4종 정상 컴파일.
+- **격리**: `cargo metadata` 워크스페이스 멤버 = `rhwp` 1개, tauri 계열 루트 그래프 부재.
+- **워크플로**: `desktop-release.yml`/`deploy-pages.yml` YAML 유효, 트리거 분리.
+
+---
+
+## 7. 빌드 / 실행 방법
+
+**macOS 로컬(.dmg)**
+```bash
+cd rhwp-desktop
+npm install                 # 최초 1회 (studio·desktop 각각)
+npm run build               # → src-tauri/target/release/bundle/dmg/HanPage_*.dmg
+npm run dev                 # 개발 실행(HanPage 창)
+```
+
+**Windows `.exe` (CI — macOS 로컬 빌드 불가)**
+```bash
+git tag desktop-v1.0.0 && git push origin desktop-v1.0.0   # → GitHub Release 자동 첨부
+# 또는 Actions > Desktop Release > Run workflow (dispatch, 테스트 빌드 = 아티팩트 업로드)
+```
+CI(`windows-latest`)가 NSIS `.exe`, `macos-14`가 `.dmg` 를 산출한다.
+
+---
+
+## 8. 잔존 / 후속 (Out of Scope — Phase 2 이후)
+
+- **코드 서명·공증**: macOS notarization / Windows Authenticode (미서명 → Gatekeeper/SmartScreen 경고).
+- **Linux 인스톨러**(`.deb`/AppImage), **universal/Intel macOS**, **자동 업데이트**.
+- 네이티브 `rlib` 코어 직접 호출(현재 WASM 유지), 딥링크/다중 윈도우/탭.
+- **GUI 시각 확인**(작업지시자 영역): `.dmg` 설치·실행, 파일 연결 더블클릭, 메뉴/창 복원/최근 문서.
+
+---
+
+## 9. 승인 요청
+
+Task #1(HanPage 데스크톱 앱 Tauri 1단계) 4 Stage 전체 완료 및 무영향 검증을 보고합니다.
+**최종 승인 및 이슈 #1 처리(클로즈) 방침 지시를 요청합니다.**
+(이슈 클로즈는 작업지시자 승인 후에만 수행합니다.)

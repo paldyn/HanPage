@@ -4,7 +4,7 @@ version = "0.8.2"
 edition = "2021"
 description = "HWP file viewer and editor written in Rust, targeting WebAssembly"
 license = "MIT"
-repository = "https://github.com/edwardkim/rhwp"
+repository = "https://github.com/paldyn/HanPage"
 
 [workspace]
 members = [".", "tools/rhwp-subsecond", "bindings/Native"]

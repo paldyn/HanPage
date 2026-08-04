@@ -1,0 +1,148 @@
+name: Desktop Release
+
+# Task #1 (M100) — HanPage 데스크톱 앱(Tauri) 멀티플랫폼 번들 릴리스.
+#
+# macOS 로컬에서는 Windows 인스톨러를 만들 수 없으므로(Tauri 의 Windows 번들러는
+# Windows 호스트 필요), Windows .exe(NSIS)는 windows-latest 러너가 산출한다.
+#
+# 트리거: `hanpage-desktop-v*` 태그 push (→ GitHub Release 생성/첨부) + workflow_dispatch
+#   (→ 릴리스 없이 빌드만, 산출물은 워크플로 아티팩트로 업로드 = 테스트용).
+#
+# CLI 바이너리 릴리스(`release-binary.yml`, `v*` 태그)와 태그 패턴을 분리해 충돌을
+# 회피한다. `main` push 가 아니므로 Pages 배포(`deploy-pages.yml`)와도 트리거 분리.
+#
+# 코드 서명·공증은 범위 밖(미서명 → macOS Gatekeeper / Windows SmartScreen 경고 정상).
+
+on:
+  push:
+    tags:
+      - 'hanpage-desktop-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write # GitHub Release 자산 첨부
+
+jobs:
+  bundle:
+    name: Bundle ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS (aarch64)
+            runner: macos-14
+            # [Task #26 후속] app 번들 추가 → updater 아티팩트(.app.tar.gz + .sig) 생성.
+            # dmg 만으론 macOS 자동업데이트 아티팩트가 안 만들어져 latest.json darwin 이 누락된다.
+            args: '--bundles app,dmg'
+          - platform: Windows (x64)
+            runner: windows-latest
+            args: '--bundles nsis'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # --- WASM 빌드 (copy-wasm 이 ../pkg/ 를 참조하므로 선행 필수) ---
+      # [Task #4 후속] rust-toolchain.toml 과 동일하게 1.93.1 핀. @stable(부동) 은
+      # RUSTUP_TOOLCHAIN 을 설정해 .toml 핀을 무시 → 신규 stable(1.96.0)이 tauri 의
+      # brotli 8.0.3 을 컴파일 못 함(StandardAlloc: Allocator 미충족). 1.93.1 은 정상.
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            HanPage-Desktop/src-tauri
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      - name: Build WASM
+        # CI 한정 wasm-opt 비활성화: macOS 러너 wasm-pack 의 번들 wasm-opt 가 구버전이라
+        # 다중 table wasm 파싱 실패("Only 1 table definition allowed in MVP"). 커밋된
+        # Cargo.toml 은 그대로 두어 GitHub Pages(deploy-pages.yml 의 wasm-pack 빌드)는
+        # 최적화 유지·산출물 불변. wasm-opt 는 최적화 단계일 뿐이라 기능 영향 없음.
+        shell: bash
+        run: |
+          printf '\n[package.metadata.wasm-pack.profile.release]\nwasm-opt = false\n' >> Cargo.toml
+          wasm-pack build --target web --release
+
+      # --- Node 의존성 (studio: 프런트 빌드, desktop: @tauri-apps/cli) ---
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install studio deps
+        working-directory: rhwp-studio
+        run: npm install
+
+      - name: Install desktop deps
+        working-directory: HanPage-Desktop
+        run: npm install
+
+      # --- 릴리스 표시명: 태그 hanpage-desktop-v{ver} → "HanPage Desktop-v{ver}" ---
+      # GitHub Actions 식 표현식엔 문자열 치환 함수가 없어 bash 로 접두어를 제거한다.
+      # matrix 양 러너(macOS·Windows)가 동일 문자열을 산출 → tauri-action 릴리스 생성/첨부 멱등.
+      # tagName 은 git 태그(hanpage-desktop-v{ver}) 그대로, 표시명만 "HanPage Desktop-v{ver}".
+      - name: Compute release name
+        id: relname
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          ver="${GITHUB_REF_NAME#hanpage-desktop-v}"
+          echo "name=HanPage Desktop-v${ver}" >> "$GITHUB_OUTPUT"
+
+      # [Task #4] macOS 공증용 App Store Connect API 키(.p8)를 시크릿(base64)에서 복원.
+      # 시크릿 미설정 시 빈 파일 → tauri-action 이 공증을 건너뛰고 미서명 번들 생성(회귀 없음).
+      - name: Prepare notarization API key (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          echo "$APPLE_API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/apple_api_key.p8"
+
+      # --- Tauri 번들 (beforeBuildCommand = build:frontend = copy-wasm + studio build:desktop) ---
+      - name: Build & bundle (tauri-action)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # [Task #26] updater 서명용 개인키·비번(시크릿). createUpdaterArtifacts=true 와
+          # 함께 tauri-action 이 서명·latest.json 생성·릴리스 첨부를 자동 처리한다.
+          # 시크릿 미설정(fork 등) 시 updater 아티팩트만 생략, 일반 dmg/nsis 는 정상 생성.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # [Task #4] macOS 코드 서명(Developer ID Application) + 공증(App Store Connect API key).
+          # Apple env 부재 시 tauri-action 은 서명·공증을 건너뛰어 기존 동작과 동일(회귀 없음).
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/apple_api_key.p8
+        with:
+          projectPath: HanPage-Desktop
+          # 태그 push 시에만 릴리스 생성. dispatch 는 빈 tagName → 빌드만 수행.
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/') && steps.relname.outputs.name || '' }}
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      # --- dispatch 테스트 빌드: 릴리스가 없으므로 아티팩트로 업로드 ---
+      - name: Upload bundle (dispatch test)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanpage-${{ matrix.runner }}
+          path: |
+            HanPage-Desktop/src-tauri/target/release/bundle/dmg/*.dmg
+            HanPage-Desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: ignore
+          retention-days: 7

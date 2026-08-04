@@ -11,7 +11,7 @@
 
 import { EditorTransport } from './transport.js';
 
-const DEFAULT_STUDIO_URL = 'https://edwardkim.github.io/rhwp/';
+const DEFAULT_STUDIO_URL = 'https://hanpage.paldyn.com/';
 
 /**
  * HWP 에디터를 생성하여 지정된 컨테이너에 마운트합니다.

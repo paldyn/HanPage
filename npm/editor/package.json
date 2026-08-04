@@ -27,11 +27,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/edwardkim/rhwp.git"
+    "url": "git+https://github.com/paldyn/HanPage.git"
   },
-  "homepage": "https://edwardkim.github.io/rhwp/",
+  "homepage": "https://hanpage.paldyn.com/",
   "bugs": {
-    "url": "https://github.com/edwardkim/rhwp/issues"
+    "url": "https://github.com/paldyn/HanPage/issues"
   },
   "funding": "https://github.com/sponsors/edwardkim",
   "license": "MIT",

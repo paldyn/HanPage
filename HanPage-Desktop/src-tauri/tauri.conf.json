@@ -1,0 +1,67 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "HanPage",
+  "mainBinaryName": "HanPage",
+  "version": "0.8.2",
+  "identifier": "com.paldyn.hanpage",
+  "build": {
+    "frontendDist": "../../rhwp-studio/dist",
+    "devUrl": "http://127.0.0.1:7700",
+    "beforeBuildCommand": "npm run build:frontend",
+    "beforeDevCommand": "npm run dev:frontend"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "HanPage",
+        "width": 1200,
+        "height": 840,
+        "minWidth": 800,
+        "minHeight": 600,
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "targets": "all",
+    "category": "Productivity",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["hwp"],
+        "name": "HWP Document",
+        "description": "한글 문서",
+        "role": "Editor",
+        "mimeType": "application/x-hwp"
+      },
+      {
+        "ext": ["hwpx"],
+        "name": "HWPX Document",
+        "description": "한글 문서 (XML)",
+        "role": "Editor",
+        "mimeType": "application/hwp+zip"
+      }
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/paldyn/HanPage/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBMzNFMTMxMzg2QjVEODMKUldTRFhXczRNZUV6cXI3M1pvNXFKbGpmNGRlNnF1UGVpTnJYR0ZyUDVCNjRzeW1TZVZyZHM5VzMK"
+    }
+  }
+}

@@ -3,7 +3,7 @@
  */
 
 export interface EditorOptions {
-  /** rhwp-studio HTTP(S) URL. file:, data:, browser extension 등 opaque origin은 지원하지 않음 */
+  /** rhwp-studio HTTP(S) URL (기본: https://hanpage.paldyn.com/). file:, data:, browser extension 등 opaque origin은 지원하지 않음 */
   studioUrl?: string;
   /** 문서 단위 renderer 요청. 기본값은 canvas2d이며 auto/CanvasKit 명시 선택도 지원함 */
   renderer?: 'auto' | 'canvas2d' | 'canvaskit';

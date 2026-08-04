@@ -53,6 +53,7 @@ import { userSettings } from '@/core/user-settings';
 import { showToast } from '@/ui/toast';
 import { clearRecentDocs, listRecentDocs, removeRecentDoc } from '@/recent/recent-store';
 import { openRecentEntry } from '@/recent/recent-open';
+import { getDesktopOpenHandler, getDesktopSaveHandler } from '@/core/desktop-bridge';
 
 /**
  * 파일 열기 대화상자(File System Access picker, 미지원 시 숨김 input 폴백)를 열어
@@ -62,6 +63,21 @@ async function openFileViaPicker(services: CommandServices): Promise<void> {
   try {
     const canReplace = await confirmSaveBeforeReplacingDocument(services);
     if (!canReplace) return;
+
+    // [Task #1 데스크톱] 네이티브 열기 dialog 분기. 브라우저에선 핸들러가 null →
+    // 아래 File System Access / file-input 경로가 그대로 동작(웹 무변경).
+    const desktopOpen = getDesktopOpenHandler();
+    if (desktopOpen) {
+      await desktopOpen((bytes, fileName) => {
+        services.eventBus.emit('open-document-bytes', {
+          bytes,
+          fileName,
+          fileHandle: null,
+          skipUnsavedGuard: true, // 위에서 이미 confirmSaveBeforeReplacingDocument 수행
+        });
+      });
+      return;
+    }
 
     const windowLike = window as FileSystemWindowLike;
     const nativeOpenPickerAvailable = canUseOpenFilePicker(windowLike);
@@ -143,6 +159,17 @@ async function chooseSaveAsFormat(services: CommandServices): Promise<SaveFormat
     context.metadata,
     context.exporterAvailable,
   );
+}
+
+/** [Task #1 데스크톱] 네이티브 저장에 넘길 바이트 — createSaveBlob 과 동일한 암호 규칙. */
+function exportBytesForNativeSave(
+  services: CommandServices,
+  format: SaveFormat,
+  password?: string,
+): Uint8Array {
+  return password === undefined
+    ? exportDocumentForFormat(services.wasm, format)
+    : exportPasswordProtectedDocumentForFormat(services.wasm, requirePasswordSaveFormat(format), password);
 }
 
 function createSaveBlob(
@@ -271,6 +298,21 @@ async function saveAsFormat(services: CommandServices, format: SaveFormat): Prom
 
     flushDeferredPaginationBeforeExplicitOutput(services, 'save-as');
     const saveName = options.fileName;
+    // [Task #1 데스크톱] 네이티브 저장 dialog 분기. 브라우저에선 핸들러가 null →
+    // 아래 File System Access / 다운로드 폴백이 그대로 동작(웹 무변경).
+    const desktopSave = getDesktopSaveHandler();
+    if (desktopSave) {
+      const bytes = exportBytesForNativeSave(services, format, password ?? undefined);
+      const r = await desktopSave({ bytes, suggestedName: saveName, saveAs: true });
+      if (r.status === 'saved') {
+        services.wasm.fileName = r.fileName;
+        services.documentState.markClean('save-as');
+        return;
+      }
+      if (r.status === 'cancelled') return;
+      reportSaveError('file:save-as', new Error(r.message));
+      return;
+    }
     const blob = createSaveBlob(services, format, password ?? undefined);
     const originalHandle = sourceFormat === 'hml' ? services.wasm.currentFileHandle : null;
     const result = await tryFileSystemSave(
@@ -332,6 +374,24 @@ export async function saveCurrentDocument(services: CommandServices): Promise<Sa
       const passwordFormat = requirePasswordSaveFormat(target.format);
       password = await showHwpSavePasswordDialog(fileNameForFormat(services.wasm.fileName, passwordFormat));
       if (password === null) return 'cancelled';
+    }
+    // [Task #1 데스크톱] 네이티브 저장 dialog 분기(웹 무변경).
+    const desktopSave = getDesktopSaveHandler();
+    if (desktopSave) {
+      const bytes = exportBytesForNativeSave(services, target.format, password ?? undefined);
+      const r = await desktopSave({
+        bytes,
+        suggestedName: target.suggestedName,
+        saveAs: target.forceSaveAs,
+      });
+      if (r.status === 'saved') {
+        services.wasm.fileName = r.fileName;
+        services.documentState.markClean('save');
+        return 'saved';
+      }
+      if (r.status === 'cancelled') return 'cancelled';
+      reportSaveError('file:save', new Error(r.message));
+      return 'failed';
     }
     const blob = createSaveBlob(services, target.format, password ?? undefined);
     const result = await tryFileSystemSave(

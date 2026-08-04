@@ -34,6 +34,7 @@ import { showToast } from '@/ui/toast';
 import { addRecentDoc, listRecentDocs } from '@/recent/recent-store';
 import { showDropConfirmDialog } from '@/ui/drop-confirm-dialog';
 import { showHwpPasswordDialog } from '@/ui/hwp-password-dialog';
+import { installAppDownloadButton } from '@/ui/app-download';
 import { initRhwpDev } from '@/core/rhwp-dev';
 import { DocumentDirtyState } from '@/core/document-dirty-state';
 import { initThemeSync, setThemeMode, getThemeMode, getEffectiveTheme } from '@/core/theme';
@@ -59,6 +60,7 @@ import {
 import { calculateFitPageZoom, calculateFitWidthZoom } from '@/view/zoom-fit';
 import { installEmbedRuntime } from '@/embed/runtime';
 import type { EmbedRendererRuntimeRequestV1 } from '@/embed/rpc-router';
+import { initDesktopBridge } from '@/core/desktop-bridge';
 
 const wasm = new WasmBridge();
 const eventBus = new EventBus();
@@ -290,6 +292,10 @@ function prepareCanvasKitLocalFonts(fontNames: readonly string[] | undefined): v
 async function initialize(): Promise<void> {
   const msg = sbMessage();
   try {
+    // [Task #38] 웹 헤더 데스크톱 앱 다운로드 버튼(데스크톱 앱 내부에선 미표시).
+    // WASM 등 무거운 로딩과 무관하므로 최상단에서 즉시 표시한다 (#38 지연 표시 수정).
+    installAppDownloadButton(document.getElementById('menu-bar')!);
+
     extensionViewerSettings = await loadExtensionViewerSettings();
     if (extensionViewerSettings.disableExternalWebFonts) {
       console.info('[main] 외부 웹폰트 사용 안 함 옵션이 켜져 있습니다.');
@@ -479,6 +485,15 @@ async function initialize(): Promise<void> {
     setupZoomControls();
     setupEventListeners();
     setupGlobalShortcuts();
+    // [Task #1 데스크톱] 네이티브(Tauri) 브리지 초기화. 브라우저에선 즉시 return = no-op.
+    // 데스크톱에선 펜딩 문서 드레인(파일 연결/최근 문서/argv)과 네이티브 메뉴 명령을
+    // 기존 eventBus/dispatcher 흐름에 연결한다. openDocument 은 skipUnsavedGuard 를
+    // 생략 → 리스너의 unsaved-guard 가 적용된다(메뉴 file:open 의 dialog 경로와 구분).
+    initDesktopBridge({
+      openDocument: (bytes, fileName) =>
+        eventBus.emit('open-document-bytes', { bytes, fileName, fileHandle: null }),
+      dispatchCommand: (id) => dispatcher.dispatch(id),
+    });
     void loadFromUrlParam();
     void offerAutosaveRecoveryIfIdle();
     installPwaFileHandling(window as FileHandlingWindowLike, {

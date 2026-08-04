@@ -18,8 +18,8 @@ rhwp에 관심을 가져주셔서 감사합니다!
 
 ```bash
 # 클론
-git clone https://github.com/edwardkim/rhwp.git
-cd rhwp
+git clone https://github.com/paldyn/HanPage.git
+cd HanPage
 
 # 빌드 + 테스트
 cargo build
@@ -45,7 +45,7 @@ npx vite --port 7700
 
 HWP 파일이 한컴과 다르게 렌더링되면 알려주세요:
 
-1. [이슈 생성](https://github.com/edwardkim/rhwp/issues/new?template=bug_report.md)
+1. [이슈 생성](https://github.com/paldyn/HanPage/issues/new?template=bug_report.md)
 2. **한컴 스크린샷** + **rhwp 스크린샷** 비교 첨부
 3. 가능하면 HWP 파일 첨부 (개인정보 제거 후)
 
@@ -56,15 +56,15 @@ HWP 파일이 한컴과 다르게 렌더링되면 알려주세요:
 컨트리뷰터는 **Fork 기반**으로 작업합니다. 저장소에 직접 push할 수 없으며, PR을 통해 코드를 제출합니다.
 
 ```
-[본인 Fork]                              [edwardkim/rhwp]
+[본인 Fork]                              [paldyn/HanPage]
 
 1. Fork (GitHub UI)
    edwardkim/rhwp → myid/rhwp
 
 2. Clone + upstream 등록 (최초 1회)
    git clone https://github.com/myid/rhwp.git
-   cd rhwp
-   git remote add upstream https://github.com/edwardkim/rhwp.git
+   cd HanPage
+   git remote add upstream https://github.com/paldyn/HanPage.git
 
 3. 브랜치 생성 + 작업 — 반드시 최신 upstream/devel 기준
    git fetch upstream

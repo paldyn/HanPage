@@ -58,7 +58,7 @@ Do not skip steps. Maintainer approval is required before proceeding to each nex
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be reported via:
 
-- [GitHub Private Vulnerability Reporting](https://github.com/edwardkim/rhwp/security/advisories/new) (for security issues)
+- [GitHub Private Vulnerability Reporting](https://github.com/paldyn/HanPage/security/advisories/new) (for security issues)
 - Direct message to the maintainer via [GitHub profile](https://github.com/edwardkim)
 
 All complaints will be reviewed and investigated promptly and fairly. The maintainer is obligated to maintain confidentiality with regard to the reporter of an incident.

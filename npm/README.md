@@ -265,8 +265,8 @@ rhwp가 SVG에 적용하는 자동 폴백 체인:
 
 ## 링크
 
-- **[온라인 데모](https://edwardkim.github.io/rhwp/)**
-- **[GitHub](https://github.com/edwardkim/rhwp)**
+- **[온라인 데모](https://hanpage.paldyn.com/)**
+- **[GitHub](https://github.com/paldyn/HanPage)**
 - **[@rhwp/editor](https://www.npmjs.com/package/@rhwp/editor)** — 에디터 UI 임베드
 - **[VS Code 확장](https://marketplace.visualstudio.com/items?itemName=edwardkim.rhwp-vscode)**
 
@@ -286,7 +286,7 @@ rhwp가 SVG에 적용하는 자동 폴백 체인:
 | unicode-segmentation / unicode-width | MIT OR Apache-2.0 |
 | image | MIT OR Apache-2.0 |
 
-전체 목록: [THIRD_PARTY_LICENSES.md](https://github.com/edwardkim/rhwp/blob/main/THIRD_PARTY_LICENSES.md)
+전체 목록: [THIRD_PARTY_LICENSES.md](https://github.com/paldyn/HanPage/blob/main/THIRD_PARTY_LICENSES.md)
 
 > 모든 의존성은 MIT 라이선스와 호환됩니다.
 

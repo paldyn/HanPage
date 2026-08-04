@@ -1,17 +1,17 @@
 <p align="center">
-  <img src="assets/logo/logo-256.png" alt="rhwp logo" width="128" />
+  <img src="assets/logo/logo-256.png" alt="HanPage logo" width="128" />
 </p>
 
-<h1 align="center">rhwp</h1>
+<h1 align="center">HanPage</h1>
 
 <p align="center">
-  <strong>알(R), 모두의 한글</strong> — 알에서 시작하다<br/>
-  <em>All HWP, Open for Everyone</em>
+  <strong>한글 문서를 어디서든</strong> — 설치 없이 브라우저로<br/>
+  <em>HWP/HWPX viewer · editor — powered by <a href="https://github.com/edwardkim/rhwp">rhwp</a></em>
 </p>
 
 <p align="center">
-  <a href="https://github.com/edwardkim/rhwp/actions/workflows/ci.yml"><img src="https://github.com/edwardkim/rhwp/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="https://edwardkim.github.io/rhwp/"><img src="https://img.shields.io/badge/Demo-GitHub%20Pages-blue" alt="Demo" /></a>
+  <a href="https://github.com/paldyn/HanPage/actions/workflows/ci.yml"><img src="https://github.com/paldyn/HanPage/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://hanpage.paldyn.com/"><img src="https://img.shields.io/badge/Demo-hanpage.paldyn.com-blue" alt="Demo" /></a>
   <a href="https://www.npmjs.com/package/@rhwp/core"><img src="https://img.shields.io/npm/v/@rhwp/core?label=npm" alt="npm" /></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=edwardkim.rhwp-vscode"><img src="https://img.shields.io/badge/VS%20Code-Marketplace-007ACC" alt="VS Code" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
@@ -20,9 +20,8 @@
 </p>
 
 <p align="center">
-  <a href="https://chromewebstore.google.com/detail/pgakpjflombjmehnebnbpnalhegaanag"><img src="https://img.shields.io/chrome-web-store/v/pgakpjflombjmehnebnbpnalhegaanag?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white" alt="Chrome Web Store" /></a>
-  <a href="https://microsoftedge.microsoft.com/addons/detail/rhwp/nfkdfobhmanddlhdbclkpoanbccpigcn"><img src="https://img.shields.io/badge/Edge%20Add--ons-Store-0078D7" alt="Edge Add-ons" /></a>
-  <a href="https://addons.mozilla.org/firefox/addon/rhwp-free-hwp-editor/"><img src="https://img.shields.io/amo/v/rhwp-free-hwp-editor?label=Firefox%20Add-ons&logo=firefoxbrowser&logoColor=white" alt="Firefox Add-ons" /></a>
+  <a href="https://oosmetrics.com/repo/edwardkim/rhwp"><img src="https://api.oosmetrics.com/api/v1/badge/achievement/921c34bc-4dd3-4409-ba2e-2d99c8b4a9b6.svg" alt="rhwp engine: Top 2 in WebAssembly by originality - 2026-04-21" /></a>
+  <a href="https://oosmetrics.com/repo/edwardkim/rhwp"><img src="https://api.oosmetrics.com/api/v1/badge/achievement/fd1e3217-b99a-4ec2-8cba-98429f3d91c7.svg" alt="rhwp engine: Top 2 in Editors by originality - 2026-04-21" /></a>
 </p>
 
 <p align="center">
@@ -31,15 +30,19 @@
 
 ---
 
-HWP/HWPX 파일과 지원되는 HML 문서를 **어디서든** 열어보세요. 무료, 설치 없이.
+**HanPage** 는 오픈소스 HWP/HWPX 뷰어·에디터 엔진 [rhwp](https://github.com/edwardkim/rhwp) 를 paldyn 이 [hanpage.paldyn.com](https://hanpage.paldyn.com/) 에서 호스팅·재배포하는 프로젝트입니다. 설치 없이 브라우저에서 한글 문서를 열어볼 수 있습니다.
 
-rhwp는 Rust + WebAssembly 기반의 오픈소스 HWP/HWPX 뷰어/에디터입니다. 닫힌 포맷의 벽을 깨고, 모든 사람, 모든 AI, 모든 플랫폼에서 한글 문서를 자유롭게 읽고 쓸 수 있게 합니다.
-
-> **[온라인 데모](https://edwardkim.github.io/rhwp/)** | **[VS Code 확장](https://marketplace.visualstudio.com/items?itemName=edwardkim.rhwp-vscode)** | **[Open VSX](https://open-vsx.org/extension/edwardkim/rhwp-vscode)**
+> **[온라인 데모](https://hanpage.paldyn.com/)** | **[VS Code 확장](https://marketplace.visualstudio.com/items?itemName=edwardkim.rhwp-vscode)** | **[Open VSX](https://open-vsx.org/extension/edwardkim/rhwp-vscode)**
 
 <p align="center">
-  <img src="assets/screenshots/render-example-1.png" alt="rhwp 렌더링 예시 — KTX 노선도" width="700" />
+  <img src="assets/screenshots/render-example-1.png" alt="HanPage 렌더링 예시 — KTX 노선도" width="700" />
 </p>
+
+## 엔진 — rhwp
+
+HanPage 가 사용하는 파서·렌더·편집 엔진은 오픈소스 프로젝트 [rhwp](https://github.com/edwardkim/rhwp) 입니다. 현재 엔진 버전 **v0.7.13** (MIT License, © 2025-2026 Edward Kim 및 기여자 다수).
+
+엔진의 릴리스 사이클별 상세 변경 내역과 외부 기여자 인정은 upstream 의 [CHANGELOG](https://github.com/edwardkim/rhwp/blob/main/CHANGELOG.md) 와 [Releases](https://github.com/edwardkim/rhwp/releases) 를 참조하세요. paldyn 의 본 저장소는 엔진 자체를 fork 하여 hanpage.paldyn.com 호스팅 및 재배포 산출물을 관리합니다.
 
 ## 로드맵
 
@@ -75,9 +78,33 @@ rhwp는 Rust + WebAssembly 기반의 오픈소스 HWP/HWPX 뷰어/에디터입�
 > 가져와 편집할 수 있고, 보존 불가 요소가 없는 HML 원본은 preflight 검사 후 HML로 다시
 > 저장할 수 있습니다. 그림·내장/외부 리소스 등 미지원 요소는 경고하고 손실 저장을 차단합니다.
 
-#### 릴리즈 이력
+<!-- 사이클별 상세는 upstream rhwp CHANGELOG 참조 -->
 
-사이클별 상세 변경 사항(기여자 목록 포함)은 [CHANGELOG.md](CHANGELOG.md)에 기록합니다.
+### v1.0.0 — 조판 엔진
+
+> AI 조판 파이프라인, 뼈대 완성
+
+- 편집 시 동적 재조판 체계화 (LINE_SEG 재계산 + 페이지네이션 연동)
+- AI 기반 문서 생성/편집 파이프라인
+- 문서 조판 품질 한컴 뷰어 수준 도달
+
+### v2.0.0 — 협업
+
+> 커뮤니티가 기능을 채워가는 단계, 살 붙이기
+
+- 플러그인/확장 아키텍처, 실시간 협업 편집
+- 다양한 출력 포맷 (PDF, DOCX 등)
+
+### v3.0.0 — 완성
+
+> 한컴과 대등한 수준, 완전한 공공 자산
+
+- 전체 HWP 기능 커버리지, 접근성(a11y), 모바일 대응
+- 공공기관 실무 투입 가능 수준
+
+자세한 내용은 [로드맵 문서](mydocs/report/archives/rhwp-milestone.md)를 참조하세요.
+
+---
 
 ## Features
 
@@ -504,7 +531,10 @@ graph TB
 
 ## Contributing
 
-기여 환영합니다. 다음 핵심 사항을 먼저 확인해 주세요:
+본 저장소(paldyn/HanPage)는 엔진 [rhwp](https://github.com/edwardkim/rhwp)의 재배포·호스팅 산출물 관리용입니다. 기여는 성격에 따라 다음과 같이 나뉩니다.
+
+- **엔진 자체 (파서·렌더·페이지네이션·편집·CLI·WASM·확장)**: upstream [edwardkim/rhwp](https://github.com/edwardkim/rhwp)에 PR을 제출해주세요. PR base 는 upstream 의 `devel` 입니다.
+- **HanPage 호스팅·재배포 (CI, gh-pages 워크플로우, 도메인 설정 등)**: 본 저장소의 [Issues](https://github.com/paldyn/HanPage/issues) / [PRs](https://github.com/paldyn/HanPage/pulls)로 제출해주세요.
 
 - **PR base 는 `devel`** 입니다 (`main` 아님). GitHub 기본 브랜치는 `main` 이지만 기여 PR 은 모두 `devel` 로 받습니다.
 - **이슈 먼저 확인**: 동일 영역에 진행 중인 작업이 있는지 [열린 이슈](https://github.com/edwardkim/rhwp/issues) 와 [열린 PR](https://github.com/edwardkim/rhwp/pulls) 을 먼저 확인해 주세요. 중복 작업을 방지합니다.
@@ -512,11 +542,11 @@ graph TB
 - **이슈 close 는 메인테이너**: 작업 완료 후 PR 만 제출해 주세요. 이슈는 PR 머지 시 메인테이너가 close 합니다.
 - **한컴 PDF 는 정답지가 아닙니다**: 한컴 도구 (편집기 / Viewer / 한컴독스), 버전 (2010 / 2020 / 2022), 출력 경로 (한컴 자체 / OS 인쇄) 별로 PDF 결과가 다릅니다. 자세한 내용과 환경별 비교 자료는 [한컴 PDF 환경 의존성 위키](https://github.com/edwardkim/rhwp/wiki/한컴-PDF-환경-의존성) 를 참고하세요.
 
-상세한 기여 절차 (Fork → 브랜치 → 커밋 → PR) 는 [CONTRIBUTING.md](CONTRIBUTING.md) 를 참고하세요.
+상세한 엔진 기여 절차 (Fork → 브랜치 → 커밋 → PR) 는 [CONTRIBUTING.md](CONTRIBUTING.md) 를 참고하세요.
 
-### 위키 자료 (Wiki)
+### Wiki (upstream rhwp)
 
-기여자와 fork 사용자에게 도움이 되는 권위 자료를 [Wiki](https://github.com/edwardkim/rhwp/wiki) 에 정리하고 있습니다:
+엔진 (rhwp) 의 기술 권위 자료는 [upstream rhwp Wiki](https://github.com/edwardkim/rhwp/wiki) 에 정리되어 있습니다:
 
 - [한컴 PDF 환경 의존성](https://github.com/edwardkim/rhwp/wiki/한컴-PDF-환경-의존성) — 한컴 도구 / 버전 / OS 별 PDF 차이 정황 및 PR 검증 시 참고 사항
 - [HWP 5.0 Spec Errata](https://github.com/edwardkim/rhwp/wiki/HWP-5.0-Spec-Errata) — HWP 5.0 스펙 정오표
@@ -543,4 +573,8 @@ This project is an independent open-source project with no affiliation, sponsors
 
 ## License
 
-[MIT License](LICENSE) — Copyright (c) 2025-2026 Edward Kim
+엔진 [rhwp](https://github.com/edwardkim/rhwp): [MIT License](LICENSE) — Copyright (c) 2025-2026 Edward Kim 외 기여자
+
+HanPage 재배포 산출물 (본 저장소 추가분): MIT License — Copyright (c) 2026 paldyn
+
+본 저장소는 MIT 라이선스의 권한에 따라 rhwp 를 fork 하여 hanpage.paldyn.com 호스팅용으로 재배포합니다. 자세한 재배포 안내는 [LICENSE](LICENSE) 와 동봉된 라이선스 고지 파일을 참조하세요.
