@@ -136,6 +136,31 @@ let fontFaceRegistrationMode: 'all' | 'local-only' | null = null;
 /** 이미 로드 완료된 woff2 파일 (중복 네트워크 요청 방지) */
 const loadedFiles = new Set<string>();
 
+/**
+ * [#50] 폰트 로딩이 문서 열기를 막지 못하게 하는 안전장치.
+ *
+ * `FontFace.load()` 는 타임아웃이 없다. CDN(함초롬/한컴 계열은 jsdelivr 참조)이나
+ * 네트워크가 지연되면 Promise 가 영원히 pending 이 되어 `initializeDocument` 의
+ * "폰트 준비 중..." 단계에서 문서가 열리지 않는다(진행 콜백조차 울리지 않아 55% 고정).
+ * 폰트는 렌더 품질 요소일 뿐 문서 표시의 전제가 아니므로, 개별 타임아웃과 전체 예산을
+ * 두고 초과분은 실패 처리하거나 백그라운드로 넘긴다(로드되면 이후 렌더에 반영).
+ */
+const FONT_LOAD_TIMEOUT_MS = 5_000;
+const FONT_STAGE_BUDGET_MS = 8_000;
+
+function withFontTimeout(p: Promise<FontFace>, file: string): Promise<FontFace> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`폰트 로드 타임아웃(${FONT_LOAD_TIMEOUT_MS}ms): ${file}`)),
+      FONT_LOAD_TIMEOUT_MS,
+    );
+    p.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
+
 function isExternalFontFile(file: string): boolean {
   return /^https?:\/\//i.test(file);
 }
@@ -259,25 +284,38 @@ export async function loadWebFonts(
   let loaded = 0;
   let failed = 0;
   const BATCH = 4;
+  const deadline = Date.now() + FONT_STAGE_BUDGET_MS;
 
   for (let i = 0; i < uniqueToLoad.length; i += BATCH) {
     const batch = uniqueToLoad.slice(i, i + BATCH);
-    await Promise.all(batch.map(async (f) => {
+    // 예산 초과 시 남은 배치는 기다리지 않고 백그라운드로 넘긴다.
+    // (로드되면 document.fonts 에 추가되어 이후 렌더에 자연히 반영된다)
+    const detached = Date.now() >= deadline;
+    const work = Promise.all(batch.map(async (f) => {
       try {
         const names = fileToNames.get(f.file) ?? [f.name];
         const fmt = f.format ?? 'woff2';
         for (const name of names) {
           const face = new FontFace(name, `url(${f.file}) format('${fmt}')`);
-          const result = await face.load();
+          const result = await withFontTimeout(face.load(), f.file);
           document.fonts.add(result);
         }
         loadedFiles.add(f.file);
         loaded++;
-      } catch {
+      } catch (e) {
         failed++;
+        console.warn(`[FontLoader] 로드 실패(문서 열기는 계속): ${f.file}`, e);
       }
-      onProgress?.(loaded + failed, total);
+      if (!detached) onProgress?.(loaded + failed, total);
     }));
+    if (detached) {
+      void work; // 대기하지 않음 — 문서 열기를 폰트가 막지 못하게 한다
+      console.warn(
+        `[FontLoader] 폰트 로딩 예산(${FONT_STAGE_BUDGET_MS}ms) 초과 — 남은 ${uniqueToLoad.length - i}개는 백그라운드 로드`,
+      );
+      break;
+    }
+    await work;
     if (i + BATCH < uniqueToLoad.length) {
       await new Promise(r => setTimeout(r, 0));
     }
