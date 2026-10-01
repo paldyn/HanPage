@@ -241,7 +241,7 @@
     "mydocs/orders/20261001.md"
   ],
   "strategy": "upstream-tree-on-HanPage-history",
-  "integration_status": "approved full Rust verification and remote push/Open PR/merge; full regression in progress",
+  "integration_status": "approved local gates complete; remote push/Open PR/current-head CI/merge pending",
   "resolved_manual_conflicts": [
     {
       "path": ".github/workflows/deploy-pages.yml",
@@ -300,5 +300,6 @@
     "path": "tests/security_corpus_regression.rs",
     "sha256": "4fd9103f51b63bda3bf3ca67c2ca828c685ed13281e2a9a4c6cd46daddeca5eb",
     "scope": "verified genuine hidden classifications; exact path/hash/finding guard; detectors unchanged; injection/unicode coverage preserved"
-  }
+  },
+  "local_validation_commit": "c38538745d7350efdf3ec9cd2ed64dda01848c66"
 }

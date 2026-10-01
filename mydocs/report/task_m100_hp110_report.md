@@ -5,7 +5,7 @@
 - 브랜치: `codex/upstream-sync-20261001`
 - 기존 HanPage: `cecaf1bbfec9a10778484d30ebb747280e7a02af`
 - 가져온 upstream/devel: `02530b9ed567a44663edb26c65fb565c4a79f00d`
-- 상태: 로컬 통합 후보 및 focused·브라우저 검증 완료. 2026-10-01 사용자의 "승인"에 따라 전체 Rust 게이트 실행 중이며, 통과 뒤 remote push·Open PR·최신 CI 확인·merge를 진행한다.
+- 상태: 로컬 통합 후보 및 focused·브라우저 검증 완료. 2026-10-01 사용자 "승인" 뒤 전체 Rust 게이트를 완료했다. remote push·Open PR·최신 CI 확인 뒤 승인된 merge를 진행한다.
 
 ## 통합과 기능 겹침
 
@@ -85,4 +85,16 @@ PDF 커밋 `3790cb0d7e35554a64e76af47b9c6e1be00d2d42`의 앞 커밋 대비 thin 
 
 [원본 XML·탐지·SVG·직접 판독 근거](../pr/assets/task_m100_hp110_security_genuine/genuine-hidden-evidence.json)를 보존했다. 대표 영역은 [30098](../pr/assets/task_m100_hp110_security_genuine/30098/region-marked.png), [coanchored](../pr/assets/task_m100_hp110_security_genuine/coanchored/region-marked.png)다. 색·비가시 문자 분류의 근거이며 한컴 조판 fidelity 결과는 아니다.
 
-보정 `b2034762f640bdf66721f52a7cda6c31cb8282e8`은 세 파일의 정확한 경로·SHA-256·전체 예상 finding을 검증한 뒤 hidden positive로 분류한다. injection/unicode 검사와 음성 코퍼스 assertion은 유지한다. 기존 positive 보호 test에서 누락·바이트 변경·탐지 감소·추가 finding을 실패시키며 기존 nested genuine fixture도 올바른 경로로 검사한다. Rust test 수는 6개 그대로다. CI bootstrap은 이 test 한 파일의 upstream·후보 SHA-256만 추가로 고정하며 다른 engine/test/policy 변경은 계속 거부한다. Node bootstrap/manifest 31개 및 실제 Git identity가 통과했다. 수정 뒤 전체 Rust 검증은 진행 중이다.
+보정 `b2034762f640bdf66721f52a7cda6c31cb8282e8`은 세 파일의 정확한 경로·SHA-256·전체 예상 finding을 검증한 뒤 hidden positive로 분류한다. injection/unicode 검사와 음성 코퍼스 assertion은 유지한다. 기존 positive 보호 test에서 누락·바이트 변경·탐지 감소·추가 finding을 실패시키며 기존 nested genuine fixture도 올바른 경로로 검사한다. Rust test 수는 6개 그대로다. CI bootstrap은 이 test 한 파일의 upstream·후보 SHA-256만 추가로 고정하며 다른 engine/test/policy 변경은 계속 거부한다. Node bootstrap/manifest 31개 및 실제 Git identity가 통과했다. 수정 뒤 보안 focused 6/6, fmt·workspace/all-target clippy 및 전체 nextest 10,276/10,276이 통과했다.
+
+## 승인 후 완료한 전체 로컬 게이트
+
+- 실행 source: `c38538745d7350efdf3ec9cd2ed64dda01848c66`. 고정 target `target/pr-review`, host CPU 14/메모리 24 GiB를 확인한 뒤 build jobs 6·test threads 10으로 모든 Cargo 명령을 순차 실행했다. 엔진·fixture·lockfile blob은 격리 후보와 검증 작업공간이 같았다. 별도 Desktop 사용자 변경은 통합에서 제외했다.
+- fmt/all 및 fmt/check, native clippy, WASM clippy, locked workspace build, workspace/all-target clippy가 통과했다. corpus 보정 뒤 prepare·파생 manifest 정합·fmt/check·workspace/all-target clippy도 다시 통과했다.
+- locked release-test 전체 nextest: 10,276 통과, 0 실패, 50 skip; test 실행  261.762s초. 같은 479개 신규/수정 입력을 보안 env로 전달했다. 보안 focused 6개도 통과했다.
+- Native Skia lib: rhwp 3,930 통과·13 ignored, 함께 실행한 dependency lib 182 통과. 그림 placeholder 2/2 및 직접 PDF export 4/4가 통과했다. WASM·Studio 결과는 앞 절의 fresh build·1,830 통과 증적을 유지한다.
+- CLI는 official nextest 0.9.140의 universal Apple Darwin asset SHA-256 `58e0a722f9444078fab447783f322acf15a2a771ba785b3fbbe8bacda31c3df9`를 확인해 ignored tools 경로에서 사용했다.
+- [실행 명령·결과 JSON](../pr/assets/task_m100_hp110_validation.json), [1,154개 committed sample의 경로·SHA-256](../pr/assets/task_m100_hp110_input_manifest.json)을 보존했다. 보안 초기 실행은 detector별 479건을 실제 검사했다. clipping 원장의 외부 참조 92건은 로컬에 없어 미검증이며 통과로 세지 않는다.
+- 보정 직후 파생 suite를 준비하지 않은 focused 시도는 0건 실행·실패였다. 이 시도를 통과로 세지 않고 `--prepare` 뒤 focused·전체 검사를 다시 실행했다. 단독 manifest `--check`는 파생 정합 검사였으며 PR 비교 정책을 대체하지 않았다. pinned baseline 정책 검사는 별도로 유지했다.
+
+CI의 missing pinned commit 경로도 별도 임시 repo에서 실제 검증했다. original upstream commit이 없는 candidate blob:none repo에서 `--depth=1 --filter=blob:limit=64k`로 GitHub upstream을 fetch한 뒤 실제 helper identity 및 sparse prepare·manifest·unit-tier 검사가 통과했다. 추가 객체는 94,093,234바이트, 20.561초였고 Git trace의 후속 lazy fetch는 로컬 대조 원본에서만 수행됐다. [filtered fetch 검증 JSON](../pr/assets/task_m100_hp110_filtered_bootstrap.json)을 남겼고, 해당 fetch flag 및 Node 계약 31개가 통과한 `c38538745d7350efdf3ec9cd2ed64dda01848c66`에 적용했다.
