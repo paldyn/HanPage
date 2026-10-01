@@ -27,7 +27,8 @@
       "files_count": 2358,
       "before_and_after_all_match": true,
       "canonical_path_blob_manifest_sha256": "0b8c7a0048290842f4e077801130d66fc4c1ae792dc0fd8cb298b89f17ffce6d",
-      "manifest_path": "output/pr-review/hp110/ci/gym-contracts-blob-identity.json"
+      "manifest_path": "mydocs/pr/assets/task_m100_hp110_ci_gym_inputs.json",
+      "execution_manifest_path": "output/pr-review/hp110/ci/gym-contracts-blob-identity.json"
     },
     "github_workflow_registration": {
       "read_only_api": "GET /repos/paldyn/HanPage/actions/workflows/gym-release-gate.yml",

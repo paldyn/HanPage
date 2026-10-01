@@ -101,7 +101,7 @@ CI의 missing pinned commit 경로도 별도 임시 repo에서 실제 검증했�
 
 ## OPEN PR에서 완료한 CI 계약·반응형 보정
 
-첫 CI run36832803599에서 Pages mirror와 HanPage 다운로드 CTA의 반응형 폭 계약이 실패했다. workflow/assertion을 유지하면서 실제 paths-ignore 목록을 mirror상수에 맞췄고 focused41/41·관련Node200/200이 통과했다. 작은 화면(<=767px)의 기존 다운로드 버튼을24px 아이콘으로 표시해 메뉴8개/토글과 공존시키며 접근 이름·title·클릭과 >=768px full label은 유지했다. responsive local setup은 실제 busy시작/종료·활성 문서/입력을 기다린다. 원 assertion·timeout·viewport는 유지했다. 최종 `npm run e2e:responsive` 2,666 PASS/0 FAIL, 단위22/22·tsc PASS. [명령/source해시](../pr/assets/task_m100_hp110_responsive/responsive-download-final-results.json), [실제12조건과클릭](../pr/assets/task_m100_hp110_responsive/responsive-download-icon-ui-probe.json).
+첫 CI run36832803599에서 Pages mirror와 HanPage 다운로드 CTA의 반응형 폭 계약이 실패했다. workflow/assertion을 유지하면서 mirror상수를 실제 workflow의 paths-ignore 목록에 맞췄고 focused41/41·관련Node200/200이 통과했다. 작은 화면(<=767px)의 기존 다운로드 버튼을24px 아이콘으로 표시해 메뉴8개/토글과 공존시키며 접근 이름·title·클릭과 >=768px full label은 유지했다. responsive local setup은 실제 busy시작/종료·활성 문서/입력을 기다린다. 원 assertion·timeout·viewport는 유지했다. 최종 `npm run e2e:responsive` 2,666 PASS/0 FAIL, 단위22/22·tsc PASS. [명령/source해시](../pr/assets/task_m100_hp110_responsive/responsive-download-final-results.json), [실제12조건과클릭](../pr/assets/task_m100_hp110_responsive/responsive-download-icon-ui-probe.json).
 
 Gym은 대형 diff의 path-filter 상한과 default main workflow 미등록으로 자동실행/dispatch가 없었다. 같은22개 unittest모듈을 실행해2,124 PASS/1skip/exit0을 확인했다. full benchmark와 구분한다. [CI계약 증적](../pr/assets/task_m100_hp110_ci_contracts.json).
 
