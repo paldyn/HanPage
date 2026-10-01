@@ -5,7 +5,7 @@
 - 브랜치: `codex/upstream-sync-20261001`
 - 기존 HanPage: `cecaf1bbfec9a10778484d30ebb747280e7a02af`
 - 가져온 upstream/devel: `02530b9ed567a44663edb26c65fb565c4a79f00d`
-- 상태: 로컬 통합 및 focused 검증. 전체 Rust 게이트·remote push·PR 생성 승인 대기 전 준비 중.
+- 상태: 로컬 통합 후보 및 focused·브라우저 검증 완료. 전체 Rust 게이트·remote push·PR 생성 명시 승인 대기.
 
 ## 통합과 기능 겹침
 
@@ -52,7 +52,9 @@ Chrome에서 Tauri 명령·이벤트는 대역을 사용했다. 실제 WASM·Can
 
 ## CI 및 전송 준비
 
-기존 origin/devel에는 최신 suite/unit-tier 정책이 없어 그대로 비교하면 CI가 실패한다. 이번 정확한 old base·동일 HanPage 저장소·통합 branch에만 적용되는 bootstrap을 준비한다. pinned upstream SHA와 Rust tree 동일성을 검증한 경우에만 그 SHA를 policy base로 사용한다. current HEAD로 비교 기준을 바꾸거나 정책 threshold를 완화하지 않는다.
+기존 origin/devel에는 최신 suite/unit-tier 정책이 없어 그대로 비교하면 CI가 실패한다. 이번 정확한 old base·동일 HanPage 저장소·통합 branch에만 적용되는 bootstrap을 추가했다. pinned upstream SHA와 Rust/test/policy 입력 tree 동일성을 검증한 경우에만, 임시 sparse worktree에서 upstream 원래 prepare·manifest·unit-tier 검사를 실행한다. current HEAD로 비교 기준을 바꾸거나 정책 threshold를 완화하지 않는다.
+
+실제 Git identity·tree 동일성 검사와 pinned sparse worktree의 prepare·두 policy check가 통과했다. `policy-bootstrap-identity.log`, `policy-bootstrap-worktree.log`. focused Node 30/30도 통과했다(`policy-bootstrap-focused.log`). 임시 worktree는 정리했다. 정책 보정은 `ci.yml`, 신규 bootstrap helper·Node test 및 기존 manifest test의 호출 경로 assertion에 한정되며 canonical policy와 JSON threshold는 upstream 그대로다.
 
 기존 main에는 CI Controller가 아직 없어 상태 부재 시 consumer가 전체 검사로 fallback한다. 향후 devel→main 릴리스에는 upstream 전용 promotion repository 제한을 HanPage에 맞추는 별도 작업이 필요하다.
 
@@ -61,6 +63,10 @@ Chrome에서 Tauri 명령·이벤트는 대역을 사용했다. 실제 WASM·Can
 첫 소스 커밋 `b6f4318dc8c8c50cdb0897887f72b3e59684dee8`의 실제 thin pack은 337,339,571바이트(0.314 GiB)로 상한 이하다. HanPage 이식 파일의 upstream 대비 `git diff --check`는 통과했다. 전체 imported tree에는 upstream의 CRLF fixture 등 기존 whitespace 경고가 있으며, 이 통합에서 원본 fixture를 일괄 수정하지 않았다.
 
 PDF 커밋 `3790cb0d7e35554a64e76af47b9c6e1be00d2d42`의 앞 커밋 대비 thin pack도 688,631,403바이트(0.641 GiB)로 상한 이하다.
+
+문서 커밋 `48404b29594806b38a3a70a2b6abc3b697a83989`의 pack은 1,110,233,641바이트(1.034 GiB), upstream 추적 기록 보완 `33386f1c09f65e6adb9462e5177acf6bbce7d911`은 982,379바이트, CI 커밋 `39a68841cce40c348cf95be77fc5d3fe876c5308`은 1,375,812바이트다. 모두 단일 push 상한 이하다. 원격 전송 승인을 받으면 각 커밋을 순서대로 push한다.
+
+최종 경로 대조: upstream 37,300경로 전부 후보에 존재하고, HanPage 추가 113경로를 포함해 37,413경로다. 원본에서 이미 추적하던 ignore 대상 `.log` 143경로는 정확한 upstream 목록만 명시 staging하여 보존했다. 이번 로컬 검증 로그는 ignored output에 있다.
 
 ## 남은 승인 및 후속
 
