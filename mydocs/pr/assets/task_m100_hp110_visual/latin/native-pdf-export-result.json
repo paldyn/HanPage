@@ -1,0 +1,17 @@
+{
+  "command": [
+    "target/pr-review/release-test/rhwp",
+    "export-pdf",
+    "samples/re-03-latin-only-hancom.hwp",
+    "-p",
+    "0",
+    "--backend",
+    "svg",
+    "--output",
+    "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/output/pr-review/hp110/representative-visual/latin/native-compatibility.pdf",
+    "--json"
+  ],
+  "exit": 0,
+  "stdout": "{\"backend\":\"svg\",\"bytes\":12359,\"format\":\"pdf\",\"output\":\"/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/output/pr-review/hp110/representative-visual/latin/native-compatibility.pdf\",\"pageCount\":1,\"renderedCount\":1,\"schemaVersion\":\"1.0\",\"source\":\"samples/re-03-latin-only-hancom.hwp\",\"untrustedContent\":false,\"untrustedFields\":[]}\n",
+  "stderr": ""
+}

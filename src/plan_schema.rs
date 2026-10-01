@@ -35,8 +35,14 @@
 
 use serde_json::{json, Value};
 
-/// 계획 스키마 버전. 봉투 schemaVersion·계획서 planVersion 과 독립적으로 진화한다.
-pub const PLAN_SCHEMA_VERSION: &str = "1.0";
+use crate::schema_registry::ENVELOPE_SCHEMA_VERSION;
+mod template;
+
+/// 계획 스키마 버전 — 단일 출처는 [`crate::schema_registry`](#4329). 여기서는
+/// 재수출만 해 기존 호출부 경로를 보존한다. 봉투 schemaVersion·계획서
+/// planVersion(아래 `REQUIRED_PLAN_VERSION`, 계획 파일이 선언하는 문법 수용
+/// 게이트)과는 여전히 독립적으로 진화한다.
+pub use crate::schema_registry::PLAN_SCHEMA_VERSION;
 
 /// 계획서가 선언해야 하는 `planVersion` 값 — 실행기가 이 값만 받는다.
 const REQUIRED_PLAN_VERSION: &str = "1.0";
@@ -142,6 +148,12 @@ fn plan_def() -> Value {
                 "Assertions",
                 "저장 전에 통과해야 하는 단언. 생략하면 기본값으로 판정한다.",
             ),
+            "preconditions": r_doc(
+                "Preconditions",
+                "[#4378 R22] 실행 전 전제(CAS). 하나라도 어긋나면 실행 0·저장 0 으로 \
+                 거절한다(exit 3 = 판정, preconditionFailed{kind,expected,actual} + nextCall). \
+                 `--dry-run` 도 같은 대조·같은 판정을 낸다.",
+            ),
             "dryRun": json!({
                 "type": "boolean",
                 "default": false,
@@ -154,6 +166,25 @@ fn plan_def() -> Value {
         "`rhwp run` 이 받는 편집 계획서. 도구 호출을 체이닝하는 대신 의도 하나를 선언하면 \
          실행기가 전 step 의 실행 가능성을 먼저 판정하고(불가 시 실행 0·exit 2), \
          인메모리 원자 실행 뒤 단언 통과 시에만 저장한다.",
+    )
+}
+
+/// [#4378 R22] 실행 전 전제 — 계획이 세워진 시점의 문서 상태를 고정한다.
+fn preconditions_def() -> Value {
+    object(
+        json!({
+            "inputSha256": prim(
+                "string",
+                "input 파일 전체의 SHA-256(64자리 16진, 대소문자 무관). 실행 시점의 \
+                 실제 해시와 다르면 — 계획 수립 후 다른 에이전트/사람이 문서를 바꿨다는 \
+                 뜻이므로 — 아무것도 적용하지 않고 preconditionFailed{kind,expected,actual} \
+                 + nextCall(재계획 힌트) + exit 3 으로 거절한다(`--dry-run` 도 같은 판정). \
+                 경합 유실(#3905: 두 exit 0 이 편집 하나를 무신호로 지움)의 \
+                 차단기다. 해시는 `rhwp-agent fingerprint` 또는 sha256sum 으로 얻는다.",
+            ),
+        }),
+        &["inputSha256"],
+        "실행 전 전제. 현재 축은 inputSha256 하나이며, 축 추가는 minor 다.",
     )
 }
 
@@ -183,13 +214,17 @@ fn assertions_def() -> Value {
 
 fn step_def() -> Value {
     json!({
-        "description": "편집 step 하나. `action` 이 판별자인 태그드 유니온이며, 4종 전부 \
+        "description": "편집 step 하나. `action` 이 판별자인 태그드 유니온이며, 8종 전부 \
                         선택 필드 `if`(조건절)를 받는다.",
         "oneOf": [
             r("FillFieldsStep"),
             r("ReplaceTextStep"),
             r("SetCellStep"),
             r("SetCheckboxStep"),
+            r("FillTemplateStep"),
+            r("RepeatAndFillParagraphBlockStep"),
+            r("RepeatAndFillTableRowsStep"),
+            r("ImportParagraphBlockStep"),
         ],
     })
 }
@@ -374,8 +409,11 @@ fn preview_step_def() -> Value {
                           자리를 지키므로 저널 항목과 계획서 항목을 순번으로 짝지을 수 있다."),
             "action": prim(
                 "string",
-                "그 step 의 action (fill_fields·replace_text·set_cell·set_checkbox 중 하나).",
+                "그 step 의 action. 기존 4종 및 템플릿/가져오기 4종이며 Step 정의를 따른다.",
             ),
+            "operationResult": prim("object", "템플릿 action의 예정 적용 대상·경로 대응표. 실행 시 같은 입력에서 동일 구조를 반환한다."),
+            "source": prim("object", "가져오기 전용 {path,sha256}. 한 번 읽어 검증한 원본 파일 지문. workload 대신 result.resources에 자원 집계를 낸다."),
+            "workload": prim("object", "records·targets·replacementTextBytes 입력 작업량. 메모리나 조판 비용 실측값이 아니다."),
             "skipped": json!({
                 "type": "boolean",
                 "description": "참이면 `if` 조건이 거짓이라 이 step 은 실행되지 않는다 — 선검증도 \
@@ -421,8 +459,9 @@ fn definition_count(schema: &Value) -> usize {
 /// `rhwp run` 계획서 전체의 JSON Schema.
 pub fn plan_schema() -> Value {
     // 정의가 늘면 json! 매크로 재귀 한도에 걸린다 — 맵으로 조립한다.
-    let defs: serde_json::Map<String, Value> = [
+    let mut defs: serde_json::Map<String, Value> = [
         ("Plan", plan_def()),
+        ("Preconditions", preconditions_def()),
         ("Assertions", assertions_def()),
         ("Step", step_def()),
         ("FillFieldsStep", fill_fields_step_def()),
@@ -436,10 +475,13 @@ pub fn plan_schema() -> Value {
     .into_iter()
     .map(|(name, def)| (name.to_string(), def))
     .collect();
+    template::extend(&mut defs);
+    template::restrict_single_step(defs.get_mut("Plan").expect("Plan exists"));
 
     json!({
         "$schema": SCHEMA_DIALECT,
-        "$id": "https://github.com/edwardkim/rhwp/schema/plan/1.0",
+        // [#4329] $id 의 버전 조각도 레지스트리 상수에서 파생 — 리터럴 산개 금지.
+        "$id": format!("https://github.com/edwardkim/rhwp/schema/plan/{PLAN_SCHEMA_VERSION}"),
         "title": "rhwp 편집 계획서",
         "planSchemaVersion": PLAN_SCHEMA_VERSION,
         "description":
@@ -469,7 +511,7 @@ pub fn envelope() -> Value {
     let schema = plan_schema();
     let def_count = definition_count(&schema);
     json!({
-        "schemaVersion": "1.0",
+        "schemaVersion": ENVELOPE_SCHEMA_VERSION,
         "planSchemaVersion": PLAN_SCHEMA_VERSION,
         "dialect": SCHEMA_DIALECT,
         "definitionCount": def_count,
@@ -483,6 +525,7 @@ mod tests {
 
     /// 닫힌 객체와 그 사유 — 사유 없는 예외는 허용목록이 아니라 구멍이다.
     const CLOSED_DEFS: &[(&str, &str)] = &[
+        ("ImportParagraphBlockStep", "파일 입력 계약의 미지 옵션을 런타임과 동일하게 거부한다"),
         (
             "StepCondition",
             "실행기가 모르는 조건 키를 invalid 로 거부한다 — 스키마가 더 관대하면 통과한 계획이 실행에서 막힌다",
@@ -490,6 +533,18 @@ mod tests {
         (
             "FieldEqualsCondition",
             "피연산자가 name·value 둘뿐이다 — 셋째 키는 뜻이 정의돼 있지 않다",
+        ),
+        (
+            "TemplateLimits",
+            "native 요청이 상한 키 오타를 거부한다 — 안전 예산의 잘못된 지정을 묵살하지 않는다",
+        ),
+        (
+            "TemplateScope",
+            "native 요청의 deny_unknown_fields와 같은 명시 대상 주소 계약을 유지한다",
+        ),
+        (
+            "TemplateBlock",
+            "복제 원형·삽입 경계·복사 수의 오타를 native 요청처럼 거부한다",
         ),
     ];
 
@@ -539,6 +594,11 @@ mod tests {
             if def["type"] != "object" {
                 continue;
             }
+            if name == "TemplateRecord" {
+                // binding key는 사용자 정의지만 값은 문자열뿐이다. 무제약 open 객체가 아니다.
+                assert_eq!(def["additionalProperties"]["type"], "string");
+                continue;
+            }
             let closed = CLOSED_DEFS.iter().find(|(n, _)| n == name);
             match closed {
                 Some((_, why)) => {
@@ -567,7 +627,7 @@ mod tests {
         let variants = schema["$defs"]["Step"]["oneOf"]
             .as_array()
             .expect("Step.oneOf");
-        assert_eq!(variants.len(), 4, "step 4종");
+        assert_eq!(variants.len(), 8, "기존 4종과 템플릿/가져오기 4종");
         let mut actions = Vec::new();
         for variant in variants {
             let name = variant["$ref"]
@@ -596,7 +656,16 @@ mod tests {
         actions.sort();
         assert_eq!(
             actions,
-            ["fill_fields", "replace_text", "set_cell", "set_checkbox"]
+            [
+                "fill_fields",
+                "fill_template",
+                "import_paragraph_block",
+                "repeat_and_fill_paragraph_block",
+                "repeat_and_fill_table_rows",
+                "replace_text",
+                "set_cell",
+                "set_checkbox"
+            ]
         );
     }
 

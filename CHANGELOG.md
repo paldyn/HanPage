@@ -4,6 +4,195 @@
 
 ## [Unreleased]
 
+### 조판·렌더링
+
+- 쪽 조각이 rowspan 블록 **안쪽**에서 끝나면 걸침 셀이 컷으로 소비한 중첩 표가 조각 상자
+  밖에 놓여 통째로 clip 되던 결함을 고쳤다. 블록-합 보정의 차액을 이 조각이 실제로 그리는
+  마지막 행에 싣는다 (#7336).
+- 저장 RowBreak object frame 이 선언 높이로 "이 쪽을 소유한다"고 말해도, 실측 표가 본문 한
+  쪽에 들어가지 않으면 종전대로 행 컷 스캐너로 분할한다. 쪽보다 큰 표를 통째로 얹어 본문
+  아래로 넘긴 내용이 사라지던 결함을 고쳤다 (#7336).
+
+## [0.8.6] — 2026-09-02
+
+> v0.8.4 이후 기능 기준선의 2,214커밋에서 확인한 262개 PR provenance를 바탕으로 준비한 누적 PATCH
+> 릴리즈다. 이후 버전·검증·릴리스 기록 commit은 이 계측 범위와 분리한다. 문서 조판·저장 충실도,
+> Studio 편집, CLI·agent, 입력 안전성과 릴리스 신뢰성을 함께 보강하며 기존 JSON 봉투 major는 유지한다.
+
+### 조판·렌더링·폰트
+
+- `HwpDocument.setExactFontInstance(optionsJson)`와 `clearExactFontInstance(optionsJson)`를 추가했다. host가
+  `registerExactFontSource`로 등록한 exact slot에만 `boundedHorizontalLtrV1` variable-font 요청을 설정·해제하며,
+  strict JSON 검증과 per-slot 멱등 clear를 제공한다. parser나 font 이름에서 axis를 자동 추론하지 않는다 (#4969).
+- exact font 커닝, bounded common shaping replay와 vertical layout을 조판·CanvasKit 경로에 단계적으로
+  연결했다. 지원하지 않거나 손상된 입력은 기존 안전 경로로 되돌아간다 (#4968, #4969).
+- 저장 RowBreak 표·물리 frame·LineSeg와 자리차지 개체의 페이지 소유권, 표 폭, 글상자 vpos, 위첨자 advance,
+  빈 줄 TAC 그림과 Square 겹침 그림 배치를 실제 한글 오라클에 맞게 보정했다.
+- `--compat 2024`를 opt-in으로 추가해 한글 2024의 자리차지 표 앵커 줄 계상을 선택할 수 있게 했다. 기본
+  조판 정책을 버전 번호만으로 자동 변경하지 않는다 (#5525).
+
+### 개방·저장·왕복 보존
+
+- `hp:ole` 의 shape-component 자식(`offset`·`orgSz`·`curSz`·`flip`·
+  `rotationInfo`·`renderingInfo`·`lineShape`)과 `id`/`instid` 를 원문
+  보존한다. `curSz=0` 은 was_zero 센티널로 되돌리고, 음수 offset 은
+  u32 wraparound 로 방출한다 (#4669, #5450).
+- HWPX curve를 `hp:seg` 체인으로 저장해 한글 개방 크래시를 막고, BinData storage id에 구멍이 있는
+  문서의 그림을 순번 축으로 복구한다 (#4676, #3893, #4049).
+- HWP3 구역 정의 제어문자 위치와 문자 보존을 고치고, OWPML 열거·숨은 설명·누름틀 범위 때문에 저장 후
+  본문이 사라지는 경로를 보정했다 (#4680, #4776).
+- DOCTYPE이 붙은 HWPML과 Version 2.1 입력을 열 수 있다 (#5848).
+- 중첩 표 검색·치환은 깊이 2 이상에서 `cellPath`를 제공한다. 깊이 1의 기존 `cellContext` 봉투는 유지한다
+  (#2792).
+
+### 편집·Studio·브라우저 확장
+
+- 문서 전체 HTML·Word `.doc` 내보내기와 차트 숫자 데이터 편집 UI를 추가했다.
+- 한글 IME `Ctrl+A`, 다른 이름 저장 뒤 문서명·최근 문서, 머리말·꼬리말 선택·편집 API, 사용자 배율과
+  표준 인쇄 판형을 보정했다.
+- 병합 셀과 일반 표 경계의 마우스 리사이즈, 쪽 나누기 뒤 캐럿 표시, 눈금자 갱신을 개선했다.
+- Chrome 다운로드 판정에서 `.xlsx` 파일이 HWP viewer로 잘못 열리는 경로를 차단했다 (#6547).
+
+### CLI·agent·MCP
+
+- 편집 명령군과 조회 CLI를 확장하고 `rhwp-q-pack`에 Control·문서 조회 명령을 모았다.
+- 문서 에이전트 공개 명령 bridge와 HWP 2024 원격 MCP client를 추가했다.
+- CLI 도움말 index와 명령별 안내를 정비하고, 검증 없이 성공하던 `test-caption` 경로를 실패로 처리한다.
+
+### 보안·성능·운영
+
+- HWPX container와 parser 재귀 깊이에 상한을 두고 입력 경계·WMF 초기화를 보강했다.
+- Oracle PDF 자동 선택은 형식·생성 엔진·저장 제품이 불명확할 때 fail-closed한다.
+- exact font source와 variable shaping cache를 bounded reuse하고, nextest archive 분할·CodeQL 경로 분리·
+  문서/review-only 증적 재사용으로 반복 CI 비용을 줄였다.
+- trusted controller가 동일 merge tree의 검증을 재사용하도록 보정했다. 실제 post-release Render Diff
+  canary는 #6243에서 계속 추적한다.
+
+### 패키지·배포
+
+- GitHub Release CLI matrix에 native `aarch64-unknown-linux-gnu` target을 추가했다 (#5949, #6573).
+- Docker build가 이미 사용 중인 GID를 받아도 실패하지 않도록 보정했다 (#5758).
+- Rust, `@rhwp/core`, `@rhwp/editor`, Studio, VS Code와 Chrome/Edge/Firefox/Safari 버전을 0.8.6으로
+  맞춘다.
+
+### 호환성과 알려진 문제
+
+- exact font instance와 `--compat 2024`는 명시적 opt-in이다. 기존 기본 경로와 JSON 봉투 major는 유지한다.
+- 저장 충실도 복구로 재저장 bytes는 달라질 수 있지만 의미 보존을 위한 의도된 변화다.
+- Linux AArch64 이슈 #5949는 실제 v0.8.6 asset의 ELF·실행권한·버전을 확인한 뒤 닫는다.
+- #6243은 `main` trusted controller의 실제 post-release canary가 성공할 때까지 열린 상태로 유지한다.
+
+### 기여자
+
+이번 사이클에 참여한 사람 20명(credit key, 대소문자 보존·알파벳순):
+
+<!-- release-contributors:start -->
+- @chrisryugj
+- @coolwithyou
+- @davindev
+- dkh0324 — Git author credit, 공개 GitHub 계정 미확인
+- @edwardkim
+- @humdrum00001010
+- @JamesPsh
+- @jangster77
+- @jeong-sik
+- @johndoekim
+- @keepYaoung
+- @kevin9327
+- @kjh0523
+- @lpaiu-cs
+- @planet6897
+- @postmelee
+- @RaghavShubham
+- @Shadungi
+- @t2c-lab
+- @thhan74
+<!-- release-contributors:end -->
+
+## [0.8.4] — 2026-08-12
+
+### 배포 채널 복원
+
+- 공식 배포 범위를 v0.8.2와 동일하게 복원했다. GitHub Pages, GitHub Release
+  네이티브 CLI, npm `@rhwp/core`·`@rhwp/editor`, VS Code Marketplace/Open VSX와
+  Chrome·Edge·Firefox 확장 배포는 유지한다 (#4655).
+- 명시적인 메인테이너 채택과 안전 검증 없이 추가됐던 PyPI, `@rhwp/node`, GHCR
+  CLI 이미지, deb/rpm/MSI, 설치 스크립트·패키지 관리자 매니페스트·설치용 GitHub
+  Action의 코드와 게시 workflow를 제거했다 (#4655).
+- 공식 배포에서 철회한 Python·Node 바인딩의 전용 개발 코드, 테스트와 현재형 안내도
+  함께 제거했다. 신규 배포 채널은 빌드·설치·업데이트·롤백 검증과 유지 책임을 합의한
+  뒤 별도로 채택한다.
+
+## [0.8.3] — 2026-08-11
+
+> 누적 PATCH 릴리즈 — v0.8.2 이후 190개 PR을 통합했다. 암호 문서 열기·저장,
+> 중첩 표 조판과 편집, MCP/에이전트 실행 계약, 공식 Node·Python 바인딩과 다중 플랫폼
+> 배포 경로를 함께 확장한다. 기존 JSON 봉투 major는 1.0을 유지한다.
+
+### 암호 문서와 저장 호환성
+
+- HWP5 EncryptVersion 4 암호 문서를 열고, Studio에서 비밀번호를 입력할 수 있다
+  (#3405, #3477).
+- HWP3 암호 해제와 암호화 HWPX 열기를 지원하고, HWP3의 옛한글 문자열 보존을 보강했다
+  (#3483, #3516).
+- HWP3/HWP5/HWPX 암호화 저장·재열기 계약을 추가했다 (#3690).
+- HWP5 손상 저장 경로와 HWPX namespace·OLE·탭·차트 등 저장 왕복 보존 범위를 넓혔다.
+
+### 조판·렌더링 정합
+
+- 중첩 표의 페이지 분할, RowBreak, 셀 내부 빈 문단, 자식 표 흐름과 마지막 하단 테두리를
+  연속 보정했다 (#4094, #4122, #4174, #4517, #4525, #4567).
+- PUA 글자 겹침으로 기록된 사각 번호와 작은 오른쪽 삼각형을 실제 글리프로 복원했다
+  (#4139, #4227, #4228).
+- CanvasKit이 정확한 glyph run을 재생하도록 하고 페이지 번호 metric과 렌더 replay
+  결정성을 개선했다 (#3741).
+
+### 편집·Studio·VS Code
+
+- 중첩 표 안의 텍스트·표 선택과 복사 경로를 보정하고, 다중 셀 서식 적용을 확장했다
+  (#4119, #4267, #4276).
+- F5 표 셀 크기 조절 3모드, 표 분할·결합, 폰트 스타일 no-op 보정이 추가됐다
+  (#3771, #3831, #4271).
+- VS Code 문서 outline 탐색을 추가했다 (#4093).
+- HwpCtrl 호환 표면과 호환성 ledger를 단계적으로 확장했다 (#4187, #4274, #4486).
+
+### CLI·MCP·에이전트 계약
+
+- `mcp-serve`가 stdio JSON-RPC 서버와 문서 세션 핸들을 제공한다 (#3571).
+- IR·capabilities·plan schema, ontology, provenance, replay/lineage/audit, 서명·anchor·gate,
+  보안 진단과 검증 사다리를 추가했다. `capabilities`의 schema registry가 봉투 1.0,
+  IR 1.0, capabilities 1.3, plan 1.1을 자기서술한다 (#4574).
+- `run` 계획과 capsule은 입력·계획·산출 해시를 고정하며, CAS 전제조건으로 실행 전 입력
+  변경을 거부할 수 있다.
+- 공식 Node·Python 바인딩과 생성 타입 드리프트 검사를 추가했다.
+
+### 보안·성능
+
+- 압축 해제 크기에 상한을 둬 deflate bomb 입력의 메모리 고갈을 차단했다 (#4263).
+- 대형 표의 커서 이동·선택·국소 repaint, 중복 렌더와 편집 후 재렌더 비용을 줄였다
+  (#3672, #3745, #4156, #4265).
+- Subsecond 핫패치의 무효화·진단·수명주기·repaint 경계를 통합했다 (#4602).
+
+### 패키지·배포
+
+- Linux x86_64, macOS x86_64/arm64, Windows x86_64 CLI archive와
+  `SHA256SUMS.txt`를 GitHub Release에 첨부하는 경로를 추가했다.
+- Python wheel/sdist, `@rhwp/node`, Debian/RPM/MSI 설치 프로그램, GHCR container
+  배포 workflow를 추가했다. 게시 시크릿이나 패키징 선행조건이 없는 채널은 검증 후
+  명시적으로 건너뛴다.
+- cargo-binstall 자산 매핑과 install.sh/install.ps1, Scoop·Homebrew·Winget·AUR
+  채널 초안을 추가했다. 해시 기반 채널 매니페스트는 릴리즈 자산 생성 후 갱신한다.
+- CI workflow action SHA 고정, stale run 취소, cache generation 청소와 경로별
+  선택 실행을 보강했다.
+
+### 기여자
+
+이번 사이클에 참여한 16명(GitHub 핸들, 알파벳순):
+
+- @edwardkim, @enigma-jerry72, @humdrum00001010, @JamesPsh, @jangster77, @jeong-sik,
+  @johndoekim, @kevin9327, @lpaiu-cs, @NacreousCloud, @planet6897, @postmelee,
+  @scari, @seo-rii, @walnutkim, @yuyu04
+
 ## [0.8.2] — 2026-07-27
 
 > 핫픽스 — 브라우저 확장의 인쇄 기능이 동작하지 않던 문제를 복구한다. v0.8.0 부터

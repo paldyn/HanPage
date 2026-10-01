@@ -2,6 +2,7 @@ import type { CommandServices } from '@/command/types';
 import type { BookmarkInfo } from '@/core/types';
 import { ModalDialog } from './dialog';
 
+import { t } from '../i18n/index.ts';
 /**
  * 찾아가기 대화상자 — 쪽/책갈피 탭으로 이동 위치 선택
  */
@@ -19,7 +20,7 @@ export class GotoDialog extends ModalDialog {
   private pageEnterHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor(services: CommandServices, tab?: 'page' | 'bookmark') {
-    super('찾아가기', 300);
+    super(t('dialog.goto.title'), 300);
     this.services = services;
     if (tab) this.activeTab = tab;
   }
@@ -34,12 +35,12 @@ export class GotoDialog extends ModalDialog {
 
     this.tabBtnPage = document.createElement('button');
     this.tabBtnPage.className = 'goto-tab-btn';
-    this.tabBtnPage.textContent = '쪽';
+    this.tabBtnPage.textContent = t('dialog.goto.tabBtnPage.text');
     this.tabBtnPage.addEventListener('click', () => this.switchTab('page'));
 
     this.tabBtnBookmark = document.createElement('button');
     this.tabBtnBookmark.className = 'goto-tab-btn';
-    this.tabBtnBookmark.textContent = '책갈피';
+    this.tabBtnBookmark.textContent = t('dialog.goto.tabBtnBookmark.text');
     this.tabBtnBookmark.addEventListener('click', () => this.switchTab('bookmark'));
 
     tabBar.appendChild(this.tabBtnPage);
@@ -54,7 +55,7 @@ export class GotoDialog extends ModalDialog {
     const row = document.createElement('div');
     row.className = 'dialog-row';
     const label = document.createElement('label');
-    label.textContent = '쪽 번호:';
+    label.textContent = t('dialog.goto.label.text');
     label.style.width = '60px';
     this.pageInput = document.createElement('input');
     this.pageInput.type = 'number';
@@ -68,7 +69,7 @@ export class GotoDialog extends ModalDialog {
     this.pageInput.style.fontSize = '12px';
 
     const rangeLabel = document.createElement('span');
-    rangeLabel.textContent = ` / ${totalPages}쪽`;
+    rangeLabel.textContent = t('dialog.goto.rangeLabel.text', { p1: totalPages });
     rangeLabel.style.color = '#666';
 
     row.appendChild(label);
@@ -114,7 +115,7 @@ export class GotoDialog extends ModalDialog {
     if (bookmarks.length === 0) {
       const empty = document.createElement('div');
       empty.style.cssText = 'color:#999;font-size:11px;padding:12px;text-align:center';
-      empty.textContent = '등록된 책갈피가 없습니다.';
+      empty.textContent = t('dialog.goto.empty.text');
       this.bookmarkList.appendChild(empty);
       return;
     }
@@ -123,7 +124,7 @@ export class GotoDialog extends ModalDialog {
     for (const bm of bookmarks) {
       const item = document.createElement('div');
       item.className = 'goto-bookmark-item';
-      item.textContent = bm.name || '(이름 없음)';
+      item.textContent = bm.name || t('dialog.goto.item.text');
       item.addEventListener('click', () => {
         this.bookmarkList.querySelectorAll('.goto-bookmark-item').forEach(el => el.classList.remove('selected'));
         item.classList.add('selected');
@@ -155,12 +156,13 @@ export class GotoDialog extends ModalDialog {
     return ih.moveCursorTo({ sectionIndex: sec, paragraphIndex: para, charOffset: offset });
   }
 
-  /** 지정 문단 전후 ±5 범위에서 커서 이동 가능한 문단 탐색 */
-  private fallbackMove(ih: any, sec: number, para: number): void {
+  /** 지정 문단 전후 ±5 범위에서 커서 이동 가능한 문단을 찾아 결과를 반환한다. */
+  private fallbackMove(ih: any, sec: number, para: number): boolean {
     for (let d = 1; d <= 5; d++) {
-      if (this.tryMoveCursor(ih, sec, para + d, 0)) return;
-      if (para - d >= 0 && this.tryMoveCursor(ih, sec, para - d, 0)) return;
+      if (this.tryMoveCursor(ih, sec, para + d, 0)) return true;
+      if (para - d >= 0 && this.tryMoveCursor(ih, sec, para - d, 0)) return true;
     }
+    return false;
   }
 
   show(): void {
@@ -183,6 +185,10 @@ export class GotoDialog extends ModalDialog {
   hide(): void {
     this.removePageEnterHandler();
     super.hide();
+    // 모달 input이 제거되면 키보드 포커스가 문서 밖으로 빠진다. InputHandler는 active인
+    // 동안 전역 단축키를 양보하므로 textarea에 다시 포커스하지 않으면 Option+G를 비롯한
+    // 편집 단축키가 다음 입력에서 사라진다.
+    this.services.getInputHandler()?.focus();
   }
 
   private installPageEnterHandler(): void {
@@ -216,24 +222,46 @@ export class GotoDialog extends ModalDialog {
     const pageNum = parseInt(this.pageInput.value, 10);
 
     if (isNaN(pageNum) || pageNum < 1 || pageNum > totalPages) {
-      this.statusLabel.textContent = `1~${totalPages} 범위의 쪽 번호를 입력하세요.`;
+      this.statusLabel.textContent = t('dialog.goto.statusLabel.text', { p1: totalPages });
       return false;
     }
 
     const globalPage = pageNum - 1;
     const posResult = this.services.wasm.getPositionOfPage(globalPage);
     if (!posResult.ok) {
-      this.statusLabel.textContent = '해당 쪽을 찾을 수 없습니다.';
+      this.statusLabel.textContent = t('dialog.goto.statusLabel.text.x314a63');
+      return false;
+    }
+
+    // 표가 쪽의 첫 항목이면 해당 상위 문단에 커서를 둘 수 없을 수 있다. 화면 이동은
+    // 커서 배치와 독립적으로 먼저 완료해야 대형 문서의 후반부도 항상 표시된다.
+    if (!this.services.gotoPage(globalPage)) {
+      this.statusLabel.textContent = t('dialog.goto.statusLabel.text.x71ce6d');
       return false;
     }
 
     const ih = this.services.getInputHandler();
-    if (ih) {
-      ih.moveCursorTo({
-        sectionIndex: posResult.sec!,
-        paragraphIndex: posResult.para!,
-        charOffset: posResult.charOffset ?? 0,
-      });
+    if (!ih) {
+      this.statusLabel.textContent = t('dialog.goto.statusLabel.text.x614cbb');
+      return false;
+    }
+
+    // 화면 이동이 성공한 경우에만 각주 편집 컨텍스트를 끝낸다. 이동이 실패하면 사용자는
+    // 기존 각주를 계속 편집할 수 있어야 하고, 본문 커서는 아래에서만 배치해야 한다.
+    ih.exitFootnoteModeForBodyNavigation();
+    const moved = this.tryMoveCursor(
+      ih,
+      posResult.sec!,
+      posResult.para!,
+      posResult.charOffset ?? 0,
+    ) || this.fallbackMove(ih, posResult.sec!, posResult.para!);
+    if (!moved) {
+      // 화면은 대상 쪽으로 이동했지만 커서를 놓을 문단을 찾지 못했다. 다음 입력을
+      // 허용하려 모달을 유지한다.
+      this.statusLabel.textContent = t('dialog.goto.statusLabel.text.x97f664');
+      this.pageInput.focus();
+      this.pageInput.select();
+      return false;
     }
   }
 }

@@ -3,8 +3,18 @@
 
 import { MovePictureCommand, MoveShapeCommand, ResizeObjectCommand } from './command';
 import type { ObjectResizeTarget } from './command';
+import { PictureResizeJournal } from './picture-resize-journal';
 import { computeArrowResize, MIN_SIZE_HWP, type ArrowKey } from './picture-resize';
 import { computeRotationRecord } from './object-drag-record';
+import {
+  exactSelectedControlLayoutPages,
+  isMasterPageDecoration,
+  isNestedCellDescendantOfControl,
+  isSupportedPictureControl,
+  isLineControlHit,
+  lineControlReference,
+} from './picture-hit-policy';
+import { clearObjectEditingPage, summarizeObjectSelection } from './object-selection-page';
 import type { CellPathLike } from '@/core/types';
 import { showToast } from '@/ui/toast';
 
@@ -25,6 +35,7 @@ type PictureObjectRef = {
   headerFooter?: { kind: 'header' | 'footer'; outerParaIdx: number; outerControlIdx: number };
   /** [Task #2230] 그림 미지정 placeholder — 더블클릭 시 그림 지정 진입. */
   missing?: boolean;
+  pageIndex?: number;
 };
 
 function hasCellPath(ref: { cellPath?: CellPathLike } | null | undefined): ref is { cellPath: CellPathLike } {
@@ -97,12 +108,28 @@ function scheduleOleSelectionLayerStabilize(this: any, ref: PictureObjectRef): v
 }
 
 /**
- * [Task #1280 v2] 렌더 정렬키 (plane, zOrder, stableIndex). Rust `paper_node_sort_key`
- * (layout.rs)와 단일 진실 원천. 사전식으로 클수록 위(최상단). layer 필드 부재 시
- * 렌더 폴백 (plane=2, z=0, stable=0)과 동일하게 처리한다.
+ * [Task #1280 v2, #4334] 렌더 정렬키 (plane, zOrder, stableIndex). Rust
+ * `paper_node_sort_key`(layout.rs)와 단일 진실 원천. 사전식으로 클수록 위(최상단).
+ * layer 필드 부재 시 렌더 폴백 (plane=2, z=0, stable=[])과 동일하게 처리한다.
+ *
+ * [#4334] `stableIndex` 는 더 이상 스칼라가 아니다 — `next_id()` 카운터도, layer 유무에
+ * 따라 서로 다른 자릿수 공간을 쓰던 패킹된 u32도 아니고, 문서 경로(정수 배열,
+ * `[secIdx, paraIdx, ...셀 경로, controlIdx]`, `doc_path_for_node`)를 그대로 받는다.
+ * layer 있는 노드와 없는 노드가 이제 같은 좌표계를 공유하므로 배열 길이가 다를 수
+ * 있다 — `compareLexArrays` 가 짧은 쪽을 공통 접두사로 보고 그 다음 길이로 비교한다
+ * (Rust `Vec<u32>` 의 `Ord` 와 동일 의미).
  */
-function controlTopKey(ctrl: any): [number, number, number] {
-  return [ctrl.plane ?? 2, ctrl.zOrder ?? 0, ctrl.stableIndex ?? 0];
+function controlTopKey(ctrl: any): [number, number, number[]] {
+  return [ctrl.plane ?? 2, ctrl.zOrder ?? 0, ctrl.stableIndex ?? []];
+}
+
+/** [#4334] 문서 경로 배열을 사전식으로 비교한다 — 공통 접두사가 같으면 짧은 쪽이 작다. */
+function compareLexArrays(a: number[], b: number[]): number {
+  const len = Math.min(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+  return a.length - b.length;
 }
 
 /** a가 b보다 위(최상단)인가? 정렬키 사전식 비교. 동률이면 false(기존 emit 순서 유지). */
@@ -111,29 +138,17 @@ function isAboveControl(a: any, b: any): boolean {
   const kb = controlTopKey(b);
   if (ka[0] !== kb[0]) return ka[0] > kb[0];
   if (ka[1] !== kb[1]) return ka[1] > kb[1];
-  return ka[2] > kb[2];
+  return compareLexArrays(ka[2], kb[2]) > 0;
 }
 
 /** 적중한 layout 컨트롤에서 PictureObjectRef 를 구성한다(line 은 끝점 포함). */
-function controlToRef(ctrl: any): PictureObjectRef {
+function controlToRef(ctrl: any, pageIndex?: number): PictureObjectRef {
   if (ctrl.type === 'line') {
-    return { sec: ctrl.secIdx, ppi: ctrl.paraIdx, ci: ctrl.controlIdx, type: 'line',
-      x1: ctrl.x1, y1: ctrl.y1, x2: ctrl.x2, y2: ctrl.y2 };
+    return lineControlReference(ctrl, pageIndex);
   }
   return { sec: ctrl.secIdx, ppi: ctrl.paraIdx, ci: ctrl.controlIdx, type: ctrl.type,
     cellIdx: ctrl.cellIdx, cellParaIdx: ctrl.cellParaIdx, outerTableControlIdx: ctrl.outerTableControlIdx,
-    cellPath: ctrl.cellPath, noteRef: ctrl.noteRef, headerFooter: ctrl.headerFooter, missing: ctrl.missing };
-}
-
-/** 클릭 좌표에서 그림, 글상자, 수식, OLE 개체를 찾는다. */
-/** 점과 선분 사이 최소 거리 (px) */
-function pointToSegmentDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
-  const dx = x2 - x1, dy = y2 - y1;
-  const lenSq = dx * dx + dy * dy;
-  if (lenSq === 0) return Math.hypot(px - x1, py - y1);
-  let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
-  t = Math.max(0, Math.min(1, t));
-  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+    cellPath: ctrl.cellPath, noteRef: ctrl.noteRef, headerFooter: ctrl.headerFooter, missing: ctrl.missing, pageIndex };
 }
 
 /**
@@ -198,28 +213,45 @@ export function findPictureAtClick(this: any,
   pageIdx: number, pageX: number, pageY: number,
 ): PictureObjectRef | null {
   try {
-    const layout = this.wasm.getPageControlLayout(pageIdx);
-    // [Task #1171] picture 우선: 클릭이 컨테이너 Shape(글상자) 와 그 안의 nested picture
-    // (cellPath 동반 image/equation) 둘 다에 들어가면 picture 를 우선 선택한다.
-    // collect_controls 가 Shape 를 자식 picture 보다 먼저 방출하므로, 이 우선 패스가 없으면
-    // 아래 1차 패스가 Shape 를 먼저 hit 한다(이슈의 핵심 결함). Shape 와 picture 가 함께
-    // hit 될 때만 동작하므로, 겹치는 Shape 가 없는 표 셀 picture 는 영향 없음.
-    // BehindText 는 기존 2차 패스 정책 유지로 제외.
+    const layout = { controls: this.wasm.getPageControlLayout(pageIdx).controls.filter(isSupportedPictureControl) };
+    // 연결선의 경로는 넓은 도형·그림 경계 상자 안에 놓이는 경우가 많다. 경계 상자보다
+    // 먼저 실제 선 경로를 판정해야 #7333 8쪽처럼 화살표 클릭이 컨테이너 선택으로 바뀌지 않는다.
+    const topLine = layout.controls
+      .filter((ctrl: any) => ctrl.type === 'line' && ctrl.secIdx !== undefined &&
+        ctrl.paraIdx !== undefined && ctrl.controlIdx !== undefined &&
+        ctrl.wrap !== 'behindText' && !isMasterPageDecoration(ctrl) &&
+        isLineControlHit(ctrl, pageX, pageY))
+      .reduce((top: any, line: any) => top === null || isAboveControl(line, top) ? line : top, null);
+    if (topLine) return controlToRef(topLine, pageIdx);
+
+    // [Task #1171, #7333] 글상자 컨테이너와 그 안의 cellPath picture가 겹치면 picture를
+    // 우선 선택한다. 다만 같은 문단의 **독립 전경 Shape**까지 컨테이너로 취급하면, #7333
+    // 8쪽에서 작은 주석 도형을 눌러도 뒤의 스크린샷 picture가 선택된다. cellPath의 조상인
+    // Shape에만 기존 picture 우선을 적용하고, 독립 Shape는 먼저 선택한다.
+    // BehindText 그림은 기존 2차 패스 정책 유지로 제외.
     {
-      let shapeHit = false;
-      let nestedPic: any = null;
+      const hitShapes: any[] = [];
+      const nestedPictures: any[] = [];
       for (const ctrl of layout.controls) {
-        if (ctrl.secIdx === undefined || ctrl.wrap === 'behindText') continue;
+        if (ctrl.secIdx === undefined || ctrl.wrap === 'behindText' || isMasterPageDecoration(ctrl)) continue;
         const inBox = pageX >= ctrl.x && pageX <= ctrl.x + ctrl.w &&
           pageY >= ctrl.y && pageY <= ctrl.y + ctrl.h;
         if (!inBox) continue;
-        if (ctrl.type === 'shape') shapeHit = true;
-        else if ((ctrl.type === 'image' || ctrl.type === 'equation') && ctrl.cellPath && !nestedPic) {
-          nestedPic = ctrl;
-        }
+        if (ctrl.type === 'shape') hitShapes.push(ctrl);
+        else if ((ctrl.type === 'image' || ctrl.type === 'equation') && ctrl.cellPath) nestedPictures.push(ctrl);
       }
-      if (shapeHit && nestedPic) {
-        return { sec: nestedPic.secIdx, ppi: nestedPic.paraIdx, ci: nestedPic.controlIdx, type: nestedPic.type, cellIdx: nestedPic.cellIdx, cellParaIdx: nestedPic.cellParaIdx, outerTableControlIdx: nestedPic.outerTableControlIdx, cellPath: nestedPic.cellPath, noteRef: nestedPic.noteRef, headerFooter: nestedPic.headerFooter, missing: nestedPic.missing };
+      const foregroundShape = hitShapes
+        .filter((shape) => !nestedPictures.some((picture) =>
+          isNestedCellDescendantOfControl(shape, picture)))
+        .reduce((top: any, shape: any) => top === null || isAboveControl(shape, top) ? shape : top, null);
+      if (foregroundShape) return controlToRef(foregroundShape, pageIdx);
+
+      const nestedPic = nestedPictures.reduce(
+        (top: any, picture: any) => top === null || isAboveControl(picture, top) ? picture : top,
+        null,
+      );
+      if (hitShapes.length > 0 && nestedPic) {
+        return { sec: nestedPic.secIdx, ppi: nestedPic.paraIdx, ci: nestedPic.controlIdx, type: nestedPic.type, cellIdx: nestedPic.cellIdx, cellParaIdx: nestedPic.cellParaIdx, outerTableControlIdx: nestedPic.outerTableControlIdx, cellPath: nestedPic.cellPath, noteRef: nestedPic.noteRef, headerFooter: nestedPic.headerFooter, missing: nestedPic.missing, pageIndex: pageIdx };
       }
     }
     // Task #516 결함 3 (옵션 3-C): BehindText 그림은 텍스트 영역 위에서는 후순위.
@@ -233,6 +265,7 @@ export function findPictureAtClick(this: any,
     for (const ctrl of layout.controls) {
       if (ctrl.type !== 'image' && ctrl.type !== 'shape' && ctrl.type !== 'equation' && ctrl.type !== 'group' && ctrl.type !== 'line' && ctrl.type !== 'ole') continue;
       if (ctrl.secIdx === undefined || ctrl.paraIdx === undefined || ctrl.controlIdx === undefined) continue;
+      if (isMasterPageDecoration(ctrl)) continue;
       // [Task #825] 머리말/꼬리말 그림: headerFooter marker 가 함께 있어야 lookup 가능.
       // (없으면 본문 picture 동작 그대로.)
 
@@ -244,45 +277,7 @@ export function findPictureAtClick(this: any,
 
       let hit = false;
       if (ctrl.type === 'line') {
-        // 직선: 점-선분 거리, 연결선: 곡선 경로 샘플링으로 히트 판정
-        const threshold = 6;
-        const dist1 = pointToSegmentDist(pageX, pageY, ctrl.x1, ctrl.y1, ctrl.x2, ctrl.y2);
-        hit = dist1 <= threshold;
-        if (!hit && ctrl.w > 2 && ctrl.h > 2) {
-          const sx = ctrl.x1, sy = ctrl.y1, ex = ctrl.x2, ey = ctrl.y2;
-          const mx = ctrl.x + ctrl.w / 2, my = ctrl.y + ctrl.h / 2;
-          // 꺽인 연결선: 가능한 모든 직각 경로 검사
-          const segs: [number,number,number,number][] = [
-            // 수평→수직→수평 (S자 꺽임)
-            [sx,sy, mx,sy], [mx,sy, mx,ey], [mx,ey, ex,ey],
-            // 수직→수평→수직 (S자 꺽임)
-            [sx,sy, sx,my], [sx,my, ex,my], [ex,my, ex,ey],
-            // L자 꺽임
-            [sx,sy, ex,sy], [ex,sy, ex,ey],
-            [sx,sy, sx,ey], [sx,ey, ex,ey],
-          ];
-          for (const [ax,ay,bx,by] of segs) {
-            if (pointToSegmentDist(pageX, pageY, ax, ay, bx, by) <= threshold) {
-              hit = true; break;
-            }
-          }
-          // 곡선 연결선: 베지어 곡선 — 8세그먼트 샘플링
-          if (!hit) {
-            const c1x = mx, c1y = sy, c2x = mx, c2y = ey;
-            const N = 8;
-            let prevX = sx, prevY = sy;
-            for (let k = 1; k <= N; k++) {
-              const t = k / N;
-              const u = 1 - t;
-              const bx = u*u*u*sx + 3*u*u*t*c1x + 3*u*t*t*c2x + t*t*t*ex;
-              const by = u*u*u*sy + 3*u*u*t*c1y + 3*u*t*t*c2y + t*t*t*ey;
-              if (pointToSegmentDist(pageX, pageY, prevX, prevY, bx, by) <= threshold) {
-                hit = true; break;
-              }
-              prevX = bx; prevY = by;
-            }
-          }
-        }
+        hit = isLineControlHit(ctrl, pageX, pageY);
       } else {
         // bbox 히트 판정
         hit = pageX >= ctrl.x && pageX <= ctrl.x + ctrl.w &&
@@ -294,7 +289,7 @@ export function findPictureAtClick(this: any,
       }
     }
     if (topHit) {
-      return controlToRef(topHit);
+      return controlToRef(topHit, pageIdx);
     }
     // 2차 패스: BehindText 그림 hit-test (옵션 3-C, Task #516).
     // 텍스트 hit-test 결과를 확인하여 텍스트가 있는 위치면 그림 hit 무시.
@@ -315,7 +310,7 @@ export function findPictureAtClick(this: any,
         for (const ctrl of behindCtrls) {
           if (pageX >= ctrl.x && pageX <= ctrl.x + ctrl.w &&
               pageY >= ctrl.y && pageY <= ctrl.y + ctrl.h) {
-            return { sec: ctrl.secIdx, ppi: ctrl.paraIdx, ci: ctrl.controlIdx, type: ctrl.type, cellIdx: ctrl.cellIdx, cellParaIdx: ctrl.cellParaIdx, outerTableControlIdx: ctrl.outerTableControlIdx, cellPath: ctrl.cellPath, noteRef: ctrl.noteRef, headerFooter: ctrl.headerFooter, missing: ctrl.missing };
+            return { sec: ctrl.secIdx, ppi: ctrl.paraIdx, ci: ctrl.controlIdx, type: ctrl.type, cellIdx: ctrl.cellIdx, cellParaIdx: ctrl.cellParaIdx, outerTableControlIdx: ctrl.outerTableControlIdx, cellPath: ctrl.cellPath, noteRef: ctrl.noteRef, headerFooter: ctrl.headerFooter, missing: ctrl.missing, pageIndex: pageIdx };
           }
         }
       }
@@ -326,15 +321,15 @@ export function findPictureAtClick(this: any,
 
 /** 선택된 개체의 bbox를 페이지 레이아웃에서 찾는다. */
 export function findPictureBbox(this: any,
-  ref: { sec: number; ppi: number; ci: number; type?: 'image' | 'shape' | 'equation' | 'group' | 'line' | 'ole'; cellIdx?: number; cellParaIdx?: number; cellPath?: CellPathLike; noteRef?: any },
+  ref: { sec: number; ppi: number; ci: number; type?: 'image' | 'shape' | 'equation' | 'group' | 'line' | 'ole'; cellIdx?: number; cellParaIdx?: number; cellPath?: CellPathLike; noteRef?: any; pageIndex?: number },
 ): { pageIndex: number; x: number; y: number; w: number; h: number; x1?: number; y1?: number; x2?: number; y2?: number } | null {
   const matchType = ref.type ?? 'image';
   // line은 shape의 하위 타입 → layout에서 'line'으로 반환됨
   const layoutType = matchType === 'line' ? 'line' : matchType;
   try {
     const pageCount = this.wasm.pageCount;
-    for (let p = 0; p < pageCount; p++) {
-      const layout = this.wasm.getPageControlLayout(p);
+    for (const p of exactSelectedControlLayoutPages(pageCount, ref.pageIndex)) {
+      const layout = { controls: this.wasm.getPageControlLayout(p).controls.filter(isSupportedPictureControl) };
       for (const ctrl of layout.controls) {
         if (matchesControlRef(ctrl, { ...ref, type: matchType } as PictureObjectRef, layoutType)) {
           // 표 셀 내 수식: cellIdx/cellParaIdx도 매칭
@@ -361,6 +356,11 @@ export function findPictureBbox(this: any,
 }
 
 /** 개체 선택 시 외곽선 + 핸들을 렌더링한다. */
+function clearPictureSelectionRender(this: any): void {
+  this.pictureObjectRenderer?.clear();
+  clearObjectEditingPage(this.eventBus);
+}
+
 export function renderPictureObjectSelection(this: any): void {
   if (!this.pictureObjectRenderer) return;
 
@@ -369,38 +369,39 @@ export function renderPictureObjectSelection(this: any): void {
     const refs = this.cursor.getSelectedPictureRefs();
     try {
       const zoom = this.viewportManager.getZoom();
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      let pageIndex = 0;
+      const boxes = [];
       for (const r of refs) {
         const bbox = this.findPictureBbox(r);
-        if (bbox) {
-          pageIndex = bbox.pageIndex;
-          minX = Math.min(minX, bbox.x);
-          minY = Math.min(minY, bbox.y);
-          maxX = Math.max(maxX, bbox.x + bbox.w);
-          maxY = Math.max(maxY, bbox.y + bbox.h);
-        }
+        if (bbox) boxes.push(bbox);
       }
-      if (minX < Infinity) {
+      const summary = summarizeObjectSelection(boxes);
+      if (summary) {
         const locked = refs.some((r: PictureObjectRef) => isObjectSizeProtected.call(this, r));
         this.pictureObjectRenderer.render(
-          { pageIndex, x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+          {
+            pageIndex: summary.renderPageIndex,
+            x: summary.x,
+            y: summary.y,
+            width: summary.width,
+            height: summary.height,
+          },
           zoom,
           0,
           locked,
         );
+        this.eventBus.emit('editing-page-changed', summary.editingPageIndex);
       } else {
-        this.pictureObjectRenderer.clear();
+        clearPictureSelectionRender.call(this);
       }
     } catch {
-      this.pictureObjectRenderer.clear();
+      clearPictureSelectionRender.call(this);
     }
     return;
   }
 
   const ref = this.cursor.getSelectedPictureRef();
   if (!ref) {
-    this.pictureObjectRenderer.clear();
+    clearPictureSelectionRender.call(this);
     return;
   }
   const matchType = ref.type ?? 'image';
@@ -408,8 +409,8 @@ export function renderPictureObjectSelection(this: any): void {
   try {
     const zoom = this.viewportManager.getZoom();
     const pageCount = this.wasm.pageCount;
-    for (let p = 0; p < pageCount; p++) {
-      const layout = this.wasm.getPageControlLayout(p);
+    for (const p of exactSelectedControlLayoutPages(pageCount, ref.pageIndex)) {
+      const layout = { controls: this.wasm.getPageControlLayout(p).controls.filter(isSupportedPictureControl) };
       for (const ctrl of layout.controls) {
         if (matchesControlRef(ctrl, ref as PictureObjectRef, layoutType)) {
           // 표 셀 내 수식: cellIdx/cellParaIdx도 매칭
@@ -452,6 +453,7 @@ export function renderPictureObjectSelection(this: any): void {
               zoom,
               midPoint,
             );
+            this.eventBus.emit('editing-page-changed', p);
             return;
           }
 
@@ -474,15 +476,16 @@ export function renderPictureObjectSelection(this: any): void {
             rotAngle,
             locked,
           );
+          this.eventBus.emit('editing-page-changed', p);
           syncOleObjectCaret.call(this, ref as PictureObjectRef, zoom);
           return;
         }
       }
     }
-    this.pictureObjectRenderer.clear();
+    clearPictureSelectionRender.call(this);
   } catch (e) {
     console.warn('[InputHandler] renderPictureObjectSelection 실패:', e);
-    this.pictureObjectRenderer.clear();
+    clearPictureSelectionRender.call(this);
   }
 }
 
@@ -625,13 +628,19 @@ export function resizeSelectedPicture(this: any, key: ArrowKey): void {
     if (pending.length === 0) return;
     // 2단계: 적용 후 Undo 기록 (드래그 리사이즈와 동일 순서; 원본 ref 로 적용해
     // headerFooter 등 dispatch 필드를 보존한다)
-    for (const { r, target } of pending) {
-      setObjectProperties.call(this, r, target.after);
+    const journal = PictureResizeJournal.capture(this.wasm, pending.map(p => p.r));
+    try {
+      for (const { r, target } of pending) {
+        setObjectProperties.call(this, r, target.after);
+      }
+      this.executeOperation({
+        kind: 'record',
+        command: journal.command(pending.map(p => p.target)),
+      });
+    } catch (error) {
+      journal.cancel(this.wasm);
+      throw error;
     }
-    this.executeOperation({
-      kind: 'record',
-      command: new ResizeObjectCommand(pending.map((p) => p.target)),
-    });
     this.eventBus.emit('document-changed');
     this.renderPictureObjectSelection();
   } catch (err) {
@@ -779,6 +788,16 @@ export function updatePictureResizeDrag(this: any, e: MouseEvent): void {
     return;
   }
 
+  try {
+    state.resizeTransformJournal ??= PictureResizeJournal.capture(
+      this.wasm, state.multiRefs ?? [state.ref],
+    );
+  } catch (error) {
+    console.warn('[InputHandler] 그림 리사이즈 원본 보관 실패:', error);
+    this.cleanupPictureResizeDrag();
+    return;
+  }
+
   // 핸들은 고정, 예비 테두리만 갱신
   const rotAngle = (state.rotationAngle ?? 0) as number;
   const newBbox = state.multiRefs
@@ -870,6 +889,16 @@ export function finishPictureResizeDrag(this: any, e: MouseEvent): void {
   const zoom = this.viewportManager.getZoom();
   const PX2HWP = PX_TO_HWP;
 
+  try {
+    state.resizeTransformJournal ??= PictureResizeJournal.capture(
+      this.wasm, state.multiRefs ?? [state.ref],
+    );
+  } catch (error) {
+    console.warn('[InputHandler] 그림 리사이즈 원본 보관 실패:', error);
+    this.cleanupPictureResizeDrag();
+    return;
+  }
+
   // 다중 선택 리사이즈: 드래그 중 실시간 반영 완료 → 최종 확정만
   if (state.multiRefs && state.multiRefs.length > 0) {
     const newBbox = this.calcResizedBbox(e, zoom);
@@ -910,7 +939,8 @@ export function finishPictureResizeDrag(this: any, e: MouseEvent): void {
         historyTargets.push({ sec: r.sec, ppi: r.ppi, ci: r.ci, type: r.type, cellPath: r.cellPath, before, after: updated });
       }
       if (historyTargets.length > 0) {
-        this.executeOperation({ kind: 'record', command: new ResizeObjectCommand(historyTargets) });
+        this.executeOperation({ kind: 'record', command: state.resizeTransformJournal.command(historyTargets) });
+        state.resizeTransformJournal = null;
       }
       this.eventBus.emit('document-changed');
     } catch (err) {
@@ -964,8 +994,9 @@ export function finishPictureResizeDrag(this: any, e: MouseEvent): void {
       setObjectProperties.call(this, state.ref, updated);
       this.executeOperation({
         kind: 'record',
-        command: new ResizeObjectCommand([{ sec: state.ref.sec, ppi: state.ref.ppi, ci: state.ref.ci, type: state.ref.type, cellPath: state.ref.cellPath, before, after: updated }]),
+        command: state.resizeTransformJournal.command([{ sec: state.ref.sec, ppi: state.ref.ppi, ci: state.ref.ci, type: state.ref.type, cellPath: state.ref.cellPath, before, after: updated }]),
       });
+      state.resizeTransformJournal = null;
       this.eventBus.emit('document-changed');
     }
   } catch (err) {
@@ -1012,6 +1043,12 @@ export function calcResizedBbox(this: any, e: MouseEvent, zoom: number): { x: nu
 }
 
 export function cleanupPictureResizeDrag(this: any): void {
+  const journal = this.pictureResizeState?.resizeTransformJournal;
+  if (journal) {
+    this.pictureResizeState.resizeTransformJournal = null;
+    try { journal.cancel(this.wasm); }
+    catch (error) { console.warn('[InputHandler] 그림 리사이즈 취소 복원 실패:', error); }
+  }
   this.isPictureResizeDragging = false;
   this.pictureResizeState = null;
   this.container.style.cursor = '';

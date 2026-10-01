@@ -1,0 +1,312 @@
+{
+  "source_commit": "c38538745d7350efdf3ec9cd2ed64dda01848c66",
+  "upstream_commit": "02530b9ed567a44663edb26c65fb565c4a79f00d",
+  "base_commit": "cecaf1bbfec9a10778484d30ebb747280e7a02af",
+  "rust_source_identity": {
+    "candidate_commit": "27666e01a99cfbf186640bc9c21e83a14d3cd1e9",
+    "verified_paths": [
+      "src",
+      "tests",
+      "crates",
+      "vendor",
+      "Cargo.toml",
+      "Cargo.lock",
+      "rust-toolchain.toml",
+      ".cargo",
+      ".config"
+    ],
+    "differences": []
+  },
+  "lint": [
+    {
+      "gate": "suite-prepare",
+      "command": [
+        "node",
+        "scripts/rust-test-suite-manifest.mjs",
+        "--prepare"
+      ],
+      "exit_code": 0,
+      "seconds": 0.72
+    },
+    {
+      "gate": "rust-fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all"
+      ],
+      "exit_code": 0,
+      "seconds": 6.476
+    },
+    {
+      "gate": "rust-fmt-check",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "seconds": 6.072
+    },
+    {
+      "gate": "rust-native-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--target-dir",
+        "target/pr-review",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "seconds": 44.477
+    },
+    {
+      "gate": "rust-wasm-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "rhwp",
+        "--lib",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--target-dir",
+        "target/pr-review",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "seconds": 49.131
+    },
+    {
+      "gate": "rust-workspace-build",
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "--workspace",
+        "--target-dir",
+        "target/pr-review"
+      ],
+      "exit_code": 0,
+      "seconds": 63.283
+    },
+    {
+      "gate": "rust-workspace-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--target-dir",
+        "target/pr-review",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "seconds": 54.759
+    }
+  ],
+  "native_skia": [
+    {
+      "gate": "native-skia-lib",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--profile",
+        "release-test",
+        "--target-dir",
+        "target/pr-review",
+        "--features",
+        "native-skia",
+        "--lib",
+        "--",
+        "--test-threads",
+        "10"
+      ],
+      "exit_code": 0,
+      "seconds": 180.418,
+      "security_sample_input_count": 479
+    },
+    {
+      "gate": "native-skia-picture-placeholder",
+      "command": [
+        "node",
+        "scripts/run-rust-test.mjs",
+        "issue_2225_missing_picture_placeholder",
+        "--",
+        "--cargo-profile",
+        "release-test",
+        "--target-dir",
+        "target/pr-review",
+        "--features",
+        "native-skia",
+        "--test-threads",
+        "10",
+        "--no-fail-fast"
+      ],
+      "exit_code": 0,
+      "seconds": 98.298,
+      "security_sample_input_count": 479
+    },
+    {
+      "gate": "native-skia-pdf-export",
+      "command": [
+        "node",
+        "scripts/run-rust-test.mjs",
+        "render_p37_direct_pdf_export",
+        "--",
+        "--cargo-profile",
+        "release-test",
+        "--target-dir",
+        "target/pr-review",
+        "--features",
+        "native-skia",
+        "--test-threads",
+        "10",
+        "--no-fail-fast"
+      ],
+      "exit_code": 0,
+      "seconds": 6.973,
+      "security_sample_input_count": 479
+    }
+  ],
+  "corpus_retest": [
+    {
+      "gate": "corpus-suite-prepare",
+      "command": [
+        "node",
+        "scripts/rust-test-suite-manifest.mjs",
+        "--prepare"
+      ],
+      "exit_code": 0,
+      "seconds": 0.85,
+      "security_sample_input_count": 479
+    },
+    {
+      "gate": "corpus-manifest-integrity",
+      "command": [
+        "node",
+        "scripts/rust-test-suite-manifest.mjs",
+        "--check"
+      ],
+      "exit_code": 0,
+      "seconds": 0.303,
+      "security_sample_input_count": 479
+    },
+    {
+      "gate": "corpus-fmt-check",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "seconds": 5.97,
+      "security_sample_input_count": 479
+    },
+    {
+      "gate": "corpus-workspace-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--target-dir",
+        "target/pr-review",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "seconds": 5.278,
+      "security_sample_input_count": 479
+    },
+    {
+      "gate": "security-corpus-focused",
+      "command": [
+        "node",
+        "scripts/run-rust-test.mjs",
+        "security_corpus_regression",
+        "--",
+        "--cargo-profile",
+        "release-test",
+        "--target-dir",
+        "target/pr-review",
+        "--test-threads",
+        "10",
+        "--no-fail-fast"
+      ],
+      "exit_code": 0,
+      "seconds": 15.834,
+      "security_sample_input_count": 479
+    },
+    {
+      "gate": "rust-nextest-full",
+      "command": [
+        "cargo",
+        "nextest",
+        "run",
+        "--locked",
+        "--cargo-profile",
+        "release-test",
+        "--target-dir",
+        "target/pr-review",
+        "--tests",
+        "--test-threads",
+        "10",
+        "--no-fail-fast"
+      ],
+      "exit_code": 0,
+      "seconds": 383.167,
+      "security_sample_input_count": 479
+    }
+  ],
+  "nextest": {
+    "summary_seconds": " 261.762s",
+    "passed": 10276,
+    "skipped": 50,
+    "failed": 0
+  },
+  "security_sample_inputs": 479,
+  "native_lib": {
+    "rhwp_passed": 3930,
+    "rhwp_ignored": 13,
+    "other_lib_passed": 182
+  },
+  "studio": {
+    "passed": 1830,
+    "skipped": 2,
+    "failed": 0
+  },
+  "limitations": [
+    "Tauri events/invoke mocked; actual OS dialogs/updater/signing not executed",
+    "UI/native SVG colour evidence does not establish full Hancom PDF fidelity",
+    "92 external clipping fixtures are absent; not counted as tested",
+    "Security test ordinarily skips parse errors; initial run actually checked all 479 in each detector"
+  ],
+  "failed_attempts": {
+    "initial_nextest": {
+      "passed": 10275,
+      "failed": 1,
+      "reason": "three verified genuine hidden fixtures classified as negative corpus"
+    },
+    "unprepared_focus": {
+      "tests_run": 0,
+      "counted_as_pass": false
+    }
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "coordinateSystem": "top-left physical96dpi",
+  "rows": [
+    {
+      "row": "header",
+      "alignment": "left text origin",
+      "pdfTextOriginPx": [
+        71.80108666666666,
+        202.33887199999995
+      ],
+      "svgTextOriginPx": [
+        71.8933333333334,
+        202.48666666666665
+      ],
+      "deltaPx": [
+        0.09224666666673897,
+        0.14779466666669805
+      ]
+    },
+    {
+      "row": "date",
+      "alignment": "left text origin",
+      "pdfTextOriginPx": [
+        346.21236666666664,
+        599.0253493333333
+      ],
+      "svgTextOriginPx": [
+        346.4533333333334,
+        599.6666666666666
+      ],
+      "deltaPx": [
+        0.24096666666673627,
+        0.6413173333332907
+      ]
+    },
+    {
+      "row": "company",
+      "alignment": "left text origin",
+      "pdfTextOriginPx": [
+        279.52850666666666,
+        849.4716466666667
+      ],
+      "svgTextOriginPx": [
+        279.7733333333334,
+        850.4
+      ],
+      "deltaPx": [
+        0.24482666666676778,
+        0.9283533333332343
+      ]
+    },
+    {
+      "row": "title",
+      "alignment": "centered paragraph logical advance box",
+      "pdfCenterAnchorPx": [
+        396.6414290341051,
+        279.37468266666673
+      ],
+      "svgCenterAnchorPx": [
+        396.85333333333335,
+        280.3066666666667
+      ],
+      "deltaPx": [
+        0.2119042992282516,
+        0.9319839999999431
+      ],
+      "pdfFirstGlyphOriginX": 144.56165333333334,
+      "svgFirstGlyphOriginX": 154.18666666666667,
+      "firstGlyphOriginDeltaPx": 9.625013333333328,
+      "pdfLastGlyphAdvancePx": 50.3255114015436,
+      "svgLastGlyphAdvancePx": 48.53333333333334,
+      "pdfCIDWidth": 1000,
+      "pdfFontSizeTextUnits": 243.0,
+      "pdfHorizontalScalePercent": 129.508194,
+      "sourceWidths": "PDF CIDFont W table and Tz243*0.119935*129.508194%; SVG font-size37.3333 and scale1.3 are read from original outputs, not fitted to image.",
+      "explanation": "The two outputs use entirely different actual font faces. Title advance box changes width while both boxes retain the same center anchor to0.22px; first glyph origin is expected to differ on a centered line. No translation/scale registration is applied to compare images."
+    }
+  ],
+  "allBaselineDifferencesLessThanOnePixel": true,
+  "maximumAnchorAxisDifferencePx": 0.9319839999999431,
+  "pictures": "Both PDF p1 and SVG p1 have zero image XObjects/image nodes. Picture-boundary check is not applicable on this selected page.",
+  "rules": "See same-coordinate-rule-geometry.json. All4 horizontal rule endpoints differ by less than1pixel, residual stroke-width difference0.04..0.23867px remains."
+}

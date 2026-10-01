@@ -1,0 +1,1262 @@
+{
+  "fontResponses": [
+    {
+      "url": "https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_four@1.0/HCRDotum.woff",
+      "status": 200,
+      "saved": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/output/pr-review/hp110/representative-visual/business/official-used-HCRDotum.woff",
+      "bytes": 9751840,
+      "sha256": "49bf312aec309ba88c3eb612c591c2d8e28b765c156c808691850137431bb1bf"
+    }
+  ],
+  "method": "Exact scripts/rasterize-svg-webfonts.mjs prepared SVG, same wrapper/Chrome arguments/viewport/zoom/font-ready/local-bold recovery; CDP actual platform faces for every SVG text node.",
+  "originalSVG": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/output/pr-review/hp110/representative-visual/official-sweep/hp110-business-p1/svg/biz_plan_001.svg",
+  "originalSVGSHA256": "787d555a3556aba5aec4b7713282bb1bf177f2b7e8bc4d90bb0505444a9af107",
+  "preparedHTML": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/output/pr-review/hp110/representative-visual/business/official-exact-rasterizer.html",
+  "preparedHTMLSHA256": "ea7913ba440970a8b9897e2727bc6ce9f6158ac6d5fca242b4f8a06db133cefe",
+  "projectionSHA256": "0b96600917c7e4b78e55a77c6904c69f70cfdd0067c00d2b54a58db6887d070e",
+  "appliedRuleIds": [
+    "rule.studio-supply.bd74329daa5a2a185478.canvas2d",
+    "rule.studio-supply.d988ac8884c2a8beab41.canvas2d",
+    "rule.studio-supply.b247488092a350760c80.canvas2d",
+    "rule.studio-supply.f09587c087bbefe58254.canvas2d",
+    "rule.studio-supply.c7917f3a4fa439763a33.canvas2d",
+    "rule.studio-supply.8175c2ae512fdcecc704.canvas2d",
+    "rule.studio-supply.16a7ab9887c570ec0d99.canvas2d",
+    "rule.studio-supply.746b8c3993b4f81def2c.canvas2d",
+    "rule.studio-supply.617b2457d3e4b9fef10f.canvas2d",
+    "rule.studio-supply.f8bd9d02732ea351cd32.canvas2d",
+    "rule.studio-supply.0aab2d58429b52047acb.canvas2d"
+  ],
+  "recoveredFontFaces": [],
+  "viewport": {
+    "width": 793.7066666666667,
+    "height": 1122.5066666666667
+  },
+  "zoom": 1,
+  "officialPNG": "output/pr-review/hp110/representative-visual/official-sweep/hp110-business-p1/rhwp_png/rhwp_001.png",
+  "officialPNGSHA256": "652f835539192b8742b3bc4fd37739d7c5241c6f4b5436096d0d0e662aac299c",
+  "verificationPNG": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/output/pr-review/hp110/representative-visual/business/official-font-proof-raster.png",
+  "verificationPNGSHA256": "652f835539192b8742b3bc4fd37739d7c5241c6f4b5436096d0d0e662aac299c",
+  "samePNGBytes": true,
+  "actualPostScriptNames": [
+    "NotoSerifKRExtraLight-Regular",
+    "HCRDotum"
+  ],
+  "allNodes": [
+    {
+      "index": 0,
+      "text": "O",
+      "attributes": {
+        "x": "71.8933333333334",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000",
+        "textLength": "15.6133",
+        "lengthAdjust": "spacingAndGlyphs"
+      },
+      "bbox": {
+        "x": 71.89350891113281,
+        "y": 177.48544311523438,
+        "width": 15.613204956054688,
+        "height": 31
+      },
+      "nodeId": 54,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "text": "O",
+      "attributes": {
+        "x": "87.50666666666673",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000",
+        "textLength": "15.6133",
+        "lengthAdjust": "spacingAndGlyphs"
+      },
+      "bbox": {
+        "x": 87.50675201416016,
+        "y": 177.48544311523438,
+        "width": 15.613197326660156,
+        "height": 31
+      },
+      "nodeId": 56,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "text": "교",
+      "attributes": {
+        "x": "103.12000000000006",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 103.11998748779297,
+        "y": 177.48544311523438,
+        "width": 20.609375,
+        "height": 31
+      },
+      "nodeId": 58,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "text": "육",
+      "attributes": {
+        "x": "123.80000000000007",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 123.79986572265625,
+        "y": 177.48544311523438,
+        "width": 20.609359741210938,
+        "height": 31
+      },
+      "nodeId": 60,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "text": "대",
+      "attributes": {
+        "x": "144.48000000000008",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 144.479736328125,
+        "y": 177.48544311523438,
+        "width": 20.609375,
+        "height": 31
+      },
+      "nodeId": 62,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "text": "학",
+      "attributes": {
+        "x": "165.16000000000005",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 165.1596221923828,
+        "y": 177.48544311523438,
+        "width": 20.609375,
+        "height": 31
+      },
+      "nodeId": 64,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "text": "교",
+      "attributes": {
+        "x": "185.84000000000006",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 185.83949279785156,
+        "y": 177.48544311523438,
+        "width": 20.609375,
+        "height": 31
+      },
+      "nodeId": 66,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "text": "O",
+      "attributes": {
+        "x": "217.18666666666672",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000",
+        "textLength": "15.6133",
+        "lengthAdjust": "spacingAndGlyphs"
+      },
+      "bbox": {
+        "x": 217.1859588623047,
+        "y": 177.48544311523438,
+        "width": 15.613204956054688,
+        "height": 31
+      },
+      "nodeId": 68,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "text": "X",
+      "attributes": {
+        "x": "232.80000000000007",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000",
+        "textLength": "15.0400",
+        "lengthAdjust": "spacingAndGlyphs"
+      },
+      "bbox": {
+        "x": 232.79920959472656,
+        "y": 177.48544311523438,
+        "width": 15.0399169921875,
+        "height": 31
+      },
+      "nodeId": 70,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "text": "X",
+      "attributes": {
+        "x": "247.84000000000006",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000",
+        "textLength": "15.0400",
+        "lengthAdjust": "spacingAndGlyphs"
+      },
+      "bbox": {
+        "x": 247.839111328125,
+        "y": 177.48544311523438,
+        "width": 15.039886474609375,
+        "height": 31
+      },
+      "nodeId": 72,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "text": "사",
+      "attributes": {
+        "x": "262.88000000000005",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 262.8790283203125,
+        "y": 177.48544311523438,
+        "width": 20.609375,
+        "height": 31
+      },
+      "nodeId": 74,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "text": "업",
+      "attributes": {
+        "x": "283.56000000000006",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 283.55889892578125,
+        "y": 177.48544311523438,
+        "width": 20.609375,
+        "height": 31
+      },
+      "nodeId": 76,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 12,
+      "text": "단",
+      "attributes": {
+        "x": "304.24000000000007",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 304.23876953125,
+        "y": 177.48544311523438,
+        "width": 20.609375,
+        "height": 31
+      },
+      "nodeId": 78,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 13,
+      "text": "홈",
+      "attributes": {
+        "x": "335.5866666666667",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 335.58526611328125,
+        "y": 177.48544311523438,
+        "width": 20.609375,
+        "height": 31
+      },
+      "nodeId": 80,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 14,
+      "text": "페",
+      "attributes": {
+        "x": "356.2666666666667",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 356.26513671875,
+        "y": 177.48544311523438,
+        "width": 20.609375,
+        "height": 31
+      },
+      "nodeId": 82,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 15,
+      "text": "이",
+      "attributes": {
+        "x": "376.9466666666667",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 376.94500732421875,
+        "y": 177.48544311523438,
+        "width": 20.609375,
+        "height": 31
+      },
+      "nodeId": 84,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 16,
+      "text": "지",
+      "attributes": {
+        "x": "397.6266666666667",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 397.6249084472656,
+        "y": 177.48544311523438,
+        "width": 20.609375,
+        "height": 31
+      },
+      "nodeId": 86,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 17,
+      "text": "구",
+      "attributes": {
+        "x": "428.97333333333336",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 428.97137451171875,
+        "y": 177.48544311523438,
+        "width": 20.609375,
+        "height": 31
+      },
+      "nodeId": 88,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 18,
+      "text": "축",
+      "attributes": {
+        "x": "449.6533333333334",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 449.6512451171875,
+        "y": 177.48544311523438,
+        "width": 20.609375,
+        "height": 31
+      },
+      "nodeId": 90,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 19,
+      "text": "사",
+      "attributes": {
+        "x": "481.00000000000006",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 480.99774169921875,
+        "y": 177.48544311523438,
+        "width": 20.609344482421875,
+        "height": 31
+      },
+      "nodeId": 92,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 20,
+      "text": "업",
+      "attributes": {
+        "x": "501.68000000000006",
+        "y": "202.48666666666665",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "21.333333333333332",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 501.6775817871094,
+        "y": 177.48544311523438,
+        "width": 20.609405517578125,
+        "height": 31
+      },
+      "nodeId": 94,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 21,
+      "text": "사",
+      "attributes": {
+        "transform": "translate(154.18666666666667,280.3066666666667) scale(1.3000,1)",
+        "font-family": "'HY헤드라인M','HYHeadLine','HYHeadLine-Medium','HCR Dotum','함초롬돋움','Malgun Gothic','맑은 고딕','Apple SD Gothic Neo','Noto Sans KR','Pretendard','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',sans-serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "37.333333333333336",
+        "font-weight": "bold",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 154.18634033203125,
+        "y": 240.64097595214844,
+        "width": 47.0794677734375,
+        "height": 48.28660583496094
+      },
+      "nodeId": 96,
+      "fonts": [
+        {
+          "familyName": "HCR Dotum",
+          "postScriptName": "HCRDotum",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 22,
+      "text": "업",
+      "attributes": {
+        "transform": "translate(226.98666666666668,280.3066666666667) scale(1.3000,1)",
+        "font-family": "'HY헤드라인M','HYHeadLine','HYHeadLine-Medium','HCR Dotum','함초롬돋움','Malgun Gothic','맑은 고딕','Apple SD Gothic Neo','Noto Sans KR','Pretendard','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',sans-serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "37.333333333333336",
+        "font-weight": "bold",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 226.9859161376953,
+        "y": 240.64097595214844,
+        "width": 47.07945251464844,
+        "height": 48.28660583496094
+      },
+      "nodeId": 98,
+      "fonts": [
+        {
+          "familyName": "HCR Dotum",
+          "postScriptName": "HCRDotum",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 23,
+      "text": "수",
+      "attributes": {
+        "transform": "translate(299.7866666666667,280.3066666666667) scale(1.3000,1)",
+        "font-family": "'HY헤드라인M','HYHeadLine','HYHeadLine-Medium','HCR Dotum','함초롬돋움','Malgun Gothic','맑은 고딕','Apple SD Gothic Neo','Noto Sans KR','Pretendard','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',sans-serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "37.333333333333336",
+        "font-weight": "bold",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 299.78546142578125,
+        "y": 240.64097595214844,
+        "width": 47.0794677734375,
+        "height": 48.28660583496094
+      },
+      "nodeId": 100,
+      "fonts": [
+        {
+          "familyName": "HCR Dotum",
+          "postScriptName": "HCRDotum",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 24,
+      "text": "행",
+      "attributes": {
+        "transform": "translate(372.5866666666667,280.3066666666667) scale(1.3000,1)",
+        "font-family": "'HY헤드라인M','HYHeadLine','HYHeadLine-Medium','HCR Dotum','함초롬돋움','Malgun Gothic','맑은 고딕','Apple SD Gothic Neo','Noto Sans KR','Pretendard','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',sans-serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "37.333333333333336",
+        "font-weight": "bold",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 372.5850524902344,
+        "y": 240.64097595214844,
+        "width": 47.0794677734375,
+        "height": 48.28660583496094
+      },
+      "nodeId": 102,
+      "fonts": [
+        {
+          "familyName": "HCR Dotum",
+          "postScriptName": "HCRDotum",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 25,
+      "text": "계",
+      "attributes": {
+        "transform": "translate(445.3866666666667,280.3066666666667) scale(1.3000,1)",
+        "font-family": "'HY헤드라인M','HYHeadLine','HYHeadLine-Medium','HCR Dotum','함초롬돋움','Malgun Gothic','맑은 고딕','Apple SD Gothic Neo','Noto Sans KR','Pretendard','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',sans-serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "37.333333333333336",
+        "font-weight": "bold",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 445.38458251953125,
+        "y": 240.64097595214844,
+        "width": 47.0794677734375,
+        "height": 48.28660583496094
+      },
+      "nodeId": 104,
+      "fonts": [
+        {
+          "familyName": "HCR Dotum",
+          "postScriptName": "HCRDotum",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 26,
+      "text": "획",
+      "attributes": {
+        "transform": "translate(518.1866666666667,280.3066666666667) scale(1.3000,1)",
+        "font-family": "'HY헤드라인M','HYHeadLine','HYHeadLine-Medium','HCR Dotum','함초롬돋움','Malgun Gothic','맑은 고딕','Apple SD Gothic Neo','Noto Sans KR','Pretendard','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',sans-serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "37.333333333333336",
+        "font-weight": "bold",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 518.1841430664062,
+        "y": 240.64097595214844,
+        "width": 47.0794677734375,
+        "height": 48.28660583496094
+      },
+      "nodeId": 106,
+      "fonts": [
+        {
+          "familyName": "HCR Dotum",
+          "postScriptName": "HCRDotum",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 27,
+      "text": "서",
+      "attributes": {
+        "transform": "translate(590.9866666666667,280.3066666666667) scale(1.3000,1)",
+        "font-family": "'HY헤드라인M','HYHeadLine','HYHeadLine-Medium','HCR Dotum','함초롬돋움','Malgun Gothic','맑은 고딕','Apple SD Gothic Neo','Noto Sans KR','Pretendard','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',sans-serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "37.333333333333336",
+        "font-weight": "bold",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 590.9837646484375,
+        "y": 240.64097595214844,
+        "width": 47.0794677734375,
+        "height": 48.28660583496094
+      },
+      "nodeId": 108,
+      "fonts": [
+        {
+          "familyName": "HCR Dotum",
+          "postScriptName": "HCRDotum",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 28,
+      "text": "2",
+      "attributes": {
+        "x": "346.4533333333334",
+        "y": "599.6666666666666",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "24",
+        "font-weight": "bold",
+        "fill": "#000000",
+        "textLength": "13.2000",
+        "lengthAdjust": "spacingAndGlyphs"
+      },
+      "bbox": {
+        "x": 346.4518737792969,
+        "y": 571.6630859375,
+        "width": 13.199920654296875,
+        "height": 35
+      },
+      "nodeId": 20,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 29,
+      "text": "0",
+      "attributes": {
+        "x": "359.65333333333336",
+        "y": "599.6666666666666",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "24",
+        "font-weight": "bold",
+        "fill": "#000000",
+        "textLength": "13.2000",
+        "lengthAdjust": "spacingAndGlyphs"
+      },
+      "bbox": {
+        "x": 359.6517639160156,
+        "y": 571.6630859375,
+        "width": 13.199951171875,
+        "height": 35
+      },
+      "nodeId": 22,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 30,
+      "text": "X",
+      "attributes": {
+        "x": "372.85333333333335",
+        "y": "599.6666666666666",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "24",
+        "font-weight": "bold",
+        "fill": "#000000",
+        "textLength": "16.9200",
+        "lengthAdjust": "spacingAndGlyphs"
+      },
+      "bbox": {
+        "x": 372.8517150878906,
+        "y": 571.6630859375,
+        "width": 16.91986083984375,
+        "height": 35
+      },
+      "nodeId": 24,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 31,
+      "text": "X",
+      "attributes": {
+        "x": "389.77333333333337",
+        "y": "599.6666666666666",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "24",
+        "font-weight": "bold",
+        "fill": "#000000",
+        "textLength": "16.9200",
+        "lengthAdjust": "spacingAndGlyphs"
+      },
+      "bbox": {
+        "x": 389.7716064453125,
+        "y": 571.6630859375,
+        "width": 16.919891357421875,
+        "height": 35
+      },
+      "nodeId": 26,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 32,
+      "text": ".",
+      "attributes": {
+        "x": "406.6933333333334",
+        "y": "599.6666666666666",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "24",
+        "font-weight": "bold",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 406.6914978027344,
+        "y": 571.6630859375,
+        "width": 7.953155517578125,
+        "height": 35
+      },
+      "nodeId": 28,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 33,
+      "text": "1",
+      "attributes": {
+        "x": "426.3733333333334",
+        "y": "599.6666666666666",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "24",
+        "font-weight": "bold",
+        "fill": "#000000",
+        "textLength": "13.2000",
+        "lengthAdjust": "spacingAndGlyphs"
+      },
+      "bbox": {
+        "x": 426.3713684082031,
+        "y": 571.6630859375,
+        "width": 13.199951171875,
+        "height": 35
+      },
+      "nodeId": 30,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 34,
+      "text": ".",
+      "attributes": {
+        "x": "439.5733333333334",
+        "y": "599.6666666666666",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "24",
+        "font-weight": "bold",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 439.5713195800781,
+        "y": 571.6630859375,
+        "width": 7.953125,
+        "height": 35
+      },
+      "nodeId": 32,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 35,
+      "text": "주",
+      "attributes": {
+        "x": "279.7733333333334",
+        "y": "850.4",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "25.333333333333332",
+        "font-weight": "bold",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 279.77227783203125,
+        "y": 821.3949584960938,
+        "width": 24.484375,
+        "height": 35.99993896484375
+      },
+      "nodeId": 34,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 36,
+      "text": "식",
+      "attributes": {
+        "x": "304.3333333333334",
+        "y": "850.4",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "25.333333333333332",
+        "font-weight": "bold",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 304.3321228027344,
+        "y": 821.3949584960938,
+        "width": 24.484375,
+        "height": 35.99993896484375
+      },
+      "nodeId": 36,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 37,
+      "text": "회",
+      "attributes": {
+        "x": "328.89333333333343",
+        "y": "850.4",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "25.333333333333332",
+        "font-weight": "bold",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 328.8919677734375,
+        "y": 821.3949584960938,
+        "width": 24.484405517578125,
+        "height": 35.99993896484375
+      },
+      "nodeId": 38,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 38,
+      "text": "사",
+      "attributes": {
+        "x": "353.45333333333343",
+        "y": "850.4",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "25.333333333333332",
+        "font-weight": "bold",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 353.45184326171875,
+        "y": 821.3949584960938,
+        "width": 24.743377685546875,
+        "height": 35.99993896484375
+      },
+      "nodeId": 40,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 39,
+      "text": "O",
+      "attributes": {
+        "x": "390.68000000000006",
+        "y": "850.4",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "25.333333333333332",
+        "font-weight": "bold",
+        "fill": "#000000",
+        "textLength": "18.5333",
+        "lengthAdjust": "spacingAndGlyphs"
+      },
+      "bbox": {
+        "x": 390.6782531738281,
+        "y": 821.3949584960938,
+        "width": 18.533233642578125,
+        "height": 35.99993896484375
+      },
+      "nodeId": 42,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 40,
+      "text": "O",
+      "attributes": {
+        "x": "409.2133333333334",
+        "y": "850.4",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "25.333333333333332",
+        "font-weight": "bold",
+        "fill": "#000000",
+        "textLength": "18.5333",
+        "lengthAdjust": "spacingAndGlyphs"
+      },
+      "bbox": {
+        "x": 409.2115173339844,
+        "y": 821.3949584960938,
+        "width": 18.533203125,
+        "height": 35.99993896484375
+      },
+      "nodeId": 44,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 41,
+      "text": "O",
+      "attributes": {
+        "x": "427.7466666666667",
+        "y": "850.4",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "25.333333333333332",
+        "font-weight": "bold",
+        "fill": "#000000",
+        "textLength": "18.5333",
+        "lengthAdjust": "spacingAndGlyphs"
+      },
+      "bbox": {
+        "x": 427.7447204589844,
+        "y": 821.3949584960938,
+        "width": 18.533203125,
+        "height": 35.99993896484375
+      },
+      "nodeId": 46,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 42,
+      "text": "소",
+      "attributes": {
+        "x": "446.2800000000001",
+        "y": "850.4",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "25.333333333333332",
+        "font-weight": "bold",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 446.2779235839844,
+        "y": 821.3949584960938,
+        "width": 24.484405517578125,
+        "height": 35.99993896484375
+      },
+      "nodeId": 48,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 43,
+      "text": "O",
+      "attributes": {
+        "x": "470.8400000000001",
+        "y": "850.4",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "25.333333333333332",
+        "font-weight": "bold",
+        "fill": "#000000",
+        "textLength": "18.5333",
+        "lengthAdjust": "spacingAndGlyphs"
+      },
+      "bbox": {
+        "x": 470.8377685546875,
+        "y": 821.3949584960938,
+        "width": 18.533233642578125,
+        "height": 35.99993896484375
+      },
+      "nodeId": 50,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    },
+    {
+      "index": 44,
+      "text": "트",
+      "attributes": {
+        "x": "489.37333333333345",
+        "y": "850.4",
+        "font-family": "'함초롬바탕','Batang','바탕','Nanum Myeongjo','AppleMyungjo','Noto Serif KR','Noto Serif CJK KR','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',serif, __rhwp_visual_sweep_noto_sans_kr__",
+        "font-size": "25.333333333333332",
+        "font-weight": "bold",
+        "fill": "#000000"
+      },
+      "bbox": {
+        "x": 489.3710021972656,
+        "y": 821.3949584960938,
+        "width": 24.484344482421875,
+        "height": 35.99993896484375
+      },
+      "nodeId": 52,
+      "fonts": [
+        {
+          "familyName": "Noto Serif KR ExtraLight",
+          "postScriptName": "NotoSerifKRExtraLight-Regular",
+          "isCustomFont": true,
+          "glyphCount": 1
+        }
+      ]
+    }
+  ]
+}

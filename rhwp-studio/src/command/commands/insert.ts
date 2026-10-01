@@ -1,5 +1,8 @@
 import type { CommandDef } from '../types';
+import { hyperlinkCommand, editHyperlinkCommand, removeHyperlinkCommand } from './hyperlink';
 import { PicturePropsDialog } from '@/ui/picture-props-dialog';
+import { ChartDataDialog } from '@/ui/chart-data-dialog';
+import { chartTargetFromSelection, matchChartRef } from '@/core/chart-data-target';
 import { EquationEditorDialog } from '@/ui/equation-editor-dialog';
 import { EquationPropertiesDialog } from '@/ui/equation-props-dialog';
 import { SymbolsDialog } from '@/ui/symbols-dialog';
@@ -12,8 +15,10 @@ import type { ShapeType } from '@/ui/shape-picker';
 import type { CellPathLike } from '@/core/types';
 import type { WasmBridge } from '@/core/wasm-bridge';
 import type { InputHandler } from '@/engine/input-handler';
-import type { RefreshPolicy } from '@/engine/command';
+import { SetObjectPropsCommand, SetZOrderCommand, type RefreshPolicy } from '@/engine/command';
+import { getObjectProps, setObjectProps, type ObjectPropsRef } from '@/engine/object-props';
 
+import { t } from '../../i18n/index.ts';
 /** 스텁 커맨드 생성 헬퍼 */
 function stub(id: string, label: string, icon?: string, shortcut?: string): CommandDef {
   return {
@@ -27,6 +32,7 @@ function stub(id: string, label: string, icon?: string, shortcut?: string): Comm
 }
 
 let picturePropsDialog: PicturePropsDialog | null = null;
+let chartDataDialog: ChartDataDialog | null = null;
 let equationEditorDialog: EquationEditorDialog | null = null;
 let equationPropsDialog: EquationPropertiesDialog | null = null;
 let symbolsDialog: SymbolsDialog | null = null;
@@ -93,7 +99,7 @@ function insertNote(
 export const insertCommands: CommandDef[] = [
   {
     id: 'insert:shape',
-    label: '도형',
+    label: t('command.insert.shape.label'),
     icon: 'icon-shape',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
@@ -109,7 +115,7 @@ export const insertCommands: CommandDef[] = [
   },
   {
     id: 'insert:image',
-    label: '그림',
+    label: t('command.insert.image.label'),
     icon: 'icon-image',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
@@ -140,14 +146,14 @@ export const insertCommands: CommandDef[] = [
           });
           ih.enterImagePlacementMode(data, ext, img.naturalWidth, img.naturalHeight, file.name);
           showToast({
-            message: '그림을 넣을 위치를 문서 본문 또는 표 셀 안에서 클릭하거나 드래그하세요.',
+            message: t('command.insert.execute.message'),
             durationMs: 3500,
           });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           console.warn('[insert:image] 이미지 준비 실패:', err);
           showToast({
-            message: `그림을 삽입할 수 없습니다.\n${msg}`,
+            message: t('command.insert.execute.message.x56c45a', { p1: msg }),
             durationMs: 6000,
           });
         } finally {
@@ -159,7 +165,7 @@ export const insertCommands: CommandDef[] = [
   },
   {
     id: 'insert:textbox',
-    label: '글상자',
+    label: t('command.insert.textbox.label'),
     icon: 'icon-textbox',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
@@ -170,7 +176,8 @@ export const insertCommands: CommandDef[] = [
   },
   {
     id: 'insert:equation',
-    label: '수식',
+    opensDialog: true,
+    label: t('command.insert.equation.label'),
     shortcutLabel: 'Ctrl+M,M',
     canExecute: (ctx) => ctx.hasDocument && !ctx.inTable,
     execute(services) {
@@ -202,7 +209,8 @@ export const insertCommands: CommandDef[] = [
   },
   {
     id: 'insert:field',
-    label: '필드 입력',
+    opensDialog: true,
+    label: t('command.insert.field.label'),
     shortcutLabel: 'Ctrl+K+E',
     canExecute: (ctx) => ctx.hasDocument && !ctx.isFormMode,
     execute(services) {
@@ -240,20 +248,20 @@ export const insertCommands: CommandDef[] = [
       fieldInsertDialog.show();
     },
   },
-  stub('insert:caption-top', '캡션 - 위'),
-  stub('insert:caption-lt', '캡션 - 왼쪽 위'),
-  stub('insert:caption-lm', '캡션 - 왼쪽 가운데'),
-  stub('insert:caption-lb', '캡션 - 왼쪽 아래'),
-  stub('insert:caption-rt', '캡션 - 오른쪽 위'),
-  stub('insert:caption-rm', '캡션 - 오른쪽 가운데'),
-  stub('insert:caption-rb', '캡션 - 오른쪽 아래'),
-  stub('insert:caption-bottom', '캡션 - 아래'),
-  stub('insert:caption-none', '캡션 없음'),
-  stub('insert:para-band', '문단 띠'),
-  stub('insert:comment', '주석', 'icon-comment'),
+  stub('insert:caption-top', t('command.insert.captionTop.registryLabel')),
+  stub('insert:caption-lt', t('command.insert.captionLt.registryLabel')),
+  stub('insert:caption-lm', t('command.insert.captionLm.registryLabel')),
+  stub('insert:caption-lb', t('command.insert.captionLb.registryLabel')),
+  stub('insert:caption-rt', t('command.insert.captionRt.registryLabel')),
+  stub('insert:caption-rm', t('command.insert.captionRm.registryLabel')),
+  stub('insert:caption-rb', t('command.insert.captionRb.registryLabel')),
+  stub('insert:caption-bottom', t('command.insert.captionBottom.registryLabel')),
+  stub('insert:caption-none', t('command.insert.captionNone.label')),
+  stub('insert:para-band', t('command.insert.paraBand.label')),
+  stub('insert:comment', t('command.insert.comment.label'), 'icon-comment'),
   {
     id: 'insert:footnote',
-    label: '각주',
+    label: t('command.insert.footnote.label'),
     icon: 'icon-footnote',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
@@ -262,7 +270,7 @@ export const insertCommands: CommandDef[] = [
   },
   {
     id: 'insert:endnote',
-    label: '미주',
+    label: t('command.insert.endnote.label'),
     icon: 'icon-endnote',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
@@ -271,7 +279,7 @@ export const insertCommands: CommandDef[] = [
   },
   {
     id: 'insert:note-close',
-    label: '닫기',
+    label: t('command.insert.noteClose.registryLabel'),
     icon: 'icon-delete',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
@@ -287,7 +295,8 @@ export const insertCommands: CommandDef[] = [
   },
   {
     id: 'insert:endnote-shape',
-    label: '미주 모양',
+    opensDialog: true,
+    label: t('command.insert.endnoteShape.label'),
     icon: 'icon-endnote',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
@@ -299,7 +308,8 @@ export const insertCommands: CommandDef[] = [
   },
   {
     id: 'insert:symbols',
-    label: '문자표',
+    opensDialog: true,
+    label: t('command.insert.symbols.label'),
     icon: 'icon-symbols',
     shortcutLabel: 'Alt+F10',
     canExecute: (ctx) => ctx.hasDocument,
@@ -310,10 +320,13 @@ export const insertCommands: CommandDef[] = [
       symbolsDialog.show();
     },
   },
-  stub('insert:hyperlink', '하이퍼링크', 'icon-hyperlink', 'Ctrl+K+H'),
+  hyperlinkCommand,
+  editHyperlinkCommand,
+  removeHyperlinkCommand,
   {
     id: 'insert:bookmark',
-    label: '책갈피',
+    opensDialog: true,
+    label: t('command.insert.bookmark.label'),
     shortcutLabel: 'Ctrl+K,B',
     canExecute: (ctx) => ctx.hasDocument,
     execute(services) {
@@ -325,7 +338,8 @@ export const insertCommands: CommandDef[] = [
   },
   {
     id: 'insert:picture-props',
-    label: '개체 속성',
+    opensDialog: true,
+    label: t('command.insert.pictureProps.label'),
     canExecute: (ctx) => ctx.inPictureObjectSelection,
     execute(services) {
       const ih = services.getInputHandler();
@@ -370,14 +384,60 @@ export const insertCommands: CommandDef[] = [
     },
   },
   {
-    id: 'insert:equation-edit',
-    label: '수식 편집',
+    id: 'insert:chart-data-edit',
+    opensDialog: true,
+    label: t('command.insert.chartDataEdit.registryLabel'),
     canExecute: (ctx) => ctx.inPictureObjectSelection,
     execute(services) {
       const ih = services.getInputHandler();
       if (!ih) return;
       const ref = ih.getSelectedPictureRef();
-      if (!ref || ref.type !== 'equation') return;
+      if (!ref) return;
+      // [#4694] 선택 → 열거 대조 → 정본 주소(문서 순번). 대조 실패는 조용히 무시 —
+      // 메뉴 노출 판정(input-handler)과 같은 경로라 여기 도달하면 보통 성공한다.
+      const target = chartTargetFromSelection(ref);
+      if (!target) return;
+      let matched = null;
+      try {
+        matched = matchChartRef(services.wasm.listCharts(), target);
+      } catch {
+        return;
+      }
+      if (!matched) return;
+      if (!chartDataDialog) {
+        chartDataDialog = new ChartDataDialog(services.wasm, services.eventBus, services);
+      }
+      // 닫힘 후 편집기 포커스 복구 — 없으면 이어지는 Ctrl+Z 가 문서에 닿지 않는다
+      // (field:edit 의 onClose 복원과 동형).
+      chartDataDialog.afterClose = () => {
+        requestAnimationFrame(() => ih.focus());
+      };
+      chartDataDialog.open(matched);
+    },
+  },
+  {
+    id: 'insert:equation-edit',
+    opensDialog: true,
+    label: t('command.insert.equationEdit.registryLabel'),
+    canExecute: (ctx) => ctx.inPictureObjectSelection,
+    execute(services) {
+      const ih = services.getInputHandler();
+      if (!ih) return;
+      let ref = ih.getSelectedPictureRef();
+      if (!ref || (ref.type !== 'equation' && ref.type !== 'ole')) return;
+      // 레거시 hwpeq5 OLE은 원본 방언을 안전하게 되쓸 수 없다. native equation으로
+      // 같은 슬롯에서 전환한 뒤 일반 편집기를 연다. snapshot 경로라 undo도 원 OLE로 복원된다.
+      if (ref.type === 'ole') {
+        const oleRef = ref;
+        let promoted: { ok: boolean; paraIdx: number; controlIdx: number } | undefined;
+        recordObjectMutation(ih, 'promoteOleEquation', (wasm) => {
+          promoted = wasm.promoteOleEquation(oleRef.sec, oleRef.ppi, oleRef.ci);
+          if (!promoted?.ok) throw new Error('[insert:equation-edit] 레거시 OLE 수식 전환 실패');
+        });
+        if (!promoted) return;
+        ih.selectPictureObject(oleRef.sec, promoted.paraIdx, promoted.controlIdx, 'equation');
+        ref = { ...oleRef, ppi: promoted.paraIdx, ci: promoted.controlIdx, type: 'equation' };
+      }
       if (!equationEditorDialog) {
         equationEditorDialog = new EquationEditorDialog(services.wasm, services.eventBus, services);
       }
@@ -386,7 +446,7 @@ export const insertCommands: CommandDef[] = [
   },
   {
     id: 'insert:caption-toggle',
-    label: '캡션 넣기',
+    label: t('command.insert.captionToggle.registryLabel'),
     canExecute: (ctx) => ctx.inPictureObjectSelection,
     execute(services) {
       const ih = services.getInputHandler();
@@ -411,7 +471,10 @@ export const insertCommands: CommandDef[] = [
           captionIncludeMargin: false,
         };
         let result: any;
-        result = setProps(services, ref, captionProps);
+        // [Task #3230] `setProps` 래퍼가 사라져 공유 라우팅을 직접 부른다. 이 경로는 종전부터
+        // 라우터를 거치지 않고 직접 적용하고 `document-changed` 를 스스로 emit 한다 —
+        // 회전/대칭과 달리 이번 변경 대상이 아니라 종전 동작 그대로 둔다.
+        result = setObjectProps(services.wasm, ref, captionProps);
         // "그림 N " 끝 위치를 Rust가 반환
         charOffset = result?.captionCharOffset ?? 4;
         services.eventBus.emit('document-changed');
@@ -429,55 +492,55 @@ export const insertCommands: CommandDef[] = [
   },
   {
     id: 'insert:arrange-front',
-    label: '맨 앞으로',
+    label: t('command.insert.arrangeFront.registryLabel'),
     canExecute: (ctx) => ctx.inPictureObjectSelection,
     execute(services) {
       const ih = services.getInputHandler();
       if (!ih) return;
       const ref = ih.getSelectedPictureRef();
       if (!ref || ref.type !== 'shape') return;
-      changeZOrder(services, ih, ref, 'front');
+      changeZOrder(ih, ref, 'front');
     },
   },
   {
     id: 'insert:arrange-forward',
-    label: '앞으로',
+    label: t('command.insert.arrangeForward.registryLabel'),
     canExecute: (ctx) => ctx.inPictureObjectSelection,
     execute(services) {
       const ih = services.getInputHandler();
       if (!ih) return;
       const ref = ih.getSelectedPictureRef();
       if (!ref || ref.type !== 'shape') return;
-      changeZOrder(services, ih, ref, 'forward');
+      changeZOrder(ih, ref, 'forward');
     },
   },
   {
     id: 'insert:arrange-backward',
-    label: '뒤로',
+    label: t('command.insert.arrangeBackward.registryLabel'),
     canExecute: (ctx) => ctx.inPictureObjectSelection,
     execute(services) {
       const ih = services.getInputHandler();
       if (!ih) return;
       const ref = ih.getSelectedPictureRef();
       if (!ref || ref.type !== 'shape') return;
-      changeZOrder(services, ih, ref, 'backward');
+      changeZOrder(ih, ref, 'backward');
     },
   },
   {
     id: 'insert:arrange-back',
-    label: '맨 뒤로',
+    label: t('command.insert.arrangeBack.registryLabel'),
     canExecute: (ctx) => ctx.inPictureObjectSelection,
     execute(services) {
       const ih = services.getInputHandler();
       if (!ih) return;
       const ref = ih.getSelectedPictureRef();
       if (!ref || ref.type !== 'shape') return;
-      changeZOrder(services, ih, ref, 'back');
+      changeZOrder(ih, ref, 'back');
     },
   },
   {
     id: 'insert:picture-delete',
-    label: '개체 지우기',
+    label: t('command.insert.pictureDelete.label'),
     canExecute: (ctx) => ctx.inPictureObjectSelection,
     execute(services) {
       const ih = services.getInputHandler();
@@ -485,7 +548,10 @@ export const insertCommands: CommandDef[] = [
       const ref = ih.getSelectedPictureRef();
       if (!ref) return;
       recordObjectMutation(ih, 'deleteObject', (wasm) => {
-        if (ref.type === 'shape' || ref.type === 'line' || ref.type === 'group') {
+        // [#7105] OLE 는 코어에서 `Control::Shape(Ole)` 다 — 그림 삭제(`deletePictureControl`)는
+        // `Control::Picture` 만 받아 거부하므로 도형 삭제로 보낸다. 키보드 Delete 경로
+        // (`deleteObjectControl`)와 같은 종류 집합이다.
+        if (ref.type === 'shape' || ref.type === 'line' || ref.type === 'group' || ref.type === 'ole') {
           wasm.deleteShapeControl(ref.sec, ref.ppi, ref.ci);
         } else if (ref.type === 'equation') {
           wasm.deleteEquationControl(ref.sec, ref.ppi, ref.ci);
@@ -501,7 +567,7 @@ export const insertCommands: CommandDef[] = [
   // ─── 개체 묶기/풀기 ──────────────────────────────
   {
     id: 'insert:group-shapes',
-    label: '개체 묶기',
+    label: t('command.insert.groupShapes.registryLabel'),
     canExecute: (ctx) => ctx.inPictureObjectSelection,
     execute(services) {
       const ih = services.getInputHandler();
@@ -523,7 +589,7 @@ export const insertCommands: CommandDef[] = [
   },
   {
     id: 'insert:ungroup-shapes',
-    label: '개체 풀기',
+    label: t('command.insert.ungroupShapes.registryLabel'),
     canExecute: (ctx) => ctx.inPictureObjectSelection,
     execute(services) {
       const ih = services.getInputHandler();
@@ -541,7 +607,7 @@ export const insertCommands: CommandDef[] = [
   // ─── 회전/대칭 ──────────────────────────────────
   {
     id: 'insert:rotate-cw',
-    label: '오른쪽 90° 회전',
+    label: t('command.insert.rotateCw.label'),
     canExecute: (ctx) => ctx.inPictureObjectSelection,
     execute(services) {
       applyRotationDelta(services, 90);
@@ -549,7 +615,7 @@ export const insertCommands: CommandDef[] = [
   },
   {
     id: 'insert:rotate-ccw',
-    label: '왼쪽 90° 회전',
+    label: t('command.insert.rotateCcw.label'),
     canExecute: (ctx) => ctx.inPictureObjectSelection,
     execute(services) {
       applyRotationDelta(services, -90);
@@ -557,7 +623,7 @@ export const insertCommands: CommandDef[] = [
   },
   {
     id: 'insert:flip-horz',
-    label: '좌우 대칭',
+    label: t('command.insert.flipHorz.label'),
     canExecute: (ctx) => ctx.inPictureObjectSelection,
     execute(services) {
       toggleFlip(services, 'horzFlip');
@@ -565,7 +631,7 @@ export const insertCommands: CommandDef[] = [
   },
   {
     id: 'insert:flip-vert',
-    label: '상하 대칭',
+    label: t('command.insert.flipVert.label'),
     canExecute: (ctx) => ctx.inPictureObjectSelection,
     execute(services) {
       toggleFlip(services, 'vertFlip');
@@ -573,39 +639,17 @@ export const insertCommands: CommandDef[] = [
   },
 ];
 
-/** 선택 개체 ref 타입 — cursor.selectedPictureRef 와 정합 (headerFooter optional, [Task #831]) */
-type PictureRef = {
-  sec: number;
-  ppi: number;
-  ci: number;
-  type: string;
-  cellPath?: CellPathLike;
-  headerFooter?: { kind: 'header' | 'footer'; outerParaIdx: number; outerControlIdx: number };
-};
+/**
+ * 선택 개체 ref 타입 — cursor.selectedPictureRef 와 정합 (headerFooter optional, [Task #831]).
+ *
+ * [Task #3230] 분기 본체는 `engine/object-props.ts` 로 옮겼다 — 역연산 커맨드가 undo 시점에
+ * 같은 분기를 써야 하는데, 커맨드는 `services` 가 아니라 `WasmBridge` 만 받기 때문이다.
+ */
+type PictureRef = ObjectPropsRef;
 
-/** 선택 개체의 속성을 조회/변경 헬퍼 (shape/picture 분기) */
+/** 선택 개체의 속성 조회 (shape/picture·셀·머리말꼬리말 분기). */
 function getProps(services: import('../types').CommandServices, ref: PictureRef): Record<string, unknown> {
-  if (ref.type === 'shape') {
-    if (ref.cellPath && ref.cellPath.length > 0) {
-      return services.wasm.getCellShapePropertiesByPath(ref.sec, ref.ppi, ref.cellPath, ref.ci) as unknown as Record<string, unknown>;
-    }
-    return services.wasm.getShapeProperties(ref.sec, ref.ppi, ref.ci) as unknown as Record<string, unknown>;
-  }
-  // [Task #831] 머리말/꼬리말 picture 의 경우 별도 API 호출 (PR #832 의 wasm-bridge).
-  // 미적용 시 본문 lookup 실패 → props 빈/stale → 회전/대칭 무동작.
-  if (ref.headerFooter) {
-    return services.wasm.getHeaderFooterPictureProperties(
-      ref.sec,
-      ref.headerFooter.outerParaIdx,
-      ref.headerFooter.outerControlIdx,
-      ref.ppi,
-      ref.ci,
-    ) as unknown as Record<string, unknown>;
-  }
-  if (ref.cellPath && ref.cellPath.length > 0) {
-    return services.wasm.getCellPicturePropertiesByPath(ref.sec, ref.ppi, ref.cellPath, ref.ci) as unknown as Record<string, unknown>;
-  }
-  return services.wasm.getPictureProperties(ref.sec, ref.ppi, ref.ci) as unknown as Record<string, unknown>;
+  return getObjectProps(services.wasm, ref);
 }
 
 /**
@@ -621,7 +665,15 @@ function recordObjectMutation(
   mutate: (wasm: WasmBridge) => boolean | void,
   opts?: { refresh?: RefreshPolicy },
 ): void {
-  const pos = ih.getCursorPosition();
+  // [Task #3351] 개체 선택은 `cursor.position` 을 옮기지 않는다. 그래서 여기서 그냥
+  // `getCursorPosition()` 을 잡으면 **개체를 선택하기 직전 캐럿**이 기록되고, undo/redo 가
+  // 조작과 무관한 자리(문서 상단일 수도 있다)로 착지한다.
+  //
+  // 한컴 2024 실측: 개체 선택은 캐럿을 앵커로 끌고 가고, 캐럿을 다른 문단으로 옮기면 선택이
+  // 풀린다 — "캐럿은 딴 곳, 개체는 선택" 이라는 상태 자체가 없다. 삭제·undo·redo 내내 캐럿은
+  // 개체 인접 문단에 머문다. Delete 키 경로(`performDelete`)가 이미 그렇게 하고 있으므로
+  // 메뉴 경로도 같은 자리를 기록한다.
+  const pos = ih.getPositionOutsideSelectedPicture() ?? ih.getCursorPosition();
   ih.executeOperation({
     kind: 'snapshot',
     operationType,
@@ -641,51 +693,93 @@ function recordObjectMutation(
 const DEFER_REFRESH_TO_EXIT = { refresh: 'none' } as const;
 
 /**
- * [Task #2370 클러스터 A] z순서 변경 — 이미 맨 앞/뒤라 바뀔 것이 없으면 기록하지 않는다.
+ * [Task #2370 클러스터 A → #5769 후속] z순서 변경 — 스냅샷 대신 역연산 커맨드로 기록한다.
  *
- * `change_shape_z_order_native`(shape.rs)는 경계 케이스에서 문서를 건드리지 않고
- * `{ok:true, zOrder:<현재값>}` 을 그대로 돌려준다("이미 맨 앞/뒤" → `changes = None`).
- * 반대로 실제로 바뀌는 경우 새 z 는 항상 이전과 다르다(front=max+1 · back=min-1 ·
- * forward/backward=이웃 z 또는 ±1). 따라서 **반환 zOrder 와 호출 전 zOrder 의 일치가
- * 곧 무변경 신호**다 — 이를 no-op 으로 보고해 phantom undo 엔트리와 스냅샷 2슬롯 점유를
- * 막는다.
+ * 무변경 판정은 Rust 응답의 moves 로 한다 — change_shape_z_order_native 는 "이미 맨 앞/뒤"
+ * 경계에서 문서를 건드리지 않고 빈 moves 를 돌려주고, 실제 변경 시 대상(+교환 이웃)의
+ * before/after 쌍을 담는다. SetZOrderCommand 가 그 쌍을 undo/redo 의 절대 복원값으로
+ * 소비한다 — 되돌릴 것이 스칼라 1~2개인데 문서 전체 클론을 스택에 얹지 않는다(#5769).
+ * 양식 모드 게이트는 kind:'command' 라우팅이 execute 보다 먼저 통과시킨다(#3230 계약).
  */
 function changeZOrder(
-  services: import('../types').CommandServices,
   ih: InputHandler,
   ref: PictureRef,
   operation: 'front' | 'forward' | 'backward' | 'back',
 ): void {
-  const zBefore = (getProps(services, ref) as { zOrder?: number }).zOrder;
-  recordObjectMutation(ih, 'changeZOrder', (wasm) => {
-    const r = wasm.changeShapeZOrder(ref.sec, ref.ppi, ref.ci, operation);
-    return r.ok && r.zOrder !== zBefore;
-  }, DEFER_REFRESH_TO_EXIT);
+  const pos = ih.getPositionOutsideSelectedPicture() ?? ih.getCursorPosition();
+  ih.executeOperation({
+    kind: 'command',
+    command: new SetZOrderCommand(ref.sec, ref.ppi, ref.ci, operation, pos),
+    meta: DEFER_REFRESH_TO_EXIT,
+  });
+  // 참고: 무변경(이미 맨 앞/뒤)일 때도 command 분기는 반환 위치로 커서를 앵커에
+  // 맞춘다 — 종전 snapshot 경로의 조기 break 와 다른 유일한 동작 델타로, 개체
+  // 선택 UX(캐럿이 개체 인접에 머무른다, #3351)와 같은 자리라 의도적으로 둔다.
   ih.exitPictureObjectSelectionAndAfterEdit();
 }
 
-function setProps(services: import('../types').CommandServices, ref: PictureRef, props: Record<string, unknown>): any {
-  if (ref.type === 'shape') {
-    if (ref.cellPath && ref.cellPath.length > 0) {
-      return services.wasm.setCellShapePropertiesByPath(ref.sec, ref.ppi, ref.cellPath, ref.ci, props);
-    }
-    return services.wasm.setShapeProperties(ref.sec, ref.ppi, ref.ci, props);
-  } else if (ref.headerFooter) {
-    // [Task #831] 머리말/꼬리말 picture setter — 5-tuple lookup 으로 IR 갱신.
-    return services.wasm.setHeaderFooterPictureProperties(
-      ref.sec,
-      ref.headerFooter.outerParaIdx,
-      ref.headerFooter.outerControlIdx,
-      ref.ppi,
-      ref.ci,
-      props,
-    );
-  } else {
-    if (ref.cellPath && ref.cellPath.length > 0) {
-      return services.wasm.setCellPicturePropertiesByPath(ref.sec, ref.ppi, ref.cellPath, ref.ci, props);
-    }
-    return services.wasm.setPictureProperties(ref.sec, ref.ppi, ref.ci, props);
+/**
+ * [Task #3230] 절대 속성 하나를 **역연산 커맨드로** 적용하고 기록한다.
+ *
+ * 스냅샷(`recordObjectMutation`) 대신 `kind:'command'`를 쓴다 — 되돌릴 것이 스칼라 하나인데
+ * `Document` 통째 클론 2개(문서에 따라 최대 21 MB)를 스택에 얹을 이유가 없다. 호출부가 이미
+ * 적용 전 값을 읽어 두었으므로 before 가 정확하다. setter를 라우터 전에 직접 호출하지 않아야
+ * 양식 모드의 편집 허용 검사가 실제 변경보다 먼저 실행된다.
+ *
+ * refresh 를 'full' 로 명시한다 — command 라우팅의 자동 판정에 맡기면 개체 회전/대칭의 화면 반영이
+ * 보장되지 않는다. 종전 스냅샷 라우팅의 'full' 이 `afterEdit()` → `document-changed` 를 대신
+ * emit 해 주고 있었다(그래서 호출부의 수동 emit 이 [undo P3 정리] 에서 제거됐다).
+ */
+function executeAbsolutePropChange(
+  ih: InputHandler,
+  ref: PictureRef,
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): void {
+  ih.executeOperation({
+    kind: 'command',
+    command: new SetObjectPropsCommand(ref, before, after),
+    meta: { refresh: 'full' },
+  });
+}
+
+/**
+ * [Task #3230] 속성 왕복이 **참인 역연산인 대상**인지.
+ *
+ * 도형은 참이다 — `rotationAngle` 은 평범한 필드 대입이고 flip 은 비트를 대칭으로 set/clear
+ * 한다(`document_core/commands/object_ops/shape.rs`). 같은 값을 다시 넣으면 원래 상태다.
+ *
+ * **그림·OLE 는 아니다.** `rotationAngle` 이 섞이면 `refresh_picture_rotation_layout_for_save`
+ * 가 각도와 무관하게 — 0 으로 되돌리는 경우까지 — `rotate_image = true` 와
+ * `flip |= 0x0008_0000` 을 세운다(`object_ops/picture.rs:242-243`). 이 둘을 다시 내리는 경로는
+ * 저장소에 없어서, 90° 돌렸다 되돌린 그림은 화면은 같아도 저장 바이트가 원본과 달라진다
+ * (HWPX `hp:rotationInfo rotateimage`·HWP5 `HWPTAG_SHAPE_COMPONENT` 의 flip 비트).
+ * 대칭도 `TRANSFORM_KEYS`(picture.rs:176-184)에 걸려 `raw_rendering`·`render_*` 캐시를
+ * 기본값으로 리셋한다.
+ *
+ * 속성 bag 만으로는 이것들을 복원할 수 없다. 문서를 통째로 되돌리는 스냅샷이라야 정확하므로
+ * 그림·OLE 는 종전 경로를 유지한다 — 되돌리기의 정확성이 스냅샷 비용보다 앞선다.
+ */
+function absolutePropChangeIsInvertible(ref: PictureRef): boolean {
+  return ref.type === 'shape';
+}
+
+/** 역연산이 참이면 커맨드로, 아니면 종전 스냅샷으로 기록한다. */
+function applyAbsolutePropChange(
+  services: import('../types').CommandServices,
+  ih: InputHandler,
+  ref: PictureRef,
+  operationType: string,
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): void {
+  if (absolutePropChangeIsInvertible(ref)) {
+    executeAbsolutePropChange(ih, ref, before, after);
+    return;
   }
+  recordObjectMutation(ih, operationType, (wasm) => {
+    setObjectProps(wasm, ref, after);
+  });
 }
 
 /** 현재 회전각에 delta(도)를 더한다 (shape + image 지원). */
@@ -701,9 +795,11 @@ function applyRotationDelta(services: import('../types').CommandServices, delta:
   // -180 ~ 180 범위로 정규화
   next = ((next % 360) + 360) % 360;
   if (next > 180) next -= 360;
-  // recordObjectMutation → executeOperation snapshot 의 'full' refresh 가 afterEdit()→
-  // 'document-changed' 를 이미 emit 한다. 수동 emit 은 중복(이중 렌더)이라 제거. [undo P3 정리]
-  recordObjectMutation(ih, 'rotateObject', () => setProps(services, ref, { rotationAngle: next }));
+  // [Task #3230] 도형은 역연산, 그림·OLE 는 스냅샷 유지(`absolutePropChangeIsInvertible`).
+  // `cur` 는 이미 위에서 읽은 적용 전 각도이고 setter 가 절대값이라 되돌리기가 자명하다.
+  applyAbsolutePropChange(
+    services, ih, ref, 'rotateObject', { rotationAngle: cur }, { rotationAngle: next },
+  );
 }
 
 /** horzFlip/vertFlip을 토글한다 (shape + image 지원). */
@@ -715,6 +811,6 @@ function toggleFlip(services: import('../types').CommandServices, key: 'horzFlip
   const props = getProps(services, ref);
   if (props.sizeProtect) return;
   const cur = !!props[key];
-  // 위 rotate 와 동일 — snapshot 라우팅이 이미 refresh 하므로 수동 emit 제거. [undo P3 정리]
-  recordObjectMutation(ih, 'flipObject', () => setProps(services, ref, { [key]: !cur }));
+  // 위 rotate 와 동일 — 토글이지만 setter 에 넘기는 값은 절대값(`!cur`)이라 역연산이 자명하다.
+  applyAbsolutePropChange(services, ih, ref, 'flipObject', { [key]: cur }, { [key]: !cur });
 }

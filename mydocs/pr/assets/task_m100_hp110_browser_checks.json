@@ -1,0 +1,226 @@
+{
+  "source_commit": "b6f4318dc8c8c50cdb0897887f72b3e59684dee8",
+  "upstream_commit": "02530b9ed567a44663edb26c65fb565c4a79f00d",
+  "browser": "Chrome/154.0.8037.58",
+  "font_injection": "FontFace.prototype.load returns a permanently pending Promise; real Chrome timers, Vite, WASM editor, file upload, keyboard input, browser download",
+  "font_and_real_download": [
+    {
+      "scenario": "font-pending-web-startup",
+      "fileName": "새 문서.hwp",
+      "pages": 1,
+      "inputActive": true,
+      "fontPendingCalls": [
+        {
+          "family": "함초롬돋움",
+          "at": 3367.5999999046326
+        },
+        {
+          "family": "함초롬바탕",
+          "at": 3367.699999809265
+        },
+        {
+          "family": "함초롬돋움",
+          "at": 8625.199999809265
+        },
+        {
+          "family": "함초롬바탕",
+          "at": 8625.199999809265
+        }
+      ],
+      "elapsedMs": 13818.299999713898,
+      "status": "새 문서.hwp — 1페이지",
+      "wallElapsedMs": 13826
+    },
+    {
+      "scenario": "font-pending-multiple-batches-eight-second-cap",
+      "required": [
+        "함초롱돋움",
+        "함초롱바탕",
+        "HY헤드라인M",
+        "HY그래픽",
+        "HY견명조",
+        "HY신명조",
+        "Malgun Gothic",
+        "돋움",
+        "굴림체",
+        "궁서",
+        "나눔고딕",
+        "나눔고딕 Bold"
+      ],
+      "foregroundMs": 8015.699999809265,
+      "callsAtReturn": [
+        {
+          "family": "함초롬돋움",
+          "at": 13898.699999809265
+        },
+        {
+          "family": "함초롬바탕",
+          "at": 13898.699999809265
+        },
+        {
+          "family": "HY헤드라인M",
+          "at": 13898.699999809265
+        },
+        {
+          "family": "HY그래픽",
+          "at": 13898.799999713898
+        },
+        {
+          "family": "HY견명조",
+          "at": 18903.299999713898
+        },
+        {
+          "family": "HY신명조",
+          "at": 18903.400000095367
+        },
+        {
+          "family": "\"Malgun Gothic\"",
+          "at": 18903.599999904633
+        },
+        {
+          "family": "돋움",
+          "at": 18903.699999809265
+        }
+      ],
+      "callsAfterBackground": [
+        {
+          "family": "함초롬돋움",
+          "at": 13898.699999809265
+        },
+        {
+          "family": "함초롬바탕",
+          "at": 13898.699999809265
+        },
+        {
+          "family": "HY헤드라인M",
+          "at": 13898.699999809265
+        },
+        {
+          "family": "HY그래픽",
+          "at": 13898.799999713898
+        },
+        {
+          "family": "HY견명조",
+          "at": 18903.299999713898
+        },
+        {
+          "family": "HY신명조",
+          "at": 18903.400000095367
+        },
+        {
+          "family": "\"Malgun Gothic\"",
+          "at": 18903.599999904633
+        },
+        {
+          "family": "돋움",
+          "at": 18903.699999809265
+        },
+        {
+          "family": "굴림체",
+          "at": 23907.599999904633
+        },
+        {
+          "family": "궁서",
+          "at": 23907.799999713898
+        },
+        {
+          "family": "\"나눔고딕 Bold\"",
+          "at": 23908
+        }
+      ],
+      "progressAtReturn": 4,
+      "progressAfterBackground": 4,
+      "pages": 1,
+      "inputActive": true
+    },
+    {
+      "scenario": "font-pending-real-hwp-open-and-edit",
+      "editedText": "오호라, 건곤(乾 font pending smoke坤)이 혼합하고 천지 개벽하는 법은 열 뒤 회가 있으니, 가론 자축인묘진사오미신유술해요, 세는 1만 8백년이라. 대개 건곤이 혼합",
+      "fileName": "para-001.hwp",
+      "pages": 3,
+      "openAndEditMs": 5904,
+      "dirtyAfterKeyboardInput": true
+    },
+    {
+      "scenario": "font-pending-real-hwp-save-download",
+      "fileName": "para-001.hwp",
+      "receivedBytes": 16896,
+      "bytes": 16896,
+      "signature": [
+        208,
+        207,
+        17,
+        224
+      ],
+      "dirty": false,
+      "nativeIoMock": false,
+      "sha256": "6dc2a8a953d85b693d385ea0e6b06539b21f0249ba31e8e24463a13806a8e4fd",
+      "committedInputPath": "mydocs/pr/assets/task_m100_hp110_font-pending-edited.hwp"
+    },
+    {
+      "scenario": "font-pending-real-hwp-download-reopen-text-preserved",
+      "path": "mydocs/pr/assets/task_m100_hp110_font-pending-edited.hwp",
+      "sha256": "6dc2a8a953d85b693d385ea0e6b06539b21f0249ba31e8e24463a13806a8e4fd",
+      "bytes": 16896,
+      "openMs": 5623,
+      "browser": "Chrome/154.0.8037.58",
+      "reopened": {
+        "fileName": "task_m100_hp110_font-pending-edited.hwp",
+        "pages": 3,
+        "text": "오호라, 건곤(乾 font pending smoke坤)이 혼합하고 천지 개벽하는 법은 열 뒤 회가 있으니, 가론 자축인묘진사오미신유술해요, 세는 1만 8백년이라. 대개 건곤이 혼합하고 천지 만물이 형용을 알지 못하다가 자회에 비로소 하늘이 생긴지 1만 8백년 후에야 축회에 비로소 땅이 생기고, 땅이 생긴지 1만 8백년 후에야 인회에 비로소 사람과 만물이 생",
+        "inputActive": true,
+        "dirty": false,
+        "fontPendingCalls": 6
+      },
+      "expectedText": "font pending smoke",
+      "preserved": true,
+      "nativeIoMock": false,
+      "pageErrors": [],
+      "input_commit": "c973306239ea6e93efac5f4d3cb0e28b3cf9cb71"
+    }
+  ],
+  "font_page_errors": [],
+  "native_io_with_tauri_mock": {
+    "evidence": [
+      {
+        "scenario": "web-start",
+        "title": "새 문서.hwp - HanPage",
+        "pages": 1,
+        "downloadButton": true
+      },
+      {
+        "scenario": "native-startup-queue-before-blank",
+        "fileName": "파일 연결 시작.hwp",
+        "pages": 3,
+        "downloadButton": false
+      },
+      {
+        "scenario": "native-save-reported-export",
+        "fileName": "네이티브 저장.hwp",
+        "bytes": 16896,
+        "signature": [
+          208,
+          207,
+          17,
+          224
+        ],
+        "dirty": false
+      },
+      {
+        "scenario": "native-save-cancel-keeps-dirty",
+        "dirty": true
+      },
+      {
+        "scenario": "native-file-open",
+        "fileName": "네이티브 열기.hwp",
+        "openCount": 1
+      },
+      {
+        "scenario": "prepared-update-action",
+        "appliedToMockNative": true
+      }
+    ],
+    "pageErrors": []
+  },
+  "limits": "UI smoke with actual Chrome/WASM. Tauri events/invoke mocked. OS dialogs, actual updater installation/signing and full Hancom PDF fidelity not executed."
+}

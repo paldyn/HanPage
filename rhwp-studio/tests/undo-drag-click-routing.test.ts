@@ -45,19 +45,29 @@ test('finishLineEndpointDrag 는 끝점 이동을 executeOperation record 로 �
 });
 
 test('onMouseUp 은 직선 끝점 종료를 finishLineEndpointDrag 로 위임한다(인라인 정리 금지)', () => {
-  const body = fnBody(mouseSrc, 'export function onMouseUp');
+  const wrapper = fnBody(mouseSrc, 'export function onMouseUp');
+  assert.match(wrapper, /finishMouseUp\.call\(this, e\)/, '공통 마우스업 종료 경로로 위임');
+  const body = fnBody(mouseSrc, 'function finishMouseUp');
   assert.match(body, /if \(this\.isLineEndpointDragging\)\s*{\s*this\.finishLineEndpointDrag\(\);/,
     'onMouseUp 은 상태 인라인 초기화가 아니라 finishLineEndpointDrag 로 위임해야 함(기록 경로 확보)');
 });
 
 // ── 결함 3: 클릭 z순서 변경 ────────────────────────────────────────────────
-test('bringShapeToFront 는 z순서 변경을 executeOperation snapshot 으로 기록한다', () => {
+test('bringShapeToFront 는 z순서 변경을 executeOperation command(SetZOrderCommand)로 기록한다', () => {
   const body = fnBody(mouseSrc, 'function bringShapeToFront');
   // 미라우팅 회귀: this.wasm.changeShapeZOrder( 직접 호출이 남으면 히스토리 우회.
   assert.doesNotMatch(body, /this\.wasm\.changeShapeZOrder\s*\(/,
     'this.wasm.changeShapeZOrder 직접 호출 금지 — executeOperation 경유여야 함');
   assert.match(body, /executeOperation\(/, 'executeOperation 경유');
-  assert.match(body, /kind:\s*'snapshot'/, "kind:'snapshot' 로 기록(메뉴 정렬 경로와 동형)");
-  assert.match(body, /operationType:\s*'changeZOrder'/, 'changeZOrder 로 분류');
-  assert.match(body, /wasm\.changeShapeZOrder\s*\(/, '뮤테이션 자체는 operation 콜백에 존재');
+  // [#5769 후속] 스냅샷 대신 역연산 커맨드 — 되돌릴 것이 스칼라 1~2개라 문서 클론이
+  // 스택에 얹힐 이유가 없다. 메뉴 정렬 경로(insert.ts changeZOrder 퍼널)와 동일 커맨드.
+  assert.match(body, /kind:\s*'command'/, "kind:'command' 로 기록(메뉴 정렬 경로와 동형)");
+  assert.match(body, /new SetZOrderCommand\(picHit\.sec/, 'z 순서 속성쌍 커맨드로 기록');
+});
+
+test('연결선 클릭은 z순서나 문서를 바꾸지 않고 선택만 한다', () => {
+  const body = fnBody(mouseSrc, 'function selectLineObjectFromHit');
+  assert.doesNotMatch(body, /bringShapeToFront\(/, '단순 클릭은 선을 맨 앞으로 옮기면 안 됨');
+  assert.doesNotMatch(body, /executeOperation\(/, '단순 클릭은 Undo 항목을 만들면 안 됨');
+  assert.match(body, /enterPictureObjectSelectionDirect\(/, '선 객체 선택으로 진입');
 });

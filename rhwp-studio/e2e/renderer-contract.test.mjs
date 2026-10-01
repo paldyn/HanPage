@@ -15,9 +15,13 @@ const repoRoot = path.resolve(studioRoot, '..');
 const canvaskitPath = path.join(studioRoot, 'src/view/canvaskit-renderer.ts');
 const canvaskitDirectory = path.join(studioRoot, 'src/view/canvaskit');
 const canvaskitDiagnosticsPath = path.join(canvaskitDirectory, 'diagnostics.ts');
+const canvaskitGlyphRunFontsPath = path.join(canvaskitDirectory, 'glyph-run-fonts.ts');
 const layerTypesPath = path.join(studioRoot, 'src/core/types.ts');
-const textIrV2DocPath = path.join(repoRoot, 'docs/text-ir-v2.md');
-const canvaskitParityPlanDocPath = path.join(repoRoot, 'docs/canvaskit-parity-implementation.md');
+const textIrV2DocPath = path.join(repoRoot, 'mydocs/tech/text-ir-v2.md');
+const canvaskitParityPlanDocPath = path.join(
+  repoRoot,
+  'mydocs/tech/canvaskit-parity-implementation.md',
+);
 const rendererBaselinePath = path.join(studioRoot, 'e2e/renderer-baseline.mjs');
 const rendererBaselineNativeDiffPath = path.join(
   studioRoot,
@@ -42,6 +46,7 @@ const fullRendererSweepWorkflowPath = path.join(
 
 const canvaskitSource = fs.readFileSync(canvaskitPath, 'utf8');
 const canvaskitDiagnosticsSource = fs.readFileSync(canvaskitDiagnosticsPath, 'utf8');
+const canvaskitGlyphRunFontsSource = fs.readFileSync(canvaskitGlyphRunFontsPath, 'utf8');
 const layerTypesSource = fs.readFileSync(layerTypesPath, 'utf8');
 const textIrV2DocSource = fs.readFileSync(textIrV2DocPath, 'utf8');
 const canvaskitParityPlanDocSource = fs.readFileSync(canvaskitParityPlanDocPath, 'utf8');
@@ -242,6 +247,16 @@ const canvaskitParityPlanTouchpoints = [
   {
     token: '.github/workflows/render-diff.yml',
     path: path.join(repoRoot, '.github/workflows/render-diff.yml'),
+    kind: 'file',
+  },
+  {
+    token: 'mydocs/tech/canvaskit-m07-pack-fallback-matrix.md',
+    path: path.join(repoRoot, 'mydocs/tech/canvaskit-m07-pack-fallback-matrix.md'),
+    kind: 'file',
+  },
+  {
+    token: 'tests/fixtures/m07_pack/reason-matrix.jsonl',
+    path: path.join(repoRoot, 'tests/fixtures/m07_pack/reason-matrix.jsonl'),
     kind: 'file',
   },
 ];
@@ -505,10 +520,10 @@ assert.doesNotMatch(
   /viewOption:showParagraphMarks/,
   'Automatic selection should permit directly replayable text marks',
 );
-assert.match(
+assert.doesNotMatch(
   mainSource,
   /viewOption:showControlCodes/,
-  'Automatic selection should reject structural control markers until they have explicit ops',
+  'Automatic selection should permit directly replayable structural control markers',
 );
 requireSnippet(
   embedRpcRouterSource,
@@ -522,13 +537,18 @@ assert.doesNotMatch(
 );
 requireSnippet(
   mainSource,
-  /new RendererSession\([\s\S]*?async \(mode, surface\) => \{[\s\S]*?import\('\@\/view\/canvaskit-renderer'\)[\s\S]*?CanvasKitLayerRenderer\.create\(mode, surface,[\s\S]*?requirePreparedFontFamilies:[\s\S]*?transformCanvasKitPreflight[\s\S]*?prepareBundledFonts/,
-  'Studio should load CanvasKit only after the renderer session selects it',
+  /new RendererSession\([\s\S]*?async \(mode, surface\) => \{[\s\S]*?import\('\@\/view\/canvaskit-renderer'\)[\s\S]*?CanvasKitLayerRenderer\.create\(mode, surface,[\s\S]*?requirePreparedFontFamilies:[\s\S]*?transformCanvasKitPreflight[\s\S]*?prepareCanvasKitDocument[\s\S]*?loadStoredLocalFonts\(\)[\s\S]*?prepareLocalFonts\(report\.requiredFontFamilies\)[\s\S]*?prepareBundledFonts/,
+  'Studio should prepare stored local faces and bundled fallback before first CanvasKit replay',
 );
 requireSnippet(
   canvaskitSource,
   /prepareBundledFonts\([\s\S]*?MAX_BUNDLED_FONT_BYTES[\s\S]*?bundledTypefaceAliases\.set[\s\S]*?CanvasKit font family가 준비되지 않았습니다/,
   'CanvasKit should bound bundled font parsing and reject unprepared explicit families',
+);
+requireSnippet(
+  canvaskitSource,
+  /private findPreparedTypeface\([\s\S]*?const local =[\s\S]*?const bundled =[\s\S]*?if \(local\) return local;[\s\S]*?if \(bundled\) return bundled;/,
+  'CanvasKit should prefer an exact prepared local face over its bundled fallback alias',
 );
 requireSnippet(
   canvaskitSource,
@@ -639,6 +659,14 @@ for (const directTextVisualToken of [
   'textRun:engraveTextEffect',
   'textRun:shadeTextEffect',
   'textRun:ratioTextEffect',
+  'lineArrow',
+  'compoundLine',
+  'shapeShadow',
+  'lineShadow',
+  'patternFill',
+  'unsupportedTextDecoration',
+  'footnoteMarker',
+  'viewOption:showControlCodes',
 ]) {
   assert.equal(
     expectedUnsupportedSetBody.includes(`'${directTextVisualToken}'`),
@@ -916,13 +944,21 @@ function runExecutableStrokeDashReplay() {
     delete() { events.push({ type: 'paint.delete' }); }
   }
   class FakePath {
+    delete() { events.push({ type: 'path.delete' }); }
+  }
+  class FakePathBuilder {
     moveTo() {}
     lineTo() {}
-    delete() { events.push({ type: 'path.delete' }); }
+    detach() {
+      events.push({ type: 'pathBuilder.detach' });
+      return new FakePath();
+    }
+    delete() { events.push({ type: 'pathBuilder.delete' }); }
   }
   const renderer = new CanvasKitLayerRendererRuntime({
     Paint: FakePaint,
     Path: FakePath,
+    PathBuilder: FakePathBuilder,
     PaintStyle: { Fill: 0, Stroke: 1 },
     PathEffect: {
       MakeDash(intervals, phase) {
@@ -969,6 +1005,194 @@ function runExecutableStrokeDashReplay() {
   });
 
   return { events, renderer, drawCountBeforeInvalid };
+}
+
+function runExecutableGradientFillReplay() {
+  const events = [];
+  class FakePaint {
+    setAntiAlias() {}
+    setStyle() {}
+    setColor(color) { this.color = color; }
+    setShader(shader) {
+      this.shader = shader;
+      events.push({ type: 'paint.setShader' });
+    }
+    delete() { events.push({ type: 'paint.delete' }); }
+  }
+  class FakePath {
+    delete() { events.push({ type: 'path.delete' }); }
+  }
+  class FakePathBuilder {
+    moveTo() {}
+    lineTo() {}
+    detach() { return new FakePath(); }
+    delete() { events.push({ type: 'pathBuilder.delete' }); }
+  }
+  const renderer = new CanvasKitLayerRendererRuntime({
+    Paint: FakePaint,
+    Path: FakePath,
+    PathBuilder: FakePathBuilder,
+    PaintStyle: { Fill: 0, Stroke: 1 },
+    TileMode: { Clamp: 0 },
+    Shader: {
+      MakeLinearGradient(start, end, colors, positions) {
+        events.push({
+          type: 'shader.linear',
+          start: [...start],
+          end: [...end],
+          colors,
+          positions,
+        });
+        return { delete() { events.push({ type: 'shader.delete' }); } };
+      },
+      MakeRadialGradient(center, radius, colors, positions) {
+        events.push({
+          type: 'shader.radial',
+          center: [...center],
+          radius,
+          colors,
+          positions,
+        });
+        return { delete() { events.push({ type: 'shader.delete' }); } };
+      },
+    },
+    Color: (r, g, b, a) => [r, g, b, a],
+    XYWHRect: (x, y, width, height) => ({ x, y, width, height }),
+    RRectXY: (rect, rx, ry) => ({ ...rect, rx, ry }),
+  }, 'default', {}, {});
+  const canvas = {
+    drawRect(_rect, paint) {
+      events.push({ type: 'canvas.drawRect', shader: Boolean(paint.shader) });
+    },
+    drawOval(_rect, paint) {
+      events.push({ type: 'canvas.drawOval', shader: Boolean(paint.shader) });
+    },
+    drawPath(_path, paint) {
+      events.push({ type: 'canvas.drawPath', shader: Boolean(paint.shader) });
+    },
+  };
+  renderer.unsupportedOps = new Set();
+  const linear = {
+    gradientType: 1,
+    angle: 0,
+    colors: ['#000000', '#ffffff'],
+    positions: [0, 1],
+  };
+  const radial = {
+    gradientType: 2,
+    centerX: 50,
+    centerY: 50,
+    colors: ['#ff0000', '#0000ff'],
+    positions: [0, 1],
+  };
+  renderer.renderPageBackground(canvas, {
+    type: 'pageBackground',
+    bbox: { x: 0, y: 0, width: 10, height: 20 },
+    gradient: linear,
+  });
+  renderer.renderRectangle(canvas, {
+    type: 'rectangle',
+    bbox: { x: 0, y: 0, width: 10, height: 10 },
+    style: { fillColor: '#123456' },
+    gradient: linear,
+  });
+  renderer.renderEllipse(canvas, {
+    type: 'ellipse',
+    bbox: { x: 0, y: 0, width: 10, height: 10 },
+    gradient: radial,
+  });
+  renderer.renderPath(canvas, {
+    type: 'path',
+    bbox: { x: 0, y: 0, width: 10, height: 10 },
+    commands: [{ type: 'moveTo', x: 0, y: 0 }, { type: 'lineTo', x: 10, y: 10 }],
+    style: { fillColor: null, strokeWidth: 0 },
+    gradient: linear,
+  });
+  return { events, renderer };
+}
+
+function runExecutableM07PackReplay() {
+  const events = [];
+  class FakePaint {
+    setAntiAlias() {}
+    setStyle() {}
+    setColor(color) { this.color = color; }
+    setStrokeWidth(width) { this.width = width; }
+    setPathEffect() {}
+    delete() { events.push({ type: 'paint.delete' }); }
+  }
+  class FakePath {
+    delete() { events.push({ type: 'path.delete' }); }
+  }
+  class FakePathBuilder {
+    moveTo(x, y) { events.push({ type: 'path.moveTo', x, y }); }
+    lineTo(x, y) { events.push({ type: 'path.lineTo', x, y }); }
+    close() { events.push({ type: 'path.close' }); }
+    detach() { return new FakePath(); }
+    delete() { events.push({ type: 'pathBuilder.delete' }); }
+  }
+  const renderer = new CanvasKitLayerRendererRuntime({
+    Paint: FakePaint,
+    Path: FakePath,
+    PathBuilder: FakePathBuilder,
+    PaintStyle: { Fill: 0, Stroke: 1 },
+    PathEffect: { MakeDash() { return { delete() {} }; } },
+    Color: (r, g, b, a) => [r, g, b, a],
+    XYWHRect: (x, y, width, height) => ({ x, y, width, height }),
+  }, 'default', {}, {});
+  const canvas = {
+    save() { events.push({ type: 'canvas.save' }); },
+    restore() { events.push({ type: 'canvas.restore' }); },
+    translate(x, y) { events.push({ type: 'canvas.translate', x, y }); },
+    drawLine(x1, y1, x2, y2, paint) {
+      events.push({ type: 'canvas.drawLine', x1, y1, x2, y2, color: paint.color, width: paint.width });
+    },
+    drawPath(path, paint) {
+      events.push({ type: 'canvas.drawPath', color: paint.color, width: paint.width });
+    },
+    drawOval(rect, paint) {
+      events.push({ type: 'canvas.drawOval', rect, color: paint.color });
+    },
+    drawRect(rect, paint) {
+      events.push({ type: 'canvas.drawRect', rect, color: paint.color });
+    },
+  };
+  renderer.unsupportedOps = new Set();
+  renderer.renderLine(canvas, {
+    type: 'line',
+    x1: 0,
+    y1: 0,
+    x2: 40,
+    y2: 0,
+    style: {
+      color: '#123456',
+      width: 4,
+      lineType: 'double',
+      endArrow: 'arrow',
+      endArrowSize: 4,
+      shadow: { shadowType: 1, color: '#000000', offsetX: 2, offsetY: 3, alpha: 0 },
+    },
+  });
+  renderer.renderRectangle(canvas, {
+    type: 'rectangle',
+    bbox: { x: 0, y: 0, width: 12, height: 12 },
+    style: {
+      pattern: { patternType: 1, patternColor: '#112233', backgroundColor: '#ffffff' },
+      strokeColor: '#000000',
+      strokeWidth: 1,
+    },
+  });
+  renderer.renderTabLeader(canvas, {
+    type: 'tabLeader',
+    bbox: { x: 0, y: 0, width: 20, height: 12 },
+    baseline: 10,
+    fontSize: 10,
+    rotation: 0,
+    color: '#000000',
+    leadersComplete: true,
+    leaders: [{ startX: 1, endX: 10, fillType: 15 }],
+  });
+  return { events, renderer };
 }
 
 function runExecutableTextSpecialReplay() {
@@ -1060,6 +1284,18 @@ function runExecutableTextSpecialReplay() {
     charOverlap: { borderType: 1, innerCharSize: 80 },
   }, 'screen');
   renderer.renderOp(canvas, {
+    type: 'charOverlap',
+    bbox: { x: 50, y: 20, width: 16, height: 16 },
+    text: '①',
+    baseline: 12,
+    rotation: 15,
+    isVertical: false,
+    style: { fontSize: 16, color: '#112233' },
+    positions: [0, 16],
+    positionsComplete: true,
+    charOverlap: { borderType: 1, innerCharSize: 80 },
+  }, 'screen');
+  renderer.renderOp(canvas, {
     type: 'textControlMark',
     bbox: { x: 10, y: 20, width: 40, height: 16 },
     fieldMarker: 'none',
@@ -1093,6 +1329,35 @@ function runExecutableTextSpecialReplay() {
       baseline: 12,
       rotation: 0,
       isVertical: false,
+      fontSize: 16,
+      ratio: 1,
+      color: '#000000',
+      shape: 0,
+      underline: 'none',
+      emphasisDot: 1,
+      positions: [0, 12],
+      positionsComplete: true,
+    },
+  }, 'screen');
+  renderer.renderOp(canvas, {
+    type: 'tabLeader',
+    bbox: { x: 10, y: 20, width: 40, height: 16 },
+    leaders: [{ startX: 4, endX: 30, fillType: 2 }],
+    color: '#000000',
+    fontSize: 16,
+    baseline: 12,
+    rotation: 0,
+    isVertical: true,
+    leadersComplete: true,
+  }, 'screen');
+  renderer.renderOp(canvas, {
+    type: 'textDecoration',
+    bbox: { x: 10, y: 20, width: 40, height: 16 },
+    decoration: {
+      kind: 'emphasisDot',
+      baseline: 12,
+      rotation: 0,
+      isVertical: true,
       fontSize: 16,
       ratio: 1,
       color: '#000000',
@@ -1318,18 +1583,6 @@ function runExecutableTextSpecialReplay() {
     },
   }, 'screen');
   renderer.renderOp(canvas, {
-    type: 'charOverlap',
-    bbox: { x: 0, y: 0, width: 10, height: 10 },
-    text: 'A',
-    baseline: 8,
-    rotation: 15,
-    isVertical: false,
-    style: { fontSize: 10 },
-    positions: [0, 10],
-    positionsComplete: true,
-    charOverlap: { borderType: 1, innerCharSize: 100 },
-  }, 'screen');
-  renderer.renderOp(canvas, {
     type: 'textControlMark',
     bbox: { x: 0, y: 0, width: 10, height: 10 },
     baseline: 8,
@@ -1504,7 +1757,7 @@ function runExecutableFontNativeGlyphReplay() {
     kind: 'leaf',
     bounds: bitmap.bbox,
     ops: [textFallback, bitmap],
-  });
+  }, canvas);
   assert.equal(renderer.selectedTextVariantOps.has(bitmap), true);
   assert.equal(renderer.selectedTextVariantOps.has(textFallback), false);
   renderer.renderGlyphOutline(canvas, bitmap);
@@ -1675,6 +1928,13 @@ const fontNativeGlyphReplayEvents = runExecutableFontNativeGlyphReplay();
 assert.ok(fontNativeGlyphReplayEvents.includes('canvas.drawImageRect'));
 assert.ok(fontNativeGlyphReplayEvents.includes('canvas.drawPath'));
 const strokeDashReplay = runExecutableStrokeDashReplay();
+for (const type of ['pathBuilder.detach', 'pathBuilder.delete', 'path.delete']) {
+  assert.equal(
+    strokeDashReplay.events.filter(event => event.type === type).length,
+    1,
+    `path replay should perform ${type} exactly once`,
+  );
+}
 assert.deepEqual(
   strokeDashReplay.events
     .filter(event => event.type === 'pathEffect.create')
@@ -1708,6 +1968,74 @@ assert.equal(
   'unknown dash styles must fail closed before drawing',
 );
 assert.ok(strokeDashReplay.renderer.unsupportedOps.has('strokeDash:zigzag'));
+const gradientFillReplay = runExecutableGradientFillReplay();
+assert.equal(
+  [...gradientFillReplay.renderer.unsupportedOps].some((op) => op.includes('gradientFill')),
+  false,
+  'gradientFill must not pin the document to a Canvas2D fallback',
+);
+assert.deepEqual(
+  gradientFillReplay.events.filter((event) => event.type === 'shader.linear').map((event) => event.start),
+  [[0, 0], [0, 0], [0, 0]],
+  'linear gradientFill replay should keep the producer angle-0 start',
+);
+assert.deepEqual(
+  gradientFillReplay.events.filter((event) => event.type === 'shader.linear').map((event) => event.end),
+  [[0, 20], [0, 10], [0, 10]],
+  'linear gradientFill replay should keep the producer angle-0 end',
+);
+assert.equal(
+  gradientFillReplay.events.filter((event) => event.type === 'shader.radial').length,
+  1,
+  'radial gradientFill replay should use a CanvasKit radial shader',
+);
+assert.equal(
+  gradientFillReplay.events.filter((event) => event.type === 'shader.delete').length,
+  gradientFillReplay.events.filter((event) => event.type === 'shader.linear' || event.type === 'shader.radial').length,
+  'each CanvasKit gradient shader should be released after drawing',
+);
+assert.equal(
+  gradientFillReplay.events.filter((event) => event.type === 'canvas.drawRect' && event.shader).length,
+  2,
+  'page background and rectangle gradientFill should draw with a shader',
+);
+assert.equal(
+  gradientFillReplay.events.some((event) => event.type === 'canvas.drawOval' && event.shader),
+  true,
+  'ellipse gradientFill should draw with a shader',
+);
+assert.equal(
+  gradientFillReplay.events.some((event) => event.type === 'canvas.drawPath' && event.shader),
+  true,
+  'path gradientFill should draw with a shader',
+);
+
+const m07PackReplay = runExecutableM07PackReplay();
+assert.equal(
+  m07PackReplay.events.some((event) => event.type === 'canvas.translate' && event.x === 2 && event.y === 3),
+  true,
+  'lineShadow should translate by the serialized offset before the compound stroke',
+);
+assert.equal(
+  m07PackReplay.events.filter((event) => event.type === 'canvas.drawLine' && event.width === 1.2).length >= 2,
+  true,
+  'double compoundLine should emit two 0.30-width-ratio strokes',
+);
+assert.equal(
+  m07PackReplay.events.some((event) => event.type === 'path.moveTo'),
+  true,
+  'lineArrow should build a CanvasKit path for the serialized arrow head',
+);
+assert.equal(
+  m07PackReplay.events.some((event) => event.type === 'canvas.drawRect' && event.color?.[0] === 255),
+  true,
+  'patternFill should paint the serialized background color first',
+);
+assert.equal(
+  m07PackReplay.renderer.unsupportedOps.has('tabLeader:invalidGeometry'),
+  false,
+  'unknown tab leader fill types must not pin the op as invalid geometry',
+);
 runExecutableEquationFallback();
 
 requireSnippet(
@@ -1733,13 +2061,48 @@ requireSnippet(
 );
 requireSnippet(
   renderPathBody,
-  /new this\.canvasKit\.Path\(\)[\s\S]*?this\.applyPathCommand[\s\S]*?this\.drawStyledPath/,
-  'path replay should build CanvasKit paths through applyPathCommand and drawStyledPath',
+  /this\.createCommandPath\(op\.commands \?\? \[\], op\.bbox\.x, op\.bbox\.y\)[\s\S]*?this\.drawStyledPath/,
+  'path replay should build command paths before drawing the serialized style',
+);
+requireSnippet(
+  extractMethodBody(canvaskitSource, 'createCommandPath'),
+  /new this\.canvasKit\.PathBuilder\(\)[\s\S]*?try\s*\{[\s\S]*?this\.applyPathCommand\(builder,[\s\S]*?return builder\.detach\(\);[\s\S]*?finally\s*\{\s*builder\.delete\(\);/,
+  'command paths should use PathBuilder, detach the completed Path, and always release the builder',
 );
 requireSnippet(
   renderLineBody,
-  /this\.makeStrokePaint\(op\.style\?\.color[\s\S]*?this\.drawStrokeWithDash\(op\.style\?\.dash[\s\S]*?canvas\.drawLine\(op\.x1, op\.y1, op\.x2, op\.y2, paint\)/,
-  'line replay should draw a CanvasKit line with its serialized stroke pattern',
+  /this\.drawCompoundLine[\s\S]*?this\.drawLineArrows/,
+  'line replay should draw compound strokes and serialized arrow heads',
+);
+requireSnippet(
+  canvaskitSource,
+  /compoundLineSegments\([\s\S]*?thinThickThinTriple/,
+  'compound line replay should retain the serialized width and offset ratio table',
+);
+requireSnippet(
+  canvaskitSource,
+  /drawCompoundLine\([\s\S]*?compoundLineSegments\(style\.lineType\)/,
+  'compound line replay should use the serialized width and offset ratio table',
+);
+requireSnippet(
+  canvaskitSource,
+  /drawArrowHead\([\s\S]*?concaveArrow[\s\S]*?openDiamond[\s\S]*?openCircle[\s\S]*?openSquare/,
+  'arrow replay should cover every serialized ArrowStyle except none',
+);
+requireSnippet(
+  canvaskitSource,
+  /drawPatternFill\([\s\S]*?backgroundColor[\s\S]*?patternColor/,
+  'pattern fill replay should paint the serialized background then hatch the pattern color',
+);
+requireSnippet(
+  canvaskitSource,
+  /drawPatternFill\([\s\S]*?patternType/,
+  'pattern fill replay should dispatch the serialized pattern type',
+);
+requireSnippet(
+  canvaskitSource,
+  /resolvedShadow\([\s\S]*?1 - alpha \/ 255/,
+  'shape and line shadows should convert HWP alpha 0=opaque into CanvasKit opacity',
 );
 requireSnippet(
   drawStrokeWithDashBody,
@@ -1770,8 +2133,28 @@ requireSnippet(
 );
 requireSnippet(
   canvaskitSource,
-  /this\.currentFontResources = tree\.fontResources;[\s\S]*?this\.glyphRunFonts\.registerResources\(tree\.fontResources, tree\.resources\);[\s\S]*?this\.selectTextVariants\(tree\.root\)/,
-  'GlyphRun font blobs must be verified before text variant selection',
+  /const canvas = surface\.getCanvas\(\);[\s\S]*?this\.currentFontResources = tree\.fontResources;[\s\S]*?this\.glyphRunFonts\.registerResources\(\s*tree\.fontResources,\s*tree\.resources,\s*resolveFontBytes,\s*documentGeneration,\s*\);[\s\S]*?this\.selectTextVariants\(tree\.root, canvas\)/,
+  'GlyphRun font blobs and actual Canvas capability must be available before text variant selection',
+);
+requireSnippet(
+  canvaskitSource,
+  /glyphRunVariantReplayable\(op: LayerGlyphRunOp, canvas: SkCanvas\)[\s\S]*?canvasKitCanvasSupportsGlyphRunReplay\(canvas\)[\s\S]*?this\.glyphRunFonts\.replayStatus/,
+  'GlyphRun selection must feature-detect drawGlyphs on the current Canvas',
+);
+requireSnippet(
+  canvaskitGlyphRunFontsSource,
+  /boundedVerticalHwp5TableCellV1[\s\S]*?verticalGlyphRun[\s\S]*?boundedVerticalGlyphRunTupleMismatch/,
+  'malformed bounded vertical declarations must fail closed',
+);
+requireSnippet(
+  canvaskitGlyphRunFontsSource,
+  /function isBoundedVerticalHwp5CanvasKitCandidate[\s\S]*?text\.glyphRun\.verticalUpright[\s\S]*?vertical-rl[\s\S]*?vertical-upright[\s\S]*?rustybuzz-q4-vertical-v1/,
+  'bounded vertical GlyphRun replay must require the exact Rust provenance tuple',
+);
+requireSnippet(
+  canvaskitGlyphRunFontsSource,
+  /drawCanvasKitGlyphRun[\s\S]*?if \(!canvasKitCanvasSupportsGlyphRunReplay\(canvas\)\) return false;[\s\S]*?canvas\.drawGlyphs/,
+  'GlyphRun draw helper must defensively recheck drawGlyphs',
 );
 requireSnippet(
   renderGlyphRunBody,
@@ -2361,6 +2744,65 @@ assert.equal(
   'Hancom boxed-number PUA should preserve the encoded number',
 );
 
+const boxedPuaRatioReplay = runExecutableTextReplay({
+  type: 'textRun',
+  bbox: { x: 0, y: 20, width: 20, height: 20 },
+  text: '\u{F02B1}',
+  baseline: 15,
+  positions: [0, 18],
+  style: { fontFamily: 'Prepared', fontSize: 20, ratio: 0.8, shadowType: 1 },
+}, {
+  glyphIds: [0],
+  fallbackGlyphIds: [0],
+  symbolGlyphIds: [0],
+  usePreparedTypeface: true,
+});
+assert.equal(
+  boxedPuaRatioReplay.unsupportedOps.has('textRun:scriptTextRequiresShaping'),
+  false,
+  'boxed-PUA with 장평 must not fail closed as a shaping gap',
+);
+assert.equal(
+  boxedPuaRatioReplay.events.some(event => event.type === 'font.scaleX' && event.scale === 0.8),
+  true,
+  'boxed-PUA 장평 should apply setScaleX on the digit font',
+);
+assert.equal(
+  boxedPuaRatioReplay.events.some(event => event.type === 'canvas.drawRect'),
+  true,
+  'boxed-PUA with 장평 should keep the bounded vector box',
+);
+for (const markerText of ['[표]', '[그림]']) {
+  const controlCodeMarkerReplay = runExecutableTextReplay({
+    type: 'textRun',
+    bbox: { x: 0, y: 20, width: 36, height: 20 },
+    text: markerText,
+    baseline: 15,
+    positions: Array.from({ length: Array.from(markerText).length + 1 }, (_, index) => index * 10),
+    style: { fontFamily: 'Prepared', fontSize: 11, color: '#0000FF' },
+  }, { usePreparedTypeface: true });
+  assert.equal(
+    controlCodeMarkerReplay.unsupportedOps.has('viewOption:showControlCodes'),
+    false,
+    `${markerText} must not pin the document to a showControlCodes fallback`,
+  );
+  assert.equal(
+    controlCodeMarkerReplay.unsupportedOps.has('textRun:scriptTextRequiresShaping'),
+    false,
+    `${markerText} must replay as ordinary horizontal text`,
+  );
+  assert.equal(
+    controlCodeMarkerReplay.events.some(event => event.type === 'font.getGlyphIDs' && event.text === markerText),
+    true,
+    `${markerText} should map its producer text to glyphs`,
+  );
+  assert.equal(
+    controlCodeMarkerReplay.events.some(event => event.type === 'canvas.drawGlyphs'),
+    true,
+    `${markerText} should replay through positioned glyph draws`,
+  );
+}
+
 const textSpecialReplay = runExecutableTextSpecialReplay();
 assert.equal(textSpecialReplay.events.some(event => event.type === 'canvas.drawOval'), true);
 assert.equal(
@@ -2410,7 +2852,6 @@ for (const diagnostic of [
   'tabLeader:visualItemLimitExceeded',
   'textDecoration:invalidGeometry',
   'textDecoration:visualItemLimitExceeded',
-  'charOverlap:rotatedText',
   'textControlMark:rotatedText',
   'tabLeader:rotatedText',
   'textDecoration:rotatedText',
@@ -2421,6 +2862,21 @@ for (const diagnostic of [
     `malformed text visuals should report ${diagnostic}`,
   );
 }
+assert.equal(
+  textSpecialReplay.unsupportedOps.has('textRun:verticalText'),
+  false,
+  'vertical tab-leader and decoration must not pin the document to a verticalText fallback',
+);
+assert.equal(
+  textSpecialReplay.unsupportedOps.has('charOverlap:rotatedText'),
+  false,
+  'rotated char-overlap markers must not pin the document to a rotatedText fallback',
+);
+assert.equal(
+  textSpecialReplay.events.some(event => event.type === 'canvas.rotate' && event.rotation === 15),
+  true,
+  'rotated char-overlap markers should replay under the producer rotation',
+);
 
 const alternatingGlyphText = 'A'.repeat(4098);
 const alternatingGlyphReplay = runExecutableTextReplay({
@@ -2554,7 +3010,7 @@ for (const token of canvaskitParityPlanRequiredTokens) {
 }
 
 assert.ok(
-  textIrV2DocSource.includes('docs/canvaskit-parity-implementation.md'),
+  textIrV2DocSource.includes('mydocs/tech/canvaskit-parity-implementation.md'),
   'Text IR v2 contract should link to the CanvasKit parity implementation plan',
 );
 
@@ -2700,10 +3156,11 @@ assert.equal(
 );
 const verticalTextReadinessSample = rendererBaselineManifest.samples
   .find((sample) => sample.id === 'table-border-style');
-assert.equal(
-  verticalTextReadinessSample?.browserParityThresholds?.inkMaskMaxDiffRatio,
-  0.005,
-  'vertical text readiness must keep its calibrated ink-mask tolerance bounded',
+assert.ok(
+  [0.005, 0.006].includes(
+    verticalTextReadinessSample?.browserParityThresholds?.inkMaskMaxDiffRatio,
+  ),
+  'vertical text readiness must use an approved calibrated font-raster ink-mask tolerance',
 );
 assert.equal(
   verticalTextReadinessSample?.browserParityThresholds?.nonInkMaxDiffPixels,

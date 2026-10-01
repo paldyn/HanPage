@@ -26,6 +26,7 @@ import {
 import type { TextMutationEffects } from './command';
 import type { DocumentPosition } from '@/core/types';
 import { showConfirm } from '@/ui/confirm-dialog';
+import { tryConfirmDeleteHyperlink } from './input-handler-hyperlink-delete';
 import {
   detectPlatformKind,
   getNavigationAction,
@@ -226,7 +227,10 @@ export function handleBackspace(this: any, pos: DocumentPosition, inCell: boolea
   if (this.cursor.isInHeaderFooter()) {
     const isHeader = this.cursor.headerFooterMode === 'header';
     const hfOff = this.cursor.hfCharOffset;
-    const target = { sectionIdx: this.cursor.hfSectionIdx, isHeader, applyTo: this.cursor.hfApplyTo };
+    const target = {
+      sectionIdx: this.cursor.hfSectionIdx, isHeader, applyTo: this.cursor.hfApplyTo,
+      previewPage: this.cursor.hfPreviewPage,
+    };
     const paraIdx = this.cursor.hfParaIdx;
     if (hfOff > 0) {
       // [Task #2337] 삭제 텍스트를 WASM 반환에서 확보해 역연산(재삽입) 기록. Backspace 이므로
@@ -247,6 +251,8 @@ export function handleBackspace(this: any, pos: DocumentPosition, inCell: boolea
   }
 
   const { charOffset } = pos;
+
+  if (tryConfirmDeleteHyperlink(this, pos, 'backward')) return;
 
   // 필드 경계 보호: 필드 시작 위치에서는 Backspace 차단
   try {
@@ -292,7 +298,10 @@ export function handleDelete(this: any, pos: DocumentPosition, inCell: boolean):
   // 머리말/꼬리말 편집 모드
   if (this.cursor.isInHeaderFooter()) {
     const isHeader = this.cursor.headerFooterMode === 'header';
-    const target = { sectionIdx: this.cursor.hfSectionIdx, isHeader, applyTo: this.cursor.hfApplyTo };
+    const target = {
+      sectionIdx: this.cursor.hfSectionIdx, isHeader, applyTo: this.cursor.hfApplyTo,
+      previewPage: this.cursor.hfPreviewPage,
+    };
     try {
       const paraIdx = this.cursor.hfParaIdx;
       const info = JSON.parse(this.wasm.getHeaderFooterParaInfo(target.sectionIdx, isHeader, target.applyTo, paraIdx));
@@ -312,6 +321,8 @@ export function handleDelete(this: any, pos: DocumentPosition, inCell: boolean):
     } catch { /* ignore */ }
     return;
   }
+
+  if (tryConfirmDeleteHyperlink(this, pos)) return;
 
   const { charOffset } = pos;
 
@@ -362,10 +373,35 @@ export function handleDelete(this: any, pos: DocumentPosition, inCell: boolean):
   }
 }
 
-export function onCompositionStart(this: any): void {
+function clearCellBlockLetterImeFollowup(this: any): void {
+  this.textarea.value = '';
+  this.isComposing = false;
+  this.compositionAnchor = null;
+  this.compositionLength = 0;
+  this._lastCompositionText = '';
+  this._lastComposedText = '';
+  this.caret.hideComposition();
   this.resetRawTextMutationEffects();
+}
+
+export function onCompositionStart(this: any): void {
+  if (this._cellBlockLetterImeGuard?.consume('compositionstart')) {
+    clearCellBlockLetterImeFollowup.call(this);
+    return;
+  }
+
+  this.resetRawTextMutationEffects();
+  this.headerFooterSelectionComposition = false;
   // 선택 영역이 있으면 삭제 후 조합 시작
-  if (this.cursor.hasSelection()) {
+  if (
+    this.cursor.isInHeaderFooter()
+    && this.getNonEmptyHeaderFooterSelection()
+  ) {
+    if (!this.beginHeaderFooterSelectionComposition()) {
+      this.textarea.value = '';
+      return;
+    }
+  } else if (!this.cursor.isInHeaderFooter() && this.cursor.hasSelection()) {
     if (!this.canDeleteSelectionInFormMode?.()) {
       this.textarea.value = '';
       return;
@@ -384,12 +420,10 @@ export function onCompositionStart(this: any): void {
     this.textarea.value = '';
     this.isComposing = false;
     this.compositionAnchor = null;
-    this.clearCompositionAnchorRect();
     this.compositionLength = 0;
     return;
   }
 
-  this.captureCompositionAnchorRect(basePos);
   this.isComposing = true;
   if (this.cursor.isInHeaderFooter()) {
     // 머리말/꼬리말 모드에서는 hfCharOffset을 anchor의 charOffset으로 사용
@@ -404,12 +438,17 @@ export function onCompositionStart(this: any): void {
 }
 
 export function onCompositionEnd(this: any): void {
+  if (this._cellBlockLetterImeGuard?.consume('compositionend', this.textarea.value)) {
+    clearCellBlockLetterImeFollowup.call(this);
+    return;
+  }
+
   const anchor = this.compositionAnchor;
   const finalLength = this.compositionLength;
+  const headerFooterSelectionComposition = this.headerFooterSelectionComposition === true;
 
   this.isComposing = false;
   this.compositionAnchor = null;
-  this.clearCompositionAnchorRect();
   this.compositionLength = 0;
   this.textarea.value = '';
   this.caret.hideComposition();
@@ -423,14 +462,19 @@ export function onCompositionEnd(this: any): void {
   // 조합 중 WASM 직접 호출로 이미 문서에 삽입된 텍스트를
   // Command로 기록하여 Undo 가능하게 한다.
   // [Task #2337] 머리말/꼬리말·각주 모드도 이제 기록한다(본문 스냅샷 undo 의 무언 파괴 차단).
-  if (anchor && finalLength > 0) {
+  if (anchor && finalLength > 0 && !headerFooterSelectionComposition) {
     if (this.cursor.isInHeaderFooter()) {
       // HF 는 신뢰할 텍스트 read 가 없어 getTextAt(본문 리더)을 쓸 수 없으므로 조합 텍스트
       // (_lastCompositionText)를 그대로 기록한다. anchor.charOffset = 조합 시작 오프셋,
       // hfParaIdx 는 조합 중 불변.
       const composed = this._lastCompositionText || '';
       if (composed) {
-        const target = { sectionIdx: this.cursor.hfSectionIdx, isHeader: this.cursor.headerFooterMode === 'header', applyTo: this.cursor.hfApplyTo };
+        const target = {
+          sectionIdx: this.cursor.hfSectionIdx,
+          isHeader: this.cursor.headerFooterMode === 'header',
+          applyTo: this.cursor.hfApplyTo,
+          previewPage: this.cursor.hfPreviewPage,
+        };
         this.executeOperation({ kind: 'record', command: new InsertTextInHeaderFooterCommand(target, this.cursor.hfParaIdx, anchor.charOffset, composed) });
       }
     } else if (this.cursor.isInFootnote()) {
@@ -449,6 +493,9 @@ export function onCompositionEnd(this: any): void {
         this.executeOperation({ kind: 'record', command: new InsertTextCommand(anchor, insertedText) });
       }
     }
+  }
+  if (headerFooterSelectionComposition) {
+    this.finishHeaderFooterSelectionComposition();
   }
 
   // 조합 종료 후 대기 중인 탐색 키 처리 (IME 조합 중 방향키 등)
@@ -476,6 +523,12 @@ export function getTextAt(this: any, pos: DocumentPosition, count: number): stri
 export function onInput(this: any, e?: InputEvent): void {
   if (!this.active) return;
 
+  if (this._cellBlockLetterImeGuard?.consume('input', this.textarea.value)) {
+    e?.preventDefault();
+    clearCellBlockLetterImeFollowup.call(this);
+    return;
+  }
+
   const text = this.textarea.value;
   // const inputType = e?.inputType ?? 'unknown';
   // const inputData = e?.data ?? '';
@@ -484,7 +537,7 @@ export function onInput(this: any, e?: InputEvent): void {
   // IME 조합 중: 이전 조합 텍스트 삭제 → 현재 조합 텍스트 삽입 (실시간 렌더링)
   // Undo 스택에는 기록하지 않음 (compositionend에서 한 번에 기록)
   if (this.isComposing && this.compositionAnchor) {
-    const anchor = this.compositionAnchor;
+    let anchor = this.compositionAnchor;
     const beforePageIndex = this.cursor.getRect()?.pageIndex;
     if (!this.canInsertTextInFormMode?.(anchor)) {
       this.textarea.value = '';
@@ -492,10 +545,39 @@ export function onInput(this: any, e?: InputEvent): void {
     }
     this.resetRawTextMutationEffects();
 
-    this.replaceTextAtRaw(anchor, this.compositionLength, text);
+    try {
+      this.replaceTextAtRaw(anchor, this.compositionLength, text);
+    } catch (err) {
+      // wasm 의 deferred replace 범위 가드가 거부하면(외부 변이로 앵커·길이가 낡은
+      // 경합) 여기서 던진 채 두면 onInput 전체가 죽어 조합 추적이 낡은 값으로
+      // wedge 된다. 조합을 현재 캐럿에 재정박하고 이번 조합 텍스트를 새로 삽입해
+      // 입력 스트림을 잇는다 — 실패분은 다음 캐럿 이동에서 자연 동기화된다.
+      console.warn('[InputHandler] 조합 replace 거부 — 현재 캐럿에 재정박:', err);
+      // 머리말/꼬리말·각주 모드에서는 cursor.getPosition()이 진입 전 본문 위치로
+      // 고정돼 있고 실제 오프셋은 hfCharOffset/fnCharOffset에 있다(onCompositionStart와
+      // 동일 규약). 이 override 없이 그대로 쓰면 insertTextAtRaw/deleteTextAt이 정확한
+      // hfParaIdx/hfSectionIdx에 엉뚱한 본문 charOffset을 실어 보낸다.
+      anchor = this.cursor.isInHeaderFooter()
+        ? { ...this.cursor.getPosition(), charOffset: this.cursor.hfCharOffset }
+        : this.cursor.isInFootnote()
+          ? { ...this.cursor.getPosition(), charOffset: this.cursor.fnCharOffset }
+          : { ...this.cursor.getPosition() };
+      this.compositionAnchor = anchor;
+      this.compositionLength = 0;
+      try {
+        this.replaceTextAtRaw(anchor, 0, text);
+      } catch (err2) {
+        console.warn('[InputHandler] 조합 재정박 삽입 실패 — 이번 업데이트 무시:', err2);
+        this.textarea.value = '';
+        return;
+      }
+    }
     // 다음 조합 업데이트의 삭제 count는 scalar 단위다.
     this.compositionLength = charCount(text);
     if (text) this._lastCompositionText = text;
+    // [#4162] 캐럿 대기 서식이 있으면 이번 조합 텍스트 전체(매 갱신마다 새로 깔린 range)에
+    // 적용한다. Command 를 거치지 않는 raw 삽입이라 InsertTextCommand 의 서식 적용을 못 탄다.
+    this.applyPendingCharShapeToRange?.(anchor, charCount(text));
 
     // cursor.moveTo() 내부의 exact lookup 전에 deferred mutation을 등록하고,
     // 실제 cell-flow 경계에서만 동기 flush한다.
@@ -597,7 +679,16 @@ export function onInput(this: any, e?: InputEvent): void {
   if (this.cursor.isInHeaderFooter()) {
     const isHeader = this.cursor.headerFooterMode === 'header';
     try {
-      const target = { sectionIdx: this.cursor.hfSectionIdx, isHeader, applyTo: this.cursor.hfApplyTo };
+      if (this.getNonEmptyHeaderFooterSelection()) {
+        this.replaceHeaderFooterSelection(text, {
+          operationType: 'replaceSelectionInHeaderFooter',
+        });
+        return;
+      }
+      const target = {
+        sectionIdx: this.cursor.hfSectionIdx, isHeader, applyTo: this.cursor.hfApplyTo,
+        previewPage: this.cursor.hfPreviewPage,
+      };
       const paraIdx = this.cursor.hfParaIdx;
       const charOffset = this.cursor.hfCharOffset;
       this.wasm.insertTextInHeaderFooter(target.sectionIdx, isHeader, target.applyTo, paraIdx, charOffset, text);
@@ -646,7 +737,8 @@ export function onInput(this: any, e?: InputEvent): void {
     this.textarea.value = '';
     return;
   }
-  this.executeOperation({ kind: 'command', command: new InsertTextCommand(insertPos, text) });
+  // [#4162] 선택 없이 지정한 서식은 예약(pending)돼 있다 — 있으면 삽입 커맨드에 실어 보낸다.
+  this.executeOperation({ kind: 'command', command: new InsertTextCommand(insertPos, text, undefined, this.getPendingCharShape?.()) });
   if (refreshClickHereGuide) {
     this.refreshClickHereAfterFirstInput?.();
   }

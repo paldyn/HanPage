@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "key": "hp110-business-p1",
+  "provenance": {
+    "hwp": {
+      "path": "samples/biz_plan.hwp",
+      "sha256": "8b786d6824622afae2220b203beeef6e5592157e1896fea055ebc602817113c1"
+    },
+    "pdf": {
+      "path": "pdf/biz_plan-2022.pdf",
+      "sha256": "55869e93e63eb5b515bff388aed8769ad66ca17183d67832598df24d90dba0a2"
+    },
+    "git_head": "88317b1110432d37a61b08a1af3ed305dd56e9c0",
+    "sweep_script": {
+      "path": "scripts/visual_sweep.py",
+      "sha256": "e67bf1ef9a9798e1f1ddaafcf38cb354668772b5ccf1c7b6c0e11e0ae1129d07"
+    },
+    "svg_rasterizer": "webfont",
+    "rhwp_binary": {
+      "configured": "target/pr-review/release-test/rhwp",
+      "path": "target/pr-review/release-test/rhwp",
+      "sha256": "75af5c7240359dfdc3a8f24f2ae621bab58388c2fa025bace119ed0c72cae4e1"
+    },
+    "font_supply": {
+      "mode": "local",
+      "source": "none",
+      "files": []
+    }
+  },
+  "dpi": 96,
+  "pixel_diff_threshold": 32,
+  "font_mismatch_evidence": {
+    "path": "output/pr-review/hp110/representative-visual/business/font-mismatch-evidence-official.json",
+    "sha256": "2f7ffe102dbebfc7b38fe7af157800e481e0f6fafd3565271fc2cd9a8870e366"
+  },
+  "requested_pages": [
+    1
+  ],
+  "requested_page_shards": [
+    [
+      1
+    ]
+  ],
+  "run_state": "complete"
+}

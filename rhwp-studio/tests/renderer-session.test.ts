@@ -69,6 +69,29 @@ function session(
   );
 }
 
+test('explicit CanvasKit waits for font preparation and font invalidation resets resources', async () => {
+  let resets = 0;
+  let preparations = 0;
+  let finish!: () => void;
+  const renderer = fakeRenderer(() => {}, () => { resets++; });
+  const rendererSession = session('canvaskit', async () => renderer, {
+    async prepareCanvasKitDocument(_renderer, report) {
+      assert.equal(report, null);
+      preparations++;
+      if (preparations === 1) await new Promise<void>(resolve => { finish = resolve; });
+    },
+  });
+  const pending = rendererSession.resolve({} as never);
+  await new Promise(resolve => setImmediate(resolve));
+  rendererSession.invalidateDocument();
+  finish();
+  assert.equal(rendererSession.isCurrent(await pending), false);
+  const current = await rendererSession.resolve({} as never);
+  assert.equal(current.backend, 'canvaskit');
+  assert.equal(resets, 1);
+  assert.equal(preparations, 2);
+});
+
 test('auto selects CanvasKit only after a complete eligible document preflight', async () => {
   let preflightCalls = 0;
   let createCalls = 0;
@@ -189,18 +212,14 @@ test('surface preflight transforms stay lazy and document resources prepare befo
   assert.equal(fallback.diagnostics.selectionError, 'font decode failed');
 });
 
-test('auto re-evaluation permits text marks but keeps structural control markers on Canvas2D', async () => {
-  let showControlCodes = false;
+test('auto re-evaluation permits text marks and structural control markers', async () => {
   let createCalls = 0;
   const rendererSession = session('auto', async () => {
     createCalls += 1;
     return fakeRenderer();
   }, {
     transformCanvasKitPreflight(report) {
-      return withCanvasKitSurfaceBlockers(
-        report,
-        showControlCodes ? ['viewOption:showControlCodes'] : [],
-      );
+      return withCanvasKitSurfaceBlockers(report, []);
     },
   });
   const wasm = { getCanvasKitDocumentPreflight: () => preflight('eligible') };
@@ -209,20 +228,14 @@ test('auto re-evaluation permits text marks but keeps structural control markers
   assert.equal((await rendererSession.resolve(wasm)).backend, 'canvaskit');
 
   rendererSession.invalidateDocument({ resetResources: false });
-  assert.equal((await rendererSession.resolve(wasm)).backend, 'canvaskit');
-
-  showControlCodes = true;
-  rendererSession.invalidateDocument({ resetResources: false });
   const controlCodes = await rendererSession.resolve(wasm);
-  assert.equal(controlCodes.backend, 'canvas2d');
+  assert.equal(controlCodes.backend, 'canvaskit');
   assert.equal(
-    controlCodes.diagnostics.preflight?.blockers.at(-1)?.detail,
-    'viewOption:showControlCodes',
+    controlCodes.diagnostics.preflight?.blockers.some(
+      (blocker) => blocker.detail === 'viewOption:showControlCodes',
+    ),
+    false,
   );
-
-  showControlCodes = false;
-  rendererSession.invalidateDocument({ resetResources: false });
-  assert.equal((await rendererSession.resolve(wasm)).backend, 'canvaskit');
   assert.equal(createCalls, 1);
 });
 

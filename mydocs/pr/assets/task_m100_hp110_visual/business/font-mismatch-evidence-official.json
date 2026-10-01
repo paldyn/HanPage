@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "sourceValidationSHA": "c38538745d7350efdf3ec9cd2ed64dda01848c66",
+  "submissionHeadSHA": "dc3f47079120c64a89565b927b2d516c3a5ff30f",
+  "engineByteIdenticalUpstreamSHA": "02530b9ed567a44663edb26c65fb565c4a79f00d",
+  "page": 1,
+  "input": "samples/biz_plan.hwp",
+  "referencePDF": "pdf/biz_plan-2022.pdf",
+  "referenceUsedFaces": [
+    "HCRBatang",
+    "H2hdrM",
+    "HCRBatang-Bold"
+  ],
+  "chromeActuallyUsedFaces": [
+    "NotoSerifKRExtraLight-Regular",
+    "HCRDotum"
+  ],
+  "actualFaceIntersection": [],
+  "fontPrograms": "Actual all45SVG nodes selected NotoSerifKRExtraLight-Regular and HCRDotum via Chrome CSS.getPlatformFontsForNode; exact replay PNG SHA matches official SVG raster. Actual supplied assets/fonts/NotoSerifKR-Regular.woff2 was decoded as WOFF2/Brotli SFNT name metadata to NotoSerifKRExtraLight-Regular; actual HCRDotum.woff network response was captured from the same Chrome page and WOFF/zlib name metadata identifies HCRDotum. Both programs have SHA256 recorded. These programs are entirely different from PDF embedded HCRBatang/H2hdrM/HCRBatang-Bold. Earlier bareSVG Nanum/Apple and erroneous CoreText-to-Helvetica diagnostics are not used for this official run.",
+  "referenceFontJSON": "hancom-actual-fonts-and-spans.json",
+  "chromeFontJSON": "official-chrome-actual-platform-fonts.json",
+  "fontFileJSON": "official-actual-font-programs.json",
+  "geometryJSON": [
+    "same-coordinate-rule-geometry.json",
+    "same-coordinate-paragraph-anchors.json"
+  ],
+  "directInspection": "Official review_001.png and overlay_001.png opened directly. The two horizontal double rules and header/date/company starts are aligned within1px. Title glyph outline/weight and centered first-glyph origin differ; logical advance-box center is independently derived from PDF CIDFont W/Tz and SVG font-size/scale and differs0.211904px with baseline0.931984px. No text omission/duplication/line-wrap change on selected p1. Remaining font outline and stroke-weight mismatch remains visible; official2px score86.04917% is below90 and not claimed as normal pass.",
+  "allowedScope": "Only business p1 on the exactly recorded input/output. This permits the documented actual-font mismatch exception; it does not waive placement errors, extend to other pages, or establish complete Hancom fidelity.",
+  "captureMode": "Official visual_sweep --font-style + scripts/rasterize-svg-webfonts.mjs at96dpi, checked by an exactly replayed prepared HTML screenshot with identical PNG bytes.",
+  "officialPNG": "output/pr-review/hp110/representative-visual/official-sweep/hp110-business-p1/rhwp_png/rhwp_001.png",
+  "officialPNGSHA256": "652f835539192b8742b3bc4fd37739d7c5241c6f4b5436096d0d0e662aac299c",
+  "officialGeometryMatchesManualSVGExactly": true,
+  "geometrySource": "Official --font-style SVG and original bareSVG have exactly identical text positions/transforms/font sizes/weights/text plus all line/rect/clip/image geometry. Only font family alias declarations differ. Therefore the recorded raw PDF-vs-SVG structural coordinates apply to this exact official capture without registration.",
+  "boundEvidenceFiles": {
+    "hancom-actual-fonts-and-spans.json": {
+      "sha256": "94ad68e208ae18fbe30c92f6a5bb3c336ee2591adc4c54133aa02d8bb0601cf5",
+      "bytes": 8294
+    },
+    "official-chrome-actual-platform-fonts.json": {
+      "sha256": "52cbeba69cde8406f58a703b1e6e07a65cec50711efd362883c50b549c93954f",
+      "bytes": 46253
+    },
+    "official-actual-font-programs.json": {
+      "sha256": "c4cff90e34b94c13c5cd7654cc9c4eb83191db40724d60361962cee4ba4e13dd",
+      "bytes": 2344
+    },
+    "same-coordinate-rule-geometry.json": {
+      "sha256": "8f126357254b1effe7a78fb30afc47a56666565e05a17e1c5ef897679e5d5123",
+      "bytes": 5227
+    },
+    "same-coordinate-paragraph-anchors.json": {
+      "sha256": "68795c1f6f0194cc6979355a588562a85f0c4884a177c483181daabe138b641d",
+      "bytes": 2666
+    }
+  }
+}

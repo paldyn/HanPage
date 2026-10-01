@@ -2,7 +2,7 @@
 kind: canonical
 status: active
 canonical: mydocs/manual/agent_surface_playbook.md
-last_verified: 2026-08-03
+last_verified: 2026-08-16
 ---
 
 # 에이전트 표면 플레이북 — 표면을 더하는 절차와, 그 표면을 굴리는 실무
@@ -56,6 +56,19 @@ helper 를 재사용한다. 서버 전용 경로를 새로 만들면 CLI 와 계
 
 ## 2. 추가 절차 (순서 고정)
 
+0. **잠금 확인·할당 (착수 = 할당)** — 조사보다 먼저 한다. 대상 이슈의 assignee 와
+   같은 이슈를 가리키는 열린 PR 을 확인하고, 비어 있으면 즉시 선점한다.
+   ```bash
+   gh issue view <n> --repo edwardkim/rhwp --json assignees -q '.assignees[].login'
+   gh pr list --repo edwardkim/rhwp --state open --limit 100 --search "<n>"
+   gh issue edit <n> --repo edwardkim/rhwp --add-assignee @me   # 권한 있는 계정만 성공
+   ```
+   **외부 기여자 계정은 assignee 편집이 거부된다**(실측 2026-08-06:
+   `gh issue edit --add-assignee` 가 `failed to update 1 issue` — 3회 재현). 그 경우
+   **이슈에 착수 코멘트("착수합니다 — <범위>")를 남기는 것이 잠금**이다. 선점된
+   이슈(assignee 있음 또는 착수 코멘트 있음)는 착수하지 않고, 작업을 접으면 즉시
+   해제(코멘트)한다. 사고 사례·판정 기준·볼륨 캡의 canonical 은
+   [병렬 세션 규약](../tech/autonomous_maintenance/parallel_session_protocol.md)이다.
 1. **이슈 등록** — 공백을 실측으로 서술하고(#3608 매트릭스 갱신 포함) 검증 계획을 적는다.
 2. **red 계약 테스트** — `tests/*_contract.rs` 신설. 구현 전 FAILED 를 확인한다.
    기존 테스트 파일 수정보다 신설을 우선한다(병렬 PR 충돌 회피).
@@ -63,13 +76,70 @@ helper 를 재사용한다. 서버 전용 경로를 새로 만들면 CLI 와 계
 4. **검증** — 신규 green + 인접 계약 스위트 무회귀 + `clippy -D warnings` 0 +
    rustfmt clean(변경 파일 기준).
 5. **누적 머지 충돌검사** — `upstream/devel` 에서 임시 브랜치를 만들어 열린 PR
-   브랜치 전부를 순차 merge, 충돌 0 확인. 겹치는 파일이 있으면 적층(베이스 PR 을
-   본문에 명시)으로 전환한다.
+   브랜치 전부를 순차 merge, 충돌 0 확인. 겹치는 파일이 있으면 **선등재 성립
+   여부를 먼저 보고**, 안 되면 적층(베이스 PR 을 본문에 명시, 체인 3단 이하)으로
+   전환한다.
+
+   **접합 기법 — 선등재**: 겹침이 "목록·표에 한 줄 추가" 형태이고 그 목록의 소비자가
+   기준 집합만 순회한다면(초과 항목 무해), 상대 PR 이 추가할 항목을 미리 등재해
+   머지 순서와 무관하게 무수정 통과시킬 수 있다. 실증 #3903 ↔ #3808 (SWEEP_EXEMPT
+   면제 호출표 선등재 — 누적 머지로 전후 대조). 성립 조건과 한계의 canonical 은
+   [선등재 패턴](../tech/autonomous_maintenance/pre_registration_pattern.md).
 6. **처리 문서 + 증적 2종** — `mydocs/report/task_m100_<이슈>/README.md` 에:
    ① 실행 원문(터미널 봉투) 캡처 ② **산출물을 실제 rhwp 로 열어 렌더한 화면**
    (`export-svg` → PNG 변환 → 합성). 편집 계열은 전/후 비교로.
 7. **PR** — 한글 제목·본문, `closes #<이슈>`, 증적 이미지는 저장소에 커밋 후
    raw 링크로 본문 참조. 열린 PR 은 10건 이내를 유지한다.
+
+### 2-1. 병렬 작업 선등재 패턴
+
+위 5단계의 "접합 기법 — 선등재"를 실무에서 쓸 때의 판단 기준이다.
+
+**언제 쓰는가** — 두 열린 PR 이 같은 허용목록·호출표(예: `SWEEP_EXEMPT` 면제 호출표)에
+각자 새 항목을 추가하는데, 그 목록에 **완전성 가드**(허용목록의 모든 항목이 검사표에도
+있어야 한다는 패닉형 대조)가 걸려 있는 상황이다. 이런 가드는 파일을 나눠도 못 피한다 —
+상대의 항목이 먼저 등재되기를 서로 기다리면, 어느 쪽을 먼저 머지해도 나머지 쪽 리베이스가
+그 자리에서 패닉한다.
+
+**왜 안전한가** — 가드가 순회하는 **기준 집합**과 항목의 처리 방법을 담은 **등재
+목록**이 분리돼 있고, 순회가 기준 쪽에서만 일어난다면(등재 목록은 조회표일 뿐), 기준에
+아직 없는 항목을 등재 목록에 미리 넣어도 조회되지 않아 무해하다. 코드 근거
+(`tests/provenance_contract.rs`, `upstream/devel`): 완전성 가드는
+`for (name, _why) in SWEEP_EXEMPT { let args = invocations.get(name)…​ }` 형태로,
+순회는 **`SWEEP_EXEMPT`(기준) 쪽에서만** 일어난다. `invocations`(등재 목록)에 기준에
+없는 이름을 넣어도 `SWEEP_EXEMPT` 에 그 이름이 없는 동안은 `.get()` 이 그 항목을 아예
+부르지 않는다 — 죽은 값으로 잠들어 있다가, 기준 쪽에 그 이름이 들어오는 순간 자동으로
+깨어난다.
+
+**실증 사례 — #3903 ↔ #3808** — [#3808](https://github.com/edwardkim/rhwp/pull/3808)
+(`export-plan-schema` + 조건부 step)은 `SWEEP_EXEMPT`(기준)에
+`export-plan-schema` 를 추가했다. [#3903](https://github.com/edwardkim/rhwp/pull/3903)
+(출처 표지 빠진 봉투 5건 + 가드 4중 확장)은 `SWEEP_EXEMPT` 의 모든 면제 명령을 실호출로
+검사하는 완전성 가드를 신설하면서, 아직 devel 에 없는 `export-plan-schema` 를 호출표
+`invocations` 에 `// [#3808 선등재] …` 주석과 함께 미리 등재해 뒀다. 세 열린 PR
+(#3808·#3897·#3903)의 누적 머지 트리에서 실측한 결과 — **선등재 전에는 완전성 패닉이
+정확히 1건 났고, 선등재 후에는 0건**이었다(대조군까지 확인). 어느 쪽이 먼저 머지돼도
+후속 수정이 없었다. 성립 조건 6가지(C1~C6)·저장소 전수 조사·반례 4종의 canonical 은
+[선등재 패턴](../tech/autonomous_maintenance/pre_registration_pattern.md).
+
+**주의점**
+
+- **텍스트 충돌 자체는 못 없앤다.** 두 PR 이 **같은 배열의 같은 자리**를 고치면 여전히
+  git 충돌이 난다. #3903↔#3808 이 무충돌이었던 것은 서로 다른 것을 고쳤기 때문이다
+  (#3808 은 `SWEEP_EXEMPT` 상수, #3903 은 새 테스트 함수). 같은 배열에 둘 다 항목을
+  추가하는 상황은 적층이나 순서 대기로 푼다.
+- **여섯 조건이 모두 성립해야 한다**(canonical §3-2) — 순회 기준이 등재 목록 밖에 있을
+  것, **역방향 실재 검사가 없을 것**("stale"·"래칫"이라는 단어가 코드 주석에 보이면
+  중단), 등재가 출력(봉투·매니페스트)에 반향되지 않을 것, 순서·인덱스(`enumerate()`)에
+  의존하지 않을 것, 초과 항목이 다른 가드를 약화시키지 않을 것(이름 매칭이 넓으면
+  위험), 상대 PR 의 diff 에서 항목 이름을 확정할 수 있을 것.
+- **등재 항목에는 반드시 주석을 남긴다** — 상대 PR 번호, 순회 기준, "아직 잠들어 있다"는
+  사실, 편입 조건 네 가지. 없으면 리뷰어에게 정체불명의 죽은 항목으로 보인다.
+- **상대 PR 이 오지 않으면 조용히 죽은 코드로 남는다.** close 되거나 항목 이름이
+  바뀌면 컴파일 에러도 테스트 실패도 없이 영영 깨어나지 않는다 — 자동 회수 수단은 없다.
+  상대 PR 번호를 추적해 닫히면 직접 회수한다.
+- **대조군 없이는 검증되지 않는다.** 선등재 항목만 지운 트리에서 예상한 실패(완전성
+  패닉)가 재현돼야, "패턴이 실제로 막았다"와 "애초에 충돌이 없었다"를 구별할 수 있다.
 
 ## 3. 수용 기준 (Definition of Done — 조각 단위)
 
@@ -229,7 +299,7 @@ $ printf '%s\n' \
 `docId` 는 **서버 프로세스 수명과 같다.** 재시작하면 사라지고, 저장하지 않은 편집도
 함께 사라진다.
 
-### 6-4. 바인딩(Node/Python) — 스키마를 먼저 뽑는다
+### 6-4. 외부 소비자 코드 생성 — 스키마를 먼저 뽑는다
 
 바인딩은 계약을 새로 만들지 않는다. 코드 생성의 단일 출처가 둘이다.
 
@@ -244,8 +314,9 @@ print(d['capabilitiesSchemaVersion'], d['definitionCount'], list(d.keys()))"
 ```
 
 `--bare` 를 주면 봉투 없이 스키마 본문만 나와 JSON Schema 도구에 바로 먹일 수 있다.
-함수로 노출할 명령의 기준은 손으로 고른 목록이 아니라 `capabilities` 의 `json:true`
-선언이다. 상세는 [노드](node_binding_guide.md)·[파이썬](python_binding_guide.md) 가이드.
+공식 Python·Node 바인딩은 v0.8.4에서 철회됐다([#4655](https://github.com/edwardkim/rhwp/issues/4655)).
+외부 소비자는 `capabilities`의 `json:true` 선언과 위 스키마를 권위로 삼고, 자체 래퍼를
+다운스트림에서 유지한다.
 
 ## 7. 판정 3층 — 실제 응답으로 읽는다
 
@@ -877,13 +948,13 @@ $ rhwp inspect unicode samples/hwp3-sample.hwp --json
 `scannedChars:20736` 이 "훑었는데 없었다"의 증거다. 0이면 탐지기가 아니라 **입력**을
 의심한다.
 
-주입 조사는 기본 8축만 본다. 누름틀 이름·안내문·메모까지 보려면 `--include-fields`:
+주입 조사는 기본 9축만 본다. 누름틀 이름·안내문·메모까지 보려면 `--include-fields`:
 
 ```
 $ rhwp inspect injection samples/field-01.hwp --json --include-fields
 {"clean":true,"highestConfidence":null,"includeFields":true,"minConfidence":"low",
  "scanScopes":["body","tableCell","textBox","equation","footnote","endnote","header","footer",
-               "fieldName","fieldGuide","fieldCommand","hiddenComment"],
+               "caption","fieldName","fieldGuide","fieldCommand","hiddenComment","fieldMemo"],
  "signalCount":0, … }
 ```
 

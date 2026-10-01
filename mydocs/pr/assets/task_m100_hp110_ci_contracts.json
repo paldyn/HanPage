@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "source_sha": "befaca4650dc3b1611b4b654a3554adfb3f69eeb",
+  "working_tree_head_at_start": "befaca4650dc3b1611b4b654a3554adfb3f69eeb",
+  "working_tree_head_after": "befaca4650dc3b1611b4b654a3554adfb3f69eeb",
+  "execution_environment": {
+    "working_directory": "repository root of isolated review worktree",
+    "python": "Python 3.9.6",
+    "env_overrides": {
+      "PYTHONDONTWRITEBYTECODE": "1"
+    }
+  },
+  "gym": {
+    "workflow_path": ".github/workflows/gym-release-gate.yml",
+    "workflow_step": "Validate Gym contracts",
+    "command": "python3 -m unittest scripts.tests.test_gym_benchmark_validation scripts.tests.test_gym_score scripts.tests.test_gym_packs scripts.tests.test_gym_coverage scripts.tests.test_gym_profiles scripts.tests.test_gym_schema scripts.tests.test_gym_pack_health scripts.tests.test_gym_audit scripts.tests.test_gym_certify scripts.tests.test_gym_build_baseline scripts.tests.test_gym_discriminate scripts.tests.test_gym_oracle_probe scripts.tests.test_gym_authority_ledger scripts.tests.test_gym_trajectory scripts.tests.test_gym_leaderboard scripts.tests.test_gym_robustness scripts.tests.test_gym_fuzz_corpus scripts.tests.test_gym_release_diff scripts.tests.test_gym_differential scripts.tests.test_gym_tutorial scripts.tests.test_gym_competitive_bench scripts.tests.test_gym_work_receipt_pack",
+    "module_count": 22,
+    "test_count": 2125,
+    "exit_code": 0,
+    "result": "PASS",
+    "started_at_utc": "2026-10-01T08:02:58.854409+00:00",
+    "finished_at_utc": "2026-10-01T08:03:10.408211+00:00",
+    "wall_time_seconds": 11.553,
+    "stdout_stderr_log": "output/pr-review/hp110/ci/gym-contracts-local.log",
+    "log_sha256": "b6f9f7f880b946c0b6a50af0a87ae64139780aeb3903152bf5e3bf4e327b9437",
+    "blob_identity": {
+      "files_count": 2358,
+      "before_and_after_all_match": true,
+      "canonical_path_blob_manifest_sha256": "0b8c7a0048290842f4e077801130d66fc4c1ae792dc0fd8cb298b89f17ffce6d",
+      "manifest_path": "mydocs/pr/assets/task_m100_hp110_ci_gym_inputs.json",
+      "execution_manifest_path": "output/pr-review/hp110/ci/gym-contracts-blob-identity.json"
+    },
+    "github_workflow_registration": {
+      "read_only_api": "GET /repos/paldyn/HanPage/actions/workflows/gym-release-gate.yml",
+      "http_status": 404,
+      "registered_workflow": false,
+      "generated_ci_run": false,
+      "limitation": "No Gym GitHub Actions run was generated; this is a local execution of the exact 22-module PR contracts command, not the full benchmark."
+    },
+    "skipped": 1,
+    "passed": 2124,
+    "failed": 0,
+    "errors": 0,
+    "skip_detail": {
+      "test": "scripts.tests.test_gym_release_diff.CommittedReportTests.test_self_diff_report_is_stable",
+      "reason": "커밋된 self-diff 리포트 없음",
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v scripts.tests.test_gym_release_diff.CommittedReportTests",
+      "test_count": 1,
+      "skipped": 1,
+      "exit_code": 0,
+      "log_path": "output/pr-review/hp110/ci/gym-contracts-skip-detail.log"
+    }
+  },
+  "pages_mirror": {
+    "path": "scripts/ci-impact-policy.cjs",
+    "before_sha256": "aff4e0109508f1c6ad7d07db14cc8bcf736bec18a5ed9fb221e61fbf84d126ac",
+    "after_sha256": "40b33b3c398f18d7c41de2da685f8fa8f312ce4616a3e0c3543103dc5e6b914b",
+    "scope": "DEPLOY_PAGES_PUSH_PATHS_IGNORE mirror only; deployment YAML and enforcement functions unchanged",
+    "focused_before": {
+      "command": "node --test scripts/tests/ci-impact-policy.test.cjs",
+      "test_count": 41,
+      "passed": 40,
+      "failed": 1,
+      "exit_code": 1,
+      "failure": "Strict retained Pages workflow paths-ignore mirror mismatch",
+      "log_path": "output/pr-review/hp110/ci/pages-policy-mirror-before.log"
+    },
+    "focused_after": {
+      "command": "node --test scripts/tests/ci-impact-policy.test.cjs",
+      "test_count": 41,
+      "passed": 41,
+      "failed": 0,
+      "exit_code": 0,
+      "log_path": "output/pr-review/hp110/ci/pages-policy-mirror-after.log"
+    },
+    "related_node_bundle_after": {
+      "command": "node --test scripts/tests/ci-impact-classifier.test.cjs scripts/tests/ci-impact-policy.test.cjs scripts/tests/ci-impact-controller-contract.test.cjs scripts/tests/ci-workflow-evidence.test.cjs scripts/tests/ci-impact-report.test.cjs scripts/tests/collect-postmerge-duration-data.test.mjs",
+      "test_count": 200,
+      "passed": 200,
+      "failed": 0,
+      "exit_code": 0,
+      "log_path": "output/pr-review/hp110/ci/pages-policy-related-after-corrected.log"
+    },
+    "incorrect_extension_attempt": {
+      "command": "node --test scripts/tests/ci-impact-classifier.test.cjs scripts/tests/ci-impact-policy.test.cjs scripts/tests/ci-impact-controller-contract.test.cjs scripts/tests/ci-workflow-evidence.test.cjs scripts/tests/ci-impact-report.test.cjs scripts/tests/collect-postmerge-duration-data.test.cjs",
+      "test_count": 0,
+      "executed_tests": 0,
+      "exit_code": 1,
+      "failure": "Invocation used nonexistent collect-postmerge-duration-data.test.cjs instead of .mjs; no tests ran",
+      "log_path": "output/pr-review/hp110/ci/pages-policy-related-after.log"
+    },
+    "execution_identity": {
+      "worktree_head_during_original_node_execution": "dc3f47079120c64a89565b927b2d516c3a5ff30f",
+      "after_node_execution_included_uncommitted_change": "scripts/ci-impact-policy.cjs",
+      "verified_committed_equivalent_source": "befaca4650dc3b1611b4b654a3554adfb3f69eeb",
+      "commit_diff_from_original_head": [
+        "scripts/ci-impact-policy.cjs"
+      ],
+      "after_policy_file_sha256_matches_committed_source": true,
+      "node_suite_files_match_committed_source": true
+    }
+  },
+  "remote_mutations": false,
+  "cargo_executed": false,
+  "source_or_document_edits_during_gym_execution": false
+}

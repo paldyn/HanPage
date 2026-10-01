@@ -1,0 +1,134 @@
+[
+  {
+    "suggestedName": "latin-review.png",
+    "source": "output/pr-review/hp110/representative-visual/official-sweep-latin/hp110-latin-p1/review/review_001.png",
+    "bytes": 74703,
+    "sha256": "b2342f89a2297001e290710e136199758c9cb101c772879c97ca1ccd1e652897"
+  },
+  {
+    "suggestedName": "latin-overlay.png",
+    "source": "output/pr-review/hp110/representative-visual/official-sweep-latin/hp110-latin-p1/overlay/overlay_001.png",
+    "bytes": 31169,
+    "sha256": "a3ea5e7cb88187266d3eec0ad92e3d1af8231a7aed92019217f1d12fb296d8bf"
+  },
+  {
+    "suggestedName": "latin-official-manifest.json",
+    "source": "output/pr-review/hp110/representative-visual/official-sweep-latin/hp110-latin-p1/manifest.json",
+    "bytes": 4524,
+    "sha256": "3ad48389495c00f905d36eb1fd08d19b932fbc2d9e8b56c9b4e2a84c766f7fae"
+  },
+  {
+    "suggestedName": "latin-official-run-manifest.json",
+    "source": "output/pr-review/hp110/representative-visual/official-sweep-latin/hp110-latin-p1/run_manifest.json",
+    "bytes": 1140,
+    "sha256": "3870cabce1247a219943854f665431b8fe1c7ced4f2e681376a0e026c145a5dd"
+  },
+  {
+    "suggestedName": "latin-official-overlay-metrics.json",
+    "source": "output/pr-review/hp110/representative-visual/official-sweep-latin/hp110-latin-p1/overlay/overlay_metrics.json",
+    "bytes": 1742,
+    "sha256": "22caf15692295b1d2ba823b42d3d1ede07dea3708403daa7925bf593f9febd26"
+  },
+  {
+    "suggestedName": "latin-native-pdf.pdf",
+    "source": "output/pr-review/hp110/representative-visual/latin/native-compatibility.pdf",
+    "bytes": 12359,
+    "sha256": "c0e274b00f95f147efa42407ea7e5e0254ccf5b2790595c6f9ac73237891b042"
+  },
+  {
+    "suggestedName": "latin-native-pdf-overlay.png",
+    "source": "output/pr-review/hp110/representative-visual/latin/native-pdf-overlay-p001-96dpi.png",
+    "bytes": 37879,
+    "sha256": "48eebeb96aeaf08b1c2b492a94677221942dcfbec380f378e84299480f3729d2"
+  },
+  {
+    "suggestedName": "latin-native-pdf-metrics.json",
+    "source": "output/pr-review/hp110/representative-visual/latin/native-pdf-overlay-metrics.json",
+    "bytes": 852,
+    "sha256": "057f0c565395c0bc0c443b47c3c73d9c91262af98a1a51070ccf8a839719284a"
+  },
+  {
+    "suggestedName": "latin-native-pdf-export.json",
+    "source": "output/pr-review/hp110/representative-visual/latin/native-pdf-export-result.json",
+    "bytes": 764,
+    "sha256": "1c7c0074b3130bc7bc584f75814975a1c91f808d2846c4e550a2452aa2cac4b7"
+  },
+  {
+    "suggestedName": "business-review.png",
+    "source": "output/pr-review/hp110/representative-visual/official-sweep-final/hp110-business-p1/review/review_001.png",
+    "bytes": 88971,
+    "sha256": "004fd3dd35336d7f46f47c0c8e1ed76d3dfa16f7c3a15ad51162d60ccad6c278"
+  },
+  {
+    "suggestedName": "business-overlay.png",
+    "source": "output/pr-review/hp110/representative-visual/official-sweep-final/hp110-business-p1/overlay/overlay_001.png",
+    "bytes": 35568,
+    "sha256": "5e248b8df56c0fc7e09c37b1ab56f7874c33cd2c9ab12cd6a49f517a3acc3d04"
+  },
+  {
+    "suggestedName": "business-official-manifest.json",
+    "source": "output/pr-review/hp110/representative-visual/official-sweep-final/hp110-business-p1/manifest.json",
+    "bytes": 4832,
+    "sha256": "224ce240c5691d1ac94cafcbad71fdd730af025cb05635ad3682385c0090d82a"
+  },
+  {
+    "suggestedName": "business-official-run-manifest.json",
+    "source": "output/pr-review/hp110/representative-visual/official-sweep-final/hp110-business-p1/run_manifest.json",
+    "bytes": 1301,
+    "sha256": "639f61df5fc3f4fa264a868b86ae9327bfcae939f8387d56bed2ab7e28cce34a"
+  },
+  {
+    "suggestedName": "business-official-overlay-metrics.json",
+    "source": "output/pr-review/hp110/representative-visual/official-sweep-final/hp110-business-p1/overlay/overlay_metrics.json",
+    "bytes": 1753,
+    "sha256": "25e6268402c6a5bda2d57f34b4f224b0e0445bf52ed40c0366d77cbceff3d14c"
+  },
+  {
+    "suggestedName": "business-font-mismatch-evidence.json",
+    "source": "output/pr-review/hp110/representative-visual/business/font-mismatch-evidence-official.json",
+    "bytes": 3941,
+    "sha256": "2f7ffe102dbebfc7b38fe7af157800e481e0f6fafd3565271fc2cd9a8870e366"
+  },
+  {
+    "suggestedName": "business-hancom-actual-fonts.json",
+    "source": "output/pr-review/hp110/representative-visual/business/hancom-actual-fonts-and-spans.json",
+    "bytes": 8294,
+    "sha256": "94ad68e208ae18fbe30c92f6a5bb3c336ee2591adc4c54133aa02d8bb0601cf5"
+  },
+  {
+    "suggestedName": "business-chrome-actual-fonts.json",
+    "source": "output/pr-review/hp110/representative-visual/business/official-chrome-actual-platform-fonts.json",
+    "bytes": 46253,
+    "sha256": "52cbeba69cde8406f58a703b1e6e07a65cec50711efd362883c50b549c93954f"
+  },
+  {
+    "suggestedName": "business-actual-font-programs.json",
+    "source": "output/pr-review/hp110/representative-visual/business/official-actual-font-programs.json",
+    "bytes": 2344,
+    "sha256": "c4cff90e34b94c13c5cd7654cc9c4eb83191db40724d60361962cee4ba4e13dd"
+  },
+  {
+    "suggestedName": "business-rule-geometry.json",
+    "source": "output/pr-review/hp110/representative-visual/business/same-coordinate-rule-geometry.json",
+    "bytes": 5227,
+    "sha256": "8f126357254b1effe7a78fb30afc47a56666565e05a17e1c5ef897679e5d5123"
+  },
+  {
+    "suggestedName": "business-paragraph-anchors.json",
+    "source": "output/pr-review/hp110/representative-visual/business/same-coordinate-paragraph-anchors.json",
+    "bytes": 2666,
+    "sha256": "68795c1f6f0194cc6979355a588562a85f0c4884a177c483181daabe138b641d"
+  },
+  {
+    "suggestedName": "committed-provenance.json",
+    "source": "output/pr-review/hp110/representative-visual/committed-provenance.json",
+    "bytes": 4267,
+    "sha256": "c06f68525a4a0bf9124ce1a6978c23e814628221547373f82e484316f8726938"
+  },
+  {
+    "suggestedName": "direct-backend-unavailable.json",
+    "source": "output/pr-review/hp110/representative-visual/direct-probe-result.json",
+    "bytes": 431,
+    "sha256": "eec59cb04c344a9c999a8cc037c03971acd045de71e1b9acfb5a72a43e14ec07"
+  }
+]

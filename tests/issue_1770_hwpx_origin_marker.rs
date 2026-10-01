@@ -32,7 +32,7 @@ fn convert_hwp_pagination_matches_hwpx_source() {
     assert_eq!(hwpx_pages, 4, "#1770 전제: HWPX 원본 4쪽");
 
     let hwp_bytes = hwpx.export_hwp_with_adapter().expect("convert");
-    let mut conv = rhwp::wasm_api::HwpDocument::from_bytes(&hwp_bytes).expect("reparse");
+    let conv = rhwp::wasm_api::HwpDocument::from_bytes(&hwp_bytes).expect("reparse");
     assert_eq!(
         conv.page_count(),
         hwpx_pages,
@@ -44,7 +44,7 @@ fn convert_hwp_pagination_matches_hwpx_source() {
 /// 중복 없이 유지된다.
 #[test]
 fn convert_hwp_carries_origin_marker_idempotently() {
-    use rhwp::document_core::converters::hwpx_to_hwp::HWPX_ORIGIN_STREAM_PATH;
+    use rhwp::model::document::HWPX_ORIGIN_STREAM_PATH;
 
     let mut hwpx = load(SAMPLE);
     let round1 = hwpx.export_hwp_with_adapter().expect("convert r1");

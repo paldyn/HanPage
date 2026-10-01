@@ -1,0 +1,28 @@
+{
+  "page": 1,
+  "rhwp_png": "output/pr-review/hp110/representative-visual/latin/native-compatibility-96dpi.png",
+  "pdf_png": "output/pr-review/hp110/representative-visual/latin/hancom-p001-96dpi.png",
+  "overlay_png": "output/pr-review/hp110/representative-visual/latin/native-pdf-overlay-p001-96dpi.png",
+  "width": 794,
+  "height": 1123,
+  "pixel_diff_threshold": 32,
+  "total_pixels": 891662,
+  "diff_pixels": 4683,
+  "diff_ratio": 0.00525199,
+  "pixel_match_percent": 99.4748,
+  "ink_union_pixels": 8383,
+  "ink_diff_pixels": 4683,
+  "ink_diff_ratio": 0.55863056,
+  "ink_match_percent": 44.13694,
+  "visual_accuracy_proxy_percent": 44.13694,
+  "tolerant_content_match_radius_px": 2,
+  "tolerant_content_match_percent": 100.0,
+  "mean_abs_channel_delta": 0.44,
+  "max_channel_delta": 204,
+  "diff_bbox": [
+    114,
+    133,
+    680,
+    189
+  ]
+}

@@ -1,0 +1,95 @@
+[
+  {
+    "path": "assets/fonts/NotoSerifKR-Regular.woff2",
+    "bytes": 971428,
+    "sha256": "c9a1e3ac69994d680883b53b1fd83d520733b704792522a932bfaa276117de45",
+    "nameMetadataMethod": "WOFF directory/zlib or WOFF2 table-directory/Brotli stream with untransformed SFNT name table (IDs1,2,6); read actual captured program, not requested family.",
+    "names": [
+      {
+        "nameID": 1,
+        "platform": 3,
+        "encoding": 1,
+        "language": 1033,
+        "value": "Noto Serif KR ExtraLight"
+      },
+      {
+        "nameID": 2,
+        "platform": 3,
+        "encoding": 1,
+        "language": 1033,
+        "value": "Regular"
+      },
+      {
+        "nameID": 6,
+        "platform": 3,
+        "encoding": 1,
+        "language": 1033,
+        "value": "NotoSerifKRExtraLight-Regular"
+      }
+    ]
+  },
+  {
+    "path": "output/pr-review/hp110/representative-visual/business/official-used-HCRDotum.woff",
+    "bytes": 9751840,
+    "sha256": "49bf312aec309ba88c3eb612c591c2d8e28b765c156c808691850137431bb1bf",
+    "nameMetadataMethod": "WOFF directory/zlib or WOFF2 table-directory/Brotli stream with untransformed SFNT name table (IDs1,2,6); read actual captured program, not requested family.",
+    "names": [
+      {
+        "nameID": 1,
+        "platform": 1,
+        "encoding": 0,
+        "language": 0,
+        "value": "HCR Dotum"
+      },
+      {
+        "nameID": 2,
+        "platform": 1,
+        "encoding": 0,
+        "language": 0,
+        "value": "Regular"
+      },
+      {
+        "nameID": 6,
+        "platform": 1,
+        "encoding": 0,
+        "language": 0,
+        "value": "HCRDotum"
+      },
+      {
+        "nameID": 1,
+        "platform": 3,
+        "encoding": 1,
+        "language": 1033,
+        "value": "HCR Dotum"
+      },
+      {
+        "nameID": 2,
+        "platform": 3,
+        "encoding": 1,
+        "language": 1033,
+        "value": "Regular"
+      },
+      {
+        "nameID": 6,
+        "platform": 3,
+        "encoding": 1,
+        "language": 1033,
+        "value": "HCRDotum"
+      },
+      {
+        "nameID": 1,
+        "platform": 3,
+        "encoding": 1,
+        "language": 1042,
+        "value": "함초롬돋움"
+      },
+      {
+        "nameID": 2,
+        "platform": 3,
+        "encoding": 1,
+        "language": 1042,
+        "value": "Regular"
+      }
+    ]
+  }
+]

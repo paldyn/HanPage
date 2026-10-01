@@ -1,0 +1,204 @@
+{
+  "browser": "existing Chrome 154",
+  "sourceChanged": false,
+  "results": [
+    {
+      "locale": "en",
+      "skin": "default",
+      "theme": "light",
+      "width": 600,
+      "before": {
+        "rootOverflow": 52,
+        "menuOverflow": 52,
+        "buttonWidth": 134.4375,
+        "toggleRight": 517.875,
+        "menuCount": 8,
+        "menuRows": 1
+      },
+      "hiddenControl": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 0,
+        "toggleRight": 592,
+        "menuCount": 8,
+        "menuRows": 1
+      }
+    },
+    {
+      "locale": "en",
+      "skin": "default",
+      "theme": "dark",
+      "width": 600,
+      "before": {
+        "rootOverflow": 52,
+        "menuOverflow": 52,
+        "buttonWidth": 134.4375,
+        "toggleRight": 517.875,
+        "menuCount": 8,
+        "menuRows": 1
+      },
+      "hiddenControl": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 0,
+        "toggleRight": 592,
+        "menuCount": 8,
+        "menuRows": 1
+      }
+    },
+    {
+      "locale": "en",
+      "skin": "flat",
+      "theme": "light",
+      "width": 600,
+      "before": {
+        "rootOverflow": 52,
+        "menuOverflow": 52,
+        "buttonWidth": 134.4375,
+        "toggleRight": 517.875,
+        "menuCount": 8,
+        "menuRows": 1
+      },
+      "hiddenControl": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 0,
+        "toggleRight": 592,
+        "menuCount": 8,
+        "menuRows": 1
+      }
+    },
+    {
+      "locale": "en",
+      "skin": "flat",
+      "theme": "dark",
+      "width": 600,
+      "before": {
+        "rootOverflow": 52,
+        "menuOverflow": 52,
+        "buttonWidth": 134.4375,
+        "toggleRight": 517.875,
+        "menuCount": 8,
+        "menuRows": 1
+      },
+      "hiddenControl": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 0,
+        "toggleRight": 592,
+        "menuCount": 8,
+        "menuRows": 1
+      }
+    },
+    {
+      "locale": "en",
+      "skin": "oldschool",
+      "theme": "light",
+      "width": 600,
+      "before": {
+        "rootOverflow": 29,
+        "menuOverflow": 29,
+        "buttonWidth": 134.4375,
+        "toggleRight": 494.28125,
+        "menuCount": 8,
+        "menuRows": 1
+      },
+      "hiddenControl": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 0,
+        "toggleRight": 592,
+        "menuCount": 8,
+        "menuRows": 1
+      }
+    },
+    {
+      "locale": "en",
+      "skin": "oldschool",
+      "theme": "dark",
+      "width": 600,
+      "before": {
+        "rootOverflow": 29,
+        "menuOverflow": 29,
+        "buttonWidth": 134.4375,
+        "toggleRight": 494.28125,
+        "menuCount": 8,
+        "menuRows": 1
+      },
+      "hiddenControl": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 0,
+        "toggleRight": 592,
+        "menuCount": 8,
+        "menuRows": 1
+      }
+    },
+    {
+      "locale": "ko",
+      "skin": "default",
+      "theme": "light",
+      "width": 520,
+      "before": {
+        "rootOverflow": 44,
+        "menuOverflow": 44,
+        "buttonWidth": 134.4375,
+        "toggleRight": 429.5,
+        "menuCount": 8,
+        "menuRows": 1
+      },
+      "hiddenControl": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 0,
+        "toggleRight": 512,
+        "menuCount": 8,
+        "menuRows": 1
+      }
+    },
+    {
+      "locale": "ko",
+      "skin": "default",
+      "theme": "light",
+      "width": 500,
+      "before": {
+        "rootOverflow": 64,
+        "menuOverflow": 64,
+        "buttonWidth": 134.4375,
+        "toggleRight": 429.5,
+        "menuCount": 8,
+        "menuRows": 1
+      },
+      "hiddenControl": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 0,
+        "toggleRight": 492,
+        "menuCount": 8,
+        "menuRows": 1
+      }
+    },
+    {
+      "locale": "ko",
+      "skin": "default",
+      "theme": "light",
+      "width": 480,
+      "before": {
+        "rootOverflow": 84,
+        "menuOverflow": 84,
+        "buttonWidth": 134.4375,
+        "toggleRight": 429.5,
+        "menuCount": 8,
+        "menuRows": 1
+      },
+      "hiddenControl": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 0,
+        "toggleRight": 472,
+        "menuCount": 8,
+        "menuRows": 1
+      }
+    }
+  ]
+}

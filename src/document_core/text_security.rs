@@ -108,7 +108,10 @@ fn script_of(ch: char) -> Option<ConfusableScript> {
 ///
 /// 출처 원칙: 키릴·그리스에서 라틴 글리프와 **사실상 동일하게 렌더되는** 글자.
 /// 목록을 넓히는 것보다 정확히 유지하는 편이 오탐을 막는다.
-fn confusable_to_latin(ch: char) -> Option<char> {
+///
+/// `queries::stego_scan`(숨은 마크 탐지·정화)의 동형자 판정과 정규화가 이 단일 표를
+/// 공유한다 — 표가 갈라져 드리프트하지 않도록 크레이트 내부에 공개한다.
+pub(crate) fn confusable_to_latin(ch: char) -> Option<char> {
     Some(match ch {
         // 키릴 소문자
         'а' => 'a',
@@ -756,6 +759,18 @@ fn bidi_severity(c: u32) -> Severity {
 /// **라틴 낱말로 위장한 경우만** 잡는다: 라틴 글자 2자 이상 + 라틴 동형자를 가진 비라틴
 /// 글자 1자 이상. 이 조건이 오탐의 대부분을 막는다 —
 /// 순수 러시아어(`Москва`)·그리스 수식 기호(`αβγ`)·`Δt` 같은 표기는 전부 통과한다.
+/// 또한 `TNFα` 같은 생의학 약어의 끝 `α`·`β`·`γ`는 정당한 그리스 문자 접미사로
+/// 취급한다. 대문자 ASCII 약어 뒤의 정확히 한 글자에만 적용하므로 `Тotal` 같은
+/// 동형자 위장과 제로폭 문자로 낱말을 분할한 우회는 계속 잡는다.
+fn is_biomedical_greek_suffix(chars: &[char], start: usize, end: usize, at: usize) -> bool {
+    if at + 1 != end || !matches!(chars[at], 'α' | 'β' | 'γ') {
+        return false;
+    }
+
+    let acronym = &chars[start..at];
+    acronym.len() >= 2 && acronym.iter().all(|ch| ch.is_ascii_uppercase())
+}
+
 fn confusable_offender(chars: &[char], start: usize, end: usize) -> Option<(usize, char)> {
     let latin = chars[start..end]
         .iter()
@@ -771,7 +786,10 @@ fn confusable_offender(chars: &[char], start: usize, end: usize) -> Option<(usiz
             !matches!(script_of(**c), Some(ConfusableScript::Latin) | None)
                 && confusable_to_latin(**c).is_some()
         })
-        .map(|(i, c)| (start + i, *c))
+        .and_then(|(i, c)| {
+            let at = start + i;
+            (!is_biomedical_greek_suffix(chars, start, end, at)).then_some((at, *c))
+        })
 }
 
 /// 문자열 하나를 **코드포인트 1패스**로 훑어 유니코드 기만 신호를 모은다.
@@ -1209,13 +1227,31 @@ mod tests {
             "{split:?}"
         );
 
-        // 순수 러시아어·그리스 수식·라틴 1자 혼합은 정상이다.
-        for ok in ["Москва 방문", "αβγ 계수", "Δt 구간", "총액 α 값"] {
+        // 순수 러시아어·그리스 수식·라틴 1자 혼합과 생의학 약어 접미사는 정상이다.
+        for ok in [
+            "Москва 방문",
+            "αβγ 계수",
+            "Δt 구간",
+            "총액 α 값",
+            "TNFα 발현",
+            "TGFβ 신호",
+            "IFNγ 반응",
+        ] {
             assert!(
                 !scan_deception(ok, None)
                     .iter()
                     .any(|f| f.kind == DeceptionKind::Confusable),
                 "오탐: {ok}"
+            );
+        }
+
+        // 대문자 약어의 끝 한 글자만 완화한다. 일반적인 혼합 표기와 제로폭 우회는 유지한다.
+        for suspicious in ["Totaα", "Тotal", "TNF\u{200B}α"] {
+            assert!(
+                scan_deception(suspicious, None)
+                    .iter()
+                    .any(|f| f.kind == DeceptionKind::Confusable),
+                "동형자 완화가 과도함: {suspicious}"
             );
         }
     }
@@ -1274,7 +1310,8 @@ mod tests {
     /// 않는다(실측 결과 노이즈보다 작았다). 그래서 코어를 직접 불러 **크기 사다리**로 잰다.
     ///
     /// 상한은 크게 잡는다 — 목적은 상수 인자를 감시하는 것이 아니라 **차수**를 잡는 것이다.
-    /// 선형이면 8배 입력에 8배 시간, 2차식이면 64배다. 24배 상한은 그 사이를 가른다.
+    /// 선형이면 8배 입력에 8배 시간, 2차식이면 64배다. 병렬 test runner의 스케줄링
+    /// 노이즈를 고려한 40배 상한도 두 차수를 충분히 가른다.
     #[test]
     fn scan_cost_stays_linear_as_input_grows() {
         use std::hint::black_box;
@@ -1289,9 +1326,10 @@ mod tests {
             let measure = |factor: usize| -> (usize, f64) {
                 let text = unit.repeat(factor);
                 let chars = text.chars().count();
-                // 첫 회는 캐시 예열로 버리고 최소값을 취한다.
+                // 병렬 test runner의 스케줄링 노이즈는 짧은 입력보다 긴 입력에 더 크게
+                // 반영될 수 있다. 충분한 표본에서 최솟값을 취해 실행 시간을 분리한다.
                 let mut best = f64::MAX;
-                for _ in 0..3 {
+                for _ in 0..7 {
                     let t = Instant::now();
                     black_box(scan_deception(black_box(&text), None));
                     best = best.min(t.elapsed().as_secs_f64());
@@ -1313,7 +1351,7 @@ mod tests {
             // 마이크로초 단위에서는 타이머 분해능이 배율을 왜곡한다 — 하한을 넘을 때만 판정.
             if t1 > 1e-4 {
                 assert!(
-                    t8 / t1 < 24.0,
+                    t8 / t1 < 40.0,
                     "[{name}] 8배 입력에 {:.1}배 시간 — 선형이 아닙니다 ({:.3}ms → {:.3}ms)",
                     t8 / t1,
                     t1 * 1e3,

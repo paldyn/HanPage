@@ -1,0 +1,16 @@
+{
+  "candidate_sha": "27666e01a99cfbf186640bc9c21e83a14d3cd1e9",
+  "upstream_sha": "02530b9ed567a44663edb26c65fb565c4a79f00d",
+  "upstream_fetch_filter": "blob:limit=64k",
+  "lazy_blob_source": "origin local file URI only; anonymous GitHub promisor disabled by process env",
+  "completed": true,
+  "source_live_head_at_audit": "27666e01a99cfbf186640bc9c21e83a14d3cd1e9",
+  "candidate_filtered_initial_object_bytes": 1331568,
+  "original_upstream_absent_before_fetch": true,
+  "upstream_filtered_fetch_elapsed_seconds": 20.561,
+  "upstream_filtered_fetch_object_bytes_added": 94093234,
+  "actual_candidate_bootstrap_identity_pass": true,
+  "pinned_sparse_policy_prepare_and_checks_pass": true,
+  "final_object_bytes": 136297038,
+  "temporary_repo_removed": true
+}

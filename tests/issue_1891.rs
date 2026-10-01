@@ -20,22 +20,61 @@ use rhwp::parser::hwpx::parse_hwpx;
 use rhwp::serializer::hwpx::serialize_hwpx;
 
 const SAMPLE: &str = "samples/issue1891_external_bindata_link.hwpx";
-// [#2070 잠정] 76076: PDF 정답 82, 86712: PDF 정답 65. 종전 82/65는 본문 래핑
-// +1줄 과대(45자 휴리스틱)와 빈 문단 0높이 과소의 **상쇄**였다. #2070 에서 빈 문단
-// 축을 한글 정합(em 줄박스, 80168=157 달성 필수)으로 고치면서 상쇄가 노출되어
-// 83/64 로 이동 — 본문 NO_LS 실폭 래핑(reflow_line_segs 정식 호출) 후속 이슈에서
-// 82/65 로 복귀시킨다. 80168/80250 은 PDF 정답 그대로.
+// 각 원본과 대응 PDF의 쪽수. 86712는 정상 한컴 2024 저장본으로 교체하고
+// 그 원본의 rhwp export-hwpx 산출물을 다시 생성했다. 두 입력의 직접 한컴 PDF는 64쪽.
 const HWP5_ORIGIN_SAMPLES: &[(&str, u32)] = &[
     ("samples/76076_regulatory_analysis.hwp", 82),
     ("samples/80168_regulatory_analysis.hwp", 157),
     ("samples/80250_regulatory_analysis.hwp", 17),
-    ("samples/86712_regulatory_analysis.hwp", 65),
+    ("samples/86712_regulatory_analysis.hwp", 64),
     ("samples/issue1891/76076_regulatory_analysis.hwpx", 82),
     ("samples/issue1891/80168_regulatory_analysis.hwpx", 157),
     ("samples/issue1891/80250_regulatory_analysis.hwpx", 17),
-    // [#2240] #2197 serializer 수정 반영 재생성 픽스처 — 원본(.hwp=65)과 등가.
-    ("samples/issue1891/86712_regulatory_analysis.hwpx", 65),
+    // 정상 HWP에서 재생성한 HWP5-origin HWPX. 쪽수 보존은 전체 시각 일치를 뜻하지 않는다.
+    ("samples/issue1891/86712_regulatory_analysis.hwpx", 64),
 ];
+
+/// 정상 원본의 저장 줄을 테스트 입력 교체 과정에서 다시 잃지 않게 한다.
+/// 잘못된 이전 입력은 원시 파싱에서 1810개 문단의 LineSeg가 비어 있었다.
+/// DocumentCore의 합성 결과가 아닌 parser 출력을 검사해야 소실을 검출한다.
+#[test]
+fn issue_1891_regulatory_fixture_preserves_authentic_saved_lines() {
+    fn check(paras: &[rhwp::model::paragraph::Paragraph]) -> usize {
+        use rhwp::model::control::Control;
+        let mut count = 0;
+        for para in paras {
+            assert!(
+                !para.line_segs.is_empty(),
+                "정상 원본의 저장 줄이 없는 문단: {:?}",
+                para.text
+            );
+            assert!(para.line_segs.iter().all(|seg| seg.tag
+                & rhwp::model::paragraph::LineSeg::TAG_IMPLEMENTATION_PROPERTY
+                == 0));
+            count += 1;
+            for control in &para.controls {
+                if let Control::Table(table) = control {
+                    for cell in &table.cells {
+                        count += check(&cell.paragraphs);
+                    }
+                }
+            }
+        }
+        count
+    }
+    for sample in [
+        "samples/86712_regulatory_analysis.hwp",
+        "samples/issue1891/86712_regulatory_analysis.hwpx",
+    ] {
+        let doc = rhwp::parser::parse_document(&read_rel(sample)).expect("정상 저장본 원시 파싱");
+        let paragraphs: usize = doc
+            .sections
+            .iter()
+            .map(|section| check(&section.paragraphs))
+            .sum();
+        assert_eq!(paragraphs, 2101, "본문·표 재귀 문단 보존: {sample}");
+    }
+}
 
 fn read_sample() -> Vec<u8> {
     let repo_root = env!("CARGO_MANIFEST_DIR");
@@ -70,7 +109,7 @@ fn issue_1891_external_link_roundtrip_render_is_self_consistent() {
 }
 
 /// HWP5 원본을 HWPX로 저장한 산출물은 HWPX 컨테이너라도 HWP5-origin marker를 통해
-/// HWP5 lineSeg 부재/pagination 시멘틱을 유지해야 한다.
+/// HWP5 저장 줄/페이지 분할 시멘틱을 유지해야 한다. 줄 정보 유무는 개별 입력에 따른다.
 #[test]
 fn issue_1891_hwp5_origin_hwpx_export_reparse_keeps_page_count() {
     for (sample, expected_page_count) in HWP5_ORIGIN_SAMPLES {
@@ -191,5 +230,33 @@ fn issue_1891_link_bin_data_stable_across_two_rounds() {
         content_bytes(&doc1),
         content_bytes(&doc3),
         "bin_data_content (id, 크기) 2-round 보존 — 인덱스 시프트 회귀"
+    );
+}
+
+/// [#3820 Stage 53] direct HWPX의 저장 reset 보정은 reset 없는 일반 중첩 표의
+/// legacy scalar 측정까지 바꾸면 안 된다. 이 문서의 깊은 중첩 표는 그 과확장 시
+/// 마지막 쪽에서 보이지 않는 줄이 34→56으로 증가한다.
+///
+/// [#5875] 상한 34→50: 중첩 표 글자 캡션을 그리기 시작하면서 69쪽의 복원된 캡션
+/// (`<장애인건강검진기관(5개소) 탈의실 및 공용면적 현황>`)이 제 띠를 차지하자, 같은
+/// 쪽 하단의 쪼갤 수 없는 중첩 표(#4915 계열)가 캡션 띠만큼 내려가 쪽 경계를 넘는다
+/// (+17줄, 전부 69쪽). #3820 의 legacy scalar 과확장(마지막 쪽 +22줄)과는 위치·기전이
+/// 다르므로 그 축의 가드 역할은 유지된다.
+#[test]
+fn issue_1891_external_link_overflow_cell_lines_do_not_grow() {
+    let data = read_sample();
+    let doc = DocumentCore::from_bytes(&data).expect("parse issue1891 sample");
+    let _ = doc.take_overflow_cell_lines();
+
+    let mut total = 0u64;
+    for page in 0..doc.page_count() {
+        doc.render_page_svg_native(page)
+            .unwrap_or_else(|e| panic!("render page {}: {e:?}", page + 1));
+        total += u64::from(doc.take_overflow_cell_lines());
+    }
+
+    assert!(
+        total <= 50,
+        "direct HWPX 일반 중첩 표의 쪽 밖 소실 줄이 증가함: {total} > 50"
     );
 }

@@ -1,0 +1,47 @@
+{
+  "summary": {
+    "compared_pages": 1,
+    "pixel_diff_threshold": 32,
+    "average_pixel_match_percent": 98.12743,
+    "worst_pixel_match_percent": 98.12743,
+    "average_ink_match_percent": 16.89727,
+    "worst_ink_match_percent": 16.89727,
+    "average_visual_accuracy_proxy_percent": 16.89727,
+    "worst_visual_accuracy_proxy_percent": 16.89727,
+    "average_tolerant_content_match_percent": 86.04917,
+    "worst_tolerant_content_match_percent": 86.04917,
+    "worst_pages": [
+      1
+    ]
+  },
+  "pages": [
+    {
+      "page": 1,
+      "rhwp_png": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/output/pr-review/hp110/representative-visual/official-sweep-final/hp110-business-p1/rhwp_png/rhwp_001.png",
+      "pdf_png": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/output/pr-review/hp110/representative-visual/official-sweep-final/hp110-business-p1/pdf_png/pdf-1.png",
+      "overlay_png": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/output/pr-review/hp110/representative-visual/official-sweep-final/hp110-business-p1/overlay/overlay_001.png",
+      "width": 794,
+      "height": 1123,
+      "pixel_diff_threshold": 32,
+      "total_pixels": 891662,
+      "diff_pixels": 16697,
+      "diff_ratio": 0.01872571,
+      "pixel_match_percent": 98.12743,
+      "ink_union_pixels": 20092,
+      "ink_diff_pixels": 16697,
+      "ink_diff_ratio": 0.83102727,
+      "ink_match_percent": 16.89727,
+      "visual_accuracy_proxy_percent": 16.89727,
+      "tolerant_content_match_radius_px": 2,
+      "tolerant_content_match_percent": 86.04917,
+      "mean_abs_channel_delta": 3.143,
+      "max_channel_delta": 255,
+      "diff_bbox": [
+        70,
+        183,
+        723,
+        853
+      ]
+    }
+  ]
+}

@@ -72,6 +72,8 @@ last_verified: 2026-08-03
 | 4 | [불변식 전수](invariants.md) | 이 표면이 **지키기로 한 규칙**을 확인할 때 |
 | 5 | [결정 대장](decision_log.md) | "왜 이렇게 했는지"를 뒤집기 전에 |
 | 6 | [미해결 공백](open_gaps.md) | 무엇이 아직 안 닫혔는지 볼 때 |
+| 7 | [관측성 계약](observability_contract.md) | R80 호출 통계의 수집·금지 경계를 보기 전에 |
+| 8 | [MCP 스펙 개정 추종 대장](mcp_spec_ledger.md) | MCP 스펙이 개정됐을 때 — 우리 표면 접점과 추종 판정 절차 |
 
 **새 조각을 착수하려는 사람**은 [층 모델 §6 층 판정 절차](layer_model.md#6-층-판정-절차--새-조각이-오면-어디에-넣나)
 로 바로 가도 된다. 세 질문으로 그 조각이 어느 층인지 정한다.
@@ -243,7 +245,6 @@ grep -ril fuzz .github/ | wc -l
 | [에이전트 보안](../agent_security/README.md) | 문서가 에이전트를 조종하는 경로 | **L2 의 권위**. [#3793](https://github.com/edwardkim/rhwp/issues/3793) 산출물 |
 | [경량 에이전트 내성](../weak_agent_proofing.md) | 약한 모델의 오사용 방지 | L1 내성 계약의 전신 |
 | [에이전트 경계 무결성 계약](../agent_boundary_contract.md) | 경로·자원·핸들 경계 | L2 경계 계약 |
-| [외부 바인딩 공통 기반](../bindings_foundation.md) | IR 스키마 버저닝·파이썬 1호 | L3 바인딩 축(M18~M20) |
 
 ### 절차
 

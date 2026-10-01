@@ -6,6 +6,7 @@
  */
 import { ModalDialog } from './dialog';
 
+import { t } from '../i18n/index.ts';
 /**
  * 외부 크레이트 라이선스 정보.
  *
@@ -13,9 +14,7 @@ import { ModalDialog } from './dialog';
  * native-skia(skia-safe/resvg/usvg) 등 optional feature 전용 크레이트는 WASM 빌드에
  * 포함되지 않으므로 제외한다. 전체 목록은 저장소 루트 THIRD_PARTY_LICENSES.md 참조.
  */
-interface LicenseItem { name: string; license: string; }
-
-const THIRD_PARTY_LICENSES: LicenseItem[] = [
+const THIRD_PARTY_LICENSES = [
   { name: 'wasm-bindgen', license: 'MIT / Apache-2.0' },
   { name: 'web-sys', license: 'MIT / Apache-2.0' },
   { name: 'js-sys', license: 'MIT / Apache-2.0' },
@@ -34,39 +33,9 @@ const THIRD_PARTY_LICENSES: LicenseItem[] = [
   { name: 'console_error_panic_hook', license: 'MIT / Apache-2.0' },
 ];
 
-/** 번들 웹폰트 라이선스 (재배포 고지) */
-const FONT_LICENSES: LicenseItem[] = [
-  { name: 'Noto Sans / Serif KR', license: 'SIL OFL 1.1' },
-  { name: 'Nanum Gothic / Myeongjo / Coding', license: 'SIL OFL 1.1' },
-  { name: 'Pretendard', license: 'SIL OFL 1.1' },
-  { name: 'Gowun Batang / Dodum', license: 'SIL OFL 1.1' },
-  { name: 'D2Coding', license: 'SIL OFL 1.1' },
-  { name: 'Spoqa Han Sans', license: 'SIL OFL 1.1' },
-  { name: 'Source Han Serif K', license: 'SIL OFL 1.1' },
-  { name: 'Latin Modern Math', license: 'GUST Font License' },
-  { name: 'Cafe24 써라운드 / 슈퍼매직', license: 'Cafe24 무료 배포' },
-  { name: '행복고딕 (Happiness Sans)', license: '행복나눔 무료 배포' },
-];
-
-function buildLicenseTable(items: LicenseItem[]): HTMLTableElement {
-  const table = document.createElement('table');
-  table.className = 'about-license-table';
-  for (const lib of items) {
-    const tr = document.createElement('tr');
-    const tdName = document.createElement('td');
-    tdName.textContent = lib.name;
-    const tdLicense = document.createElement('td');
-    tdLicense.textContent = lib.license;
-    tr.appendChild(tdName);
-    tr.appendChild(tdLicense);
-    table.appendChild(tr);
-  }
-  return table;
-}
-
 export class AboutDialog extends ModalDialog {
   constructor() {
-    super('제품 정보', 460);
+    super(t('dialog.about.title'), 460);
   }
 
   protected createBody(): HTMLElement {
@@ -82,7 +51,7 @@ export class AboutDialog extends ModalDialog {
     // 제품 한글명
     const titleKo = document.createElement('div');
     titleKo.className = 'about-product-name-ko';
-    titleKo.textContent = 'HWP 오픈소스 편집 — HanPage';
+    titleKo.textContent = `${t('dialog.about.titleKo.text')} — HanPage`;
     body.appendChild(titleKo);
 
     // 버전
@@ -101,52 +70,46 @@ export class AboutDialog extends ModalDialog {
     const notice = document.createElement('div');
     notice.className = 'about-notice';
     notice.textContent =
-      '본 제품은 한글과컴퓨터의 한글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.';
+      t('dialog.about.notice.text');
     body.appendChild(notice);
 
-    // 기반 프로젝트 고지 (MIT)
+    // 기반 엔진의 MIT 라이선스와 HanPage 재배포를 함께 고지한다.
     const baseNotice = document.createElement('div');
     baseNotice.className = 'about-notice';
-    baseNotice.textContent =
-      'HanPage는 rhwp(MIT License, © 2025–2026 Edward Kim)를 기반으로 재배포됩니다.';
+    baseNotice.textContent = t('dialog.about.baseNotice.text');
     body.appendChild(baseNotice);
 
     // 오픈소스 라이선스
     const licenseTitle = document.createElement('div');
     licenseTitle.className = 'about-license-title';
-    licenseTitle.textContent = '오픈소스 라이선스';
+    licenseTitle.textContent = t('dialog.about.licenseTitle.text');
     body.appendChild(licenseTitle);
 
-    body.appendChild(buildLicenseTable(THIRD_PARTY_LICENSES));
-
-    // 웹폰트 라이선스
-    const fontTitle = document.createElement('div');
-    fontTitle.className = 'about-license-title';
-    fontTitle.textContent = '웹폰트 라이선스';
-    body.appendChild(fontTitle);
-    body.appendChild(buildLicenseTable(FONT_LICENSES));
-
-    // 라이선스 전문 링크
-    const licenseLink = document.createElement('a');
-    licenseLink.className = 'about-license-link';
-    licenseLink.href = `${import.meta.env.BASE_URL}LICENSE`;
-    licenseLink.target = '_blank';
-    licenseLink.rel = 'noopener';
-    licenseLink.textContent = 'MIT License 전문 보기';
-    body.appendChild(licenseLink);
+    const licenseTable = document.createElement('table');
+    licenseTable.className = 'about-license-table';
+    for (const lib of THIRD_PARTY_LICENSES) {
+      const tr = document.createElement('tr');
+      const tdName = document.createElement('td');
+      tdName.textContent = lib.name;
+      const tdLicense = document.createElement('td');
+      tdLicense.textContent = lib.license;
+      tr.appendChild(tdName);
+      tr.appendChild(tdLicense);
+      licenseTable.appendChild(tr);
+    }
+    body.appendChild(licenseTable);
 
     // 전체 라이선스 목록 안내
     const licenseNote = document.createElement('div');
     licenseNote.className = 'about-license-note';
     licenseNote.textContent =
-      'WASM 번들에 포함되는 핵심 크레이트만 표시합니다. 전체 목록은 THIRD_PARTY_LICENSES.md를 참조하세요.';
+      t('dialog.about.licenseNote.text');
     body.appendChild(licenseNote);
 
     // 저작권
     const copyright = document.createElement('div');
     copyright.className = 'about-copyright';
-    copyright.textContent =
-      '\u00A9 2025\u20132026 Edward Kim (rhwp, MIT) \u00B7 HanPage \uC7AC\uBC30\uD3EC: paldyn';
+    copyright.textContent = t('dialog.about.copyright.text');
     body.appendChild(copyright);
 
     return body;
@@ -164,7 +127,7 @@ export class AboutDialog extends ModalDialog {
       footer.replaceChildren();
       const closeBtn = document.createElement('button');
       closeBtn.className = 'dialog-btn dialog-btn-primary';
-      closeBtn.textContent = '닫기';
+      closeBtn.textContent = t('dialog.about.closeBtn.text');
       closeBtn.addEventListener('click', () => this.hide());
       footer.appendChild(closeBtn);
     }
