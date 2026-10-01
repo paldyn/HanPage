@@ -1,0 +1,8 @@
+{
+  "ref": "refs/heads/devel",
+  "before": "cecaf1bbfec9a10778484d30ebb747280e7a02af",
+  "after": "b57d9ae5e77bf3f10f76ced17e40dc7c47673930",
+  "update": "fast-forward checked; compare-and-swap exact old ref; no checkout/user branch switch",
+  "current_branch": "codex/upstream-sync-20261001",
+  "not_checked_out_in_worktrees": true
+}

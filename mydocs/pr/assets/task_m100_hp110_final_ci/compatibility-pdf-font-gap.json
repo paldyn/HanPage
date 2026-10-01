@@ -1,0 +1,285 @@
+{
+  "schemaVersion": 1,
+  "observedUTC": "2026-10-01T08:41:27.868988+00:00",
+  "runID": 36836467524,
+  "runHeadSHA": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+  "engineUpstreamSHA": "02530b9ed567a44663edb26c65fb565c4a79f00d",
+  "scope": "Read-only artifact/source diagnosis. No candidate export, browser, Cargo, runtime/source/baseline/threshold/remote modification or newtests.",
+  "confirmedFailure": "biz_plan.hwp p1 compatibilityPDF contains only mainheading plus horizontal rules; source header/date/company text are absent in PDF text content and rootdirectlyobserved raster. NativeSkia directPDF and browserCanvas reference retain all four text rows. Treat as semantic missing-content failure, despite canonical wholepage2% gate passing.",
+  "confirmedMissingText": [
+    "OO교육대학교 OXX사업단 홈페이지 구축 사업",
+    "20XX. 1.",
+    "주식회사 OOO소O트"
+  ],
+  "artifacts": {
+    "compatibilityPDF": {
+      "path": "output/pr-review/hp110/ci/render-diff-artifacts/rhwp-studio/e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01.pdf",
+      "bytes": 4849,
+      "sha256": "0c6e3ea5fe64d23ecaaf842c7af8d8aa3ed97a468e3b5902202b9f3b01367ce6",
+      "pdftotext": "사 업 수 행 계 획 서\n\f",
+      "pdffonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nVYVEMB+NotoSansKR-Regular            CID TrueType      Identity-H       yes yes yes      6  0\n"
+    },
+    "directPDF": {
+      "path": "output/pr-review/hp110/ci/render-diff-artifacts/rhwp-studio/e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-direct.pdf",
+      "bytes": 33482,
+      "sha256": "489219af4e4aa7164e3bf111a6303ec29a9bdf257b002fd9687710ce5216d215",
+      "pdftotext": "OO교육대학교 OXX사업단 홈페이지 구축 사업\n\n\n    사 업 수 행 계 획 서\n\n\n\n\n               20XX. 1.\n\n\n\n\n           주식회사 OOO소O트\n\f",
+      "pdffonts": "name                                 type              encoding         emb sub uni object ID\n------------------------------------ ----------------- ---------------- --- --- --- ---------\nAAAAAA+DejaVuSans                    CID TrueType      Identity-H       yes yes yes      4  0\nBAAAAA+NotoSansKR-Regular            CID TrueType      Identity-H       yes yes yes      5  0\nCAAAAA+DejaVuSans-Bold               CID TrueType      Identity-H       yes yes yes      8  0\nBAAAAA+NotoSansKR-Regular            Type 3            Custom           yes yes yes      9  0\nBAAAAA+NotoSansKR-Regular            Type 3            Custom           yes yes yes     10  0\nBAAAAA+NotoSansKR-Regular            Type 3            Custom           yes yes yes     11  0\nBAAAAA+NotoSansKR-Regular            Type 3            Custom           yes yes yes     12  0\nBAAAAA+NotoSansKR-Regular            Type 3            Custom           yes yes yes     13  0\nBAAAAA+NotoSansKR-Regular            Type 3            Custom           yes yes yes     14  0\n"
+    },
+    "compatibilityRaster": {
+      "path": "output/pr-review/hp110/ci/render-diff-artifacts/rhwp-studio/e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-pdf-raster.png",
+      "bytes": 6536,
+      "sha256": "a53e8c3efbaa712af78b1e61ab24da793f422df55e9326140311094668826b77"
+    },
+    "directRaster": {
+      "path": "output/pr-review/hp110/ci/render-diff-artifacts/rhwp-studio/e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-direct-raster.png",
+      "bytes": 16530,
+      "sha256": "1e8a8560058957d756723de27b2a2d144b86d3566db01d2cf029906fec1187fe"
+    },
+    "browserCanvasReference": {
+      "path": "output/pr-review/hp110/ci/render-diff-artifacts/rhwp-studio/e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-pdf-reference.png",
+      "bytes": 44110,
+      "sha256": "dc583960c9d2eb7e38cd31af16fe2c2c543a07294286e88790f765b0796193b3"
+    }
+  },
+  "actualCIReportRow": {
+    "fixture": "biz_plan.hwp",
+    "pageIndex": 0,
+    "directExpected": true,
+    "rhwpMode": "binary",
+    "reportStage": "complete",
+    "reportError": null,
+    "reportComparison": {
+      "referenceWidth": 794,
+      "referenceHeight": 1123,
+      "pdfWidth": 596,
+      "pdfHeight": 842,
+      "width": 794,
+      "height": 1123,
+      "sameSize": false,
+      "majorSizeMismatch": true,
+      "sizeNormalization": null,
+      "diffPixels": 19366,
+      "totalPixels": 891662,
+      "diffRatio": 0.02171899217416465,
+      "maxChannelDelta": 255,
+      "averageChannelDelta": 3.765154284919622
+    },
+    "exceedsReportThreshold": true,
+    "directStage": "complete",
+    "directError": null,
+    "directComparison": {
+      "referenceWidth": 596,
+      "referenceHeight": 842,
+      "pdfWidth": 596,
+      "pdfHeight": 842,
+      "width": 596,
+      "height": 842,
+      "sameSize": true,
+      "majorSizeMismatch": false,
+      "sizeNormalization": null,
+      "diffPixels": 5812,
+      "totalPixels": 501832,
+      "diffRatio": 0.011581565145307593,
+      "maxChannelDelta": 255,
+      "averageChannelDelta": 1.615452980280253
+    },
+    "directGateFailed": false,
+    "artifactFiles": {
+      "reference": "e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-pdf-reference.png",
+      "pdf": "e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01.pdf",
+      "pdfRaster": "e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-pdf-raster.png",
+      "diff": "e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-pdf-diff.png"
+    },
+    "directArtifactFiles": {
+      "compatibilityPdf": "e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01.pdf",
+      "compatibilityRaster": "e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-pdf-raster.png",
+      "directPdf": "e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-direct.pdf",
+      "directRaster": "e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-direct-raster.png",
+      "diff": "e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-direct-vs-compat-diff.png"
+    },
+    "referenceWidth": 794,
+    "referenceHeight": 1123,
+    "pdfWidth": 596,
+    "pdfHeight": 842,
+    "width": 794,
+    "height": 1123,
+    "sameSize": false,
+    "majorSizeMismatch": true,
+    "sizeNormalization": null,
+    "diffPixels": 19366,
+    "totalPixels": 891662,
+    "diffRatio": 0.02171899217416465,
+    "maxChannelDelta": 255,
+    "averageChannelDelta": 3.765154284919622
+  },
+  "wholePageGateLimitation": {
+    "diffPixels": 5812,
+    "totalPixels": 501832,
+    "diffRatio": 0.011581565145307593,
+    "canonicalThreshold": 0.02,
+    "numericGatePassed": true,
+    "semanticContentPassed": false,
+    "thresholdChanged": false
+  },
+  "sourceProvenance": [
+    {
+      "path": "src/cli/outputs/pdf.rs",
+      "sha256ByCommit": {
+        "02530b9ed567a44663edb26c65fb565c4a79f00d": "1a4389fd306de10f99bfb5635e6575f48073422b68ccbb9af5db0a2677ec82af",
+        "f9f2e47bf43d87fff7e1faabcdac361c7091be12": "1a4389fd306de10f99bfb5635e6575f48073422b68ccbb9af5db0a2677ec82af"
+      },
+      "upstreamAndFinalHeadBytesIdentical": true
+    },
+    {
+      "path": "src/document_core/queries/rendering.rs",
+      "sha256ByCommit": {
+        "02530b9ed567a44663edb26c65fb565c4a79f00d": "46b573a78faa2e43b8660bf53c599c006f1db31f7605668a80ff75d408087fa9",
+        "f9f2e47bf43d87fff7e1faabcdac361c7091be12": "46b573a78faa2e43b8660bf53c599c006f1db31f7605668a80ff75d408087fa9"
+      },
+      "upstreamAndFinalHeadBytesIdentical": true
+    },
+    {
+      "path": "src/renderer/pdf.rs",
+      "sha256ByCommit": {
+        "02530b9ed567a44663edb26c65fb565c4a79f00d": "6ec2b549e020e9d3e582076beba9e571a94672635c2fc0cc1c428efa751c5ebb",
+        "f9f2e47bf43d87fff7e1faabcdac361c7091be12": "6ec2b549e020e9d3e582076beba9e571a94672635c2fc0cc1c428efa751c5ebb"
+      },
+      "upstreamAndFinalHeadBytesIdentical": true
+    },
+    {
+      "path": "src/renderer/font_paths.rs",
+      "sha256ByCommit": {
+        "02530b9ed567a44663edb26c65fb565c4a79f00d": "704e17dbf261fd48ccc8cce933a1f132da251936626a58cde772efdb2d8659c2",
+        "f9f2e47bf43d87fff7e1faabcdac361c7091be12": "704e17dbf261fd48ccc8cce933a1f132da251936626a58cde772efdb2d8659c2"
+      },
+      "upstreamAndFinalHeadBytesIdentical": true
+    },
+    {
+      "path": "src/renderer/mod.rs",
+      "sha256ByCommit": {
+        "02530b9ed567a44663edb26c65fb565c4a79f00d": "1648202081f939d5d9c2dc548eaaaf9f43283e1ba5fa14a4efaafd64337859d1",
+        "f9f2e47bf43d87fff7e1faabcdac361c7091be12": "1648202081f939d5d9c2dc548eaaaf9f43283e1ba5fa14a4efaafd64337859d1"
+      },
+      "upstreamAndFinalHeadBytesIdentical": true
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256ByCommit": {
+        "02530b9ed567a44663edb26c65fb565c4a79f00d": "965e127faa8826819f413cc8e35b3d6433dda2a0c5bd662c9052d1d70e111fda",
+        "f9f2e47bf43d87fff7e1faabcdac361c7091be12": "965e127faa8826819f413cc8e35b3d6433dda2a0c5bd662c9052d1d70e111fda"
+      },
+      "upstreamAndFinalHeadBytesIdentical": true
+    },
+    {
+      "path": "ttfs/opensource/SourceHanSerifK-OldHangul-subset.otf",
+      "sha256ByCommit": {
+        "02530b9ed567a44663edb26c65fb565c4a79f00d": "2f86ef9a52acb6d1dad9d915843239123b635d97edd88fd0573a88ffcb4e16f1",
+        "f9f2e47bf43d87fff7e1faabcdac361c7091be12": "2f86ef9a52acb6d1dad9d915843239123b635d97edd88fd0573a88ffcb4e16f1"
+      },
+      "upstreamAndFinalHeadBytesIdentical": true
+    },
+    {
+      "path": "ttfs/opensource/NotoSansKR-Regular.ttf",
+      "sha256ByCommit": {
+        "02530b9ed567a44663edb26c65fb565c4a79f00d": "6e06a7fe5d696ca719894a23f36bb2b1be8c816a5937cd4ad0f23ca67780dd74",
+        "f9f2e47bf43d87fff7e1faabcdac361c7091be12": "6e06a7fe5d696ca719894a23f36bb2b1be8c816a5937cd4ad0f23ca67780dd74"
+      },
+      "upstreamAndFinalHeadBytesIdentical": true
+    },
+    {
+      "path": "ttfs/opensource/NotoSansKR-ExtraLight.ttf",
+      "sha256ByCommit": {
+        "02530b9ed567a44663edb26c65fb565c4a79f00d": "67b4003e2be99ea44a7c957e4b35acde1b5e6e82a54fe195c5598c3c617bc2e3",
+        "f9f2e47bf43d87fff7e1faabcdac361c7091be12": "67b4003e2be99ea44a7c957e4b35acde1b5e6e82a54fe195c5598c3c617bc2e3"
+      },
+      "upstreamAndFinalHeadBytesIdentical": true
+    }
+  ],
+  "causeClassification": "Strong static inference: environment-sensitive native SVG-compatibilityPDF initial serif font-resolution failure inherited from upstream. Exact failing fontdb snapshot/CLIstderr was not retained by successful harness command; no runtime rerun is authorized, so missing requested family on the runner remains inferred rather than directly enumerated.",
+  "causeChain": [
+    {
+      "path": "src/document_core/queries/rendering.rs",
+      "line": 1582,
+      "fact": "CompatibilityPDF builds Print PageLayerTree then layeredSVG, then native svgs_to_pdf_with_links; directPDF consumes PageLayerTree separately."
+    },
+    {
+      "path": "src/renderer/pdf.rs",
+      "line": 474,
+      "fact": "Linux defaultserif is Noto Serif CJK KR."
+    },
+    {
+      "path": "src/renderer/pdf.rs",
+      "line": 529,
+      "fact": "create_fontdb loads system+font_paths and sets genericserif to options fallback without selecting an existing family when absent."
+    },
+    {
+      "path": "src/renderer/pdf.rs",
+      "line": 755,
+      "fact": "Missing configured family produces warning but conversion continues."
+    },
+    {
+      "path": "src/renderer/pdf.rs",
+      "line": 1265,
+      "fact": "Only percharacter select_fallback is customized; initial select_font remains usvgdefault."
+    },
+    {
+      "dependency": "usvg0.45.1/src/text/mod.rs",
+      "line": 86,
+      "fact": "Default initial selector queries listedfamilies and genericserif; missingmatches returnNone."
+    },
+    {
+      "dependency": "fontdb0.23.0/src/lib.rs",
+      "line": 661,
+      "fact": "Query matches actual exact family names; genericserif resolves only to configured family string, then returnsNone if no candidate."
+    },
+    {
+      "dependency": "usvg0.45.1/src/text/layout.rs",
+      "line": 201,
+      "fact": "Initial font load creates spanfont cache; when absent, spans/chunks are skipped before percharacter fallback can rescue them."
+    },
+    {
+      "path": "src/renderer/mod.rs",
+      "line": 2185,
+      "fact": "Batang-family serif chain omits available Noto Sans KR. Explicit oldHangul familyname inchain is Source Han Serif K Old Hangul; actual bundled subsetnameID1 is Source Han Serif K, so it does not match that declared name."
+    }
+  ],
+  "bundledFontMetadata": {
+    "sourceHanSubset": {
+      "path": "ttfs/opensource/SourceHanSerifK-OldHangul-subset.otf",
+      "actualFamilyNameID1": "Source Han Serif K",
+      "postScriptNameID6": "SourceHanSerifK-Regular",
+      "declaredChainName": "Source Han Serif K Old Hangul",
+      "matchesDeclaredName": false
+    },
+    "sansRegular": {
+      "path": "ttfs/opensource/NotoSansKR-Regular.ttf",
+      "actualFamilyNameID1": "Noto Sans KR",
+      "postScriptNameID6": "NotoSansKR-Regular"
+    },
+    "note": "The bundle also contains a SourceHan serif oldHangul subset, so claiming it contains only sansfonts would be inaccurate. That subset actualname does not match the declared chain family; no Noto Serif CJK KR program is bundled."
+  },
+  "CIObservationLimit": "pdf-render-diff-report.mjs runCommand captures stdout/stderr but successful compatibility-export return is unused, so missing-fallback warnings are not present in archivedjoblog. Four report-onlyCanvas-vsPDF warnings also involve 96dpi Canvas vs72dpi PDF raster size mismatch and cannot be used as independently aligned fidelity metrics. Native direct-vscompat PDF rasters are same596x842, so that1.158% score is physically comparable but semantically insufficient.",
+  "frontendScope": {
+    "sourcePaths": [
+      {
+        "path": "rhwp-studio/src/command/commands/file.ts",
+        "line": 583,
+        "fact": "preparePrintPages uses wasm.renderPageSvgWithProfile(print)."
+      },
+      {
+        "path": "rhwp-studio/src/command/commands/file.ts",
+        "line": 672,
+        "fact": "PDF-save command invokes printsurface.window.print(), browser print pipeline."
+      },
+      {
+        "path": "HanPage-Desktop/src-tauri/tauri.conf.json",
+        "line": 9,
+        "fact": "Desktop frontendDist is rhwp-studio/dist."
+      }
+    ],
+    "relationship": "Native fontdb/usvg/svg2pdf code is cfg(notwasm32) and is not used by this frontend PDF command. The identified failure is therefore in the native compatibility path; static callpath separation does not itself validate actual frontend browser-printed PDF. BrowserCanvasartifact retains alltext, but actual frontend Save-asPDF output was not exercised here.",
+    "actualFrontendPDFStatus": "unverified in this diagnosis; no evidence it shares this native initialfontresolver failure"
+  },
+  "disposition": "Record inherited native compatibilityPDF semantic gap under upstream-sync limitations and separatefollowup. Do not label missingcontent as visualpass or infer fullHanPage frontendPDF failure. No engine fix or threshold/baseline adjustment in this upstreamsync task."
+}

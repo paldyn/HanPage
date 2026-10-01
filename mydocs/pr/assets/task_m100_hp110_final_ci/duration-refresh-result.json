@@ -1,0 +1,15 @@
+{
+  "merge_sha": "b57d9ae5e77bf3f10f76ced17e40dc7c47673930",
+  "workflow": "Refresh nextest target duration data",
+  "run_id": 36838895952,
+  "url": "https://github.com/paldyn/HanPage/actions/runs/36838895952",
+  "conclusion": "success",
+  "collector": {
+    "ready": false,
+    "reason": "no-verified-pr-duration-measurements"
+  },
+  "policy_update_step": "skipped",
+  "summary": "metadata workflow success, 검증된 PR duration artifact 부재(no-verified-pr-duration-measurements)로 갱신 보류",
+  "cause_scope": "HanPage에서는 B/C/D duration artifact upload guard가 edwardkim/rhwp 전용이므로 artifact가 없다. 실제 collector reason과 단계 skip을 확인했다.",
+  "verification_ci_restarted": false
+}

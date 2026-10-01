@@ -1,0 +1,506 @@
+{
+  "observedUTC": "2026-10-01T08:37:19.198431+00:00",
+  "runID": 36836467524,
+  "runURL": "https://github.com/paldyn/HanPage/actions/runs/36836467524",
+  "headSHA": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+  "expectedHeadSHA": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+  "headMatches": true,
+  "event": "workflow_dispatch",
+  "expectedEvent": "workflow_dispatch",
+  "eventMatches": true,
+  "runAttempt": 1,
+  "status": "completed",
+  "conclusion": "success",
+  "PRConnections": [
+    {
+      "url": "https://api.github.com/repos/paldyn/HanPage/pulls/111",
+      "id": 4700892878,
+      "number": 111,
+      "head": {
+        "ref": "codex/upstream-sync-20261001",
+        "sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "repo": {
+          "id": 1253161898,
+          "url": "https://api.github.com/repos/paldyn/HanPage",
+          "name": "HanPage"
+        }
+      },
+      "base": {
+        "ref": "devel",
+        "sha": "cecaf1bbfec9a10778484d30ebb747280e7a02af",
+        "repo": {
+          "id": 1253161898,
+          "url": "https://api.github.com/repos/paldyn/HanPage",
+          "name": "HanPage"
+        }
+      }
+    }
+  ],
+  "jobs": [
+    {
+      "id": 110284975397,
+      "headSHA": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "headMatches": true,
+      "name": "Render Diff preflight",
+      "status": "completed",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-01T08:28:05Z",
+          "completed_at": "2026-10-01T08:28:06Z"
+        },
+        {
+          "name": "Detect review-only fast pass",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-01T08:28:06Z",
+          "completed_at": "2026-10-01T08:28:06Z"
+        },
+        {
+          "name": "Check out current-base merge tree inputs",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 3,
+          "started_at": "2026-10-01T08:28:06Z",
+          "completed_at": "2026-10-01T08:28:06Z"
+        },
+        {
+          "name": "Verify current-base merge tree",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 4,
+          "started_at": "2026-10-01T08:28:06Z",
+          "completed_at": "2026-10-01T08:28:06Z"
+        },
+        {
+          "name": "Finalize review-only fast pass",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-01T08:28:06Z",
+          "completed_at": "2026-10-01T08:28:06Z"
+        },
+        {
+          "name": "Check out trusted CI impact classifier",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-01T08:28:06Z",
+          "completed_at": "2026-10-01T08:28:07Z"
+        },
+        {
+          "name": "Collect Render Diff impact input",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-10-01T08:28:07Z",
+          "completed_at": "2026-10-01T08:28:08Z"
+        },
+        {
+          "name": "Classify Render Diff impact",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-01T08:28:08Z",
+          "completed_at": "2026-10-01T08:28:10Z"
+        },
+        {
+          "name": "Summarize Render Diff impact",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-01T08:28:10Z",
+          "completed_at": "2026-10-01T08:28:10Z"
+        },
+        {
+          "name": "Post Check out trusted CI impact classifier",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18,
+          "started_at": "2026-10-01T08:28:10Z",
+          "completed_at": "2026-10-01T08:28:10Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19,
+          "started_at": "2026-10-01T08:28:10Z",
+          "completed_at": "2026-10-01T08:28:10Z"
+        }
+      ]
+    },
+    {
+      "id": 110285054253,
+      "headSHA": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "headMatches": true,
+      "name": "Canvas visual diff",
+      "status": "completed",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-01T08:28:17Z",
+          "completed_at": "2026-10-01T08:28:18Z"
+        },
+        {
+          "name": "Render Diff identity PR # base ",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 2,
+          "started_at": "2026-10-01T08:28:18Z",
+          "completed_at": "2026-10-01T08:28:18Z"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-01T08:28:18Z",
+          "completed_at": "2026-10-01T08:29:54Z"
+        },
+        {
+          "name": "Install Rust toolchain",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-01T08:29:54Z",
+          "completed_at": "2026-10-01T08:29:56Z"
+        },
+        {
+          "name": "Install PDF raster tools",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-01T08:29:56Z",
+          "completed_at": "2026-10-01T08:30:09Z"
+        },
+        {
+          "name": "Install wasm-pack",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-01T08:30:09Z",
+          "completed_at": "2026-10-01T08:30:09Z"
+        },
+        {
+          "name": "Restore cargo registry & build cache",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-10-01T08:30:09Z",
+          "completed_at": "2026-10-01T08:30:12Z"
+        },
+        {
+          "name": "Build WASM package",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-01T08:30:12Z",
+          "completed_at": "2026-10-01T08:32:06Z"
+        },
+        {
+          "name": "Build native CLI for PDF report",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-01T08:32:06Z",
+          "completed_at": "2026-10-01T08:34:02Z"
+        },
+        {
+          "name": "Save cargo registry & build cache",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 10,
+          "started_at": "2026-10-01T08:34:02Z",
+          "completed_at": "2026-10-01T08:34:02Z"
+        },
+        {
+          "name": "Setup Node.js",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-10-01T08:34:02Z",
+          "completed_at": "2026-10-01T08:34:03Z"
+        },
+        {
+          "name": "Install Studio dependencies",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-10-01T08:34:03Z",
+          "completed_at": "2026-10-01T08:34:09Z"
+        },
+        {
+          "name": "Install Chromium",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-10-01T08:34:09Z",
+          "completed_at": "2026-10-01T08:34:16Z"
+        },
+        {
+          "name": "Check render diff script syntax",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14,
+          "started_at": "2026-10-01T08:34:16Z",
+          "completed_at": "2026-10-01T08:34:19Z"
+        },
+        {
+          "name": "Run canvas visual diff and PDF report",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15,
+          "started_at": "2026-10-01T08:34:19Z",
+          "completed_at": "2026-10-01T08:35:15Z"
+        },
+        {
+          "name": "Run selected CanvasKit readiness gate",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16,
+          "started_at": "2026-10-01T08:35:15Z",
+          "completed_at": "2026-10-01T08:36:24Z"
+        },
+        {
+          "name": "Add render diff summary",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17,
+          "started_at": "2026-10-01T08:36:24Z",
+          "completed_at": "2026-10-01T08:36:24Z"
+        },
+        {
+          "name": "Upload render diff artifacts",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18,
+          "started_at": "2026-10-01T08:36:24Z",
+          "completed_at": "2026-10-01T08:36:27Z"
+        },
+        {
+          "name": "Post Setup Node.js",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 35,
+          "started_at": "2026-10-01T08:36:27Z",
+          "completed_at": "2026-10-01T08:36:27Z"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 36,
+          "started_at": "2026-10-01T08:36:27Z",
+          "completed_at": "2026-10-01T08:36:27Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 37,
+          "started_at": "2026-10-01T08:36:27Z",
+          "completed_at": "2026-10-01T08:36:27Z"
+        }
+      ]
+    }
+  ],
+  "artifactCount": 1,
+  "artifacts": [
+    {
+      "id": 11149398006,
+      "name": "render-diff-artifacts",
+      "expired": false,
+      "bytes": 3540059,
+      "digest": "sha256:38773e05da6ab8c330e795af369ca6cc77bd460ab19dc33e2ea54abef05d3770",
+      "workflowRun": {
+        "id": 36836467524,
+        "repository_id": 1253161898,
+        "head_repository_id": 1253161898,
+        "head_branch": "codex/upstream-sync-20261001",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12"
+      },
+      "artifactHeadMatches": true
+    }
+  ],
+  "workflowConfig": {
+    "path": ".github/workflows/render-diff.yml",
+    "headFileSHA256": "62f3bd5edeba1892e074fe804913a20bb07a60c85df4195d9856648235cca98d",
+    "primaryMatchesFinalHead": true,
+    "nativeCLI": "cargo build --features native-skia --bin rhwp",
+    "canvasPDFStep": "Run canvas visual diff and PDF report",
+    "PDFEnv": {
+      "RHWP_RENDER_DIFF_PDF": "1",
+      "RHWP_RENDER_DIFF_PDF_WRITE_IMAGES": "1",
+      "RHWP_RENDER_DIFF_DIRECT_PDF": "1",
+      "RHWP_RENDER_DIFF_DIRECT_PDF_GATE": "1",
+      "RHWP_RENDER_DIFF_DIRECT_PDF_MAX_RATIO": "0.02",
+      "RHWP_RENDER_DIFF_DIRECT_PDF_RASTER_DPI": "144"
+    },
+    "readinessStep": "Run selected CanvasKit readiness gate",
+    "readinessArgs": [
+      "--profiles",
+      "screen",
+      "--browser-mode",
+      "headless",
+      "--readiness-only"
+    ],
+    "availabilityGuard": "steps.pdf-raster-runtime.outputs.available == true; Install PDF raster tools APT timeout can return success with available=false, causing protected steps to skip."
+  },
+  "scope": "Read-only API/job/step/artifact availability audit. No artifact download or direct image inspection by this agent. Aggregate step success cannot alone prove every directPDF fixture/report row; artifact parsing/image inspection belongs to root.",
+  "configuredComparisonContract": {
+    "sourceFiles": [
+      {
+        "path": "rhwp-studio/e2e/pdf-render-diff-report.mjs",
+        "exactHeadSHA256": "e825758283ca45b813ea22a14526412ea74f164f2872a1e5aba301e4935fe9d1",
+        "primaryMatchesFinalHead": true
+      },
+      {
+        "path": "rhwp-studio/e2e/run-render-diff.mjs",
+        "exactHeadSHA256": "3a3a65ebca72269750f6dde923fab70108eb6a6c199701162fabb70cccff7e36",
+        "primaryMatchesFinalHead": true
+      },
+      {
+        "path": "scripts/renderer_baseline.py",
+        "exactHeadSHA256": "aed14d448fccd758e74af152549ceaeb800724693d3c7845c666c5d9ce156e72",
+        "primaryMatchesFinalHead": true
+      }
+    ],
+    "directPDF": "NativeCLI export-pdf --backend direct --profile print --raster-dpi144; freshPDF validated and Poppler-rasterized at matching captureDPI, compared against Native SVG-derived compatibilityPDF. Direct selected corpus is gated at2% diff; missing direct comparison/error/major size mismatch causes failure.",
+    "browserPDF": "Fresh browser renderPageToCanvas PNG vs SVG-derived compatibilityPDF; report-only metrics, separate from selected direct gate.",
+    "independentHancomReference": "This CI PDFreport does not compare against committed Hancom PDF; separate representativeVisual Hancom evidence remains relevant.",
+    "defaultDirectCorpus": [
+      "biz_plan.hwp",
+      "kps-ai.hwp",
+      "tac-case-001.hwp"
+    ],
+    "actualSelectedCorpus": "Canvasdiff logs confirmbasic/KTX.hwp,biz_plan.hwp,tac-case-001.hwp p1; PDFreport4pages and directgate3/3. ExactPDF rows/corpus paths belong to pdf-results.json in artifact.",
+    "readiness": "renderer_baseline --readiness-only skipsNativecapture and selects manifest CanvasKit readiness corpus; browser capture/gate failure exitsnonzero.",
+    "requiredArtifactChecksByRoot": [
+      "pdf-results.json actual directExpected/directStage/directError/directComparison/directGateFailed rows and freshPDF/directPDF/raster/diff paths",
+      "PDF visual diff report summary and Direct PDF compatibility gate compared/expected/failures",
+      "browser-baseline-report.json CanvasKit readiness total/evaluated/passed/failed/missing and actual selectedcorpus",
+      "representative emittedPNG/PDF direct visual inspection"
+    ]
+  },
+  "actualLogEvidence": {
+    "path": "output/pr-review/hp110/ci/render-diff-36836467524-canvas-job.log",
+    "bytes": 174873,
+    "sha256": "c985540427f53cb9a9fd4be1ec8db002c9640f77f98c03a97a1fcce64d9d240f",
+    "markers": [
+      {
+        "line": 1196,
+        "text": "Canvas visual diff\tRun canvas visual diff and PDF report\t2026-10-01T08:34:28.2277727Z   PASS: basic/KTX.hwp page 1: 166/891662 pixels differ (0.01862%), max channel delta 123, size 1123x794"
+      },
+      {
+        "line": 1197,
+        "text": "Canvas visual diff\tRun canvas visual diff and PDF report\t2026-10-01T08:34:30.4453679Z   PASS: biz_plan.hwp page 1: 0/891662 pixels differ (0.00000%), max channel delta 0, size 794x1123"
+      },
+      {
+        "line": 1198,
+        "text": "Canvas visual diff\tRun canvas visual diff and PDF report\t2026-10-01T08:34:32.2927004Z   PASS: tac-case-001.hwp page 1: 0/891662 pixels differ (0.00000%), max channel delta 0, size 794x1123"
+      },
+      {
+        "line": 1208,
+        "text": "Canvas visual diff\tRun canvas visual diff and PDF report\t2026-10-01T08:35:15.4837635Z PDF visual diff report: 4 page(s), 4 warning(s), 0 error(s)"
+      },
+      {
+        "line": 1209,
+        "text": "Canvas visual diff\tRun canvas visual diff and PDF report\t2026-10-01T08:35:15.4838676Z Direct PDF compatibility gate: 3/3 compared page(s), 0 failure(s)"
+      },
+      {
+        "line": 1271,
+        "text": "Canvas visual diff\tRun selected CanvasKit readiness gate\t2026-10-01T08:36:19.7976699Z [baseline] complete: /home/runner/work/HanPage/HanPage/output/renderer-baseline/canvaskit-readiness"
+      }
+    ],
+    "CanvasDiff": {
+      "comparedPages": 3,
+      "passedPages": 3,
+      "observedPixels": {
+        "basic/KTX.hwp": "166/891662 (0.01862%)",
+        "biz_plan.hwp": "0/891662",
+        "tac-case-001.hwp": "0/891662"
+      }
+    },
+    "PDFReport": {
+      "comparedPages": 4,
+      "warnings": 4,
+      "errors": 0,
+      "scope": "Canvas-vs-SVG compatibilityPDF report-only; warnings preserved, do not report exact PDF fidelity."
+    },
+    "directPDFCompatibilityGate": {
+      "comparedPages": 3,
+      "expectedPages": 3,
+      "failures": 0,
+      "status": "passed",
+      "scope": "Native-skia direct printPDF vsSVGcompatibilityPDF; comparison against Hancom reference is not performed in this CI step."
+    },
+    "readiness": {
+      "stepConclusion": "success",
+      "capturedSamples": [
+        {
+          "sample": "paragraph-line-basic",
+          "category": "paragraph",
+          "page": 0,
+          "logLine": 1237
+        },
+        {
+          "sample": "paragraph-text-marks",
+          "category": "paragraph",
+          "page": 0,
+          "logLine": 1241
+        },
+        {
+          "sample": "pua-special-glyphs",
+          "category": "font",
+          "page": 0,
+          "logLine": 1245
+        },
+        {
+          "sample": "font-batang-hancom",
+          "category": "font",
+          "page": 0,
+          "logLine": 1249
+        },
+        {
+          "sample": "font-native-bitmap",
+          "category": "font-native-glyph",
+          "page": 0,
+          "logLine": 1253
+        },
+        {
+          "sample": "table-core",
+          "category": "table",
+          "page": 0,
+          "logLine": 1257
+        },
+        {
+          "sample": "table-border-style",
+          "category": "table",
+          "page": 0,
+          "logLine": 1261
+        },
+        {
+          "sample": "image-crop",
+          "category": "image",
+          "page": 0,
+          "logLine": 1265
+        }
+      ],
+      "capturedSampleCount": 8,
+      "browserReportPath": "output/renderer-baseline/canvaskit-readiness/browser/browser-baseline-report.json",
+      "artifactActualEvaluatedFailedMissingRows": "Root artifact inspection still required; joblog shows eight pairedCanvas2D/CanvasKit captures and gate step success."
+    },
+    "actualAvailability": "Install PDF raster tools succeeded; guarded WASM, native-skia CLI, Canvas/PDF report and readiness all actually executed successfully. APT-timeout false-availability skip path excluded by executed protected steps."
+  },
+  "completionAudit": "Final head/event/attempt/PR connection verified; actual PDF availability and all expected execution steps verified; artifactID/digest/head/expiry verified. Root owns artifact content and direct image review. Four report-onlyPDF warnings preserved."
+}

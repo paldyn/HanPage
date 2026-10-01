@@ -1,0 +1,113 @@
+{
+  "head": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+  "run_id": 36836467524,
+  "run_url": "https://github.com/paldyn/HanPage/actions/runs/36836467524",
+  "artifact_id": 11149398006,
+  "artifact_size": 3540059,
+  "artifact_archive_sha256": "38773e05da6ab8c330e795af369ca6cc77bd460ab19dc33e2ea54abef05d3770",
+  "canvas_pages_passed": 3,
+  "canvas_failed": 0,
+  "canvas_comparison": "Legacy Canvas2D vs layered Canvas2D; selected p1 fixtures; canonical budget0.0005",
+  "pdf_report_pages": 4,
+  "pdf_report_warnings": 4,
+  "pdf_report_errors": 0,
+  "pdf_report_only": true,
+  "direct_pdf_comparison": "Native Skia direct(print) PDF vs Native SVG compatibility PDF; selected p1 three fixtures; canonical max0.02; not Hancom fidelity",
+  "direct_pdf_rows": [
+    {
+      "fixture": "biz_plan.hwp",
+      "stage": "complete",
+      "diff_ratio": 0.011581565145307593,
+      "failed": false
+    },
+    {
+      "fixture": "tac-case-001.hwp",
+      "stage": "complete",
+      "diff_ratio": 0.0034393980455610642,
+      "failed": false
+    },
+    {
+      "fixture": "kps-ai.hwp",
+      "stage": "complete",
+      "diff_ratio": 0.008174050279774905,
+      "failed": false
+    }
+  ],
+  "readiness_summary": {
+    "total": 8,
+    "evaluated": 8,
+    "passed": 8,
+    "failed": 0,
+    "missing": 0
+  },
+  "native_readiness_capture_skipped_by_design": true,
+  "visual_inspection": "Root directly opened selected five PNGs. KTX map/tables and CanvasKit table borders/text are visible. Business Native Skia direct PDF includes heading/top line/date/company; its SVG compatibility PDF raster omits top line/date/company. This semantic gap remains despite whole-page direct difference1.1581565% below2%. Report-only browser/compatibility rows have size mismatch and warnings; no complete PDF fidelity claim.",
+  "source_scope": "Rust engine/src/crates/lockfile exact pinned upstream025; no source/threshold/golden modified for green results. Compatibility gap is preserved as a scoped follow-up.",
+  "selected_artifacts": [
+    {
+      "execution_path": "rhwp-studio/e2e/screenshots/render-diff/results.json",
+      "sha256": "3fd70734dc0204109dacc17d4840294da52183b27198d4c4871bb63a8b97c5f5",
+      "bytes": 2349
+    },
+    {
+      "execution_path": "rhwp-studio/e2e/screenshots/render-diff/pdf-results.json",
+      "sha256": "a45ba9ecc32572d03b13ec3dc8b234683e6b89285e48af64acfa7b4e5ce60b41",
+      "bytes": 10297
+    },
+    {
+      "execution_path": "rhwp-studio/e2e/screenshots/render-diff/summary.md",
+      "sha256": "4353bc9f973e8c6a3c0b15a05eaaaab7d9d304b2dff1c729072be508cb16f260",
+      "bytes": 1181
+    },
+    {
+      "execution_path": "rhwp-studio/e2e/screenshots/render-diff/pdf-summary.md",
+      "sha256": "85499211772c16913a626fe4548d59a5dce49200f95c5298d6384ac0650b8e81",
+      "bytes": 3768
+    },
+    {
+      "execution_path": "output/renderer-baseline/canvaskit-readiness/baseline-report.json",
+      "sha256": "a7819b35acde5b66e59ad60994f31805d8e2b055320390b454f020a86965f2c4",
+      "bytes": 395582
+    },
+    {
+      "execution_path": "output/renderer-baseline/canvaskit-readiness/performance-summary.json",
+      "sha256": "6f42258f4f1639ce9adce9090a68d3c4b0d1bc4e60e17e4dc4a6d43f71d4fce1",
+      "bytes": 3019
+    },
+    {
+      "execution_path": "rhwp-studio/e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01.pdf",
+      "sha256": "0c6e3ea5fe64d23ecaaf842c7af8d8aa3ed97a468e3b5902202b9f3b01367ce6",
+      "bytes": 4849
+    },
+    {
+      "execution_path": "rhwp-studio/e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-direct.pdf",
+      "sha256": "489219af4e4aa7164e3bf111a6303ec29a9bdf257b002fd9687710ce5216d215",
+      "bytes": 33482
+    },
+    {
+      "execution_path": "rhwp-studio/e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-pdf-raster.png",
+      "sha256": "a53e8c3efbaa712af78b1e61ab24da793f422df55e9326140311094668826b77",
+      "bytes": 6536
+    },
+    {
+      "execution_path": "rhwp-studio/e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-direct-raster.png",
+      "sha256": "1e8a8560058957d756723de27b2a2d144b86d3566db01d2cf029906fec1187fe",
+      "bytes": 16530
+    },
+    {
+      "execution_path": "rhwp-studio/e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-direct-vs-compat-diff.png",
+      "sha256": "763dfed539c586a4fb6550642ee0574ade8e504b790aac6f6ece775719f946a3",
+      "bytes": 7992
+    },
+    {
+      "execution_path": "rhwp-studio/e2e/screenshots/render-diff/basic_KTX.hwp-ce76d1d6-p01-layer.png",
+      "sha256": "073540fd097f10eff34ebd2834df39b81cfdd22e476a169d7d8b03f31879326b",
+      "bytes": 322019
+    },
+    {
+      "execution_path": "output/renderer-baseline/canvaskit-readiness/browser/table-border-style/canvaskit-default-screen.png",
+      "sha256": "fbc4adad378609cdc3984382fd959aadfa2cca8c142e66717858467777e7039f",
+      "bytes": 73959
+    }
+  ]
+}

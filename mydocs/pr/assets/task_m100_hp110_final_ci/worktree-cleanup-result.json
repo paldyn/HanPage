@@ -1,0 +1,14 @@
+{
+  "archived": false,
+  "retained": true,
+  "worktree_path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage",
+  "head": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+  "clean": true,
+  "archive_tool": "mcp__codex_app__archive_worktree",
+  "archive_error": "This worktree is protected by a pinned task or workspace.",
+  "reason": "App protection prevents archive; preserve pinned/workspace preference, do not bypass with filesystem removal.",
+  "postmerge_document_choice": "maintainer direct archive review/impl, orders, mydocs/pr/assets only",
+  "primary_workspace_preserved": true,
+  "shared_target_preserved": "target/pr-review (13GiB)",
+  "local_remote_branch_retained": "codex/upstream-sync-20261001; primary Desktop dirty/active work"
+}

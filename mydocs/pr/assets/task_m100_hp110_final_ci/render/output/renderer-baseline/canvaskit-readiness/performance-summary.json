@@ -1,0 +1,101 @@
+{
+  "browser": [
+    {
+      "backend": "canvas2d",
+      "profile": "screen",
+      "sampleCount": 8,
+      "averageAppLoadMs": 1461.3727414999998,
+      "averageDocumentLoadAndInitialRenderMs": 254.97500000000582,
+      "averageSelectedPageRenderMs": 155.60259024999914,
+      "averageScreenshotMs": 83.26980537499992,
+      "averageTotalMs": 3611.2082111250006,
+      "effectPixelsTotal": 0,
+      "effectCacheHitsTotal": 0,
+      "effectCacheMissesTotal": 0,
+      "effectFailuresTotal": 0
+    },
+    {
+      "backend": "canvaskit-default",
+      "profile": "screen",
+      "sampleCount": 8,
+      "averageAppLoadMs": 1481.9951990000009,
+      "averageDocumentLoadAndInitialRenderMs": 609.4124999999913,
+      "averageSelectedPageRenderMs": 207.72889587500026,
+      "averageScreenshotMs": 128.49548525,
+      "averageTotalMs": 4082.8508542500003,
+      "effectPixelsTotal": 0,
+      "effectCacheHitsTotal": 0,
+      "effectCacheMissesTotal": 0,
+      "effectFailuresTotal": 0
+    }
+  ],
+  "canvaskitSurface": "auto",
+  "canvaskitSurfaceDiagnostics": [
+    {
+      "backend": "canvaskit-default",
+      "profile": "screen",
+      "preference": "auto",
+      "surfaceBackend": "default",
+      "sampleCount": 8,
+      "usedGpuSurfaceCount": 0,
+      "createdSurfacesTotal": 0,
+      "reusedSurfacesTotal": 0,
+      "webgpuAttemptsTotal": 0,
+      "webgpuFailuresTotal": 0,
+      "webglAttemptsTotal": 0,
+      "webglFailuresTotal": 0,
+      "softwareAttemptsTotal": 0,
+      "softwareFailuresTotal": 0,
+      "softwareFallbacksTotal": 0,
+      "webgpuFailureExamples": [],
+      "webglFailureExamples": [],
+      "softwareFailureExamples": [],
+      "lastFailureExamples": []
+    }
+  ],
+  "canvaskitReplayDiagnostics": {
+    "mode": "contractGateAndReportInventory",
+    "hardGateViolationCount": 0,
+    "hardGateViolations": [],
+    "summaryByBackendProfile": [
+      {
+        "backend": "canvaskit-default",
+        "profile": "screen",
+        "captureCount": 8,
+        "totalItems": 602,
+        "directItems": 601,
+        "directRequiredItems": 1,
+        "compatOverlayItems": 0,
+        "textFallbackItems": 0,
+        "unsupportedItems": 0,
+        "hiddenOverlayViolations": 0,
+        "hardGateViolationCount": 0,
+        "runtimeRenderErrors": 0,
+        "runtimeUnexpectedUnsupportedOps": 0,
+        "runtimeImageReplayFailures": 0,
+        "planStatusCounts": {
+          "direct": 601,
+          "directRequired": 1
+        },
+        "planReasonCounts": {
+          "directReplayRequired": 1,
+          "directReplaySupported": 601
+        },
+        "planFeatureCounts": {
+          "cacheHint": 17,
+          "clip": 126,
+          "pageBackground": 8,
+          "rasterImage": 2,
+          "textRun": 313,
+          "textSpecialVisual": 19,
+          "textVariant": 1,
+          "vectorShape": 116
+        },
+        "expectedUnsupportedOpCounts": {},
+        "unexpectedUnsupportedOpCounts": {},
+        "imageFailureReasonCounts": {},
+        "imageFailureSourceCounts": {}
+      }
+    ]
+  }
+}

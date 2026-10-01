@@ -1,0 +1,3058 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-10-01T08:51:14.828Z",
+  "repository": "paldyn/HanPage",
+  "pull_request": 111,
+  "audit_result": "PASS",
+  "audit_phase": "Pre-merge verification snapshot; OPEN/CLEAN below records the independently observed gate before parent merged.",
+  "audit_scope": "Read-only final-head run/check/job-step audit and selected actual execution logs. No CI reruns, source edits, Cargo/browser execution or remote mutations.",
+  "final_head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+  "base_sha": "cecaf1bbfec9a10778484d30ebb747280e7a02af",
+  "head_branch": "codex/upstream-sync-20261001",
+  "base_branch": "devel",
+  "final_pr_gate": {
+    "state": "OPEN",
+    "merged_at": null,
+    "mergeable": "MERGEABLE",
+    "merge_state_status": "CLEAN",
+    "url": "https://github.com/paldyn/HanPage/pull/111",
+    "head_and_base_unchanged": true
+  },
+  "execution_identity": {
+    "merge": {
+      "parents": [
+        "cecaf1bbfec9a10778484d30ebb747280e7a02af",
+        "f9f2e47bf43d87fff7e1faabcdac361c7091be12"
+      ],
+      "sha": "f36a4e5fd6da6ef0f520bdd066d7b61a6c669001",
+      "tree": "9a66834cfd4dbd2630eca89a960e56ff7c71b851"
+    },
+    "head": {
+      "parents": [
+        "9299f56de331cb58524249c71275dde3da501ce5"
+      ],
+      "sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "tree": "9a66834cfd4dbd2630eca89a960e56ff7c71b851"
+    },
+    "same_tree": true,
+    "correct_parents": true
+  },
+  "totals": {
+    "generated_runs": 8,
+    "run_conclusions": {
+      "success": 7,
+      "skipped": 1
+    },
+    "commit_checks": 35,
+    "commit_check_conclusions": {
+      "success": 31,
+      "skipped": 4
+    },
+    "pr_rollup_checks": 33,
+    "pr_rollup_conclusions": {
+      "SKIPPED": 4,
+      "SUCCESS": 29
+    },
+    "actual_jobs": 34,
+    "failed_or_pending_runs_checks_jobs": 0
+  },
+  "pr_rollup_difference": {
+    "commit_checks_excluded_from_pr_rollup": [
+      {
+        "name": "Canvas visual diff",
+        "conclusion": "success",
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836467524/job/110285054253"
+      },
+      {
+        "name": "Render Diff preflight",
+        "conclusion": "success",
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836467524/job/110284975397"
+      }
+    ],
+    "reason": "The manually dispatched Render Diff preflight and Canvas visual diff checks are separate exact-head checks rather than PR-triggered rollup entries."
+  },
+  "runs": [
+    {
+      "conclusion": "success",
+      "created_at": "2026-10-01T08:27:58Z",
+      "event": "workflow_dispatch",
+      "head_branch": "codex/upstream-sync-20261001",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 36836467524,
+      "name": "Render Diff",
+      "path": ".github/workflows/render-diff.yml",
+      "run_attempt": 1,
+      "status": "completed",
+      "updated_at": "2026-10-01T08:36:31Z",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836467524"
+    },
+    {
+      "conclusion": "success",
+      "created_at": "2026-10-01T08:27:43Z",
+      "event": "pull_request",
+      "head_branch": "codex/upstream-sync-20261001",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 36836442790,
+      "name": "Cancel stale PR runs",
+      "path": ".github/workflows/cancel-stale-pr-runs.yml",
+      "run_attempt": 1,
+      "status": "completed",
+      "updated_at": "2026-10-01T08:27:54Z",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836442790"
+    },
+    {
+      "conclusion": "success",
+      "created_at": "2026-10-01T08:27:43Z",
+      "event": "pull_request",
+      "head_branch": "codex/upstream-sync-20261001",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 36836443372,
+      "name": "Adapter inter-diff",
+      "path": ".github/workflows/adapter-diff.yml",
+      "run_attempt": 1,
+      "status": "completed",
+      "updated_at": "2026-10-01T08:32:31Z",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443372"
+    },
+    {
+      "conclusion": "success",
+      "created_at": "2026-10-01T08:27:43Z",
+      "event": "pull_request",
+      "head_branch": "codex/upstream-sync-20261001",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 36836443410,
+      "name": "Proptest roundtrip",
+      "path": ".github/workflows/proptest-roundtrip.yml",
+      "run_attempt": 1,
+      "status": "completed",
+      "updated_at": "2026-10-01T08:33:46Z",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443410"
+    },
+    {
+      "conclusion": "success",
+      "created_at": "2026-10-01T08:27:43Z",
+      "event": "pull_request",
+      "head_branch": "codex/upstream-sync-20261001",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 36836442780,
+      "name": "Skill router gate",
+      "path": ".github/workflows/skill-router-gate.yml",
+      "run_attempt": 1,
+      "status": "completed",
+      "updated_at": "2026-10-01T08:30:45Z",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836442780"
+    },
+    {
+      "conclusion": "success",
+      "created_at": "2026-10-01T08:27:43Z",
+      "event": "pull_request",
+      "head_branch": "codex/upstream-sync-20261001",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 36836443266,
+      "name": "CodeQL",
+      "path": ".github/workflows/codeql.yml",
+      "run_attempt": 1,
+      "status": "completed",
+      "updated_at": "2026-10-01T08:43:12Z",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443266"
+    },
+    {
+      "conclusion": "success",
+      "created_at": "2026-10-01T08:27:43Z",
+      "event": "pull_request",
+      "head_branch": "codex/upstream-sync-20261001",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 36836443303,
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "run_attempt": 1,
+      "status": "completed",
+      "updated_at": "2026-10-01T08:48:33Z",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303"
+    },
+    {
+      "conclusion": "skipped",
+      "created_at": "2026-10-01T08:27:40Z",
+      "event": "pull_request_target",
+      "head_branch": "codex/upstream-sync-20261001",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 36836438247,
+      "name": "Cancel stale PR runs",
+      "path": ".github/workflows/cancel-stale-pr-runs.yml",
+      "run_attempt": 1,
+      "status": "completed",
+      "updated_at": "2026-10-01T08:27:51Z",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836438247"
+    }
+  ],
+  "commit_check_runs": [
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:48:33Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110292062066,
+      "name": "Build & Test",
+      "started_at": "2026-10-01T08:48:27Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110292062066"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:48:25Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110288574312,
+      "name": "test-archive-b-shard-1 / Default-feature tests (Archive B)",
+      "started_at": "2026-10-01T08:38:24Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110288574312"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:45:35Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110288469977,
+      "name": "test-archive-d-shard-1 / Default-feature tests (Archive D)",
+      "started_at": "2026-10-01T08:38:06Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110288469977"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:41:35Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110288114448,
+      "name": "test-archive-c-shard-1 / Default-feature tests (Archive C)",
+      "started_at": "2026-10-01T08:37:05Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110288114448"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:39:30Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110287800744,
+      "name": "test-archive-a-shard-1 / Default-feature tests (Archive A)",
+      "started_at": "2026-10-01T08:36:11Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110287800744"
+    },
+    {
+      "app": "github-advanced-security",
+      "completed_at": "2026-10-01T08:32:29Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110286493930,
+      "name": "CodeQL",
+      "started_at": "2026-10-01T08:32:23Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/runs/110286493930"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:33:45Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285289710,
+      "name": "prop roundtrip",
+      "started_at": "2026-10-01T08:28:57Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443410/job/110285289710"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:38:22Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285248946,
+      "name": "build-test-archive-b / Build test archive (b)",
+      "started_at": "2026-10-01T08:28:50Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285248946"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:38:04Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285248945,
+      "name": "build-test-archive-d / Build test archive (d)",
+      "started_at": "2026-10-01T08:28:50Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285248945"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:37:03Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285248886,
+      "name": "build-test-archive-c / Build test archive (c)",
+      "started_at": "2026-10-01T08:28:50Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285248886"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:32:33Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285241868,
+      "name": "Analyze (python)",
+      "started_at": "2026-10-01T08:28:48Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443266/job/110285241868"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:43:11Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285241831,
+      "name": "Analyze (rust)",
+      "started_at": "2026-10-01T08:28:48Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443266/job/110285241831"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:33:01Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285241702,
+      "name": "Analyze (javascript-typescript)",
+      "started_at": "2026-10-01T08:28:48Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443266/job/110285241702"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:28:43Z",
+      "conclusion": "skipped",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285227469,
+      "name": "Workflow promotion preflight",
+      "started_at": "2026-10-01T08:28:44Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285227469"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:28:43Z",
+      "conclusion": "skipped",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285227185,
+      "name": "Frontend unit gates",
+      "started_at": "2026-10-01T08:28:44Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285227185"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:36:08Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285225522,
+      "name": "build-test-archive-a / Build test archive (a)",
+      "started_at": "2026-10-01T08:28:45Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285225522"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:39:00Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285225405,
+      "name": "Lint (fmt, clippy, WASM check)",
+      "started_at": "2026-10-01T08:28:46Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285225405"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:41:30Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285225370,
+      "name": "Native Skia tests",
+      "started_at": "2026-10-01T08:28:45Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285225370"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:38:25Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285225323,
+      "name": "Frontend package gates",
+      "started_at": "2026-10-01T08:28:46Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285225323"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:28:47Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285225233,
+      "name": "Resolve nextest target duration policy",
+      "started_at": "2026-10-01T08:28:45Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285225233"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:30:44Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285208114,
+      "name": "Skill router gate",
+      "started_at": "2026-10-01T08:28:42Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836442780/job/110285208114"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:32:31Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285105998,
+      "name": "adapter inter-diff",
+      "started_at": "2026-10-01T08:28:25Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443372/job/110285105998"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:28:46Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285093585,
+      "name": "CodeQL preflight",
+      "started_at": "2026-10-01T08:28:22Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443266/job/110285093585"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:36:30Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285054253,
+      "name": "Canvas visual diff",
+      "started_at": "2026-10-01T08:28:16Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836467524/job/110285054253"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:28:55Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285043147,
+      "name": "Proptest preflight",
+      "started_at": "2026-10-01T08:28:49Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443410/job/110285043147"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:28:43Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285020322,
+      "name": "CI preflight",
+      "started_at": "2026-10-01T08:28:09Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285020322"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:28:22Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110285013727,
+      "name": "adapter inter-diff preflight",
+      "started_at": "2026-10-01T08:28:09Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443372/job/110285013727"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:28:20Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110284994445,
+      "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+      "started_at": "2026-10-01T08:28:05Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443266/job/110284994445"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:28:13Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110284975397,
+      "name": "Render Diff preflight",
+      "started_at": "2026-10-01T08:28:04Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836467524/job/110284975397"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:27:52Z",
+      "conclusion": "skipped",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110284938669,
+      "name": "WASM Build",
+      "started_at": "2026-10-01T08:27:53Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110284938669"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:28:06Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110284938186,
+      "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+      "started_at": "2026-10-01T08:27:55Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443372/job/110284938186"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:28:11Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110284937774,
+      "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+      "started_at": "2026-10-01T08:27:56Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443410/job/110284937774"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:28:07Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110284937260,
+      "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+      "started_at": "2026-10-01T08:27:55Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110284937260"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:27:53Z",
+      "conclusion": "success",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110284885755,
+      "name": "cancel-stale-runs",
+      "started_at": "2026-10-01T08:27:46Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836442790/job/110284885755"
+    },
+    {
+      "app": "github-actions",
+      "completed_at": "2026-10-01T08:27:41Z",
+      "conclusion": "skipped",
+      "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+      "id": 110284874571,
+      "name": "cancel-stale-runs",
+      "started_at": "2026-10-01T08:27:42Z",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36836438247/job/110284874571"
+    }
+  ],
+  "pr_status_check_rollup": [
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:27:41Z",
+      "conclusion": "SKIPPED",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836438247/job/110284874571",
+      "name": "cancel-stale-runs",
+      "startedAt": "2026-10-01T08:27:42Z",
+      "status": "COMPLETED",
+      "workflowName": "Cancel stale PR runs"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:28:06Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443372/job/110284938186",
+      "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+      "startedAt": "2026-10-01T08:27:55Z",
+      "status": "COMPLETED",
+      "workflowName": "Adapter inter-diff"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:28:07Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110284937260",
+      "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+      "startedAt": "2026-10-01T08:27:55Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:27:53Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836442790/job/110284885755",
+      "name": "cancel-stale-runs",
+      "startedAt": "2026-10-01T08:27:46Z",
+      "status": "COMPLETED",
+      "workflowName": "Cancel stale PR runs"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:28:20Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443266/job/110284994445",
+      "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+      "startedAt": "2026-10-01T08:28:05Z",
+      "status": "COMPLETED",
+      "workflowName": "CodeQL"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:28:11Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443410/job/110284937774",
+      "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+      "startedAt": "2026-10-01T08:27:56Z",
+      "status": "COMPLETED",
+      "workflowName": "Proptest roundtrip"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:30:44Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836442780/job/110285208114",
+      "name": "Skill router gate",
+      "startedAt": "2026-10-01T08:28:42Z",
+      "status": "COMPLETED",
+      "workflowName": "Skill router gate"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:27:52Z",
+      "conclusion": "SKIPPED",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110284938669",
+      "name": "WASM Build",
+      "startedAt": "2026-10-01T08:27:53Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:28:22Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443372/job/110285013727",
+      "name": "adapter inter-diff preflight",
+      "startedAt": "2026-10-01T08:28:09Z",
+      "status": "COMPLETED",
+      "workflowName": "Adapter inter-diff"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:28:46Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443266/job/110285093585",
+      "name": "CodeQL preflight",
+      "startedAt": "2026-10-01T08:28:22Z",
+      "status": "COMPLETED",
+      "workflowName": "CodeQL"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:28:55Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443410/job/110285043147",
+      "name": "Proptest preflight",
+      "startedAt": "2026-10-01T08:28:49Z",
+      "status": "COMPLETED",
+      "workflowName": "Proptest roundtrip"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:32:31Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443372/job/110285105998",
+      "name": "adapter inter-diff",
+      "startedAt": "2026-10-01T08:28:25Z",
+      "status": "COMPLETED",
+      "workflowName": "Adapter inter-diff"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:28:43Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285020322",
+      "name": "CI preflight",
+      "startedAt": "2026-10-01T08:28:09Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:33:01Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443266/job/110285241702",
+      "name": "Analyze (javascript-typescript)",
+      "startedAt": "2026-10-01T08:28:48Z",
+      "status": "COMPLETED",
+      "workflowName": "CodeQL"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:33:45Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443410/job/110285289710",
+      "name": "prop roundtrip",
+      "startedAt": "2026-10-01T08:28:57Z",
+      "status": "COMPLETED",
+      "workflowName": "Proptest roundtrip"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:32:33Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443266/job/110285241868",
+      "name": "Analyze (python)",
+      "startedAt": "2026-10-01T08:28:48Z",
+      "status": "COMPLETED",
+      "workflowName": "CodeQL"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:43:11Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443266/job/110285241831",
+      "name": "Analyze (rust)",
+      "startedAt": "2026-10-01T08:28:48Z",
+      "status": "COMPLETED",
+      "workflowName": "CodeQL"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:28:47Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285225233",
+      "name": "Resolve nextest target duration policy",
+      "startedAt": "2026-10-01T08:28:45Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:36:08Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285225522",
+      "name": "build-test-archive-a / Build test archive (a)",
+      "startedAt": "2026-10-01T08:28:45Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:39:00Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285225405",
+      "name": "Lint (fmt, clippy, WASM check)",
+      "startedAt": "2026-10-01T08:28:46Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:41:30Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285225370",
+      "name": "Native Skia tests",
+      "startedAt": "2026-10-01T08:28:45Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:28:43Z",
+      "conclusion": "SKIPPED",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285227185",
+      "name": "Frontend unit gates",
+      "startedAt": "2026-10-01T08:28:44Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:38:25Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285225323",
+      "name": "Frontend package gates",
+      "startedAt": "2026-10-01T08:28:46Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:28:43Z",
+      "conclusion": "SKIPPED",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285227469",
+      "name": "Workflow promotion preflight",
+      "startedAt": "2026-10-01T08:28:44Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:38:22Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285248946",
+      "name": "build-test-archive-b / Build test archive (b)",
+      "startedAt": "2026-10-01T08:28:50Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:37:03Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285248886",
+      "name": "build-test-archive-c / Build test archive (c)",
+      "startedAt": "2026-10-01T08:28:50Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:38:04Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285248945",
+      "name": "build-test-archive-d / Build test archive (d)",
+      "startedAt": "2026-10-01T08:28:50Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:39:30Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110287800744",
+      "name": "test-archive-a-shard-1 / Default-feature tests (Archive A)",
+      "startedAt": "2026-10-01T08:36:11Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:48:25Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110288574312",
+      "name": "test-archive-b-shard-1 / Default-feature tests (Archive B)",
+      "startedAt": "2026-10-01T08:38:24Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:41:35Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110288114448",
+      "name": "test-archive-c-shard-1 / Default-feature tests (Archive C)",
+      "startedAt": "2026-10-01T08:37:05Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:45:35Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110288469977",
+      "name": "test-archive-d-shard-1 / Default-feature tests (Archive D)",
+      "startedAt": "2026-10-01T08:38:06Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:48:33Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110292062066",
+      "name": "Build & Test",
+      "startedAt": "2026-10-01T08:48:27Z",
+      "status": "COMPLETED",
+      "workflowName": "CI"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-01T08:32:29Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/paldyn/HanPage/runs/110286493930",
+      "name": "CodeQL",
+      "startedAt": "2026-10-01T08:32:23Z",
+      "status": "COMPLETED",
+      "workflowName": ""
+    }
+  ],
+  "actual_jobs_by_run": {
+    "36836443266": [
+      {
+        "completed_at": "2026-10-01T08:28:20Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110284994445,
+        "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+        "run_attempt": 1,
+        "run_id": 36836443266,
+        "started_at": "2026-10-01T08:28:05Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Default to full verification",
+            "conclusion": "success"
+          },
+          {
+            "name": "Capture PR merge-tree evidence",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload PR merge-tree evidence",
+            "conclusion": "success"
+          },
+          {
+            "name": "Resolve trusted source base parent",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Checkout trusted verifier",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Evaluate exact PR workflow evidence",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Publish validated Archive B duration measurement",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Publish validated Archive C duration measurement",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Publish validated Archive D duration measurement",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Finalize reuse after validated evidence publication",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443266/job/110284994445"
+      },
+      {
+        "completed_at": "2026-10-01T08:28:46Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285093585,
+        "name": "CodeQL preflight",
+        "run_attempt": 1,
+        "run_id": 36836443266,
+        "started_at": "2026-10-01T08:28:22Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Detect review-only fast pass",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check out current-base merge tree inputs",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Verify current-base merge tree",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Finalize review-only fast pass",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check out trusted CodeQL impact classifier",
+            "conclusion": "success"
+          },
+          {
+            "name": "Collect CodeQL impact input",
+            "conclusion": "success"
+          },
+          {
+            "name": "Classify CodeQL impact",
+            "conclusion": "success"
+          },
+          {
+            "name": "Finalize CodeQL language selection",
+            "conclusion": "success"
+          },
+          {
+            "name": "Summarize CodeQL impact classification",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Check out trusted CodeQL impact classifier",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443266/job/110285093585"
+      },
+      {
+        "completed_at": "2026-10-01T08:33:01Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285241702,
+        "name": "Analyze (javascript-typescript)",
+        "run_attempt": 1,
+        "run_id": 36836443266,
+        "started_at": "2026-10-01T08:28:48Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Skip unselected language",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Initialize CodeQL (non-Rust)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Initialize CodeQL (Rust)",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Initialize CodeQL (Rust post-merge)",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Initialize CodeQL (Rust full scan)",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Perform CodeQL Analysis",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Perform CodeQL Analysis",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Initialize CodeQL (non-Rust)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443266/job/110285241702"
+      },
+      {
+        "completed_at": "2026-10-01T08:43:11Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285241831,
+        "name": "Analyze (rust)",
+        "run_attempt": 1,
+        "run_id": 36836443266,
+        "started_at": "2026-10-01T08:28:48Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Skip unselected language",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Initialize CodeQL (non-Rust)",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Initialize CodeQL (Rust)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Initialize CodeQL (Rust post-merge)",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Initialize CodeQL (Rust full scan)",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "success"
+          },
+          {
+            "name": "Perform CodeQL Analysis",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Perform CodeQL Analysis",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Initialize CodeQL (Rust)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443266/job/110285241831"
+      },
+      {
+        "completed_at": "2026-10-01T08:32:33Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285241868,
+        "name": "Analyze (python)",
+        "run_attempt": 1,
+        "run_id": 36836443266,
+        "started_at": "2026-10-01T08:28:48Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Skip unselected language",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Initialize CodeQL (non-Rust)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Initialize CodeQL (Rust)",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Initialize CodeQL (Rust post-merge)",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Initialize CodeQL (Rust full scan)",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Perform CodeQL Analysis",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Perform CodeQL Analysis",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Initialize CodeQL (non-Rust)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443266/job/110285241868"
+      }
+    ],
+    "36836443372": [
+      {
+        "completed_at": "2026-10-01T08:28:06Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110284938186,
+        "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+        "run_attempt": 1,
+        "run_id": 36836443372,
+        "started_at": "2026-10-01T08:27:55Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Default to full verification",
+            "conclusion": "success"
+          },
+          {
+            "name": "Capture PR merge-tree evidence",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload PR merge-tree evidence",
+            "conclusion": "success"
+          },
+          {
+            "name": "Resolve trusted source base parent",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Checkout trusted verifier",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Evaluate exact PR workflow evidence",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Publish validated Archive B duration measurement",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Publish validated Archive C duration measurement",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Publish validated Archive D duration measurement",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Finalize reuse after validated evidence publication",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443372/job/110284938186"
+      },
+      {
+        "completed_at": "2026-10-01T08:28:22Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285013727,
+        "name": "adapter inter-diff preflight",
+        "run_attempt": 1,
+        "run_id": 36836443372,
+        "started_at": "2026-10-01T08:28:09Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Classify review-only or trusted trailing review tail",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check out current-base merge tree inputs",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Verify current-base merge tree",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Finalize adapter impact",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443372/job/110285013727"
+      },
+      {
+        "completed_at": "2026-10-01T08:32:31Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285105998,
+        "name": "adapter inter-diff",
+        "run_attempt": 1,
+        "run_id": 36836443372,
+        "started_at": "2026-10-01T08:28:25Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "success"
+          },
+          {
+            "name": "Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check adapter-diff runner contract",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check adapter-diff harness",
+            "conclusion": "success"
+          },
+          {
+            "name": "Discover adapters (honest skip)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Prepare derived Rust test suites",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run adapter inter-diff case",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443372/job/110285105998"
+      }
+    ],
+    "36836443410": [
+      {
+        "completed_at": "2026-10-01T08:28:11Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110284937774,
+        "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+        "run_attempt": 1,
+        "run_id": 36836443410,
+        "started_at": "2026-10-01T08:27:56Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Default to full verification",
+            "conclusion": "success"
+          },
+          {
+            "name": "Capture PR merge-tree evidence",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload PR merge-tree evidence",
+            "conclusion": "success"
+          },
+          {
+            "name": "Resolve trusted source base parent",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Checkout trusted verifier",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Evaluate exact PR workflow evidence",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Publish validated Archive B duration measurement",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Publish validated Archive C duration measurement",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Publish validated Archive D duration measurement",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Finalize reuse after validated evidence publication",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443410/job/110284937774"
+      },
+      {
+        "completed_at": "2026-10-01T08:28:55Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285043147,
+        "name": "Proptest preflight",
+        "run_attempt": 1,
+        "run_id": 36836443410,
+        "started_at": "2026-10-01T08:28:49Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Detect review-only or trusted trailing review tail",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check out current-base merge tree inputs",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Verify current-base merge tree",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Finalize fast pass",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443410/job/110285043147"
+      },
+      {
+        "completed_at": "2026-10-01T08:33:45Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285289710,
+        "name": "prop roundtrip",
+        "run_attempt": 1,
+        "run_id": 36836443410,
+        "started_at": "2026-10-01T08:28:57Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "success"
+          },
+          {
+            "name": "Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check property runner contract",
+            "conclusion": "success"
+          },
+          {
+            "name": "Prepare derived Rust test suites",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run property roundtrip cases",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443410/job/110285289710"
+      }
+    ],
+    "36836442780": [
+      {
+        "completed_at": "2026-10-01T08:30:44Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285208114,
+        "name": "Skill router gate",
+        "run_attempt": 1,
+        "run_id": 36836442780,
+        "started_at": "2026-10-01T08:28:42Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Set up Python 3.12",
+            "conclusion": "success"
+          },
+          {
+            "name": "Gate new skill (3×)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Route unit tests",
+            "conclusion": "success"
+          },
+          {
+            "name": "Skill-router gate tests",
+            "conclusion": "success"
+          },
+          {
+            "name": "Catalog route tests",
+            "conclusion": "success"
+          },
+          {
+            "name": "Author-skill unit tests",
+            "conclusion": "success"
+          },
+          {
+            "name": "Catalog sync",
+            "conclusion": "success"
+          },
+          {
+            "name": "Probe unit tests",
+            "conclusion": "success"
+          },
+          {
+            "name": "Precommit path tests",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Set up Python 3.12",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836442780/job/110285208114"
+      }
+    ],
+    "36836467524": [
+      {
+        "completed_at": "2026-10-01T08:28:13Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110284975397,
+        "name": "Render Diff preflight",
+        "run_attempt": 1,
+        "run_id": 36836467524,
+        "started_at": "2026-10-01T08:28:04Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Detect review-only fast pass",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check out current-base merge tree inputs",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Verify current-base merge tree",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Finalize review-only fast pass",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check out trusted CI impact classifier",
+            "conclusion": "success"
+          },
+          {
+            "name": "Collect Render Diff impact input",
+            "conclusion": "success"
+          },
+          {
+            "name": "Classify Render Diff impact",
+            "conclusion": "success"
+          },
+          {
+            "name": "Summarize Render Diff impact",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Check out trusted CI impact classifier",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836467524/job/110284975397"
+      },
+      {
+        "completed_at": "2026-10-01T08:36:30Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285054253,
+        "name": "Canvas visual diff",
+        "run_attempt": 1,
+        "run_id": 36836467524,
+        "started_at": "2026-10-01T08:28:16Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Render Diff identity PR # base ",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install PDF raster tools",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install wasm-pack",
+            "conclusion": "success"
+          },
+          {
+            "name": "Restore cargo registry & build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build WASM package",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build native CLI for PDF report",
+            "conclusion": "success"
+          },
+          {
+            "name": "Save cargo registry & build cache",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Setup Node.js",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Studio dependencies",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Chromium",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check render diff script syntax",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run canvas visual diff and PDF report",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run selected CanvasKit readiness gate",
+            "conclusion": "success"
+          },
+          {
+            "name": "Add render diff summary",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload render diff artifacts",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Setup Node.js",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836467524/job/110285054253"
+      }
+    ],
+    "36836442790": [
+      {
+        "completed_at": "2026-10-01T08:27:53Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110284885755,
+        "name": "cancel-stale-runs",
+        "run_attempt": 1,
+        "run_id": 36836442790,
+        "started_at": "2026-10-01T08:27:46Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Force-cancel older pull-request runs for this PR",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836442790/job/110284885755"
+      }
+    ],
+    "36836438247": [
+      {
+        "completed_at": "2026-10-01T08:27:41Z",
+        "conclusion": "skipped",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110284874571,
+        "name": "cancel-stale-runs",
+        "run_attempt": 1,
+        "run_id": 36836438247,
+        "started_at": "2026-10-01T08:27:42Z",
+        "status": "completed",
+        "steps": [],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836438247/job/110284874571"
+      }
+    ],
+    "36836443303": [
+      {
+        "completed_at": "2026-10-01T08:28:07Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110284937260,
+        "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:27:55Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Default to full verification",
+            "conclusion": "success"
+          },
+          {
+            "name": "Capture PR merge-tree evidence",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload PR merge-tree evidence",
+            "conclusion": "success"
+          },
+          {
+            "name": "Resolve trusted source base parent",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Checkout trusted verifier",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Evaluate exact PR workflow evidence",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Publish validated Archive B duration measurement",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Publish validated Archive C duration measurement",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Publish validated Archive D duration measurement",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Finalize reuse after validated evidence publication",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110284937260"
+      },
+      {
+        "completed_at": "2026-10-01T08:27:52Z",
+        "conclusion": "skipped",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110284938669,
+        "name": "WASM Build",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:27:53Z",
+        "status": "completed",
+        "steps": [],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110284938669"
+      },
+      {
+        "completed_at": "2026-10-01T08:28:43Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285020322,
+        "name": "CI preflight",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:28:09Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Select test profile policy",
+            "conclusion": "success"
+          },
+          {
+            "name": "Detect review-only fast pass",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check out current-base merge tree inputs",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Verify current-base merge tree",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Finalize review-only fast pass",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check out trusted CI impact classifier",
+            "conclusion": "success"
+          },
+          {
+            "name": "Collect CI impact input",
+            "conclusion": "success"
+          },
+          {
+            "name": "Classify CI impact",
+            "conclusion": "success"
+          },
+          {
+            "name": "Summarize CI impact classification",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Check out trusted CI impact classifier",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285020322"
+      },
+      {
+        "completed_at": "2026-10-01T08:28:47Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285225233,
+        "name": "Resolve nextest target duration policy",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:28:45Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run set -euo pipefail",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285225233"
+      },
+      {
+        "completed_at": "2026-10-01T08:38:25Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285225323,
+        "name": "Frontend package gates",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:28:46Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install wasm-pack",
+            "conclusion": "success"
+          },
+          {
+            "name": "Restore frontend WASM cargo cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build fresh WASM package for frontend gates",
+            "conclusion": "success"
+          },
+          {
+            "name": "Set up Node.js",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install frontend package dependencies",
+            "conclusion": "success"
+          },
+          {
+            "name": "Verify WASM bindings and editor embed contract",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run editor package tests when declared",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run shared and extension service worker tests",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run Chrome extension options UI tests",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run Studio unit tests",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install headless Chrome",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run undo depth measurement gate (#5769)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run Studio responsive toolbar gate (#6118,",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build Studio",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build browser extensions",
+            "conclusion": "success"
+          },
+          {
+            "name": "Verify extension distributions",
+            "conclusion": "success"
+          },
+          {
+            "name": "Compile VS Code extension",
+            "conclusion": "success"
+          },
+          {
+            "name": "Verify VS Code webview outline keyboard contract",
+            "conclusion": "success"
+          },
+          {
+            "name": "Verify font asset contracts",
+            "conclusion": "success"
+          },
+          {
+            "name": "Save frontend WASM cargo cache",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Post Set up Node.js",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285225323"
+      },
+      {
+        "completed_at": "2026-10-01T08:41:30Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285225370,
+        "name": "Native Skia tests",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:28:45Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Free disk space (remove unused pre-installed toolchains)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "success"
+          },
+          {
+            "name": "Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install native Skia runtime packages",
+            "conclusion": "success"
+          },
+          {
+            "name": "Prepare derived Rust test suites",
+            "conclusion": "success"
+          },
+          {
+            "name": "Native Skia tests",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285225370"
+      },
+      {
+        "completed_at": "2026-10-01T08:39:00Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285225405,
+        "name": "Lint (fmt, clippy, WASM check)",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:28:46Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "success"
+          },
+          {
+            "name": "Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Prepare derived Rust test suites",
+            "conclusion": "success"
+          },
+          {
+            "name": "Format check",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate CI impact classifier",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate Rust test suite manifest",
+            "conclusion": "success"
+          },
+          {
+            "name": "Test internal Rust crates",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate LLM verifier tool contracts",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate Render Diff trigger policy",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate canvaskit-parity batch map",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate workflow contracts",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate adoption spine contract",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate planner templates",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate agent org contract",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate agent frame contract",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate external reality check contract",
+            "conclusion": "success"
+          },
+          {
+            "name": "Clippy",
+            "conclusion": "success"
+          },
+          {
+            "name": "Clippy (WASM32)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check workspace members (FFI bindings, tools)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Agent preflight (failure-path sweep + undeclared-command detection)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check WASM target",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285225405"
+      },
+      {
+        "completed_at": "2026-10-01T08:36:08Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285225522,
+        "name": "build-test-archive-a / Build test archive (a)",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:28:45Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate test archive policy",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Free disk space (remove unused pre-installed toolchains)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install cargo-nextest",
+            "conclusion": "success"
+          },
+          {
+            "name": "Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Inspect disk space after Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Summarize test archive policy",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build default-feature test archive",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload test archive",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload archive expected count",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285225522"
+      },
+      {
+        "completed_at": "2026-10-01T08:28:43Z",
+        "conclusion": "skipped",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285227185,
+        "name": "Frontend unit gates",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:28:44Z",
+        "status": "completed",
+        "steps": [],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285227185"
+      },
+      {
+        "completed_at": "2026-10-01T08:28:43Z",
+        "conclusion": "skipped",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285227469,
+        "name": "Workflow promotion preflight",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:28:44Z",
+        "status": "completed",
+        "steps": [],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285227469"
+      },
+      {
+        "completed_at": "2026-10-01T08:37:03Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285248886,
+        "name": "build-test-archive-c / Build test archive (c)",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:28:50Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate test archive policy",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Free disk space (remove unused pre-installed toolchains)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install cargo-nextest",
+            "conclusion": "success"
+          },
+          {
+            "name": "Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Inspect disk space after Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Summarize test archive policy",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build default-feature test archive",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload test archive",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload archive expected count",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285248886"
+      },
+      {
+        "completed_at": "2026-10-01T08:38:04Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285248945,
+        "name": "build-test-archive-d / Build test archive (d)",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:28:50Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate test archive policy",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Free disk space (remove unused pre-installed toolchains)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install cargo-nextest",
+            "conclusion": "success"
+          },
+          {
+            "name": "Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Inspect disk space after Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Summarize test archive policy",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build default-feature test archive",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload test archive",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload archive expected count",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285248945"
+      },
+      {
+        "completed_at": "2026-10-01T08:38:22Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110285248946,
+        "name": "build-test-archive-b / Build test archive (b)",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:28:50Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate test archive policy",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Free disk space (remove unused pre-installed toolchains)",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install cargo-nextest",
+            "conclusion": "success"
+          },
+          {
+            "name": "Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Inspect disk space after Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Summarize test archive policy",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build default-feature test archive",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload test archive",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload archive expected count",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Rust build cache",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110285248946"
+      },
+      {
+        "completed_at": "2026-10-01T08:39:30Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110287800744,
+        "name": "test-archive-a-shard-1 / Default-feature tests (Archive A)",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:36:11Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install cargo-nextest",
+            "conclusion": "success"
+          },
+          {
+            "name": "Download shared test archive",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run Archive A",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload Archive A count",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload upstream PR B/C/D target durations",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Upload devel B/C/D target durations",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110287800744"
+      },
+      {
+        "completed_at": "2026-10-01T08:41:35Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110288114448,
+        "name": "test-archive-c-shard-1 / Default-feature tests (Archive C)",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:37:05Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install cargo-nextest",
+            "conclusion": "success"
+          },
+          {
+            "name": "Download shared test archive",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run Archive C",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload Archive C count",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload upstream PR B/C/D target durations",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Upload devel B/C/D target durations",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110288114448"
+      },
+      {
+        "completed_at": "2026-10-01T08:45:35Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110288469977,
+        "name": "test-archive-d-shard-1 / Default-feature tests (Archive D)",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:38:06Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install cargo-nextest",
+            "conclusion": "success"
+          },
+          {
+            "name": "Download shared test archive",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run Archive D",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload Archive D count",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload upstream PR B/C/D target durations",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Upload devel B/C/D target durations",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110288469977"
+      },
+      {
+        "completed_at": "2026-10-01T08:48:25Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110288574312,
+        "name": "test-archive-b-shard-1 / Default-feature tests (Archive B)",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:38:24Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install cargo-nextest",
+            "conclusion": "success"
+          },
+          {
+            "name": "Download shared test archive",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run Archive B",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload Archive B count",
+            "conclusion": "success"
+          },
+          {
+            "name": "Upload upstream PR B/C/D target durations",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Upload devel B/C/D target durations",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110288574312"
+      },
+      {
+        "completed_at": "2026-10-01T08:48:33Z",
+        "conclusion": "success",
+        "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+        "id": 110292062066,
+        "name": "Build & Test",
+        "run_attempt": 1,
+        "run_id": 36836443303,
+        "started_at": "2026-10-01T08:48:27Z",
+        "status": "completed",
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success"
+          },
+          {
+            "name": "Download archive A expected count",
+            "conclusion": "success"
+          },
+          {
+            "name": "Download archive B expected count",
+            "conclusion": "success"
+          },
+          {
+            "name": "Download archive C expected count",
+            "conclusion": "success"
+          },
+          {
+            "name": "Download archive D expected count",
+            "conclusion": "success"
+          },
+          {
+            "name": "Download shard counts",
+            "conclusion": "success"
+          },
+          {
+            "name": "Verify archive shard totals",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check Build & Test worker results",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success"
+          }
+        ],
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36836443303/job/110292062066"
+      }
+    ]
+  },
+  "observed_execution_results": {
+    "frontend": {
+      "job_id": 110285225323,
+      "checkout_sha": "f36a4e5fd6da6ef0f520bdd066d7b61a6c669001",
+      "responsive": {
+        "passed": 2666,
+        "failed": 0
+      },
+      "studio_unit": {
+        "test_count": 1832,
+        "passed": 1830
+      },
+      "fresh_wasm_step": "success",
+      "required_frontend_steps": "success"
+    },
+    "adapter": {
+      "job_id": 110285105998,
+      "checkout_sha": "f36a4e5fd6da6ef0f520bdd066d7b61a6c669001",
+      "present_adapters": [
+        "svg",
+        "null",
+        "trace",
+        "png",
+        "skia"
+      ],
+      "skipped_adapters": [],
+      "adapter_pairs": 26,
+      "test_count": 7,
+      "passed": 7,
+      "failed": 0
+    },
+    "proptest": {
+      "job_id": 110285289710,
+      "actual_case_step": "Run property roundtrip cases",
+      "step_conclusion": "success"
+    },
+    "default_feature_archives": {
+      "by_archive": [
+        {
+          "archive": "A",
+          "job_id": 110287800744,
+          "passed": 3873,
+          "skipped": 13,
+          "failed": 0,
+          "test_seconds": 78.176
+        },
+        {
+          "archive": "B",
+          "job_id": 110288574312,
+          "passed": 2072,
+          "skipped": 5,
+          "failed": 0,
+          "test_seconds": 457.651
+        },
+        {
+          "archive": "C",
+          "job_id": 110288114448,
+          "passed": 2102,
+          "skipped": 22,
+          "failed": 0,
+          "test_seconds": 149.779
+        },
+        {
+          "archive": "D",
+          "job_id": 110288469977,
+          "passed": 2036,
+          "skipped": 10,
+          "failed": 0,
+          "test_seconds": 367.2
+        }
+      ],
+      "passed": 10083,
+      "skipped": 50,
+      "failed": 0,
+      "scope_note": "Actual GitHub CI default-feature Archive A/B/C/D execution counts. These are kept separate from the previously recorded local release-test total of 10,276."
+    }
+  },
+  "normal_job_skip_reasons": [
+    {
+      "name": "WASM Build",
+      "source_path": ".github/workflows/ci.yml",
+      "source_line": 1906,
+      "reason": "CI event is pull_request; standalone WASM Build is limited to workflow_dispatch or v* tag. Frontend package gates separately built fresh WASM successfully."
+    },
+    {
+      "name": "Frontend unit gates",
+      "source_path": ".github/workflows/ci.yml",
+      "source_line": 1318,
+      "reason": "Preflight selected package lane rather than unit lane; completed Frontend package gates included Studio unit tests and broader package/browser/build checks."
+    },
+    {
+      "name": "Workflow promotion preflight",
+      "source_path": ".github/workflows/ci.yml",
+      "source_line": 1575,
+      "reason": "Guard requires same-repository devel -> main PR. PR #111 is codex/upstream-sync-20261001 -> devel."
+    },
+    {
+      "name": "cancel-stale-runs (pull_request_target)",
+      "source_path": ".github/workflows/cancel-stale-pr-runs.yml",
+      "reason": "Same-repository PR uses pull_request path. pull_request_target job is restricted to fork PRs, avoiding duplicate cancellation."
+    }
+  ],
+  "ghas_final": {
+    "app": "github-advanced-security",
+    "conclusion": "success",
+    "details_url": "https://github.com/paldyn/HanPage/runs/110286493930",
+    "head_sha": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+    "id": 110286493930,
+    "name": "CodeQL",
+    "output": {
+      "annotations_count": 0,
+      "annotations_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110286493930/annotations",
+      "summary": "[View all branch alerts](/paldyn/HanPage/security/code-scanning?query=pr%3A111+tool%3ACodeQL+is%3Aopen).",
+      "text": null,
+      "title": "No new alerts in code changed by this pull request"
+    },
+    "status": "completed"
+  },
+  "ghas_intermediate_note": "An earlier neutral check temporarily reported the Rust configuration missing while Rust analysis was in progress; after Rust analysis completed this same GHAS check became success with title 'No new alerts in code changed by this pull request'.",
+  "classic_commit_status": {
+    "state": "pending",
+    "statuses": [],
+    "total_count": 0
+  },
+  "classic_status_interpretation": "No classic commit-status contexts exist (total_count=0). The endpoint's default state=pending is not an outstanding status context; actual PR/commit checks are all complete and successful or normally skipped.",
+  "render_diff_artifact_validation": {
+    "workflow_run_id": 36836467524,
+    "source_of_artifact_validation": "Parent/root report, separate from this agent's metadata audit",
+    "canvas_cases_passed": 3,
+    "direct_pdf_cases_passed": 3,
+    "readiness_cases_passed": 8,
+    "captures": 16,
+    "representative_pngs_directly_viewed": 5,
+    "limitations": "Report-only warnings (4), DPI differences, and business compatibility PDF missing text are recorded separately; direct PDF preserved text. Gate pass is not Hancom fidelity or resolution of all semantic missing-text behavior."
+  },
+  "ungenerated_workflow_limitations": {
+    "gym": "No automatic Gym run was generated, and workflow registration/dispatch lookup returned HTTP404 because the workflow is absent on default main. Exact 22-module local PR contracts produced 2,124 PASS/1 skip; no full Gym benchmark or GitHub Gym CI success is claimed."
+  },
+  "validation_commands": [
+    "gh pr view 111 --repo paldyn/HanPage --json number,url,state,mergedAt,headRefOid,headRefName,baseRefOid,baseRefName,mergeable,mergeStateStatus,statusCheckRollup",
+    "gh api 'repos/paldyn/HanPage/actions/runs?head_sha=f9f2e47bf43d87fff7e1faabcdac361c7091be12&per_page=100'",
+    "gh api 'repos/paldyn/HanPage/commits/f9f2e47bf43d87fff7e1faabcdac361c7091be12/check-runs?per_page=100'",
+    "gh api repos/paldyn/HanPage/commits/f9f2e47bf43d87fff7e1faabcdac361c7091be12/status",
+    "gh api 'repos/paldyn/HanPage/actions/runs/<run_id>/jobs?per_page=100'",
+    "gh api repos/paldyn/HanPage/actions/jobs/<job_id>/logs",
+    "gh api repos/paldyn/HanPage/check-runs/110286493930",
+    "gh api repos/paldyn/HanPage/git/commits/f36a4e5fd6da6ef0f520bdd066d7b61a6c669001",
+    "gh api repos/paldyn/HanPage/git/commits/f9f2e47bf43d87fff7e1faabcdac361c7091be12"
+  ],
+  "urls": {
+    "pull_request": "https://github.com/paldyn/HanPage/pull/111",
+    "ci": "https://github.com/paldyn/HanPage/actions/runs/36836443303",
+    "codeql": "https://github.com/paldyn/HanPage/actions/runs/36836443266",
+    "render_diff": "https://github.com/paldyn/HanPage/actions/runs/36836467524",
+    "adapter": "https://github.com/paldyn/HanPage/actions/runs/36836443372",
+    "proptest": "https://github.com/paldyn/HanPage/actions/runs/36836443410",
+    "skill_router": "https://github.com/paldyn/HanPage/actions/runs/36836442780",
+    "ghas": "https://github.com/paldyn/HanPage/runs/110286493930",
+    "synthetic_merge": "https://github.com/paldyn/HanPage/commit/f36a4e5fd6da6ef0f520bdd066d7b61a6c669001"
+  },
+  "final_merge_precondition": "Parent independently re-confirmed the exact head/base and PR-rollup/manual-Render scope before the authorized merge. This audit agent performed no merge.",
+  "post_audit_parent_report": {
+    "state": "MERGED",
+    "merge_sha": "b57d9ae5e77bf3f10f76ced17e40dc7c47673930",
+    "merged_at": "2026-10-01T08:50:48Z",
+    "evidence_source": "Parent/root reported actual PR MERGED API verification after completing its independent final gate.",
+    "audit_polling_stopped": true,
+    "post_merge_execution_scope": "Parent observes duration refresh only; no verification CI rerun."
+  }
+}

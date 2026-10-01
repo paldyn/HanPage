@@ -1,0 +1,11 @@
+{
+  "head": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+  "base": "cecaf1bbfec9a10778484d30ebb747280e7a02af",
+  "mergeable": "MERGEABLE",
+  "merge_state": "CLEAN",
+  "pr_rollup_success": 29,
+  "pr_rollup_skipped": 4,
+  "manual_render_jobs_success": 2,
+  "result": "PASS",
+  "count_scope_note": "Initial >=35 assertion for PR rollup failed because manual Render Diff two jobs are separate; corrected33 actualPRchecks+manualRender independently allverified before merge."
+}

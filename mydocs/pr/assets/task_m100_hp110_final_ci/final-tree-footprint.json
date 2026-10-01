@@ -1,0 +1,10 @@
+{
+  "head": "f9f2e47bf43d87fff7e1faabcdac361c7091be12",
+  "base": "cecaf1bbfec9a10778484d30ebb747280e7a02af",
+  "changed_files": 28104,
+  "insertions": 6895197,
+  "deletions": 161972,
+  "tracked_paths": 37475,
+  "comparison": "git diff --shortstat base head; git ls-tree -r --name-only head",
+  "rename_detection_note": "Exhaustive rename detection skipped by Git due to number of files; no claim of exhaustive rename pairing."
+}

@@ -2,7 +2,7 @@
 
 ## 승인과 고정 기준
 
-2026-10-01 사용자 “승인”으로 전체 검증·remote push·Open PR·최신 CI 뒤 merge를 승인받았다. primary의 별도 Desktop 변경은 사용자가 소유하며 통합 범위에서 제외했다. GitHub 댓글·수동 issue close·앱 릴리스는 별도 승인 대상이다. [리뷰](pr_111_review.md), [Task 계획](../plans/task_m100_hp110.md), [보고서](../report/task_m100_hp110_report.md)를 따른다.
+2026-10-01 사용자 “승인”으로 전체 검증·remote push·Open PR·최신 CI 뒤 merge를 승인받았다. primary의 별도 Desktop 변경은 사용자가 소유하며 통합 범위에서 제외했다. GitHub 댓글·수동 issue close·앱 릴리스는 별도 승인 대상이다. [리뷰](pr_111_review.md), [Task 계획](../../plans/task_m100_hp110.md), [보고서](../../report/task_m100_hp110_report.md)를 따른다.
 
 base cecaf1bbfec9a10778484d30ebb747280e7a02af; pinned upstream 02530b9ed567a44663edb26c65fb565c4a79f00d. isolated worktree는 /Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage이며 owned clean worktree다. shared primary와 target/pr-review는 삭제 대상이 아니다.
 
@@ -38,3 +38,7 @@ base cecaf1bbfec9a10778484d30ebb747280e7a02af; pinned upstream 02530b9ed567a4466
 로컬 초기 전체 nextest 실패 한 건은 원본 corpus 분류와 실제 hidden-positive 세 입력이 달랐기 때문이다. detector 변경이나 corpus 전체 skip 대신 경로·hash·전체 finding 보호로 분류했다. fixture/원본 XML/실제 출력은 커밋한 자료에 고정했다. full suite10,276 및 focused6 통과했다.
 
 CI가 실패하면 실제 실패 로그의 원인에 한정해 보정하고 최신 head 검사를 새로 확인한다. workflow/source 수정이면 관련 로컬 검증을 수행한다. 이미 merged한 tree를 되돌릴 필요가 생기면 최신 devel 기반 별도 branch/PR에서 실제 merge SHA에 git revert -m1을 적용하며 reset·force push·사용자 작업 삭제는 하지 않는다. rollback은 현재 통합 범위에 포함하지 않았다.
+
+## 처리 완료
+
+최종 PR head `f9f2e47bf43d87fff7e1faabcdac361c7091be12`는9299f56de의review/asset docs tail과f9f2e47bf의문구/영구증적경로보정을포함한다. 실제 merge SHA `b57d9ae5e77bf3f10f76ced17e40dc7c47673930`. 최신 CI/CodeQL/Render Diff gate를확인한뒤사용자승인범위에서병합했다. primary ff-only동기화·Desktop39변경보존·clean managedworktree apparchive는pinned task/workspace보호로거절돼유지했다. local/remote branch는primaryDesktopdirty때문에보존한다. [최종운영증적](../assets/task_m100_hp110_final_ci/artifact-map.json)과 [오늘할일](../../orders/20261001.md)을따른다. Duration갱신은근거부족보류를별도기록하고검증CI를재시작하지않았다. Linux SVG호환PDF문구누락/실제OSupdater/중복PR정리/main승격정책은남은별도범위다.
