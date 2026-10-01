@@ -267,3 +267,18 @@
   opacity: 0.7;
   cursor: progress;
 }
+
+/* 좁은 웹 화면에서도 설치 버튼과 원래 접근 이름을 유지하며 메뉴·토글 공간을 확보한다. */
+@media (max-width: 767px) {
+  #app-download-btn {
+    width: 24px;
+    flex: 0 0 24px;
+    padding: 0;
+    font-size: 0;
+  }
+
+  #app-download-btn::before {
+    content: '↓' / '';
+    font-size: 14px;
+  }
+}

@@ -45,6 +45,45 @@ async function primeTheme(page, skin = 'default', mode = 'light') {
   }, { selectedSkin: skin, selectedMode: mode });
 }
 
+// __canvasView가 노출된 뒤에도 시작 문서와 새 문서의 비동기 초기화가 겹칠 수 있다.
+// 실제 busy 시작/종료와 최종 입력 활성화를 기다려 준비 중인 toolbar에 실키를 보내지 않는다.
+async function prepareNewDocument(page) {
+  await page.evaluate(async () => {
+    const { busyDepth } = await import('/src/view/busy-cursor.ts');
+    const root = document.documentElement;
+    const setup = {
+      started: busyDepth() > 0 || root.classList.contains('rhwp-busy'),
+      ended: false,
+      depth: busyDepth,
+    };
+    const observer = new MutationObserver(records => {
+      // 시작과 종료가 같은 mutation 배치에 있어도 시작 신호를 놓치지 않는다.
+      setup.started ||= busyDepth() > 0 || root.classList.contains('rhwp-busy')
+        || records.some(record => record.oldValue?.split(/\s+/).includes('rhwp-busy'));
+      setup.ended ||= setup.started && busyDepth() === 0 && !root.classList.contains('rhwp-busy');
+    });
+    observer.observe(root, { attributes: true, attributeFilter: ['class'], attributeOldValue: true });
+    window.__responsiveDocumentSetup = { setup, observer };
+    window.__eventBus?.emit('create-new-document');
+  });
+  try {
+    await page.waitForFunction(() => {
+      const setup = window.__responsiveDocumentSetup?.setup;
+      const toolbar = document.getElementById('style-bar');
+      return setup?.started && setup.ended && setup.depth() === 0
+        && !document.documentElement.classList.contains('rhwp-busy')
+        && window.__wasm?.pageCount > 0 && window.__inputHandler?.isActive()
+        && toolbar?.getAttribute('aria-disabled') === 'false' && !toolbar.inert
+        && !document.getElementById('btn-style-overflow')?.disabled;
+    });
+  } finally {
+    await page.evaluate(() => {
+      window.__responsiveDocumentSetup?.observer.disconnect();
+      delete window.__responsiveDocumentSetup;
+    });
+  }
+}
+
 // 정착 후 표시·배치 계약만 검사한다. 연속 resize의 프레임 공백 검증과 구분한다 (#6187).
 function readRulerLayout() {
   const editor = document.getElementById('editor-area');
@@ -107,7 +146,7 @@ async function run() {
         try {
           await primeTheme(page, skin, theme);
           await loadApp(page, `/?lang=${locale}`);
-          await page.evaluate(() => window.__eventBus?.emit('create-new-document'));
+          await prepareNewDocument(page);
           const oneRow = locale === 'en' ? 828 : 808;
           const fullRow = locale === 'en' ? 982 : 962;
           // Ascending then descending catches stale state on both sides of each boundary.
@@ -187,7 +226,7 @@ async function run() {
     try {
       await primeTheme(page);
       await loadApp(page);
-      await page.evaluate(() => window.__eventBus?.emit('create-new-document'));
+      await prepareNewDocument(page);
       await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 1000)));
 
       const result = await page.evaluate(() => {
@@ -771,7 +810,7 @@ async function run() {
     try {
       await primeTheme(page);
       await loadApp(page);
-      await page.evaluate(() => window.__eventBus?.emit('create-new-document'));
+      await prepareNewDocument(page);
       await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 1000)));
       checkRulers(tc, await page.evaluate(readRulerLayout));
       const menuHidden = await page.evaluate(
@@ -871,7 +910,7 @@ async function run() {
     try {
       await primeTheme(page, skin, theme);
       await loadApp(page);
-      await page.evaluate(() => window.__eventBus?.emit('create-new-document'));
+      await prepareNewDocument(page);
       await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 400)));
 
       const result = await page.evaluate(async (expectedStyleMode) => {
