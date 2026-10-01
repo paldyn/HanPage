@@ -1,0 +1,76 @@
+{
+  "files": [
+    {
+      "path": "samples/re-03-latin-only-hancom.hwp",
+      "bytes": 9216,
+      "sha256": "52b8da3a7cd5625a5e9624aaa532be5faa29d9fc0fc96cc982109729d53cb09f",
+      "workingTreeGitBlobSHA1": "b55553422f96b5d2b5c2fd6ee1cf06bdd129f573",
+      "commitBlobs": {
+        "88317b1110432d37a61b08a1af3ed305dd56e9c0": "b55553422f96b5d2b5c2fd6ee1cf06bdd129f573",
+        "c38538745d7350efdf3ec9cd2ed64dda01848c66": "b55553422f96b5d2b5c2fd6ee1cf06bdd129f573",
+        "dc3f47079120c64a89565b927b2d516c3a5ff30f": "b55553422f96b5d2b5c2fd6ee1cf06bdd129f573",
+        "02530b9ed567a44663edb26c65fb565c4a79f00d": "b55553422f96b5d2b5c2fd6ee1cf06bdd129f573"
+      },
+      "matchesAllFourCommitBlobs": true
+    },
+    {
+      "path": "pdf/re-03-latin-only-hancom-2022.pdf",
+      "bytes": 11762,
+      "sha256": "c614ef7cc4dc55c8069a61f2c211c71a6a40b7144ad0555eae8700f53aa03400",
+      "workingTreeGitBlobSHA1": "7f36ddccacec34b2c902b01ed9a9e436052144f8",
+      "commitBlobs": {
+        "88317b1110432d37a61b08a1af3ed305dd56e9c0": "7f36ddccacec34b2c902b01ed9a9e436052144f8",
+        "c38538745d7350efdf3ec9cd2ed64dda01848c66": "7f36ddccacec34b2c902b01ed9a9e436052144f8",
+        "dc3f47079120c64a89565b927b2d516c3a5ff30f": "7f36ddccacec34b2c902b01ed9a9e436052144f8",
+        "02530b9ed567a44663edb26c65fb565c4a79f00d": "7f36ddccacec34b2c902b01ed9a9e436052144f8"
+      },
+      "matchesAllFourCommitBlobs": true
+    },
+    {
+      "path": "samples/biz_plan.hwp",
+      "bytes": 33792,
+      "sha256": "8b786d6824622afae2220b203beeef6e5592157e1896fea055ebc602817113c1",
+      "workingTreeGitBlobSHA1": "279664c364c95470835856dcbaa15d3030c7dad1",
+      "commitBlobs": {
+        "88317b1110432d37a61b08a1af3ed305dd56e9c0": "279664c364c95470835856dcbaa15d3030c7dad1",
+        "c38538745d7350efdf3ec9cd2ed64dda01848c66": "279664c364c95470835856dcbaa15d3030c7dad1",
+        "dc3f47079120c64a89565b927b2d516c3a5ff30f": "279664c364c95470835856dcbaa15d3030c7dad1",
+        "02530b9ed567a44663edb26c65fb565c4a79f00d": "279664c364c95470835856dcbaa15d3030c7dad1"
+      },
+      "matchesAllFourCommitBlobs": true
+    },
+    {
+      "path": "pdf/biz_plan-2022.pdf",
+      "bytes": 102541,
+      "sha256": "55869e93e63eb5b515bff388aed8769ad66ca17183d67832598df24d90dba0a2",
+      "workingTreeGitBlobSHA1": "200402a0c982d64695276a91f531c982555fb952",
+      "commitBlobs": {
+        "88317b1110432d37a61b08a1af3ed305dd56e9c0": "200402a0c982d64695276a91f531c982555fb952",
+        "c38538745d7350efdf3ec9cd2ed64dda01848c66": "200402a0c982d64695276a91f531c982555fb952",
+        "dc3f47079120c64a89565b927b2d516c3a5ff30f": "200402a0c982d64695276a91f531c982555fb952",
+        "02530b9ed567a44663edb26c65fb565c4a79f00d": "200402a0c982d64695276a91f531c982555fb952"
+      },
+      "matchesAllFourCommitBlobs": true
+    }
+  ],
+  "engineScope": "src/**,crates/**,Cargo.lock; upstream top-level Cargo.toml intentionally differs and is excluded from engine-source equality claim.",
+  "engineSourceTreeListingSHA256": {
+    "88317b1110432d37a61b08a1af3ed305dd56e9c0": "54f5a9cf80661cfe6a4aaa433812ed1d7ba340dcf3739e87040af331f1798753",
+    "c38538745d7350efdf3ec9cd2ed64dda01848c66": "54f5a9cf80661cfe6a4aaa433812ed1d7ba340dcf3739e87040af331f1798753",
+    "dc3f47079120c64a89565b927b2d516c3a5ff30f": "54f5a9cf80661cfe6a4aaa433812ed1d7ba340dcf3739e87040af331f1798753",
+    "02530b9ed567a44663edb26c65fb565c4a79f00d": "54f5a9cf80661cfe6a4aaa433812ed1d7ba340dcf3739e87040af331f1798753"
+  },
+  "allFourEngineSourceSnapshotsByteIdentical": true,
+  "engineWorkingTreeVerifiedTrackedFiles": 1324,
+  "engineWorkingTreeBlobMismatches": [],
+  "engineAndRootCargoManifestTreeListingSHA256": {
+    "88317b1110432d37a61b08a1af3ed305dd56e9c0": "fe66db17e771db071d71f2606f29562f915c1ee2597bfadc99c799ca01440165",
+    "c38538745d7350efdf3ec9cd2ed64dda01848c66": "fe66db17e771db071d71f2606f29562f915c1ee2597bfadc99c799ca01440165",
+    "dc3f47079120c64a89565b927b2d516c3a5ff30f": "fe66db17e771db071d71f2606f29562f915c1ee2597bfadc99c799ca01440165",
+    "02530b9ed567a44663edb26c65fb565c4a79f00d": "067ad91f75f5d33cf44cce007f9557adc484cc8b75bb748ae2bfaab85d982346"
+  },
+  "allFourEngineAndRootCargoManifestSnapshotsByteIdentical": false,
+  "upstreamDifferenceInExpandedBuildManifestScope": [
+    "Cargo.toml"
+  ]
+}

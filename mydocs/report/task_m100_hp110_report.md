@@ -1,11 +1,11 @@
-# Task #110 — upstream 통합 후보 검증 기록
+# Task #110 — upstream 통합 제출 검증 기록
 
 - 이슈: [HanPage #110](https://github.com/paldyn/HanPage/issues/110)
 - 계획: [task_m100_hp110](../plans/task_m100_hp110.md)
 - 브랜치: `codex/upstream-sync-20261001`
 - 기존 HanPage: `cecaf1bbfec9a10778484d30ebb747280e7a02af`
 - 가져온 upstream/devel: `02530b9ed567a44663edb26c65fb565c4a79f00d`
-- 상태: 로컬 통합 후보 및 focused·브라우저 검증 완료. 2026-10-01 사용자 "승인" 뒤 전체 Rust 게이트를 완료했다. remote push·Open PR·최신 CI 확인 뒤 승인된 merge를 진행한다.
+- 기록 성격: [PR #111](https://github.com/paldyn/HanPage/pull/111)에 제출한 source·입력·로컬 검증의 이력이다. 병합 이후 확정되는 SHA·CI·issue·정리 상태는 [오늘할일](../orders/20261001.md)과 PR에서 확인한다. 2026-10-01 사용자 "승인"으로 전체 검증·push·Open PR·최신 CI 통과 뒤 merge를 승인받았다.
 
 ## 통합과 기능 겹침
 
@@ -25,7 +25,7 @@ Rust 엔진 `src/`, `crates/`, `Cargo.lock`의 upstream 대비 diff는 0이다. 
 
 ## 실행한 검증
 
-명령 로그는 ignored `output/pr-review/hp110/logs/`에 보존한다. 아래 결과는 실제 실행한 범위만 뜻한다.
+명령 로그는 실행 때 ignored `output/pr-review/hp110/logs/`에 기록했다. 영구 증적은 mydocs/pr/assets의 검증 JSON·manifest·이미지로 보존하며 unused 실행 산출물은 종료 시 정리한다. 아래 결과는 실제 실행한 범위만 뜻한다.
 
 | 검사 | 결과 / 증거 |
 | --- | --- |
@@ -58,23 +58,23 @@ Chrome에서 Tauri 명령·이벤트는 대역을 사용했다. 실제 WASM·Can
 
 기존 main에는 CI Controller가 아직 없어 상태 부재 시 consumer가 전체 검사로 fallback한다. 향후 devel→main 릴리스에는 upstream 전용 promotion repository 제한을 HanPage에 맞추는 별도 작업이 필요하다.
 
-전체 snapshot의 thin pack 추정은 2,895,192,237바이트(2.696 GiB)로 단일 push 상한 2 GiB를 넘는다. 소스·fixture, mydocs, PDF의 중간 커밋으로 나누고 각 pack을 측정한 뒤 같은 통합 branch를 순차 push한다. 최종 tree는 하나의 통합 후보로 PR에 제출한다.
+전체 snapshot의 thin pack 추정은 2,895,192,237바이트(2.696 GiB)로 단일 push 상한 2 GiB를 넘는다. 소스·fixture, mydocs, PDF의 중간 커밋으로 나누고 각 pack을 측정한 뒤 같은 통합 branch를 순차 push했다. 최종 tree는 하나의 통합 후보로 PR에 제출했다. 실제 순차 push 네 건은 모두 성공했다.
 
 첫 소스 커밋 `b6f4318dc8c8c50cdb0897887f72b3e59684dee8`의 실제 thin pack은 337,339,571바이트(0.314 GiB)로 상한 이하다. HanPage 이식 파일의 upstream 대비 `git diff --check`는 통과했다. 전체 imported tree에는 upstream의 CRLF fixture 등 기존 whitespace 경고가 있으며, 이 통합에서 원본 fixture를 일괄 수정하지 않았다.
 
 PDF 커밋 `3790cb0d7e35554a64e76af47b9c6e1be00d2d42`의 앞 커밋 대비 thin pack도 688,631,403바이트(0.641 GiB)로 상한 이하다.
 
-문서 커밋 `48404b29594806b38a3a70a2b6abc3b697a83989`의 pack은 1,110,233,641바이트(1.034 GiB), upstream 추적 기록 보완 `33386f1c09f65e6adb9462e5177acf6bbce7d911`은 982,379바이트, CI 커밋 `39a68841cce40c348cf95be77fc5d3fe876c5308`은 1,375,812바이트다. 모두 단일 push 상한 이하다. 사용자 승인을 받았으며 전체 로컬 게이트가 끝나면 각 커밋을 순서대로 push한다.
+문서 커밋 `48404b29594806b38a3a70a2b6abc3b697a83989`의 pack은 1,110,233,641바이트(1.034 GiB), upstream 추적 기록 보완 `33386f1c09f65e6adb9462e5177acf6bbce7d911`은 982,379바이트, CI 커밋 `39a68841cce40c348cf95be77fc5d3fe876c5308`은 1,375,812바이트다. 모두 단일 push 상한 이하다. 사용자 승인을 받았으며 전체 로컬 게이트를 완료한 뒤 각 커밋을 순서대로 push했다.
 
-최종 경로 대조: upstream 37,300경로 전부 후보에 존재하고, HanPage 추가 113경로를 포함해 37,413경로다. 원본에서 이미 추적하던 ignore 대상 `.log` 143경로는 정확한 upstream 목록만 명시 staging하여 보존했다. 이번 로컬 검증 로그는 ignored output에 있다.
+초기 ownership audit(39a68841 source)의 경로 대조: upstream 37,300경로 전부 후보에 존재하고, HanPage 추가 113경로를 포함해 37,413경로다. 원본에서 이미 추적하던 ignore 대상 `.log` 143경로는 정확한 upstream 목록만 명시 staging하여 보존했다. 이번 로컬 검증 로그는 ignored output에 있다.
 
-## 승인 및 남은 후속
+## 제출 시점의 승인과 처리 계획
 
 - [Internal Task PR Approval](../manual/codex/docs_and_git_workflow.md#internal-task-pr-approval)에 따라 focused·browser 결과 공유 뒤 2026-10-01 사용자 "승인"으로 전체 Rust lint/회귀와 remote push·Open PR 생성·최신 CI 통과 뒤 merge를 승인받았다.
-- 최종 head에서 필수 로컬 게이트 및 GitHub CI를 확인한 뒤 사용자가 요청한 merge를 수행한다.
+- 제출 시점의 처리 계획은 최종 head 로컬 게이트·GitHub CI 확인 뒤 merge다. 이후 확정된 상태는 오늘할일·PR에서 확인한다.
 - Dependabot 29개 중 26개에 upstream에서 이미 수용한 범위가 있다. #52/#55/#58은 Desktop workflow 변경도 있어 전부 대체된 것은 아니다. #56 Tauri·#30 cross-env는 Desktop 별도 범위다. 중복 PR의 close는 이 작업에서 실행하지 않았다.
 
-승인 뒤 primary 작업공간에 별도 Desktop 아이콘·설정 변경이 생겼으므로 최종 통합 커밋은 `88317b1110432d37a61b08a1af3ed305dd56e9c0` 기준의 격리 worktree에서 기록한다. primary의 사용자 변경은 staging·되돌림 없이 보존한다. 검증 source와 격리 후보의 엔진·Studio·workflow blob 동일성을 최종 제출 전에 확인한다.
+승인 뒤 primary 작업공간에 별도 Desktop 아이콘·설정 변경이 생겼으므로 최종 통합 커밋은 `88317b1110432d37a61b08a1af3ed305dd56e9c0` 기준의 격리 worktree에서 기록한다. primary의 사용자 변경은 staging·되돌림 없이 보존한다. Rust 검증 source와 격리 후보의 엔진·fixture·lockfile blob 동일성을 확인했다. 이후 OPEN PR의 Pages mirror와 Studio CSS/E2E 보정은 해당 변경 검증을 별도로 수행했다.
 
 ## 전체 회귀에서 확인한 코퍼스 분류 보정
 
@@ -98,3 +98,11 @@ PDF 커밋 `3790cb0d7e35554a64e76af47b9c6e1be00d2d42`의 앞 커밋 대비 thin 
 - 보정 직후 파생 suite를 준비하지 않은 focused 시도는 0건 실행·실패였다. 이 시도를 통과로 세지 않고 `--prepare` 뒤 focused·전체 검사를 다시 실행했다. 단독 manifest `--check`는 파생 정합 검사였으며 PR 비교 정책을 대체하지 않았다. pinned baseline 정책 검사는 별도로 유지했다.
 
 CI의 missing pinned commit 경로도 별도 임시 repo에서 실제 검증했다. original upstream commit이 없는 candidate blob:none repo에서 `--depth=1 --filter=blob:limit=64k`로 GitHub upstream을 fetch한 뒤 실제 helper identity 및 sparse prepare·manifest·unit-tier 검사가 통과했다. 추가 객체는 94,093,234바이트, 20.561초였고 Git trace의 후속 lazy fetch는 로컬 대조 원본에서만 수행됐다. [filtered fetch 검증 JSON](../pr/assets/task_m100_hp110_filtered_bootstrap.json)을 남겼고, 해당 fetch flag 및 Node 계약 31개가 통과한 `c38538745d7350efdf3ec9cd2ed64dda01848c66`에 적용했다.
+
+## OPEN PR에서 완료한 CI 계약·반응형 보정
+
+첫 CI run36832803599에서 Pages mirror와 HanPage 다운로드 CTA의 반응형 폭 계약이 실패했다. workflow/assertion을 유지하면서 실제 paths-ignore 목록을 mirror상수에 맞췄고 focused41/41·관련Node200/200이 통과했다. 작은 화면(<=767px)의 기존 다운로드 버튼을24px 아이콘으로 표시해 메뉴8개/토글과 공존시키며 접근 이름·title·클릭과 >=768px full label은 유지했다. responsive local setup은 실제 busy시작/종료·활성 문서/입력을 기다린다. 원 assertion·timeout·viewport는 유지했다. 최종 `npm run e2e:responsive` 2,666 PASS/0 FAIL, 단위22/22·tsc PASS. [명령/source해시](../pr/assets/task_m100_hp110_responsive/responsive-download-final-results.json), [실제12조건과클릭](../pr/assets/task_m100_hp110_responsive/responsive-download-icon-ui-probe.json).
+
+Gym은 대형 diff의 path-filter 상한과 default main workflow 미등록으로 자동실행/dispatch가 없었다. 같은22개 unittest모듈을 실행해2,124 PASS/1skip/exit0을 확인했다. full benchmark와 구분한다. [CI계약 증적](../pr/assets/task_m100_hp110_ci_contracts.json).
+
+대표 Native SVG/한컴 PDF 두 문서p1을 physical96dpi로 실제 비교했다. Latin 공식 gate passed(2px99.81464%), Business p1은 실제 사용 font program/CDP와 좌표근거를 고정한 font_mismatch_exception(86.04917%)이다. 제목 glyph/weight·괘선 stroke 차이가 남으며 전체 한컴 fidelity 통과로 세지 않는다. [실제 결과](../pr/assets/task_m100_hp110_visual/validation-summary.json), [입력/출처해시](../pr/assets/task_m100_hp110_visual/committed-provenance.json), [영구 경로/해시](../pr/assets/task_m100_hp110_visual/artifact-map.json).

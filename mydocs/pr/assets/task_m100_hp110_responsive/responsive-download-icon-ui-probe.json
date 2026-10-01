@@ -1,0 +1,277 @@
+{
+  "browser": "existing Chrome 154",
+  "sourceChange": "menu-bar.css only",
+  "cases": [
+    {
+      "locale": "en",
+      "skin": "default",
+      "theme": "light",
+      "width": 600,
+      "measurement": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 24,
+        "buttonRight": 592,
+        "buttonVisible": true,
+        "fontSize": "0px",
+        "pseudoContent": "\"↓\" / \"\"",
+        "text": "데스크톱 앱 다운로드",
+        "title": "운영체제에 맞는 HanPage 데스크톱 앱을 내려받습니다",
+        "toggleRight": 542.9375,
+        "menuCount": 8,
+        "menuRows": 1,
+        "accessibleName": "데스크톱 앱 다운로드"
+      }
+    },
+    {
+      "locale": "en",
+      "skin": "default",
+      "theme": "dark",
+      "width": 600,
+      "measurement": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 24,
+        "buttonRight": 592,
+        "buttonVisible": true,
+        "fontSize": "0px",
+        "pseudoContent": "\"↓\" / \"\"",
+        "text": "데스크톱 앱 다운로드",
+        "title": "운영체제에 맞는 HanPage 데스크톱 앱을 내려받습니다",
+        "toggleRight": 542.9375,
+        "menuCount": 8,
+        "menuRows": 1,
+        "accessibleName": "데스크톱 앱 다운로드"
+      }
+    },
+    {
+      "locale": "en",
+      "skin": "flat",
+      "theme": "light",
+      "width": 600,
+      "measurement": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 24,
+        "buttonRight": 592,
+        "buttonVisible": true,
+        "fontSize": "0px",
+        "pseudoContent": "\"↓\" / \"\"",
+        "text": "데스크톱 앱 다운로드",
+        "title": "운영체제에 맞는 HanPage 데스크톱 앱을 내려받습니다",
+        "toggleRight": 542.9375,
+        "menuCount": 8,
+        "menuRows": 1,
+        "accessibleName": "데스크톱 앱 다운로드"
+      }
+    },
+    {
+      "locale": "en",
+      "skin": "flat",
+      "theme": "dark",
+      "width": 600,
+      "measurement": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 24,
+        "buttonRight": 592,
+        "buttonVisible": true,
+        "fontSize": "0px",
+        "pseudoContent": "\"↓\" / \"\"",
+        "text": "데스크톱 앱 다운로드",
+        "title": "운영체제에 맞는 HanPage 데스크톱 앱을 내려받습니다",
+        "toggleRight": 542.9375,
+        "menuCount": 8,
+        "menuRows": 1,
+        "accessibleName": "데스크톱 앱 다운로드"
+      }
+    },
+    {
+      "locale": "en",
+      "skin": "oldschool",
+      "theme": "light",
+      "width": 600,
+      "measurement": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 24,
+        "buttonRight": 592,
+        "buttonVisible": true,
+        "fontSize": "0px",
+        "pseudoContent": "\"↓\" / \"\"",
+        "text": "데스크톱 앱 다운로드",
+        "title": "운영체제에 맞는 HanPage 데스크톱 앱을 내려받습니다",
+        "toggleRight": 531.140625,
+        "menuCount": 8,
+        "menuRows": 1,
+        "accessibleName": "데스크톱 앱 다운로드"
+      }
+    },
+    {
+      "locale": "en",
+      "skin": "oldschool",
+      "theme": "dark",
+      "width": 600,
+      "measurement": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 24,
+        "buttonRight": 592,
+        "buttonVisible": true,
+        "fontSize": "0px",
+        "pseudoContent": "\"↓\" / \"\"",
+        "text": "데스크톱 앱 다운로드",
+        "title": "운영체제에 맞는 HanPage 데스크톱 앱을 내려받습니다",
+        "toggleRight": 531.140625,
+        "menuCount": 8,
+        "menuRows": 1,
+        "accessibleName": "데스크톱 앱 다운로드"
+      }
+    },
+    {
+      "locale": "ko",
+      "skin": "default",
+      "theme": "light",
+      "width": 480,
+      "measurement": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 24,
+        "buttonRight": 472,
+        "buttonVisible": true,
+        "fontSize": "0px",
+        "pseudoContent": "\"↓\" / \"\"",
+        "text": "데스크톱 앱 다운로드",
+        "title": "운영체제에 맞는 HanPage 데스크톱 앱을 내려받습니다",
+        "toggleRight": 438.75,
+        "menuCount": 8,
+        "menuRows": 1,
+        "accessibleName": "데스크톱 앱 다운로드"
+      }
+    },
+    {
+      "locale": "ko",
+      "skin": "default",
+      "theme": "light",
+      "width": 500,
+      "measurement": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 24,
+        "buttonRight": 492,
+        "buttonVisible": true,
+        "fontSize": "0px",
+        "pseudoContent": "\"↓\" / \"\"",
+        "text": "데스크톱 앱 다운로드",
+        "title": "운영체제에 맞는 HanPage 데스크톱 앱을 내려받습니다",
+        "toggleRight": 448.75,
+        "menuCount": 8,
+        "menuRows": 1,
+        "accessibleName": "데스크톱 앱 다운로드"
+      }
+    },
+    {
+      "locale": "ko",
+      "skin": "default",
+      "theme": "light",
+      "width": 520,
+      "measurement": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 24,
+        "buttonRight": 512,
+        "buttonVisible": true,
+        "fontSize": "0px",
+        "pseudoContent": "\"↓\" / \"\"",
+        "text": "데스크톱 앱 다운로드",
+        "title": "운영체제에 맞는 HanPage 데스크톱 앱을 내려받습니다",
+        "toggleRight": 458.75,
+        "menuCount": 8,
+        "menuRows": 1,
+        "accessibleName": "데스크톱 앱 다운로드"
+      }
+    },
+    {
+      "locale": "ko",
+      "skin": "default",
+      "theme": "light",
+      "width": 767,
+      "measurement": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 24,
+        "buttonRight": 759,
+        "buttonVisible": true,
+        "fontSize": "0px",
+        "pseudoContent": "\"↓\" / \"\"",
+        "text": "데스크톱 앱 다운로드",
+        "title": "운영체제에 맞는 HanPage 데스크톱 앱을 내려받습니다",
+        "toggleRight": 582.25,
+        "menuCount": 8,
+        "menuRows": 1,
+        "accessibleName": "데스크톱 앱 다운로드"
+      }
+    },
+    {
+      "locale": "ko",
+      "skin": "default",
+      "theme": "light",
+      "width": 768,
+      "measurement": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 134.4375,
+        "buttonRight": 760,
+        "buttonVisible": true,
+        "fontSize": "13px",
+        "pseudoContent": "none",
+        "text": "데스크톱 앱 다운로드",
+        "title": "운영체제에 맞는 HanPage 데스크톱 앱을 내려받습니다",
+        "toggleRight": 527.53125,
+        "menuCount": 8,
+        "menuRows": 1,
+        "accessibleName": "데스크톱 앱 다운로드"
+      }
+    },
+    {
+      "locale": "ko",
+      "skin": "default",
+      "theme": "light",
+      "width": 1280,
+      "measurement": {
+        "rootOverflow": 0,
+        "menuOverflow": 0,
+        "buttonWidth": 134.4375,
+        "buttonRight": 1272,
+        "buttonVisible": true,
+        "fontSize": "13px",
+        "pseudoContent": "none",
+        "text": "데스크톱 앱 다운로드",
+        "title": "운영체제에 맞는 HanPage 데스크톱 앱을 내려받습니다",
+        "toggleRight": 783.53125,
+        "menuCount": 8,
+        "menuRows": 1,
+        "accessibleName": "데스크톱 앱 다운로드"
+      }
+    }
+  ],
+  "clickProbe": {
+    "fetches": [
+      {
+        "url": "https://api.github.com/repos/paldyn/HanPage/releases/latest",
+        "accept": "application/vnd.github+json"
+      }
+    ],
+    "popups": [
+      {
+        "url": "https://example.invalid/hanpage-test-installer",
+        "target": "_blank",
+        "features": "noopener,noreferrer"
+      }
+    ],
+    "platform": "MacIntel",
+    "restoredText": "데스크톱 앱 다운로드",
+    "restoredBusy": ""
+  },
+  "networkNote": "Release request and popup mocked; no external download/navigation."
+}

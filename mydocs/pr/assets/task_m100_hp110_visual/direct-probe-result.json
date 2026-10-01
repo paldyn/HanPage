@@ -1,0 +1,17 @@
+{
+  "command": [
+    "target/pr-review/release-test/rhwp",
+    "export-pdf",
+    "samples/re-03-latin-only-hancom.hwp",
+    "-p",
+    "0",
+    "--backend",
+    "direct",
+    "--output",
+    "output/pr-review/hp110/representative-visual/direct-probe.pdf",
+    "--json"
+  ],
+  "exit": 1,
+  "stdout": "",
+  "stderr": "오류: PDF 변환 실패 - 렌더링 오류: direct PDF backend requires a build with the native-skia feature\n"
+}

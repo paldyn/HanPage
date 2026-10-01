@@ -241,7 +241,7 @@
     "mydocs/orders/20261001.md"
   ],
   "strategy": "upstream-tree-on-HanPage-history",
-  "integration_status": "approved local gates complete; remote push/Open PR/current-head CI/merge pending",
+  "integration_status": "submitted validation record; live merge/CI/cleanup status in PR and orders/20261001.md",
   "resolved_manual_conflicts": [
     {
       "path": ".github/workflows/deploy-pages.yml",
@@ -301,5 +301,21 @@
     "sha256": "4fd9103f51b63bda3bf3ca67c2ca828c685ed13281e2a9a4c6cd46daddeca5eb",
     "scope": "verified genuine hidden classifications; exact path/hash/finding guard; detectors unchanged; injection/unicode coverage preserved"
   },
-  "local_validation_commit": "c38538745d7350efdf3ec9cd2ed64dda01848c66"
+  "local_validation_commit": "c38538745d7350efdf3ec9cd2ed64dda01848c66",
+  "pull_request": {
+    "number": 111,
+    "url": "https://github.com/paldyn/HanPage/pull/111",
+    "author": "enxec",
+    "title": "최신 upstream 0.8.6 통합 및 HanPage Desktop 기능 보존",
+    "base": "devel"
+  },
+  "premerge_source_corrections": {
+    "pages_mirror": "befaca4650dc3b1611b4b654a3554adfb3f69eeb",
+    "responsive": "580a1e6f386052ad64bbfa3e8bef7887fb21a557",
+    "responsive_passed": 2666,
+    "responsive_failed": 0,
+    "node_contracts_passed": 200,
+    "gym_contracts_passed": 2124,
+    "gym_contracts_skipped": 1
+  }
 }

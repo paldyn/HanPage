@@ -1,0 +1,408 @@
+{
+  "readySetup": true,
+  "setupSourceSha256": "2f50a5c0d7ffa15b941911f5e25513c0d6bc5bb09b9be114fe0d333a5fb64158",
+  "outcome": "PASS original focus wait",
+  "states": [
+    {
+      "label": "loadApp returned",
+      "at": 6236.400000095367,
+      "focus": "",
+      "pageCount": 1,
+      "rootClass": "",
+      "inputActive": true,
+      "triggerDisabled": null,
+      "panelHidden": false,
+      "dialogs": [],
+      "events": [
+        {
+          "kind": "root-class",
+          "at": 5862.699999809265,
+          "className": "rhwp-busy"
+        },
+        {
+          "kind": "focusin",
+          "at": 6211.799999713898,
+          "id": "",
+          "tag": "TEXTAREA"
+        },
+        {
+          "kind": "root-class",
+          "at": 6213.400000095367,
+          "className": ""
+        }
+      ]
+    },
+    {
+      "label": "actual document setup returned",
+      "at": 6459.900000095367,
+      "focus": "",
+      "pageCount": 1,
+      "rootClass": "",
+      "inputActive": true,
+      "triggerDisabled": null,
+      "panelHidden": false,
+      "dialogs": [],
+      "events": [
+        {
+          "kind": "root-class",
+          "at": 5862.699999809265,
+          "className": "rhwp-busy"
+        },
+        {
+          "kind": "focusin",
+          "at": 6211.799999713898,
+          "id": "",
+          "tag": "TEXTAREA"
+        },
+        {
+          "kind": "root-class",
+          "at": 6213.400000095367,
+          "className": ""
+        },
+        {
+          "kind": "root-class",
+          "at": 6241.900000095367,
+          "className": "rhwp-busy"
+        },
+        {
+          "kind": "root-class",
+          "at": 6441.900000095367,
+          "className": ""
+        }
+      ]
+    },
+    {
+      "label": "focused trigger before ArrowDown",
+      "at": 6506.900000095367,
+      "focus": "btn-style-overflow",
+      "pageCount": 1,
+      "rootClass": "",
+      "inputActive": true,
+      "triggerDisabled": null,
+      "panelHidden": true,
+      "dialogs": [],
+      "events": [
+        {
+          "kind": "root-class",
+          "at": 5862.699999809265,
+          "className": "rhwp-busy"
+        },
+        {
+          "kind": "focusin",
+          "at": 6211.799999713898,
+          "id": "",
+          "tag": "TEXTAREA"
+        },
+        {
+          "kind": "root-class",
+          "at": 6213.400000095367,
+          "className": ""
+        },
+        {
+          "kind": "root-class",
+          "at": 6241.900000095367,
+          "className": "rhwp-busy"
+        },
+        {
+          "kind": "root-class",
+          "at": 6441.900000095367,
+          "className": ""
+        },
+        {
+          "kind": "focusin",
+          "at": 6505.400000095367,
+          "id": "btn-style-overflow",
+          "tag": "BUTTON"
+        }
+      ]
+    },
+    {
+      "label": "after ArrowDown",
+      "at": 6517,
+      "focus": "btn-style-overflow",
+      "pageCount": 1,
+      "rootClass": "",
+      "inputActive": true,
+      "triggerDisabled": null,
+      "panelHidden": false,
+      "dialogs": [],
+      "events": [
+        {
+          "kind": "root-class",
+          "at": 5862.699999809265,
+          "className": "rhwp-busy"
+        },
+        {
+          "kind": "focusin",
+          "at": 6211.799999713898,
+          "id": "",
+          "tag": "TEXTAREA"
+        },
+        {
+          "kind": "root-class",
+          "at": 6213.400000095367,
+          "className": ""
+        },
+        {
+          "kind": "root-class",
+          "at": 6241.900000095367,
+          "className": "rhwp-busy"
+        },
+        {
+          "kind": "root-class",
+          "at": 6441.900000095367,
+          "className": ""
+        },
+        {
+          "kind": "focusin",
+          "at": 6505.400000095367,
+          "id": "btn-style-overflow",
+          "tag": "BUTTON"
+        },
+        {
+          "kind": "keydown",
+          "at": 6512.699999809265,
+          "id": "btn-style-overflow",
+          "key": "ArrowDown",
+          "prevented": false
+        }
+      ]
+    },
+    {
+      "label": "original focus wait ended",
+      "at": 6526.199999809265,
+      "focus": "btn-align-left",
+      "pageCount": 1,
+      "rootClass": "",
+      "inputActive": true,
+      "triggerDisabled": null,
+      "panelHidden": false,
+      "dialogs": [],
+      "events": [
+        {
+          "kind": "root-class",
+          "at": 5862.699999809265,
+          "className": "rhwp-busy"
+        },
+        {
+          "kind": "focusin",
+          "at": 6211.799999713898,
+          "id": "",
+          "tag": "TEXTAREA"
+        },
+        {
+          "kind": "root-class",
+          "at": 6213.400000095367,
+          "className": ""
+        },
+        {
+          "kind": "root-class",
+          "at": 6241.900000095367,
+          "className": "rhwp-busy"
+        },
+        {
+          "kind": "root-class",
+          "at": 6441.900000095367,
+          "className": ""
+        },
+        {
+          "kind": "focusin",
+          "at": 6505.400000095367,
+          "id": "btn-style-overflow",
+          "tag": "BUTTON"
+        },
+        {
+          "kind": "keydown",
+          "at": 6512.699999809265,
+          "id": "btn-style-overflow",
+          "key": "ArrowDown",
+          "prevented": false
+        },
+        {
+          "kind": "focusin",
+          "at": 6524.699999809265,
+          "id": "btn-align-left",
+          "tag": "BUTTON"
+        }
+      ]
+    }
+  ],
+  "consoleMessages": [
+    {
+      "type": "debug",
+      "text": "[vite] connecting..."
+    },
+    {
+      "type": "log",
+      "text": "%c[rhwpDev]%c 개발자 도구 로드 — %crhwpDev.help()%c 영역 영역 사용 방법 점검 color:#2563eb;font-weight:bold color:inherit color:#059669;font-weight:bold;background:#f0fdf4;padding:1px 4px color:inherit"
+    },
+    {
+      "type": "log",
+      "text": "[FontLoader] OS 폰트 감지: Apple SD Gothic Neo, AppleMyungjo, AppleGothic"
+    },
+    {
+      "type": "debug",
+      "text": "[FontLoader][debug] CDN 후보: 함초롬돋움, 함초롬바탕"
+    },
+    {
+      "type": "log",
+      "text": "[FontLoader] 웹폰트 로드 시작: 2개 파일 (이미 요청함: 0개)"
+    },
+    {
+      "type": "debug",
+      "text": "[FontLoader][debug] CDN 로드 시작: 함초롬돋움 <- https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_four@1.0/HCRDotum.woff"
+    },
+    {
+      "type": "debug",
+      "text": "[FontLoader][debug] CDN 로드 시작: 함초롬바탕 <- https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2104@1.0/HANBatang.woff"
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected."
+    },
+    {
+      "type": "debug",
+      "text": "[FontLoader][debug] CDN 로드 성공: 함초롬돋움 <- https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_four@1.0/HCRDotum.woff"
+    },
+    {
+      "type": "debug",
+      "text": "[FontLoader][debug] CDN 로드 실패: 함초롬바탕 <- https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2104@1.0/HANBatang.woff Error: 폰트 로드 타임아웃(5000ms): https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2104@1.0/HANBatang.woff"
+    },
+    {
+      "type": "log",
+      "text": "[FontLoader] 폰트 로드 완료: 1개 성공, 1개 실패 (총 1개 파일 요청)"
+    },
+    {
+      "type": "log",
+      "text": "[WasmBridge] WASM 초기화 완료 (rhwp 0.8.6)"
+    },
+    {
+      "type": "log",
+      "text": "%c[rhwpDev]%c 개발자 도구 로드 — %crhwpDev.help()%c 영역 영역 사용 방법 점검 color:#2563eb;font-weight:bold color:inherit color:#059669;font-weight:bold;background:#f0fdf4;padding:1px 4px color:inherit"
+    },
+    {
+      "type": "log",
+      "text": "[WasmBridge] 새 문서 생성: 1페이지"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 1. 폰트 로딩 시작"
+    },
+    {
+      "type": "log",
+      "text": "[FontLoader] OS 폰트 감지: Apple SD Gothic Neo, AppleMyungjo, AppleGothic"
+    },
+    {
+      "type": "debug",
+      "text": "[FontLoader][debug] CDN 후보: 함초롬돋움, 함초롬바탕"
+    },
+    {
+      "type": "log",
+      "text": "[FontLoader] 웹폰트 로드 시작: 1개 파일 (이미 요청함: 1개)"
+    },
+    {
+      "type": "debug",
+      "text": "[FontLoader][debug] CDN 로드 시작: 함초롬바탕 <- https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2104@1.0/HANBatang.woff"
+    },
+    {
+      "type": "debug",
+      "text": "[FontLoader][debug] CDN 로드 성공: 함초롬바탕 <- https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2104@1.0/HANBatang.woff"
+    },
+    {
+      "type": "log",
+      "text": "[FontLoader] 폰트 로드 완료: 1개 성공, 0개 실패 (총 2개 파일 요청)"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 2. 폰트 로딩 완료"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 3. inputHandler deactivate"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 4. canvasView loadDocument"
+    },
+    {
+      "type": "log",
+      "text": "[CanvasView] 1/1페이지 로드, 총 높이: 806.0980219226407px"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 5. toolbar setEnabled"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 6. toolbar initFontDropdown + initStyleDropdown"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 7. 사전 검증 및 로컬 글꼴 확인"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 8. inputHandler activateWithCaretPosition"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 9. 완료"
+    },
+    {
+      "type": "log",
+      "text": "[WasmBridge] 새 문서 생성: 1페이지"
+    },
+    {
+      "type": "debug",
+      "text": "[autosave] draft deleted: 948aa652-a822-4847-9074-8f31284034c9 (document-replaced)"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 1. 폰트 로딩 시작"
+    },
+    {
+      "type": "log",
+      "text": "[FontLoader] OS 폰트 감지: Apple SD Gothic Neo, AppleMyungjo, AppleGothic"
+    },
+    {
+      "type": "debug",
+      "text": "[FontLoader][debug] CDN 후보: 함초롬돋움, 함초롬바탕"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 2. 폰트 로딩 완료"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 3. inputHandler deactivate"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 4. canvasView loadDocument"
+    },
+    {
+      "type": "log",
+      "text": "[CanvasView] 1/1페이지 로드, 총 높이: 806.0980219226407px"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 5. toolbar setEnabled"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 6. toolbar initFontDropdown + initStyleDropdown"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 7. 사전 검증 및 로컬 글꼴 확인"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 8. inputHandler activateWithCaretPosition"
+    },
+    {
+      "type": "log",
+      "text": "[initDoc] 9. 완료"
+    }
+  ]
+}
