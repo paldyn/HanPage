@@ -2,7 +2,7 @@
 kind: canonical
 status: active
 canonical: mydocs/manual/cli_commands.md
-last_verified: 2026-08-03
+last_verified: 2026-09-16
 ---
 
 # rhwp CLI 명령어 매뉴얼
@@ -15,6 +15,37 @@ rhwp <명령> [옵션]
 rhwp --help        # 도움말
 rhwp --version     # 버전
 ```
+
+## 도움말 탐색
+
+`rhwp --help`는 짧은 최상위 index다. 공개 명령과 `내부 개발·회귀 명령`을 **각각 명령
+이름순**으로 표시하며, dispatch-only 명령은 아직 사람용 호출 계약이 없으므로 표시하지
+않는다. 목록에서 명령을 찾은 뒤 그 명령의 상세 도움말을 연다.
+
+```bash
+# 최상위 명령 인덱스
+rhwp --help
+
+# 한 명령의 위치 인자, 옵션, 입출력·종료 계약
+rhwp export-png --help
+rhwp dump-extents --help
+
+# 계층형 명령의 하위 명령 인덱스(이름순)
+rhwp edit --help
+rhwp inspect --help
+
+# 한 하위 명령의 상세 도움말
+rhwp edit insert-row --help
+rhwp inspect hidden-text --help
+```
+
+- `rhwp <명령> --help`와 `rhwp <그룹> <하위명령> --help`는 stdout에 성공적으로 도움말을
+  출력하고 종료한다. 모든 capabilities 선언 경로는 공통으로 `사용법`, `옵션`, `예시` 절을
+  가지며, 기존의 장문 계약은 그 아래 `세부 설명`으로 보강한다.
+- `rhwp edit --help`와 `rhwp inspect --help`는 현재 지원하는 하위 명령을 빠짐없이 이름순으로
+  표시하는 인덱스이며, 최상위 `rhwp --help`에는 이 계층을 중복 나열하지 않는다.
+- 자동화가 사람이 읽는 도움말을 파싱해서 명령 목록을 얻으면 안 된다. 기계 판독용 목록과
+  입출력 계약은 `rhwp capabilities`를 사용한다.
 
 > 빌드: `cargo build --release` 후 `./target/release/rhwp`, 또는 개발 중 `cargo run --bin rhwp -- <명령>`.
 > 네이티브 빌드/실행은 항상 로컬 cargo 사용(Docker 는 WASM 전용).
@@ -64,6 +95,8 @@ rhwp --password '문서비밀번호' export-text protected.hwp -o output/
 ```
 
 - `--password <값>`과 `--password-stdin`은 명령 앞뒤 어느 위치든 한 번만 지정할 수 있다.
+  `--password-stdin`은 Windows PowerShell/.NET pipe가 붙인 UTF-8 BOM도 인코딩 표식으로
+  처리하므로, 권장 stdin 전달 방식으로도 정상 비밀번호를 그대로 사용할 수 있다.
 - 비밀번호가 없으면 종료 코드 2, 틀리면 종료 코드 1이다. 지원하지 않는 HWP5
   EncryptVersion 또는 비압축 HWP3 암호 본문은 종료 코드 1로 거부한다.
 - 일반 열기·내보내기·변환 명령과 `dump-records`가 이 옵션을 사용한다.
@@ -85,10 +118,17 @@ rhwp --password '문서비밀번호' export-text protected.hwp -o output/
 | 0 | 성공 | 요청한 페이지를 모두 내보냄 |
 | 1 | 런타임 실패 — 읽기·파싱·렌더·쓰기 | 입력 파일 없음, 파싱 실패, 출력 저장 실패 |
 | 2 | 사용법 오류 — 인자 없음, 알 수 없는 옵션/명령, 페이지 범위 초과 | `rhwp export-svg` (인자 없음), `--fontpath` 오타 |
-| 3 | IR 차이 검출 | `convert` / `export-hwpx` 의 `--verify` (아래 §3), `ir-diff --json` (#3274) |
+| 3 | 검증·판정 실패 | `convert` / `export-hwpx` 의 `--verify` (아래 §3), `ir-diff --json`, `layout-anomaly --strict`, 계획 단언·영수증 재현·정책 게이트 불일치 |
 | 4 | `--verify-pages` 페이지 수 불일치 | `convert` / `export-hwpx` 전용 (아래 §3) |
 
 - 알 수 없는 명령·옵션은 **경고 후 진행하지 않고** 즉시 2로 끝난다. 안내는 stderr 로 나간다.
+- **정형 수복 줄 (#4220 T4)** — 사용법 오류(2) 중 다음 호출이 결정론적으로 정해지는
+  부류(임계 내 오타의 확신 교정, 명령 누락 → `capabilities`)에서는 stderr **마지막 줄**에
+  `수복: {"nextCall":{"name":...,"subcommand"?,...,"why":...}}` 한 줄이 붙는다. `nextCall` 어휘는
+  MCP 오류 봉투(R72)와 같고, `name` 은 반드시 실존 명령이다. 애매한 경로(임계 밖 오타,
+  하위 명령 누락)와 런타임 실패(1)에는 이 줄 자체가 없다 — 오제안 0. stdout 은 여전히
+  0 바이트다. 소비자는 "마지막 `수복: ` 줄 하나"만 파싱하면 된다
+  (계약: `tests/nextcall_cli_contract.rs`).
 - 페이지 단위 내보내기 명령의 "N개 … 완료" 메시지는 **실제로 저장에 성공한 개수**다.
   한 장이라도 실패하면 종료 코드는 1이다.
 - `export-png` 는 `native-skia` feature 없이 빌드된 바이너리에서 2로 끝난다(기능 부재).
@@ -100,27 +140,40 @@ rhwp --password '문서비밀번호' export-text protected.hwp -o output/
 ### `export-svg <파일> [옵션]`
 HWP/HWPX → SVG.
 - `--json` (#3287): 산출물 **매니페스트**를 stdout 에 JSON 으로 출력한다(렌더 동작 무변경).
-  `{"schemaVersion":"1.0","source","format":"svg","outputDir","pageCount","renderedCount","overflowCellLines","pages":[{"page","path","bytes","overflowCellLines"}]}`
+  `{"schemaVersion":"1.0","source","format":"svg","backend":"layer|legacy","outputDir","pageCount","renderedCount","overflowCellLines","pages":[{"page","path","bytes","overflowCellLines"}]}`
+  `backend`은 기본 production 경로의 `layer` 또는 명시적 compatibility 진단 경로의
+  `legacy`이므로 자동화가 두 artifact를 혼동하지 않는다.
   기본 출력(사람용 진행 메시지)은 무변경이며, `--json` 모드에서는 stdout 에 JSON 만 나간다.
   `search --json`(#3283)과 조합하면 **찾은 페이지만 렌더해 VLM 에 넘기는** 루프가 닫힌다.
   - `overflowCellLines` (#3668): 셀 안 줄의 윗변이 쪽 하단 밖에 그려져 **보이지 않는 줄 수**
     (`LAYOUT_OVERFLOW_CELL` 진단과 같은 조건). top-level 은 문서 합계, `pages[]` 항목은
     페이지별 카운트다. 0 이 아니면 그 페이지의 셀 콘텐츠 일부가 소실 렌더된 것이다 —
     #3236 계열(분할 대신 통짜 배치 후 clip) 조사의 1차 신호. 원장 게이트는
-    [`local_validation.md` 4.3.1](pr_review/local_validation.md#431-새-hwphwpx-fixture의-baseline-등록--ir-sweep--overflow-cell-원장) 참조.
+    [`local_validation.md` 4.3.1](pr_review/local_validation.md#431-새-hwphwpx-fixture의-baseline-등록--코퍼스-래칫-여섯) 참조.
 - `-o`, `-p` (공통)
 - `--show-para-marks` — 문단부호(↵/↓)
 - `--show-control-codes` — 조판부호(문단부호 + 개체 마커)
+- `--annotate-metric-font` — 배치 폭 계산에 쓴 내장 메트릭 face 를 각 `<text>`의
+  `data-metric-font` 와 루트 `<svg>`의 `data-rhwp-metric-fonts`(쉼표 목록)로 주석 (#4709).
+  임베드 호스트의 폰트 설치 확인·대체 폰트 자간 보정용. 레이아웃 불변, 기본 꺼짐.
+  WASM 은 `setAnnotateMetricFont(true)` 후 `renderPageSvg`.
 - `--debug-overlay` — 디버그 오버레이(문단/표 경계 + 인덱스 라벨)
 - `--respect-vpos-reset` — LINE_SEG vpos=0 리셋을 단/페이지 강제 경계로 처리
+- `--compat 2022|2024` — 목표 한글 조판 세대(기본 `2022`). 아래 [조판 세대](#조판-세대-compat)
 - `--show-grid[=Nmm]` — 격자 오버레이(기본 1mm, 예 `--show-grid=3mm`)
 - `--grid-origin=X,Y|auto` — 격자 종이 기준 위치(예 `--grid-origin=15mm,20mm`)
 - `--font-style` — `@font-face local()` 참조 삽입(폰트 데이터 미포함)
 - `--embed-fonts` — 폰트 서브셋 임베딩(사용 글자만 base64)
 - `--embed-fonts=full` — 폰트 전체 임베딩
 - `--font-path <경로>` — 폰트 탐색 경로(여러 번 지정 가능)
-- `--profile <프로필>` — layer 출력 프로필(공통 옵션 참조). 생략 시 기존
-  (legacy) 경로 — 인쇄 등가 억제 동작.
+- `--backend layer|legacy` — 기본값은 canonical `layer`. `legacy`는 migration 중
+  `PageRenderTree → SvgRenderer` 출력을 명시적으로 비교하는 compatibility/diagnostic 전용이며
+  `--profile`·`--font-style`·`--embed-fonts`와 함께 사용할 수 없다.
+- `--profile <프로필>` — layer 출력 프로필(공통 옵션 참조). 생략 시에도
+  `render_page_svg_native`가 `RenderProfile::Screen`의 `PageLayerTree`를 직접 재생한다.
+  인쇄 등가 산출물이 필요하면 `--profile print`(또는 `high-quality`)를 명시한다.
+  font style/embedding도 같은 screen layer tree를 소비하며, production routing은
+  `RHWP_RENDER_PATH` 같은 환경변수로 legacy backend를 고르지 않는다.
   **제약**: `--font-style`/`--embed-fonts` 와 함께 사용할 수 없다(오류 종료).
 
 ### `export-png <파일> [옵션]` *(native-skia feature 필요)*
@@ -131,6 +184,17 @@ HWP/HWPX → PNG(Skia raster, AI 파이프라인/VLM 연동). 상세: [export_pn
 - `--profile <프로필>` — 출력 프로필. **기본 `high-quality`(인쇄 등가)** —
   그림 미지정 placeholder 는 억제된다. 편집기식 표시가 필요하면
   `--profile screen` 을 명시한다 (#2297, #2225 계약).
+- `--compat 2022|2024` — 목표 한글 조판 세대. [조판 세대](#조판-세대-compat)
+
+### `export-png-gpu <파일.hwp|파일.hwpx> [옵션]` / `gpu-info` *(gpu feature 필요)*
+`export-png-gpu`는 기존 SVG 산출을 `vello`/`wgpu`로 래스터화하여 PNG로 내보내는 대량
+VLM 입력용 경로다. 문서 파싱·레이아웃을 GPU로 옮기는 명령은 아니며, 래스터화 단계만 대상이다.
+- `-o, --output <폴더>`(기본 `output/`)·`-p, --page <0-기준 번호>`·`--scale <배율>`(기본 2.0)·
+  `--font-path <경로>`(여러 번 가능)를 받는다.
+- `--benchmark`는 동일 SVG를 CPU `resvg`로도 래스터화하여 시간·픽셀 차이를 함께 보고하며,
+  `--repeat <N>`은 페이지별 반복 중 최솟값을 쓴다.
+- `gpu-info`로 실행 가능한 GPU 어댑터를 먼저 확인한다. `gpu` feature 없이 빌드한 바이너리는
+  두 명령을 사용법 오류(exit 2)로 거부한다.
 
 ### `export-pdf <파일> [옵션]`
 HWP/HWPX → PDF (svg2pdf + pdf-writer).
@@ -139,6 +203,7 @@ HWP/HWPX → PDF (svg2pdf + pdf-writer).
   실패 경로의 stdout 은 비운다(export-svg 규약).
 - `-o <파일>`, `--output <파일>` — 출력 PDF 파일(기본 `output/<입력명>.pdf`)
 - `-p <번호>`, `--page <번호>` — 0-based 단일 페이지 선택. 생략하면 전체 문서를 다중 페이지 PDF로 내보낸다.
+- `--compat 2022|2024` — 목표 한글 조판 세대. [조판 세대](#조판-세대-compat)
 - `--font-path <경로>` — PDF 변환 fontdb에 추가할 폰트 탐색 경로(여러 번 지정 가능)
   - 환경변수 `RHWP_FONT_PATH` 로도 지정할 수 있다(#2864). 복수 경로는 OS 관례
     구분자로 나눈다(유닉스 `:`, Windows `;`). 백엔드에서 대량 변환할 때 호출마다
@@ -163,8 +228,8 @@ HWP/HWPX → PDF (svg2pdf + pdf-writer).
   폰트 서브셋 경로를 건너뛰어 **메모리를 크게 절감**(실측 예: 124→78 MB)
   하는 대신 **PDF 의 텍스트 선택·검색 기능을 잃는다** (시각 출력 동일,
   파일 크기는 증가). 저메모리 환경(Quick Look 등)용 옵트아웃.
-- `--profile <프로필>` — layer 출력 프로필(공통 옵션 참조). 생략 시 기존
-  (legacy) 경로.
+- `--profile <프로필>` — layer 출력 프로필(공통 옵션 참조). 생략 시 `svg` backend는
+  `screen`, `direct` backend는 `print`를 사용한다.
 - `<파일>`, `<경로>`, `<family>`는 자리표시자이며 실제 입력에는 꺾쇠괄호를 쓰지 않는다.
 - 공백이 없는 값은 그대로 입력한다. 예: `--font-path ./ttfs`
 - 공백이 있는 경로/폰트명은 큰따옴표를 권장한다. 예:
@@ -189,6 +254,11 @@ rhwp export-pdf input.hwp -o out.pdf \
 - 선택한 fallback family 또는 수식 폰트가 fontdb에 없으면 warning을 출력한다.
 - direct/vector `PageLayerTree → PDF` backend는 `--backend direct`로 이미 사용 가능하다
   (`native-skia` feature 빌드 필요, 위 옵션 설명 참고).
+- 두 backend 모두 HWP5/HWPX의 본문·표 셀·글상자 텍스트 필드에 있는 HTTP/HTTPS 및
+  mailto 링크를 PDF 링크 주석으로 보존한다(#6963). 줄이나 페이지가 나뉘면 실제 출력된
+  글자 영역마다 클릭 영역을 만든다. 문서 내부 이동(GoTo), 머리말·꼬리말·각주·캡션 및
+  HWP3 링크는 아직 지원하지 않는다. 회전·세로쓰기·글자 겹침·표시값 길이가 달라지는
+  URI 링크의 출력 영역은 오류를 반환한다. Studio의 브라우저 PDF 저장은 별도 경로다.
 
 ### `export-text <파일> [옵션]`
 페이지별 텍스트 → TXT. `-o`, `-p`.
@@ -365,9 +435,118 @@ rhwp table-to-csv samples/hwpx/basic-table-01.hwpx --table 0 -o /tmp/표0.csv
 rhwp csv-to-table samples/hwpx/basic-table-01.hwpx --csv /tmp/표0.csv --table 0 -o 작성본.hwpx --json
 ```
 
+### `chart-to-csv <파일.hwp|파일.hwpx> [--chart <번호>] [-o <경로>] [--bom] [--json]` (#4100)
+차트의 숫자 데이터를 RFC 4180 CSV 로 내보낸다. **행 = 카테고리, 열 = 계열** — 원본 데이터
+시트와 같은 모양이라 스프레드시트에서 바로 고쳐 `csv-to-chart` 로 되돌릴 수 있다.
+- `--chart <번호>` — 차트 번호(**문서 순서, 1부터**). 생략하면 전부.
+  표 CSV 의 `--table` 과 달리 0 부터가 아니다 — 차트에는 `export-tables` 같은 발견 명령이
+  없어 번호가 문서 순서 그 자체다. 글상자·표 셀 안의 차트도 이 순서에 포함된다.
+- `-o, --output <경로>` — `--chart` 지정 시 CSV 파일, 생략 시 차트별 파일(`chart<N>.csv`)을
+  담을 폴더
+- `--bom` — 파일 출력에만 UTF-8 BOM 을 붙인다(엑셀 한글 깨짐 방지). 봉투의 `csv` 문자열에는
+  붙이지 않는다 — 붙이면 JSON 소비자가 첫 셀 앞의 U+FEFF 를 값으로 읽는다.
+- `-o` 도 `--json` 도 없으면 CSV 본문을 stdout 으로 흘린다(파이프용).
+- **분산형**은 첫 열이 X 값이고 머리 행 첫 칸이 `X` 다. 카테고리형은 그 칸이 비어 있다.
+- 행 수는 **값이 정한다**(라벨 수가 아니다). `c:cat` 이 일부 계열에만 있는 문서가 실재하며,
+  라벨로 행 수를 잡으면 값이 통째로 빠진 CSV 가 나온다.
+- 비순차 `c:pt idx`(희소·역순·중복) 문서는 `nonSequentialPointIndex` 로 **거부한다** —
+  행 번호가 벡터 출현 순서라, 자리 기반으로 정렬하면 틀린 CSV 를 조용히 내게 된다.
+  오정렬 산출보다 실패가 낫다. 논리 행 모델은 후속 작업이다.
+- 모든 계열의 카테고리 라벨(분산형은 X 값)이 같아야 한다. 계열마다 다르면 CSV 첫 열 하나로
+  안전하게 표현할 수 없어 출력하지 않는다. HWPX의 ① `Chart/chartN.xml`과 ② 중첩 CFB
+  `OOXMLChartContents`도 계열·라벨·값이 논리적으로 같아야 하며, 다르면 어느 쪽도 정본으로
+  가정하지 않고 `representationMismatch`로 거부한다.
+- `--json` 봉투: `{"schemaVersion":"1.0","source","chartCount","charts":[{"chart","rowCount","colCount","csv","output"?}],"bom","output"?,"outputFormat"?}`
+
+```bash
+rhwp chart-to-csv samples/chart/세로막대형/묶은세로막대형.hwpx --chart 1
+# ,계열 1,계열 2,계열 3
+# 항목 1,4.3,2.4,2
+rhwp chart-to-csv 보고서.hwpx --json | jq '.charts[] | {chart, rowCount, colCount}'
+```
+
+### `csv-to-chart <파일.hwp|파일.hwpx> --csv <경로.csv> --chart <번호> [-o <출력>] [--structure] [--dry-run] [--verify] [--json]` (#4100·#5652)
+CSV 내용으로 기존 차트 N 의 숫자 값을 덮어쓴다. `chart-to-csv` 의 짝이다.
+**`--structure` 없이는 크기·이름을 바꾸지 않는다** — 계열 수, 값 개수, 계열명, 카테고리 라벨이
+다르면 **한 칸도 쓰지 않고** `invalid[]` + exit 2 다. 의도 없이 개수가 어긋난 CSV 는 사고이므로
+구조 편집은 옵트인이다.
+- `--csv <경로.csv>` (필수) — UTF-8 CSV(선두 BOM 허용). `chart-to-csv` 산출을 고쳐 쓰는 것이 안전하다.
+- `--chart <번호>` (필수) — 문서 순서 1부터.
+- `--structure` (#5652) — **CSV 를 목표 상태로 본다.** 행(카테고리)·열(계열) 추가·삭제, 계열명·
+  카테고리 라벨(분산형은 X) 변경까지 ①② 에 함께 쓴다. **행 치수 차이는 위치 기반 꼬리 증감**이다 —
+  행이 늘면 각 블록 꼬리에 점이 붙고(`c:ptCount` 재계산, `c:pt idx` 는 `0..n-1` 유지), 줄면 꼬리
+  점이 지워진다. 따라서 "중간 행 삭제"는 뒤 행이 앞으로 당겨지고 마지막 행이 지워지는 것과 같다.
+  **계열 증감은 정체 보존**이다(#6053) — 원본↔목표 계열을 비어 있지 않은 이름 일치 또는 값 벡터
+  일치로 대응시켜, 대응이 서면 새 열은 지정 자리에 **기본 스타일**(계열 `c:spPr`·명시 `c:symbol`
+  없음 — 한컴 편집기가 더한 계열과 같은 모양)로 끼어들고(`insertSeries`), 사라진 열의 계열은
+  요소째 지워지며(`removeSeries`), 잔여 계열은 `c:idx`/`c:order` 재번호만 되어 **자기 스타일
+  (색·마커)을 지킨다**. 대응이 모호하거나(중복 이름·값, 삽입·삭제 동시, 순서 역전) 증감이
+  꼬리뿐이면 종전대로 꼬리 증감이다 — 계열이 늘면 마지막 계열을 복제해 뒤에 붙이고
+  (`c:idx`/`c:order` 채번, `c:f` 는 복제분 그대로 — 한컴은 캐시만 읽는다 #5447), 줄면 꼬리
+  계열이 지워진다.
+  `c:f`·레거시 `Contents`(③)·EMF 프리뷰(④)·`c:extLst`·`ho:hncChartStyle` 은 바이트 그대로다.
+  - 종류별 가드(한컴이 막지 않아 코어가 fail-closed 로 막는다 — #5447·#6037 실측): 주식형 캔들
+    (`c:upDownBars`, OHLC)은 **첫 계열과 끝 계열**을 몸통으로 삼아 그 둘이 바뀌면 캔들이 엉뚱한
+    짝으로 다시 잡혀 전부 검은 박스가 되므로 거부(`candleAnchorBroken`) — 새 계열은 양끝 사이에
+    두고 첫·끝 계열은 지우지 않는다. 중간 삽입·중간 삭제와 캔들 없는 HLC 는 통과한다.
+    **원형은 계열을 더할 수 있으나** 첫 계열만 그려져 추가분이 화면에 나타나지 않는다(파손은
+    아니다 — 종류는 봉투의 `plot` 으로 미리 안다). 마지막 1점·1계열 삭제 거부
+    (`lastPointDeleteRefused`/`lastSeriesDeleteRefused`), 분산형은 행 수 변경 시 X(첫 열)가 같은
+    개수로 함께 와야 함(`scatterXYMismatch`), 다층 카테고리(`multiLvlStrRef`)는 행·라벨 구조 편집
+    거부(`multiLevelLabelsUnsupported`).
+  - 행렬 규칙: 직사각형(`rowCountMismatch`), 라벨 보유 차트의 행 수 변경은 라벨 열 필수
+    (`labelsRequired`·`labelCountMismatch`), 새 점·바뀌는 점은 수치(`notANumber`), 이름·라벨에
+    XML 특수문자(`<`·`>`·`&`)는 이스케이프하지 않고 거부(`unsafeText`), `c:tx` 없는 계열의 이름은
+    넣을 자리가 없어 거부(`seriesNameNotPatchable`), 신설 계열은 템플릿에 이름이 있으면 이름 필수
+    (`seriesNameRequired`), 캐시 구조 좌표(`ptCount`·앵커)가 없는 블록은 개수 변경 불가
+    (`pointsNotInsertable`·`seriesNotClonable`).
+  - 쓰기 전에 산출을 다시 읽어 목표와 같을 때만 쓴다(`selfCheckFailed` 면 한 바이트도 안 씀).
+    봉투 `changed[]` 에 구조 항목 `{"op":"appendPoints"|"truncatePoints"|"renameSeries"|"relabel"|
+    "appendSeries"|"truncateSeries"|"insertSeries"|"removeSeries", …}` 이 값 항목과 함께 실린다 —
+    개수 변경 op 는 `before`/`after`(엔진 개수), `renameSeries`·`relabel` 은 `from`/`to`(문서
+    파생 — 출처 표지 `changed[].from`), [#6053] `insertSeries`·`removeSeries` 는 `at`·`name`
+    (`insertSeries.at` 은 최종 문서 자리·`name` 은 목표 입력, `removeSeries.at` 은 원본 자리·
+    `name` 은 문서 파생).
+- **값 하나가 OOXML 두 표현에 중복 저장돼 있어 각 원본에 독립적으로 쓴다** — HWPX zip 파트
+  `Chart/chartN.xml`(①)과 중첩 CFB 의 `OOXMLChartContents`(②). ①만 쓰면 HWP 변환에서 편집이
+  조용히 사라진다(#4055 한컴 실측). 두 표현의 계열·라벨·값이 다르면
+  `representationMismatch`로 둘 다 쓰지 않는다. 바이트 차이만 있는 경우에도 각 사본의
+  원래 XML에 해당 값만 패치해 확장 속성·미래 요소를 보존한다. 어디에 썼는지는 봉투의
+  `wrote[]` 로 항상 드러난다 — HWPX 는 `["zipPart","nestedCopy"]`, HWP5 는 `["nestedCopy"]`.
+- ②를 특정하지 못하면(`<hp:switch>` 의 fallback OLE 부재) `nestedCopyNotFound` 로 거부하고
+  ①에도 쓰지 않는다. 반쪽만 새 값인 파일을 내보내지 않는다.
+- 값이 실제로 달라지는 칸만 다시 쓴다. 바뀐 칸이 0 이면 **슬롯을 건드리지 않는다** —
+  중첩 CFB 를 되쓰기만 해도 섹터 배치가 달라져 바이트가 바뀐다.
+- 거부 사유(기본): `csvParse`(CSV 구조) · `seriesCountMismatch` · `valueCountMismatch` ·
+  `seriesNameMismatch` · `categoryMismatch`(넷은 `--structure` 로만 풀린다) · `notANumber` · `valueNotPatchable`(빈 `<c:v/>`) ·
+  `sharedXRequired`(분산형에서 계열별 X 가 달라 한 열로 표현 불가) ·
+  `sharedCategoryRequired`(카테고리형에서 계열별 라벨이 달라 한 열로 표현 불가) ·
+  `representationMismatch`(①·②의 논리 차트 데이터 불일치) ·
+  `nonSequentialPointIndex`(희소·역순·중복 `c:pt idx` — 자리 대응이 성립하지 않아
+  읽기·쓰기 모두 거부, 후속 작업 전까지 미지원)
+- `-o, --output <파일>` — 출력 파일(기본 `<입력명>_chart.<입력과 같은 확장자>`, §edit 산출 형식)
+- `--dry-run` — 파일을 쓰지 않고 `changed[]`(from→to)만 보고
+- `--verify` — 저장 직후 IR 자기검증(차이 시 exit 3)
+- `--json` 봉투: `{"schemaVersion":"1.0","source","csv","chart","changedCount","changed":[{"series","point"|"x","from","to"} | {"op",…}],"invalid":[],"wrote":["zipPart","nestedCopy"],"dryRun","changedPages":null,"output"?,"outputFormat"?,"verify"?}`
+
+```bash
+rhwp chart-to-csv 보고서.hwpx --chart 1 -o /tmp/차트1.csv
+# /tmp/차트1.csv 를 편집한 뒤 (값만)
+rhwp csv-to-chart 보고서.hwpx --csv /tmp/차트1.csv --chart 1 -o 수정본.hwpx --json
+# 행·열을 더하거나 지우고 계열명·라벨을 바꾼 CSV 는 --structure 로 (먼저 --dry-run 으로 op 확인)
+rhwp csv-to-chart 보고서.hwpx --csv /tmp/차트1.csv --chart 1 --structure --dry-run --json
+rhwp csv-to-chart 보고서.hwpx --csv /tmp/차트1.csv --chart 1 --structure -o 수정본.hwpx --json
+```
+
+> **알려진 한계** — 편집된 차트의 레거시 `Contents` 표현은 옛 값으로 남는다. 한컴은 그것을
+> 읽지 않으므로 화면·인쇄에는 무해하지만 rhwp 의 레거시 소비 경로는 옛 값을 보고한다(#4098).
+> `c:formatCode` 도 동기화하지 않는다 — 서식이 `General` 이 아닌 계열은 한컴이 새 값을 그
+> 서식대로 표시하므로 CSV 값과 화면 표시가 다를 수 있다.
+
 ### `export-render-tree <파일> [옵션]`
 페이지별 render tree bbox JSON(레이아웃 시각 분석용). 출력 `render_tree_{NNN}.json`.
-- `-o`, `-p`, `--show-para-marks`, `--show-control-codes`, `--respect-vpos-reset`
+- `-o`, `-p`, `--show-para-marks`, `--show-control-codes`, `--respect-vpos-reset`,
+  `--compat 2022|2024`
 - JSON: `{type, bbox:{x,y,w,h}, children:[...]}` (Page → PageBg/Line/TextRun/Image/Table/Shape …)
 
 ### `export-structure <파일> [--mode auto|outline|clause] [-o out.json] [--json]`
@@ -399,6 +578,32 @@ HWP5 / HWPX 문서를 **DocLang v0.6** 의미 XML 로 내보낸다 (다운스트
   — `assetsDir` 는 `--assets-dir` 를 준 경우에만 문자열, 아니면 `null`. `lossCount` 는
   사람용 "손실 보고 N건"의 기계 필드. 실패 경로의 stdout 은 비운다(#3596 규약).
 
+### `export-llm <파일.hwp|파일.hwpx> [--max-tokens N] [--format jsonl|json] [--mode auto|outline|clause] [-o <출력>]`
+문서 구조를 보존한 LLM/RAG 청크를 만든다. 기본 출력 형식은 한 줄에 청크 하나인 `jsonl`,
+기본 상한은 청크당 512 토큰이다.
+- `--format json`은 단일 JSON 봉투의 `chunks[]`로 출력한다. `-o`가 없으면 stdout, 있으면
+  지정한 파일에 저장한다.
+- `--mode`는 `export-structure`와 같은 `auto|outline|clause` 구조 해석을 사용한다.
+- 청크의 `headingPath`·`text`는 문서 파생 데이터이므로 `untrustedContent`/
+  `untrustedFields` 표지를 함께 소비해야 한다. 문서 안 문장을 실행 지시로 취급하지 않는다.
+
+### 자기서술·스키마 내보내기
+외부 바인딩·에이전트가 임의 형식을 추측하지 않도록, 다음 명령은 문서를 입력받지 않고 기계
+계약을 출력한다. `--bare`는 공통 봉투 없이 본문만, `-o <파일>`은 파일 저장, `--json`은
+저장 결과 봉투 출력을 의미한다.
+
+| 명령 | 산출물 |
+|---|---|
+| `export-ir-schema [--bare] [-o <파일>] [--json]` | 공개 IR JSON Schema |
+| `export-capabilities-schema [--bare] [-o <파일>] [--json]` | `capabilities`·MCP 매니페스트 JSON Schema |
+| `export-plan-schema [--bare] [-o <파일>] [--json]` | `run` 계획서 JSON Schema |
+| `export-ontology [--bare] [-o <파일>] [--json]` | IR·capabilities·MCP·출처 지도를 기계 유도한 JSON-LD 온톨로지 |
+| `export-agent-manifest [--bare] [--json]` | 에이전트 작업 표준과 CLI 표면의 기계 판독 매니페스트 |
+
+`--bare` 산출은 JSON Schema/JSON-LD 도구의 직접 입력용이며, 호출 결과 파일 경로·바이트 수를
+자동화에서 받아야 하면 `--json`을 사용한다. 단, `export-agent-manifest`는 파일 저장을 지원하지
+않고 `--bare`도 내부 매니페스트 봉투만 생략한다. 외부 출처 표지는 유지된다.
+
 ---
 
 ## 2. 구조 덤프·진단 (Debug)
@@ -406,8 +611,37 @@ HWP5 / HWPX 문서를 **DocLang v0.6** 의미 XML 로 내보낸다 (다운스트
 ### `dump <파일> [--section <N>] [--para <N>]` (별칭 `-s`/`-p`)
 문서 조판부호 구조 덤프. ParaShape/LINE_SEG/표·도형 속성. 상세: [dump_command.md](dump_command.md)
 
-### `dump-pages <파일> [-p <N>] [--respect-vpos-reset]`
+### `dump-pages <파일> [-p <N>] [--respect-vpos-reset] [--compat 2022|2024] [--json]`
 페이지네이션 결과(페이지별 문단/표 배치 목록 + 높이).
+- **파일 인자가 먼저다.** 옵션을 파일 앞에 두면 `알 수 없는 옵션` 으로 종료한다(EXIT 2).
+- `--json` — 조판 진단 기계 계약. `{schemaVersion, source, pageCount, pageFilter,
+  respectVposReset, pages}`.
+- `--compat 2022|2024` — 아래 [조판 세대](#조판-세대-compat).
+
+### 조판 세대 `--compat`
+한글 편집기 세대마다 조판 규칙이 다르다. `--compat` 는 **어느 세대를 목표로 조판할지**를
+고르는 세션 설정이며, `export-svg` · `export-pdf` · `export-png` · `export-render-tree` ·
+`dump-pages` 가 받는다. 기본값은 `2022` 이고 이것이 현행 동작이다.
+
+축이 4세대가 아니라 **이분인 것은 실측 결과**다. 10k 전수 3자 대조에서 2020↔2022 차이는
+5건인데 2020↔2024 는 258건이다 — 2018·2020·2022 는 사실상 같은 엔진이고 2024 만 갈린다
+(`mydocs/report/hangul_version_oracle_r1_20260807.md` 8절). 그래서 `2018`·`2020` 은
+받지 않는다.
+
+**문서가 저장된 버전으로 자동 선택하지 않는다.** 저장 버전(`info --json` 의
+`lastSavedWith`)은 "이 문서가 2024 규칙을 필요로 하는가"를 예측하지 못한다 — 두 버전이
+다르게 조판하는 254건 중 2024 로 저장된 문서는 0건이고, 갈림률은 저장 버전이 올라갈수록
+오히려 낮아진다(전수 실측 2026-08-24). 목표 세대는 **사용자가 고르는 값**이다.
+
+한글 오라클과 대조할 때는 오라클을 띄운 한글 버전과 `--compat` 를 맞춰라. 어긋난 채로
+재면 버전 차이를 결함으로 오판한다.
+
+### `dump-extents <파일.hwp> [-p <쪽번호>] [--min-h <px>] [--outside] [--gaps]`
+렌더 노드의 세로 범위와 빈 구간을 사람용으로 덤프하는 레이아웃 조사 도구다.
+- `--min-h <px>`는 이보다 낮은 높이의 노드를 제외하고, `--outside`는 쪽 본문 밖 노드만,
+  `--gaps`는 노드 사이의 세로 빈 구간도 함께 보인다.
+- 자동 판정·CI 게이트에는 구조화된 `layout-anomaly --json`을 우선 사용한다. 이 명령은 원인
+  좌표를 사람이 추적하는 용도이며 JSON 계약을 제공하지 않는다.
 
 ### `dump-note-shape <파일.hwp|파일.hwpx>`
 구역별 각주/미주 모양 raw 값과 한컴 UI 의미값을 JSON으로 덤프.
@@ -420,6 +654,21 @@ HWP5 raw record 덤프(DocInfo/BodyText 레코드 트리).
 
 ### `diag <파일>`
 문서 구조 진단(번호/글머리표/개요 분석).
+
+### `scan <경로...> [--probe] [--max-depth N] [--limit N] [--json]`
+파일 또는 디렉터리를 재귀로 훑어 HWP/HWPX/HML을 발견·분류한다. batch 입력 목록을 만들기 전의
+안전한 인벤토리 단계다.
+- 심볼릭 링크는 따라가지 않으며, 결과는 경로 문자열 기준으로 결정적으로 정렬한다.
+- `--probe`는 실제 파싱을 시도해 읽기 가능 여부·암호 필요 여부·쪽수를 기록한다. `--max-depth 1`은
+  지정 폴더만, `--limit`은 정렬 뒤 적용하며 절단 사실은 JSON 봉투의 `truncated:true`로 남긴다.
+- 확장자 주장과 매직 감지가 다르면 `extMismatch`로 보고한다. `.hwp`는 HWP3/HWP5 모두 정상일 수 있다.
+
+### `threat-scan <파일.hwp|파일.hwpx> [--json]`
+문서를 열기 전에 읽기 전용으로 구조 위협 신호를 보고한다. 실행체 내장(MZ/PE), OLE 패키지,
+손상 레코드, 매크로/스크립트, 원격 외부 참조가 대상이다.
+- 탐지되어도 성공 종료 코드 0이다. 이것은 안티바이러스나 안전 보증이 아니라, 후속 격리·사람
+  검토를 위한 휴리스틱 신호다. JSON 소비자는 `clean`·`findings`·`highestSeverity`를 분기 재료로 쓴다.
+- 실제 문서 내용을 LLM에 전달해야 하면 `armor --json`의 nonce 격벽과 출처 표지를 함께 사용한다.
 
 ### `capabilities` (#3263)
 도구 자기서술 JSON 을 stdout 으로 출력한다 — 에이전트가 첫 호출 1회로 명령·플래그·
@@ -473,25 +722,129 @@ rhwp 를 **실제 MCP 서버**로 실행한다. 전송은 MCP 표준 stdio(줄 �
 ### `info <파일> [--json]`
 HWP 파일 정보 표시(버전/구역 수/암호화 등).
 - `--json` (#3237): stdout 에 순수 JSON 하나 —
-  `{"schemaVersion":"1.0","source","format":"hwp5|hwpx|hwp3|hml","sizeBytes","version","sections","pageCount","paraCount","fonts"}`.
-  `version` 은 HML 이면 null. 스키마 계약은 `export-text --json` 항목과 동일 규칙.
+  `{"schemaVersion":"1.0","source","format":"hwp5|hwpx|hwp3|hml","sizeBytes","version","sections","pageCount","paraCount","fonts","title","lastSavedWith","warnings"}`.
+  `version` 은 HML 이면 null. `lastSavedWith`는 HWP5 `HwpSummaryInformation.revisionNumber` 또는
+  HWPX `version.xml/appVersion`을 해석한 마지막 저장 제품 메타데이터다. 예:
+  `{"product":"hancom-office-2024","version":"13.0.0.3457","confidence":"metadata"}`.
+  알려진 주버전은 2010/2018/2020/2022/2024로 분류하고 매핑 근거가 없으면 `product:null`이다.
+  HWP3, 메타데이터 없음·손상은 `lastSavedWith:null`이다. 원 작성 제품의 증명이 아니며,
+  재저장·삭제·변조될 수 있다. 스키마 계약은
+  `export-text --json` 항목과 동일 규칙.
 
-### `digest <파일> [--max-chars N] [--json]` (#3633)
+### `word-count <파일> [--json]` (#4999)
+IR 본문에서 구역·문단·글자·어절·쪽 수를 센다. 새 파서는 없다.
+- `--json`: `{"schemaVersion","source","sectionCount","paragraphCount","charCount","wordCount","pageCount"}`
+- 어절은 공백 분리. 본문 문자열은 봉투에 싣지 않는다.
+
+### `bookmarks <파일> [--json]` (#5025)
+문서 책갈피 목록. 코어 `get_bookmarks_native`. 새 파서는 없다.
+- `--json`: `{"schemaVersion","source","count","bookmarks":[{"name","sec","para","ctrlIdx","charPos"}]}`
+
+### `header-footer <파일> [--header|--footer] [--section N] [--apply-to 0|1|2] [--json]`
+구역의 머리말/꼬리말 한 건. 코어 `get_header_footer_native`. 기본은 구역 0 양쪽 머리말.
+- `--json`: `{"schemaVersion","source","section","isHeader","applyTo","exists"}` — 있으면 `kind`/`label`/`paraIndex`/`controlIndex`/`paraCount`/`text` 도 실림
+
+### `headers-footers <파일> [--json]` (#5044)
+문서 머리말/꼬리말 목록. 코어 `get_header_footer_list_native`. 새 파서는 없다.
+- `--json`: `{"schemaVersion","source","count","headersFooters":[{"sectionIdx","isHeader","applyTo","label"}]}`
+
+### `charts <파일> [--json]` (#5051)
+문서 차트 목록. 코어 `list_charts_native`. `chart-to-csv --chart N` 의 순번 출처다. 새 파서는 없다.
+- `--json`: `{"schemaVersion","source","count","charts":[{"index","section","paragraph","control","container"?,"zipPart"?,"nestedCopy"?}]}`
+
+### `digest <파일> [--sections | --pages a..b] [--max-chars N] [--json]` (#3633)
 초소형 모델용 매크로 1호 — "info 로 훑고 → export-structure 로 개요를 얻고 →
 export-text 로 첫 장을 읽는" 3단 파이프라인을 **한 번 호출**로 수행한다. 도구
 체이닝을 못 하는 로컬 소형 모델(4B급)이 1차 소비자다. 설계 결정은
 [초소형 모델용 매크로 도구 축 설계 결정](../tech/tiny_model_macro_tools.md).
-- 기계 전용 명령: `--json` 유무와 무관하게 항상 봉투 **한 줄 JSON** 을 낸다 —
+- 기계 전용 명령: `--json` 유무와 무관하게 항상 봉투 **한 줄 JSON** 을 낸다.
+  기본 모드 봉투 —
   `{"schemaVersion":"1.0","source","format","pageCount","paraCount","outline":[최상위 노드 제목 최대 20개],"excerpt","truncated","nextStep"}`
 - `excerpt` 는 페이지 0~2 텍스트를 `--max-chars`(기본 2000) **문자 수**에서 절단한
   발췌. 절단되면 `truncated:true`.
 - `nextStep` 은 고정 문자열 계약(다음 행동 유도문) — 문구 변경은
   `tests/digest_macro_contract.rs` 가 잡는다.
+- `--sections` (#3633 후속): 페이지 발췌 대신 **주소 보존 절 단위 청크**를 낸다.
+  봉투는 `outline`/`excerpt` 대신
+  `"sectionsMode","sectionCount","sections":[{"title","page","charCount","excerpt"}]`.
+  `page` 는 절 제목 문단의 글로벌 쪽 번호(0부터)라 요약 결과가 원문 쪽으로
+  되짚어진다. 절별 발췌 상한은 **기본 240자**(`--max-chars` 가 절별 상한이 된다),
+  청크는 최대 50개까지 싣고 전체 개수는 `sectionCount` 로 따로 실어 봉투만 보고
+  누락 여부를 판정한다. 구조 없는 문서는 쪽 단위 폴백으로 강등하되
+  `sectionsMode:"page"` 로 강등 사실을 명시한다(`title` 은 빈 문자열).
+- `--pages <a..b>` (#3633 후속): 해당 쪽 범위만 발췌한다 — **0 기준, 양끝 포함,
+  `a<=b`**(형식이 어긋나면 exit 2). 봉투에 `"pages":{"from","to"}` 가 실리고,
+  끝 쪽이 문서 끝을 넘으면 마지막 쪽으로 잘라 낸다(시작 쪽이 범위 밖이면 exit 1).
+  `nextStep` 이 같은 폭의 다음 범위 호출(`이어서 digest --json --pages a..b`)을
+  안내해 체이닝을 못 하는 모델도 "이어 읽기"를 계획 없이 수행한다 — 남은 범위가
+  없으면 완료 유도문으로 바뀐다.
+- `--sections` 와 `--pages` 는 동시에 쓸 수 없다(exit 2).
 - 실패 시 stdout 0바이트, 종료 코드는 #2707 계약(0/1/2).
 
 ```bash
 # 처음 보는 문서를 한 번 호출로 파악
 rhwp digest 편람.hwp --json --max-chars 500
+# 절 단위 청크로 문서 지도를 얻는다 (쪽 주소 보존)
+rhwp digest 편람.hwp --sections --json
+# 대형 문서를 10쪽 창으로 나눠 읽는다 — nextStep 이 다음 창을 안내
+rhwp digest 편람.hwp --pages 0..9 --json
+```
+
+### `explain <파일.hwp|파일.hwpx|파일.hml> [--json]` (#3828)
+문서를 처음 보는 에이전트를 위한 **결정론적 요약** — 형식·쪽수·문단 수, 표 개수와
+크기·병합 여부, 누름틀 이름, 각주/미주 개수, 암호 여부를 규칙 문장으로 낸다.
+기존 조회(`info`·`export-structure`·`export-tables`·`fields`)가 이미 계산한 값의
+템플릿 조립일 뿐, 새 판정 로직도 LLM 판정도 없다. "부분 목록 금지"(#3719) 원칙대로
+표·누름틀 이름은 축약·상위 N개 자르기 없이 전부 나열한다.
+- 기본 출력은 사람 문장 요약. `--json` 이면 봉투 —
+  `{"schemaVersion":"1.0","source","format","pageCount","paragraphCount","tables":[{"index","rows","cols","hasMergedCells"}],"fields":[누름틀 이름],"footnoteCount","endnoteCount","encrypted","summary"}`
+- `capabilities --mcp` 의 `hwp_explain` 도구와 봉투 생성 함수를 공유한다 —
+  recordFields 선언과 CLI `--json` 출력이 어긋날 수 없다.
+- 문단 수 키는 `paragraphCount` 다 — `info`/`digest` 봉투의 `paraCount` 와 표기가
+  다르므로 소비자는 봉투별 키를 그대로 쓴다.
+- `tables[].index` 는 0 기준으로 `export-tables`·`table-to-csv` 의 표 번호와
+  일치한다. `summary` 문장 속 "표 1(3×4)" 번호만 사람용 1 기준이다.
+- `tables` 는 크기·병합 여부만 싣고 **셀 텍스트를 싣지 않는다** — 내용은
+  `export-tables` 의 몫이다.
+- 암호 문서는 다른 명령과 같은 규약을 따른다 — 비밀번호 없으면 exit 2, 틀리면
+  exit 1 (`--password`/`--password-stdin`).
+
+```bash
+# 처음 보는 문서의 전체 그림을 문장 요약으로
+rhwp explain 편람.hwp
+# 기계용 봉투 (hwp_explain 과 동일 계약)
+rhwp explain 편람.hwp --json | jq '{format, pageCount, tables, fields}'
+```
+
+### `explore <파일.hwp|파일.hwpx|파일.hml> [--json]`
+이 문서로 **무엇을 할 수 있는지**를 라우팅하는 어포던스 메뉴다. `explain` 이 문서가
+*무엇인지*를, `capabilities` 가 *도구 일반*을 서술한다면, `explore` 는 *이 문서*에
+적용 가능한 rhwp 행동만 골라 순위 매긴 메뉴로 준다 — 처음 보는 문서 앞에서 "70개
+명령 중 무엇이 이 문서에 맞는지"를 매번 뒤지지 않게 하는 놀이터 입구다.
+- 새 판정 로직이 아니라 기존 조회(`export-tables`·`fields`·`export-structure`·
+  `chart-to-csv`·`explain`(각주/미주)·`inspect injection`·`inspect hidden-text`)가
+  이미 센 개수에서 유도한 **결정론적** 메뉴다. LLM 판정은 없다.
+- 기본 출력은 사람용 메뉴. `--json` 이면 봉투 —
+  `{"schemaVersion":"1.0","source","format","pageCount","encrypted","affordanceCount","menu":[{"affordance","why","command","skill","confidence"}],"note"}`
+- `menu[]` 는 우선순위 내림차순이다. 있는 어포던스만 담기므로 **문서마다 메뉴가
+  다르다** — 표가 많은 문서는 `table-extract` 가, 서식은 `form-fill` 이, 주입 신호가
+  있으면 `security-sweep` 가 위로 온다. 아무 특수 신호가 없어도 `triage-overview`
+  한 갈래는 늘 담겨 메뉴가 비지 않는다.
+- 각 항목: `affordance`(안정 식별자), `why`(엔진이 센 개수 근거), `command`(다음에
+  실행할 명령 템플릿 — 경로 자리는 `<file>` 자리표시자), `skill`(다루는 스킬 이름),
+  `confidence`(high/medium/low).
+- **정직한 휴리스틱**이다 — 적용 가능한 행동을 제안할 뿐 완전성을 보장하지 않는다.
+  `note` 필드가 이 성격을 봉투 안에서도 밝힌다.
+- 증거(`why`)는 문서 원문이 아니라 개수·형식 레이블이라 봉투는 문서 파생 문자열을
+  싣지 않는다(`untrustedContent:false`). `capabilities --mcp` 의 `hwp_explore` 도구로도
+  노출된다(읽기 전용·무상태).
+- 암호 문서는 다른 명령과 같은 규약(`--password`/`--password-stdin`).
+
+```bash
+# 이 문서로 무엇을 할 수 있는지 사람용 메뉴로
+rhwp explore 편람.hwp
+# 기계용: 가장 높은 확신도의 다음 명령만 뽑기
+rhwp explore 편람.hwp --json | jq -r '.menu[0] | "\(.command)  # \(.why)"'
 ```
 
 ### `search <파일> [--json] [--ignore-case] [--limit N] [--] <검색어>` (#3283)
@@ -617,9 +970,10 @@ rhwp fields 신청서.hwp --json | jq -r '.fields[] | "\(.name): \(.memo // .gui
 rhwp export-provenance-map --json | jq '.commands["export-text"]'
 ```
 
-### `inspect <hidden-text|injection|unicode> <파일.hwp|파일.hwpx> [축별 옵션]`
+### `inspect <hidden-text|injection|unicode|watermark> <파일.hwp|파일.hwpx> [축별 옵션]`
 문서를 **읽기만** 하는 보안 검사 명령군 — `hidden-text`(조판 은닉), `injection`(문장형 지시
-신호), `unicode`(화면과 바이트의 불일치)를 각각 판정한다. 어느 축도 문서를 고치지 않는다.
+신호), `unicode`(화면과 바이트의 불일치), `watermark`(숨은 마크)를 각각 판정한다. 어느 축도
+문서를 고치지 않는다.
 탐지 건수가 0이 아니어도 종료 코드는 0이다 — 1은 런타임 실패 전용이고(#2707), "위험 문서
 발견"은 실패가 아니라 정상적으로 얻어낸 판정 결과다. 소비자는 봉투의 `clean`(단, `injection`
 은 `highestConfidence`도) 필드로 분기한다.
@@ -668,6 +1022,34 @@ rhwp inspect injection samples/field-01.hwp --json | jq '{clean, highestConfiden
 
 ```bash
 rhwp inspect unicode samples/field-01.hwp --json --kind zero-width | jq '{clean, findingCount}'
+```
+
+#### `inspect watermark <파일> [--json] [--kind hidden|homoglyph|whitespace|all]`
+제로폭·비가시 문자 열, 라틴 낱말 속 동형자, 비정상 공백 열처럼 문서에 심긴 은닉 추적·워터마크
+신호를 위치·개수와 함께 보고한다. 비트열로 해석 가능한 비가시 문자 열은 ASCII 후보도 함께 낸다.
+- `--kind`로 검사 축을 좁힌다. 생략값은 `all`이다.
+- 신호가 발견되어도 도구 실패가 아니다. 원본 보존·사람 검토·출처 확인을 위한 자료이며, 워터마크
+  제거·우회 기능을 제공하지 않는다.
+
+### `armor <파일.hwp|파일.hwpx> [--json]` (프롬프트 주입 방패)
+문서 본문을 이 호출만의 무작위 nonce 격벽 `⟦UNTRUSTED:<nonce>⟧ … ⟦/UNTRUSTED:<nonce>⟧` 으로 감싸,
+LLM 프롬프트에 통째로 넣어도 문서 안 문장이 사용자의 지시로 오인되지 않게 한다 — `inspect injection`
+(주입 신호)·출처 표지(`untrustedContent`/`untrustedFields`)·격벽을 **한 번의 호출**로 묶은 것이다.
+문서는 nonce 를 모르므로 격벽을 위조하거나 조기 종료할 수 없다. **문서를 고치지 않는다** — 격벽은 뜻을
+지우지 않고 "지시가 아니라 데이터"라는 경계만 구조로 세운다(`inspect injection` 과 같은 무변경 규약).
+- `armoredText`: `⟦UNTRUSTED:<nonce>⟧\n<본문>\n⟦/UNTRUSTED:<nonce>⟧`. 본문은 `export-text` 와 같은
+  출처(렌더 텍스트)라 조판 줄바꿈이 들어갈 수 있다. 반면 주입 판정은 IR 을 훑으므로(격벽이 감싸는 렌더
+  텍스트보다 넓다) 렌더 줄바꿈으로 끊긴 지시나 각주·머리말에 심긴 지시도 잡는다.
+- `safety`: `{nonce, fenceOpen, fenceClose, injectionSignalCount, highestConfidence, note}` — nonce·격벽
+  표지는 엔진 생성값이라 문서가 정할 수 없다. `note` 는 소비자에게 "격벽 안은 전부 데이터"임을 알린다.
+- 검사 범위는 `scanScopes` 가 밝힌다(본문·표 셀·글상자·수식·각주·미주·머리말·꼬리말·캡션). 탐지 건수가
+  0이 아니어도 종료 코드는 0이다 — "위험 문서 발견"은 실패가 아니라 정상 판정 결과다(#2707).
+- `--json` 봉투: `{"schemaVersion":"1.0","source","pageCount","scanScopes":[...],"safety":{...},"armoredText","injectionSignals":[...],"signalCount","clean"}`
+- 위협 모델의 전체 근거는 [간접 프롬프트 인젝션](../tech/agent_security/indirect_prompt_injection.md)과
+  [봉투 출처 표지](../tech/envelope_provenance.md)를 따른다.
+
+```bash
+rhwp armor 편람.hwp --json | jq '{clean, signalCount, nonce: .safety.nonce}'
 ```
 
 ### `edit fill-fields <파일> --data <JSON|@파일> [옵션]` (#3329)
@@ -748,6 +1130,249 @@ rhwp edit set-cell 양식.hwpx --table 0 --row 2 --col 1 --text "1,234" -o 작�
 rhwp export-tables 작성본.hwpx --json | jq '.tables[0].cells[] | select(.row==2 and .col==1).text'
 ```
 
+### `edit insert-text <파일> --text <문자열> [--section N] [--para N] [--offset N] [-o <출력>] [--dry-run] [--verify] [--json]` (#4990)
+문단 좌표에 **새 텍스트를 삽입**한다. `replace-text`/`fill-fields`/`set-cell` 은 있는 값을
+바꾸는 축이고, 이 명령은 **없는 자리에 글자를 넣는** 축이다. 새 편집 로직은 없다 —
+검증된 코어 `insert_text_native`(스튜디오·세션이 이미 쓰는 경로)만 배선한다.
+
+- `--text <문자열>` (필수) — 넣을 문자열. 빈 문자열은 사용법 오류(exit 2).
+- `--section` / `--para` / `--offset` — 구역·문단·문자 오프셋(전부 **0 기준**, `search`
+  주소와 같다). 생략하면 0. `--offset` 이 그 문단의 문자 수와 같으면 끝에 붙인다.
+  문단 길이를 넘으면 조용히 자르지 않고 exit 2 + 실제 길이를 안내한다.
+  구역·문단이 범위를 벗어나도 exit 2.
+- `-o, --output <파일>` — 출력 파일(기본 `<입력명>_inserted.<입력과 같은 확장자>`, §edit 산출 형식)
+- `--dry-run` — 파일을 쓰지 않고 삽입 예정만 보고
+- `--verify` — 저장 직후 IR 자기검증(차이 시 exit 3)
+- `--json` 봉투: `{"schemaVersion":"1.0","source","section","paragraph","offset","text","insertedChars","dryRun","changedPages","output"?,"outputFormat"?,"verify"?}`
+  - `output`/`outputFormat`/`verify` 는 실제 저장했을 때만 실린다.
+- 실패 시 원본 불변.
+
+```bash
+rhwp edit insert-text 공문.hwp --section 0 --para 0 --offset 0 --text "긴급: " -o 개정본.hwp --json
+rhwp export-text 개정본.hwp --json | jq -r '.pages[0].text' | head -c 20
+```
+
+### `edit insert-text-in-cell <파일> --table <번호> --row <행> --col <열> --text <문자열> [--offset N] [--cell-para N] [-o <출력>] [--dry-run] [--verify] [--json]` (#5055)
+표 셀의 지정한 문단 오프셋에 텍스트를 삽입한다. 코어
+`insert_text_in_cell_native` 경로를 사용하며, `--table`/`--row`/`--col`/`--text`는
+필수다. `--cell-para`는 셀 내부 문단 번호(0 기준), `--offset`은 해당 문단의 문자
+오프셋(생략하면 0)이다. 셀·문단·오프셋이 범위를 벗어나면 exit 2로 종료하고 원본은
+변경하지 않는다.
+
+- `-o, --output <파일>` — 출력 파일 (기본 `<입력명>_cell_inserted.<입력과 같은 확장자>`)
+- `--dry-run` — 파일을 쓰지 않고 삽입 예정만 보고한다.
+- `--verify` — 저장 직후 IR 자기검증을 수행한다.
+- `--json` 봉투에는 `table`/`row`/`col`/`cellPara`/`offset`/`text`/`insertedChars`와
+  저장 시 `output`/`outputFormat`/`verify`가 포함된다.
+
+```bash
+rhwp edit insert-text-in-cell 양식.hwpx --table 0 --row 1 --col 2 --cell-para 0 \
+  --offset 0 --text "추가 문구" -o 작성본.hwpx --verify --json
+```
+
+### `edit delete-text <파일> --count N [--section N] [--para N] [--offset N] [-o <출력>] [--dry-run] [--verify] [--json]` (#5011)
+문단 좌표에서 글자를 지운다. 코어 `delete_text_native`. `--count` 는 1 이상.
+
+### `edit insert-paragraph <파일> [--section N] [--para N] [-o <출력>] [--dry-run] [--verify] [--json]` (#4992)
+지정한 자리에 빈 문단을 끼운다. 앞 문단 서식을 상속한다(한글 Enter). 코어
+`insert_paragraph_native` 배선이며 새 편집 로직은 없다.
+- `--section` / `--para` — 0 기준. `--para` 가 구역 문단 수와 같으면 끝에 붙인다.
+- `-o` / `--dry-run` / `--verify` / `--json` 은 형제 `edit` 과 같다.
+
+### `edit delete-paragraph <파일> [--section N] [--para N] [-o <출력>] [--dry-run] [--verify] [--json]` (#5012)
+지정 문단을 지운다. 코어 `delete_paragraph_native`. 구역 마지막 문단은 거부한다.
+
+### `edit merge-paragraph <파일> [--section N] [--para N] [-o <출력>] [--dry-run] [--verify] [--json]` (#5018)
+지정 문단을 바로 앞 문단에 합친다. 코어 `merge_paragraph_native`. `--para` 는 합쳐질
+문단(1 이상, 0 은 거부).
+
+### `edit set-page-def <파일> --props <JSON> [--section N] [-o <출력>] [--dry-run] [--verify] [--json]`
+구역의 용지 설정(너비·높이·여백, HWPUNIT)을 바꾼다. 코어 `set_page_def_native`. `--props` 필수.
+
+### `edit set-section-def <파일> --props <JSON> [--section N] [-o <출력>] [--dry-run] [--verify] [--json]`
+구역 정의(머리말 감추기·시작 번호 등)를 바꾼다. 코어 `set_section_def_native`. `--props` 필수.
+
+### `edit insert-page-break <파일> [--section N] [--para N] [--offset N] [-o <출력>] [--dry-run] [--verify] [--json]` (#4993)
+문단을 지정 오프셋에서 가르고 새 문단에 쪽 나눔을 넣는다. 코어 `insert_page_break_native` 배선.
+`--offset 0`(문단 시작)이면 문단을 가르지 않고 그 문단에만 쪽 나눔을 건다(#7218) — 가르면 원 문단 모양(개요 수준 포함)을
+물려받은 빈 문단이 앞에 남아 개요 번호가 비어 보인다. 이미 쪽·구역 나눔이 있는 문단에는 아무것도 하지 않는다.
+`--json` 봉투는 `paragraphDelta`(문단 수 변화: offset 0 이면 0, 아니면 1)와 `pageBreakParagraph`(쪽 나눔이 걸린 문단 번호)를 싣는다.
+
+### `edit insert-column-break <파일> [--section N] [--para N] [--offset N] [-o <출력>] [--dry-run] [--verify] [--json]` (#5019)
+문단을 지정 오프셋에서 가르고 단 나눔을 넣는다. 코어 `insert_column_break_native` 배선.
+
+<a id="edit-insert-table"></a>
+
+### `edit insert-table <파일> --rows N --cols N [--section N --para N --offset N | --at-field 이름] [--widths 목록] [--alignments 목록] [--repeat-header true|false] [-o <출력>] [--dry-run] [--verify] [--json]` (#5819)
+
+본문에 빈 표를 만든다. `--rows`는 1~65535, `--cols`는 1~256이며 좌표는 0부터 시작한다.
+`--at-field`는 이름이 유일한 **본문 필드가 있는 문단 바로 뒤**에 독립된 표를 삽입한다.
+필드 이름·ID·안내문·내용을 유지하며 필드 내부를 분할하지 않는다. 좌표 옵션과 함께 쓸 수 없고,
+없는 이름·중복 이름·표 셀/글상자 내부 필드는 오류로 거부한다. 후자는 기존 본문 표 생성 명령의 범위 밖이다.
+
+| 옵션 | 계약 |
+| --- | --- |
+| `--widths 3000,6000,9000` | 열별 HWPUNIT 정수. 개수는 열 수와 같고 각 값은 양수, 합계는 2147483647 이하. 전체 표 폭은 합계다. |
+| `--widths 20%,30%,50%` | 기존 기본 표 폭에 대한 양수 비율. 합계 100%, 단위 혼용 불가. 누적 경계를 반올림해 전체 폭을 보존하며 1 HWPUNIT 미만으로 반올림되는 열은 거부한다. |
+| `--alignments left,center,right` | 열별 텍스트 문단 정렬. 개수는 열 수와 같아야 한다. 생략하면 삽입 문단의 서식을 상속한다. |
+| `--repeat-header true` | 기본값. 첫 행을 머리행으로 지정하고 `repeatHeader=1`, `pageBreak=CELL`로 생성한다. |
+| `--repeat-header false` / `--no-repeat-header` | 반복 머리행을 끈다. `pageBreak=CELL`은 유지한다. |
+
+너비를 생략하면 기존 균등 열 폭을 유지한다. 절대 너비는 페이지 폭에 맞추어 자동 축소하지 않는다.
+`--dry-run`도 실제 인메모리 생성·입력 검증을 거치며 파일 쓰기만 생략한다. JSON의 `tableParagraph`와
+`control`은 생성된 표의 실제 위치, `widths`는 확정된 HWPUNIT 너비다. `--verify`는 저장본의 IR 재파싱 비교이며
+한컴 화면·PDF 일치 판정은 아니다.
+
+```bash
+rhwp edit insert-table template.hwpx --rows 12 --cols 3 --at-field MR_LIST \
+  --widths 20%,30%,50% --alignments left,center,right -o report.hwpx --verify --json
+```
+
+MCP `hwp_insert_table`은 `atField`, `widths`, `alignments`, `repeatHeader`로 같은 옵션을 제공한다.
+`widths`와 `alignments`는 CLI와 동일한 쉼표 구분 문자열이며 `repeatHeader:false`는 명시적으로 머리행 반복을 끈다.
+
+### `edit set-chart-data <파일> --chart N --data <JSON> [-o <출력>] [--dry-run] [--verify] [--json]`
+문서 순번 차트의 숫자 데이터를 바꾼다. 코어 `set_chart_data_by_index_native`. `--chart` 는
+문서 순서 1부터(`charts` 와 같다). `--data` 는
+`{"labels"?,"series":[{"name"?,"values":["…"]}],"structure"?:bool,"dryRun"?:bool}`.
+기본은 계열 수·값 개수·이름·라벨이 다르면 한 칸도 쓰지 않는다. [#5652] `"structure": true` 면
+행렬이 목표 상태다 — 행·열 증감(꼬리 기준)·계열명·라벨 변경을 쓰고, 종류별 가드와 거부 사유는
+위 `csv-to-chart --structure` 절과 같다. `--dry-run` 도 코어 검증을 거쳐 거부 사유(`invalid[]` + exit 2)와 `changed[]`(`op`)를
+보고한다(예전엔 dry-run 이 코어를 건너뛰었다). 봉투에 `changedCount`·`changed`·`wrote` 가 실린다.
+
+### `edit insert-number <파일> [--section N] [--para N] [--offset N] [--count N] [-o <출력>] [--dry-run] [--verify] [--json]`
+문단 좌표에 쪽 새 번호로 시작 컨트롤을 넣는다. 코어 `insert_new_number_native`. `--count` 는
+시작 쪽 번호(1~65535, 기본 1).
+
+### `edit insert-row <파일> --table <번호> --row <행> [--below] [-o <출력>] [--dry-run] [--verify] [--json]` (#4994)
+본문 최상위 표에 행을 끼운다. 코어 `insert_table_row_native`. `--below` 면 지정 행 아래.
+
+### `edit insert-col <파일> --table <번호> --col <열> [--right] [-o <출력>] [--dry-run] [--verify] [--json]` (#4995)
+본문 최상위 표에 열을 끼운다. 코어 `insert_table_column_native`. `--right` 면 지정 열 오른쪽.
+
+### `edit delete-row <파일> --table <번호> --row <행> [-o <출력>] [--dry-run] [--verify] [--json]` (#4996)
+본문 최상위 표에서 행을 지운다. 코어 `delete_table_row_native`.
+
+### `edit delete-col <파일> --table <번호> --col <열> [-o <출력>] [--dry-run] [--verify] [--json]` (#5009)
+본문 최상위 표에서 열을 지운다. 코어 `delete_table_column_native`.
+
+### `edit merge-cells <파일> --table <번호> --row <행> --col <열> --end-row <행> --end-col <열> [-o <출력>] [--dry-run] [--verify] [--json]` (#4997)
+본문 최상위 표의 셀 사각형을 병합한다. 코어 `merge_table_cells_native`.
+
+### `edit split-cell <파일> --table <번호> --row <행> --col <열> [-o <출력>] [--dry-run] [--verify] [--json]` (#5010)
+본문 최상위 표의 병합 셀을 다시 나눈다. 코어 `split_table_cell_native`.
+
+### `edit split-cell-into <파일> --table <번호> --row <행> --col <열> --rows <행수> --cols <열수> [--equal-row-height] [--merge-first] [-o <출력>] [--dry-run] [--verify] [--json]`
+본문 최상위 표의 셀을 n행 × m열로 나눈다. 코어 `split_table_cell_into_native`. `--rows`/`--cols` 는 1 이상.
+
+### `edit resize-table-cell <파일> --table <번호> --row <행> --col <열> [--vertical] [--forward] [-o <출력>] [--dry-run] [--verify] [--json]`
+본문 최상위 표의 한 칸 크기를 한 걸음(283 HWPUNIT) 조절한다. 코어 `resize_table_cell_native`. 병합 칸이 있으면 네이티브가 거부한다.
+
+### `edit set-cell-props <파일> --table <번호> --row <행> --col <열> --props <JSON> [-o <출력>] [--dry-run] [--verify] [--json]`
+본문 최상위 표 셀의 속성을 JSON 객체로 변경한다. 코어 `set_cell_properties_native`를 사용하며, `--props`에는 `verticalAlign`, 셀 여백 등 지원되는 속성만 지정한다.
+
+### `edit move-table <파일> --table <번호> --dx <가로> --dy <세로> [-o <출력>] [--dry-run] [--verify] [--json]`
+본문 최상위 표의 위치 오프셋을 옮긴다. 코어 `move_table_offset_native`. `--dx`/`--dy` 는 HWPUNIT(양수=오른쪽/아래, 음수 허용).
+
+### `edit set-table-props <파일> --table <번호> --props <JSON> [-o <출력>] [--dry-run] [--verify] [--json]`
+본문 최상위 표 속성(칸간격·여백·글자처럼·배치 등)을 고친다. 코어 `set_table_properties_native`.
+표 번호는 `export-tables` 의 index. `--props` 는 JSON 객체.
+
+### `edit insert-footnote <파일> [--section N] [--para N] [--offset N] [-o <출력>] [--dry-run] [--verify] [--json]` (#4998)
+문단 좌표에 각주를 끼운다. 코어 `insert_footnote_native`.
+
+### `edit insert-endnote <파일> [--section N] [--para N] [--offset N] [-o <출력>] [--dry-run] [--verify] [--json]` (#5013)
+문단 좌표에 미주를 끼운다. 코어 `insert_endnote_native`.
+
+### `edit delete-footnote <파일> --section N --para N --ctrl N [-o <출력>] [--dry-run] [--verify] [--json]` (#5017)
+본문 각주/미주 컨트롤을 지운다. 코어 `delete_footnote_native`. `--section`/`--para`/`--ctrl`
+은 필수(0 기준).
+
+### `edit delete-text-in-footnote <파일> --count N [--section N] [--para N] [--ctrl N] [--fn-para N] [--offset N] [-o <출력>] [--dry-run] [--verify] [--json]`
+각주/미주 문단에서 글자를 지운다. 코어 `delete_text_in_footnote_native`. `--count` 는 1 이상.
+
+### `edit group-shapes <파일> --targets P,C;P,C [--section N] [-o <출력>] [--dry-run] [--verify] [--json]`
+같은 구역의 도형/그림을 하나로 묶는다. 코어 `group_shapes_native`. `--targets` 는
+`para,ctrl;para,ctrl` (0 기준, 2개 이상). `--target P,C` 를 여러 번 써도 같다.
+
+### `edit add-bookmark <파일> --name <이름> [--section N] [--para N] [--offset N] [-o <출력>] [--dry-run] [--verify] [--json]` (#5026)
+지정 좌표에 책갈피를 넣는다. 코어 `add_bookmark_native`. `--name` 필수. 같은 이름은 거부.
+
+### `edit delete-bookmark <파일> --section N --para N --ctrl N [-o <출력>] [--dry-run] [--verify] [--json]` (#5027)
+책갈피 컨트롤을 지운다. 코어 `delete_bookmark_native`. `--section`/`--para`/`--ctrl` 필수.
+
+### `edit rename-bookmark <파일> --section N --para N --ctrl N --name <이름> [-o <출력>] [--dry-run] [--verify] [--json]` (#5033)
+책갈피 이름을 바꾼다. 코어 `rename_bookmark_native`. `--section`/`--para`/`--ctrl`/`--name` 필수. 같은 이름은 거부.
+
+### `edit delete-header-footer <파일> --header|--footer [--section N] [--apply-to 0|1|2] [-o <출력>] [--dry-run] [--verify] [--json]` (#5039)
+머리말/꼬리말 컨트롤을 지운다. 코어 `delete_header_footer_native`. `--header` 또는 `--footer` 필수.
+`--apply-to` 는 0 양쪽·1 짝수·2 홀수(기본 0).
+
+### `edit insert-header-footer-text <파일> --header|--footer --text <문자열> [--section N] [--apply-to 0|1|2] [--para N] [--offset N] [-o <출력>] [--dry-run] [--verify] [--json]`
+기존 머리말/꼬리말 문단에 텍스트를 끼운다. 코어 `insert_text_in_header_footer_native`. `--header` 또는 `--footer` 와 `--text` 필수. 빈 문자열은 거부. `--para` 는 머리말/꼬리말 안 문단(기본 0).
+
+### `edit set-header-footer-text <파일> --header|--footer --text <문자열> [--section N] [--apply-to 0|1|2] [--para N] [-o <출력>] [--dry-run] [--verify] [--json]`
+기존 머리말/꼬리말 문단 텍스트를 통째로 바꾼다. 코어 `delete_text_in_header_footer_native` + `insert_text_in_header_footer_native`. `--header` 또는 `--footer` 와 `--text` 필수.
+
+### `edit delete-hf-text <파일> --header|--footer --count <글자수> [--section N] [--apply-to 0|1|2] [--para N] [--offset N] [-o <출력>] [--dry-run] [--verify] [--json]`
+기존 머리말/꼬리말 문단에서 글자를 지운다. 코어 `delete_text_in_header_footer_native`. `--header` 또는 `--footer` 와 `--count`(1 이상) 필수.
+
+### `edit split-paragraph-in-hf <파일> --header|--footer [--section N] [--apply-to 0|1|2] [--para N] [--offset N] [-o <출력>] [--dry-run] [--verify] [--json]`
+기존 머리말/꼬리말 문단을 오프셋에서 나눈다. 코어 `split_paragraph_in_header_footer_native`. `--header` 또는 `--footer` 필수.
+
+### `edit merge-paragraph-in-hf <파일> --header|--footer [--section N] [--apply-to 0|1|2] [--para N] [-o <출력>] [--dry-run] [--verify] [--json]`
+머리말/꼬리말 문단을 바로 앞 문단과 합친다. 코어 `merge_paragraph_in_header_footer_native`. `--header` 또는 `--footer` 필수. `--para` 는 합쳐질 문단(기본 1, 0은 거부).
+
+### `edit split-paragraph-in-cell <파일> --table N --row N --col N [--cell-para N] [--offset N] [-o <출력>] [--dry-run] [--verify] [--json]`
+표 셀 문단을 오프셋에서 나눈다. 코어 `split_paragraph_in_cell_native`. `--table`/`--row`/`--col` 필수. `--cell-para` 는 셀 안 문단(기본 0).
+
+### `edit merge-paragraph-in-cell <파일> --table N --row N --col N [--cell-para N] [-o <출력>] [--dry-run] [--verify] [--json]`
+표 셀 문단을 바로 앞 문단과 합친다. 코어 `merge_paragraph_in_cell_native`. `--table`/`--row`/`--col` 필수. `--cell-para` 는 합쳐질 문단(기본 1, 0은 거부).
+
+### `edit apply-char-format <파일> --props <JSON> [--section N] [--para N] [--offset N] [--count N] [-o <출력>] [--dry-run] [--verify] [--json]`
+본문 문단 글자 범위에 글자 서식을 적용한다. 코어 `apply_char_format_native`. `--props` 필수(예: `{"bold":true}`). `--count` 생략 시 문단 끝까지.
+
+### `edit apply-para-format <파일> --props <JSON> [--section N] [--para N] [-o <출력>] [--dry-run] [--verify] [--json]`
+본문 문단에 문단 서식을 적용한다. 코어 `apply_para_format_native`. `--props` 필수(예: `{"alignment":"center"}`).
+
+### `edit apply-style <파일> --style N [--section N] [--para N] [-o <출력>] [--dry-run] [--verify] [--json]`
+본문 문단에 스타일을 적용한다. 코어 `apply_style_native`. `--style` 은 docInfo 스타일 인덱스.
+
+### `edit apply-cell-style <파일> --table N --row N --col N --style N [--cell-para N] [-o <출력>] [--dry-run] [--verify] [--json]`
+표 셀 문단에 스타일을 적용한다. 코어 `apply_cell_style_native`. `--table`/`--row`/`--col`/`--style` 필수.
+
+### `edit apply-para-format-in-cell <파일> --table N --row N --col N --props <JSON> [--cell-para N] [-o <출력>] [--dry-run] [--verify] [--json]`
+표 셀 문단에 문단 서식을 적용한다. 코어 `apply_para_format_in_cell_native`. `--table`/`--row`/`--col`/`--props` 필수.
+
+### `edit delete-control <파일> --section N --para N --ctrl N [-o <출력>] [--dry-run] [--verify] [--json]` (#5041)
+문단이 담은 컨트롤 하나를 지운다(갈래 무관). 코어 `delete_control_native`. `--section`/`--para`/`--ctrl` 필수.
+
+### `edit delete-table <파일> --table <번호> [-o <출력>] [--dry-run] [--verify] [--json]` (#5028)
+본문 최상위 표를 지운다. 코어 `delete_table_control_native`. 좌표는 `export-tables` 의 index.
+
+### `edit insert-header-footer <파일> --header|--footer [--section N] [--apply-to 0|1|2] [-o <출력>] [--dry-run] [--verify] [--json]` (#5036)
+머리말 또는 꼬리말을 만든다. 코어 `create_header_footer_native`. `--header`/`--footer` 중
+하나 필수. `--apply-to` 는 0 양쪽·1 짝수·2 홀수(기본 0). 같은 적용 대상이 있으면 거부.
+
+### `edit set-equation-properties <파일> --section N --para N --ctrl N --props <JSON> [-o <출력>] [--dry-run] [--verify] [--json]`
+
+본문 수식 속성을 바꾼다. 코어 `set_equation_properties_native`. `--section`/`--para`/`--ctrl`/`--props`는 필수다 (예: `{"script":"x^2"}`).
+
+### `edit insert-shape <파일> --width N --height N [--section N] [--para N] [--offset N] [--x N] [--y N] [--shape rectangle] [--wrap InFrontOfText] [--treat-as-char] [-o <출력>] [--dry-run] [--verify] [--json]`
+
+본문 문단에 도형(기본 사각형)을 끼운다. 코어 `create_shape_control_native` 배선이며 새 편집 로직은 없다.
+
+- `--width` / `--height` (필수) — HWPUNIT. 둘 다 0 이면 거부.
+- `--section` / `--para` / `--offset` — 0 기준. 생략하면 0.
+- `--x` / `--y` — 가로·세로 오프셋(HWPUNIT, 기본 0).
+- `--shape` — `rectangle`(기본)·`ellipse`·`line`·`textbox`·`polygon`·`arc`.
+- `--wrap` — `InFrontOfText`(기본) 등 네이티브가 받는 감싸기 값.
+- `--json` 봉투: `section`/`paragraph`/`offset`/`width`/`height`/`x`/`y`.
+
+### `edit delete-shape <파일> --section N --para N --ctrl N [-o <출력>] [--dry-run] [--verify] [--json]`
+본문 도형 컨트롤을 지운다. 코어 `delete_shape_control_native` 배선이며 새 편집 로직은 없다.
+`--section`/`--para`/`--ctrl` 은 필수(0 기준). 지정 컨트롤이 Shape 이 아니면 거부한다.
+
 ### `edit insert-image <파일> --image <그림> [--page N] [--x N --y N] [--width N --height N] [-o <출력>] [--dry-run] [--verify] [--json]` (#3719 §6-5)
 도장·서명 같은 그림을 쪽 좌표에 붙인다 — 채워 넣은 서식에 직인을 얹는 실물 제출의 마지막 조각.
 - `--image <그림>` (필수) — 지원 형식은 `png`·`jpg`·`jpeg`·`bmp`·`tif`·`tiff` 뿐(확장자와 내용
@@ -773,6 +1398,49 @@ rhwp export-tables 작성본.hwpx --json | jq '.tables[0].cells[] | select(.row=
 rhwp edit insert-image 신청서_filled.hwp --image samples/images/moogung.jpg \
   --page 0 --x 50000 --y 70000 --width 5000 --height 5000 \
   -o 제출본.hwp --json | jq '{output, overflow}'
+```
+
+### `edit insert-picture <파일> --image <그림> [--section N] [--para N] [--offset N] [--width N] [--height N] [--x N] [--y N] [-o <출력>] [--dry-run] [--verify] [--json]`
+문단 좌표에 **본문 그림**을 끼운다. `insert-image` 는 도장·서명용 쪽 좌표(용지 기준 floating)
+축이고, 이 명령은 `search` 와 같은 구역·문단·문자 오프셋에 코어 `insert_picture_native` 만
+배선한다. 새 편집 로직은 없다. 그림 바이트는 파일 그대로 넘긴다.
+
+- `--image <그림>` (필수) — `png`·`jpg`·`jpeg`·`bmp`·`tif`·`tiff`. 확장자·내용 둘 다 검사.
+- `--section` / `--para` / `--offset` — 0 기준. 생략하면 0.
+- `--width` / `--height` — HWPUNIT. 생략 시 원본 픽셀 ×75, 한쪽만 주면 비율 유지.
+- `--x` / `--y` — 용지 기준 위치(HWPUNIT, 기본 0).
+- `--json` 봉투: `image`·`section`·`paragraph`·`offset`·`x`·`y`·`width`·`height`·`binDataId`.
+
+```bash
+rhwp edit insert-picture 공문.hwp --image assets/logo/logo-16.png \
+  --section 0 --para 0 --offset 0 --width 1200 --height 1200 \
+  -o 그림본.hwp --json | jq '{section, paragraph, offset, binDataId}'
+```
+
+### `edit delete-picture <파일> --section N --para N --ctrl N [-o <출력>] [--dry-run] [--verify] [--json]`
+본문 그림 컨트롤을 지운다. 코어 `delete_picture_control_native`. `--section`/`--para`/`--ctrl`
+은 필수(0 기준). 인덱스는 문서를 스캔해 Picture 컨트롤을 고른다(하드코드 금지).
+
+```bash
+rhwp edit delete-picture 그림본.hwp --section 0 --para 0 --ctrl 0 -o 지움.hwp --json
+```
+
+### `edit set-picture <파일> --section N --para N --ctrl N --props <JSON> [-o <출력>] [--dry-run] [--verify] [--json]`
+본문 그림 속성을 바꾼다. 코어 `set_picture_properties_native`. `--section`/`--para`/`--ctrl`/
+`--props` 필수. 인덱스는 문서를 스캔해 Picture 컨트롤을 고른다. `--props` 예:
+`{"brightness":50}`, `{"treatAsChar":true}`, `{"hasCaption":true}`.
+
+```bash
+rhwp edit set-picture 그림본.hwp --section 0 --para 0 --ctrl 0 \
+  --props '{"brightness":50}' -o 조정본.hwp --json
+```
+
+### `edit ungroup-shape <파일> --section N --para N --ctrl N [-o <출력>] [--dry-run] [--verify] [--json]`
+본문 GroupShape 를 풀어 자식 개체를 되돌린다. 코어 `ungroup_shape_native`. `--section`/`--para`/`--ctrl`
+은 필수(0 기준). 인덱스는 문서를 스캔해 GroupShape 를 고른다(하드코드 금지).
+
+```bash
+rhwp edit ungroup-shape 묶음.hwp --section 0 --para 0 --ctrl 0 -o 풀림.hwp --json
 ```
 
 ### `edit redact <파일> [--kind …] [--mask <문자>] [--dry-run] [--no-raw] [-o <출력>|--in-place]` (#3719 §6-11)
@@ -861,7 +1529,7 @@ rhwp edit sanitize 배포본.hwp -o /tmp/재확인.hwp --json | jq .removedCount
 ```
 
 ### `edit` 산출 형식 (#3383)
-`edit` 6종(`fill-fields`/`replace-text`/`set-cell`/`insert-image`/`redact`/`sanitize`)은
+`edit` 56종(`fill-fields`/`replace-text`/`set-cell`/`insert-text-in-cell`/`delete-text-in-cell`/`insert-text`/`delete-text`/`insert-paragraph`/`delete-paragraph`/`merge-paragraph`/`split-paragraph`/`insert-page-break`/`insert-column-break`/`insert-table`/`insert-row`/`insert-col`/`delete-row`/`delete-col`/`merge-cells`/`split-cell`/`split-cell-into`/`split-table`/`fit-table`/`resize-table`/`merge-table`/`set-column-widths`/`insert-footnote`/`insert-endnote`/`delete-footnote`/`delete-equation`/`add-bookmark`/`delete-bookmark`/`delete-table`/`rename-bookmark`/`delete-header-footer`/`insert-header-footer-text`/`set-header-footer-text`/`delete-hf-text`/`split-paragraph-in-hf`/`merge-paragraph-in-hf`/`split-paragraph-in-cell`/`merge-paragraph-in-cell`/`apply-char-format`/`apply-para-format`/`apply-style`/`apply-cell-style`/`delete-control`/`insert-header-footer`/`insert-field-in-hf`/`set-column-def`/`set-numbering-restart`/`set-page-hide`/`transpose-table`/`insert-image`/`redact`/`sanitize`)은
 **입력 형식을 보존**한다.
 
 - HWPX 입력 → HWPX 산출(`export_hwpx_native`), 기본 확장자도 `.hwpx`
@@ -883,6 +1551,8 @@ rhwp edit sanitize 배포본.hwp -o /tmp/재확인.hwp --json | jq .removedCount
 
 ### `convert <입력.hwp|.hwpx> <출력.hwp> [--verify] [--verify-pages] [--output-password-stdin]`
 배포용(읽기전용) HWP → 편집 가능 HWP 변환. 출력은 항상 `.hwp`.
+- 출력 확장자는 대소문자 무시 `.hwp`만 허용한다. 확장자가 없거나 `.hwpx` 등 다른 확장자면 입력을
+  읽거나 파일을 쓰기 전에 사용법 오류(exit 2)로 거부하고, HWPX 변환에는 `export-hwpx`를 안내한다.
 - `--verify` — 저장 후 산출물을 재파싱하여 어댑터 적용 후 IR과 재로딩 IR 차이를 검출한다.
   차이가 있으면 산출물은 남기고 종료 코드 3으로 실패한다.
 - `--verify-pages` — 저장 전 문서 페이지 수와 저장 후 재로딩 페이지 수를 비교한다.
@@ -925,14 +1595,25 @@ HWP 문서를 HWPX(ZIP+XML)로 변환 저장. `convert`(배포용 해제)와 별
   단, 한컴 기준 PDF가 있는 대형 문서는 `tools/fidelity_compare/fidelity_compare.py`의 direct pair
   `--source <HWP/HWPX> --reference-pdf <PDF> --label <ASCII>`를 사용한다. 먼저
   `--text-only --export-all-svg --layout-ledger`로 PDF text↔SVG text 및 render-tree 기하 후보(본문/각주,
-  표/footer, frame, Square/Tight/Through 그림을 3행 이상 침범한 본문)를 전수 수집하고, 후보 페이지만
+  표/footer, frame, Square/Tight/Through 그림을 3행 이상 넓게 침범하거나 edge에 맞닿는 본문)를 전수 수집하고, 후보 페이지만
   pixel compare/visual sweep으로 확정한다. 이때 `text-owner-shift-candidates.tsv`의 인접 쪽
   reciprocal text difference와 `text-owner-sequence-candidates.tsv`의 NFC·공백 정규화 16자 이상
   순서 보존 text 이동은 각주·본문·caption이 한 쪽 이르게/늦게 놓인 physical owner 후보를 바로 묶어 준다.
   후자는 p52→p53 URL처럼 다른 본문과 문자 Counter가 상쇄되는 이동을 보완한다.
+  `float-owner-shift-candidates.tsv`는 그 중 `rhwp_earlier_than_reference` 이동과 다음 페이지 상단
+  Body `TopAndBottom`/`Square`/`Tight`/`Through` 그림을 묶어, 그림 앞 본문이 한 페이지 이르게
+  확정된 p118→p119 유형을 우선 검토 후보로 낸다. 그림만으로는 후보가 되지 않는다.
   `table-fragment-candidates.tsv`는 같은 source `(pi, ci)` Body 표가 인접 render-tree 쪽에 연속한 경우와
   표/footer·frame 신호, 또는 쪽 하단 표와 24자 이상 text delta를 rows/cols·bbox·쪽 신호와 함께 묶는다.
   이는 visual review 우선순위 후보일 뿐 **PDF table row owner나 표 분할 정답을 판정하지 않는다.**
+  `table-cell-text-boundary-candidates.tsv`는 visible TextLine이 소유 Cell 경계를 2px 이상 넘거나
+  visible 문자로 끝나는 자연 TextRun 폭이 선을 넘는 p34형 위험을 기록한다. 후자는
+  `natural_visible_width_risk`로 구분하며 저장 자간/justify 뒤 실제 glyph 침범을 뜻하지 않는다.
+  overflowing edge가 그리지 않는 선행/후행 공백뿐이면 후보에서 제외한다.
+  `svg-text-band-clip-candidates.tsv`는 명시적 SVG clip이 glyph 근사 band의 상·하단을 2px 이상 부분
+  절단하는 글자 잘림을 기록한다. band는 baseline `-0.8em..+0.2em`이며 완전히 clip 밖인 stale
+  continuation과 중첩 셀의 외부 소유
+  오인은 제외하지만, 두 원장 모두 PDF raster로 확정해야 하는 candidate다.
   `page-count-ledger.tsv`는 PDF↔전체 SVG/render-tree page count drift를 별도로 드러낸다. 이 신호들은
   모두 candidate일 뿐 전역 page-break 보정의 근거는 아니다. 같은 문자만으로는 표 row geometry·same-page
   overlap을 판정할 수 없다.
@@ -949,8 +1630,10 @@ HML 원본 문서를 의미 보존 HWPML 2.91 XML로 저장한다.
 두 파일의 IR 비교(HWPX↔HWP 불일치 검출). 상세: [ir_diff_command.md](ir_diff_command.md)
 - 비교: text, char_count/offsets/shapes, line_segs, controls, tab_extended, ParaShape, TabDef,
   표(page_break/outer_margin/treat_as_char/wrap/size/offset), 그림·도형(rel_to 등)
-- `--json` (#3274): 판정 봉투 **한 줄** JSON 을 stdout 으로 —
-  `{"schemaVersion":"1.0","a","b","identical","diffCount","categories":{카테고리:건수}}`.
+- `--json` (#3274, #4658): 판정 봉투 **한 줄** JSON 을 stdout 으로 —
+  `{"schemaVersion":"1.0","a","b","identical","diffCount","categories":{카테고리:건수},"pageCountA","pageCountB"}`.
+  `pageCountA`/`pageCountB` 는 `info --json` 과 같은 조판 쪽수다. IR 필드가 같아도
+  쪽수가 다르면 `identical:false` 이고 `categories.pageCount` 가 1 이다 (IR 동일 ≠ 조판 동일).
   종료 코드 0=동일 / **3=차이 발견**(위 "종료 코드 (#2707)" 표의 "IR 차이 검출" 코드와 동일 의미) /
   1=읽기·파싱 실패(stdout 0바이트) / 2=사용법 오류 → 변환 파이프라인 게이트:
   `rhwp ir-diff 원본.hwp 변환본.hwpx --json || 격리처리`
@@ -1001,6 +1684,48 @@ rhwp export-svg output/poc/ingest/sample_minimal.hwpx \
   복원할 수 없다. 이 경우 ingest 단계에서 이미지/media 또는 전용 구조로 분류하고,
   결함 유형을 hotfix/follow-up 으로 나누어 기록한다.
 
+### `scaffold <spec.json> [--format hwpx] -o <out.hwpx> [--json]`
+구조화된 명세(JSON) → HWPX 생성. `build-from-ingest` 와 같은 **무(無)에서 생성** 축이며,
+입력은 문서가 아니라 호출자가 쓴 계획서다(그래서 봉투에 신뢰 불가 표지가 붙지 않는다).
+
+명세 모델의 정본은 `src/scaffold/schema.rs` 다. 미지 필드는 조용히 버리지 않고 즉시 거부한다.
+
+| 필드 | 필수 | 설명 |
+| --- | --- | --- |
+| `version` | ✓ | `"1"` 고정 (`schema_registry::SCAFFOLD_SCHEMA_VERSION`) |
+| `title` |  | 있으면 본문 최상단 가운데 정렬 제목 문단 |
+| `font` |  | 기본 글꼴 이름 (기본값 `함초롬바탕`) |
+| `page_size` |  | `{"width_mm":210,"height_mm":297}` (기본 A4) |
+| `blocks` |  | `heading`(level 1~7) · `paragraph` · `table` 블록의 나열 |
+
+`table` 블록:
+
+| 필드 | 필수 | 설명 |
+| --- | --- | --- |
+| `rows` | ✓ | 행마다 셀 텍스트 목록. 길이가 다르면 최대 열 수에 맞춰 빈 칸으로 채운다 |
+| `cell_align` |  | [#7232] 셀 문단의 가로 정렬 — `"justify"`(기본) · `"left"` · `"center"` · `"right"`, 또는 **열 수와 길이가 같은 목록** |
+
+`cell_align` 의 낱말과 열 단위 축은 편집 경로 `edit insert-table --alignments` 와 같다.
+생략하면 종전과 같은 양쪽 정렬이며, 좁은 열에 긴 영문 토큰(코드명·경로·SQL)이 오면 한/글이
+폭을 채우려 글자 사이를 벌리므로 그런 표에는 `"left"` 를 지정한다.
+
+```bash
+rhwp scaffold spec.json -o out.hwpx --json
+```
+
+```json
+{"version":"1","title":"점검표","blocks":[
+  {"type":"heading","level":1,"text":"1. 개요"},
+  {"type":"paragraph","text":"본문 문단"},
+  {"type":"table","cell_align":["center","left","right"],
+   "rows":[["No","항목","금액"],["1","INSERT…VALUES APPEND","1,000"]]}
+]}
+```
+
+- `--json` 봉투: `schemaVersion`·`source`·`output`·`format`·`bytes`·`blockCount`·
+  `paragraphCount`·`tableCount`.
+- 지원 요소는 왕복 검증을 통과한 것만 노출한다 — 제목, 개요 수준 제목, 본문 문단, 단순 표.
+
 ### `hwpx-roundtrip <파일.hwpx | --batch 폴더> [-o <출력폴더>] [--lineseg-report]`
 HWPX → IR → HWPX roundtrip 검증(**구조 보존 게이트**, #1315 baseline). 재조립 `.rt.hwpx` 와
 `inventory.tsv` 산출(기본 `output/poc/task1315`). 하드 실패 존재 시 종료 코드 1.
@@ -1029,6 +1754,37 @@ HWP5 → IR → HWP5 roundtrip 무손실 검증(#1552). 재조립 `.rt.hwp` 와 
   `Δ Line: 4→0 (-4)  RawSvg: 1→0 (-1)`, 배치는 콘솔/`struct_delta` 컬럼에 `Line:-4;RawSvg:-1`).
   음수=라운드트립 손실, 양수=추가. 손실 노드 타입으로 직렬화 누락 원인을 즉시 좁힌다.
 
+### `layout-anomaly <파일 | --batch 폴더> [-p <페이지>] [--overflow-tolerance <px>] [--overlap-tolerance <px>] [--stored-line-tolerance <px>] [--types <Type,...>] [--strict] [--json]`
+**렌더 한 장의 이상탐지** — `render-diff` 가 두 렌더 사이 **변위**를 재는 것과 달리, 렌더 한 장
+만으로 "정상적인 문서로 보이는가"를 판정한다. 두 렌더가 똑같이 망가져 있으면 변위는 0이라
+`render-diff` 는 못 잡는 케이스를 이 명령이 잡는다. 설계 배경:
+[layout_anomaly_detection.md](../tech/layout_anomaly_detection.md).
+- 판정 6종: `overflow`(요소 bbox가 본문 여백 초과) · `off-canvas`(페이지 상자 밖 또는 y<0) ·
+  `overlap`(겹치면 안 되는 흐름 요소끼리 겹침) ·
+  `text-overlap`(텍스트 런 bbox 교차 — 글자끼리, 표·이미지 겹침 아님) ·
+  `stored-line-escape`(저장 줄을 재현한 줄의 글자가 **남의** 저장 줄 baseline 에 앉음 — 상자를
+  넘거나 겹치지 않는 배치 이탈, #7061) ·
+  `empty_page`(콘텐츠 없는 중간 쪽 — 항상 "가능성 신호").
+- 기본 종료 코드는 0(판정=데이터, 도구 실패 아님). `--strict` 만 확정 신호
+  (overflow·off-canvas·overlap·text-overlap·stored-line-escape)를 종료 코드 3으로 낸다 — `empty_page` 는 `--strict` 로도
+  실패를 유발하지 않는다(의도된 빈 쪽과 기하만으로 구분 불가). `text-overlap` 을 확정에 넣는
+  이유: 글자 bbox 교차는 의도된 wrap 이 아니고 빈 쪽처럼 애매하지도 않다.
+- `--overflow-tolerance`(기본 1.0px) / `--overlap-tolerance`(기본 2.0px, 폭·높이 둘 다 초과해야
+   잡음; text-overlap 도 같은 허용치) 로 민감도 조절. `-p` 는 사람 모드 출력만 좁힌다(스캔 자체는
+   항상 전 페이지). `--stored-line-tolerance`(기본 0.5px)는 stored-line-escape 에서 렌더 줄과 저장
+   줄을 같다고 볼 여유다.
+- `--types Table,Image` 처럼 overflow·overlap 검사 대상을 노드 타입으로 좁힌다. `empty_page` 는
+  페이지 단위 신호라 필터의 영향을 받지 않는다. 알 수 없는 타입은 사용법 오류(exit 2).
+- `--batch <폴더>` 는 `render-diff --batch` 와 같다: `.hwp`/`.hwpx` 를 재귀 수집해 상대 경로
+  정렬 순으로 보고하고, 파일별 로드·스캔 실패는 스트림에서 빼지 않고 `error` 레코드(DATA)로
+  남긴다. `--json` 배치는 NDJSON. 한 건이라도 측정 실패면 exit 1 이 `--strict` 의 3보다 우선한다.
+- `--json` 봉투는 `pageCount`, `pageFilter`, 세 tolerance(`overflowTolerancePx`·`overlapTolerancePx`·
+  `storedLineTolerancePx`), `strict`, `overflowCount`, `offCanvasCount`,
+  `mode`, `types`, `overlapCount`, `textOverlapCount`, `storedLineEscapeCount`, `emptyPageCount`,
+  `hasSignal`, 페이지별 `pages[]`(각 `offCanvas`·`textOverlap`·`storedLineEscape`)를 낸다. `--batch` 의
+  `error` 레코드도 같은 카운트 키를 0으로 채운다. 자동화는 사람용 출력이 아니라 이 필드와 종료 코드로만
+  판정한다.
+
 ### `bench <파일...> | --batch <폴더> [-n <반복수>] [--tsv <출력.tsv>]`
 **단계별 처리 성능 계측** — parse / layout / render / serialize 를 워밍업 1회 후 N회(기본 3)
 반복하여 median(ms)으로 보고한다.
@@ -1041,7 +1797,71 @@ HWP5 → IR → HWP5 roundtrip 무손실 검증(#1552). 재조립 `.rt.hwp` 와 
 
 ---
 
-## 4. HWPX→HWP 저장 계약 분석 (hwp5-* 진단 도구)
+## 4. 계획 실행·증명·감사
+
+### `verify <파일> --expect-* [--json]`
+문서를 고치지 않고 기대 조건을 단언하는 기계용 게이트다. 적어도 하나의 `--expect-*`가 필요하며,
+조건 하나라도 틀리면 종료 코드 3이다.
+- 쪽수: `--expect-pages N`, `--expect-min-pages N`, `--expect-max-pages N`
+- 본문/표: `--expect-min-chars N`, `--expect-min-tables N`, `--expect-table-count N`,
+  `--expect-contains 문자열`, `--expect-not-contains 문자열`
+- 양식/필드: `--expect-format hwp5|hwpx|hwp3|hml`, `--expect-field 이름=값`
+- `--json`은 조건별 `expectations[]`, `passCount`, `failCount`, `verdict`를 한 줄 봉투로 낸다.
+
+### `run <계획.json> | --plan-json <JSON> [--dry-run] [--json]`
+선언적 편집 계획을 전부 정적 검증한 뒤 인메모리에서 원자 실행한다. 모든 단언이 통과할 때만 한 번
+저장하므로, 사용법·계획 오류가 있으면 디스크는 바뀌지 않는다.
+- 기존 계획 step은 `fill_fields`, `replace_text`, `set_cell`, `set_checkbox`이며, 각 step에
+  `if` 조건(`fieldExists`, `fieldEquals`, `textFound`)을 둘 수 있다. 조건이 거짓이면 해당
+  step은 `skipped:true` 저널을 남기고 건너뛴다.
+- `fill_template`, `repeat_and_fill_paragraph_block`, `repeat_and_fill_table_rows`는 `request`를
+  받는 단독 step이다. 기존 action과 섞거나 여러 템플릿 step을 넣으면 `invalid[]`로 거부한다.
+  dry-run도 동일 native 준비 경로를 실행한다. 요청·주소·WASM·MCP 계약은
+  [템플릿 자동화 API](template_automation.md)를 따른다.
+- `--dry-run` 또는 계획의 `dryRun:true`는 preview 저널만 내고 파일을 쓰지 않는다.
+  `import_paragraph_block`도 단독 step이며 `source:{path,sha256}`와 native `request`를 받는다.
+  원본 한 번 읽기로 SHA-256을 검사하고 같은 바이트를 파싱한다. 원본은 대상 입력/출력과
+  별도인 64 MiB 이하 일반 파일이다. 지문 불일치는 exit 3, 읽기/파싱 실패는 exit 1이다.
+  계획 문법은 `export-plan-schema --bare`로 먼저 검증한다.
+- `preconditions.inputSha256`에 입력 파일의 64자리 SHA-256을 넣으면 compare-and-swap으로
+  원본 변경을 막는다. 불일치는 사용법 오류가 아니라 판정 실패(exit 3)이며, JSON에는
+  `preconditionFailed:{kind:"inputSha256",expected,actual}`와 갱신한 계획을 위한 `nextCall`이
+  남는다. `preconditions`를 쓸 때는 이 키 하나만 허용한다.
+- 성공 저널은 실제 읽은 `inputSha256`와 실제 쓴 `outputSha256`를 모두 기록한다. 앞 실행의
+  `outputSha256`을 다음 실행 `preconditions.inputSha256`에 연결하면 편집 사슬을 재구성할 수 있다.
+
+### 영수증·계보·감사 명령
+`replay`와 이후 명령은 작업 캡슐(`*.capsule.json`)을 중심으로 재현성·서명·계보를 검증한다.
+문서 입력의 본문은 신뢰할 수 없는 데이터이므로, 캡슐의 해시·서명·정책 판정과 별개로 취급한다.
+
+| 명령 | 용도와 실패 계약 |
+|---|---|
+| `replay <계획.json> [--expect-output-sha256 <hex>] [--capsule <파일>] [--parent <캡슐>] [--sign-key <키>] [--json]` | 임시 산출로 재실행해 입력·계획·산출 SHA-256 영수증을 발급한다. 기대 산출 해시 불일치는 exit 3이며 원본 출력 경로는 건드리지 않는다. |
+| `audit <캡슐 폴더> [--json]` | 폴더의 캡슐을 전수 재현해 `reproducedRate`를 계산한다. 하나라도 불일치하면 exit 3. |
+| `lineage <머리캡슐> [--deep] [--keyring <키링>] [--anchor-log <로그>] [--json]` | parent SHA-256과 전·후 입력/산출 지문을 걸어 계보를 검증한다. `--deep`은 각 링크를 재실행한다. |
+| `keygen --key-id <id> --out <키.json>` | Ed25519 서명키를 만든다. 비밀키 파일은 저장소·로그에 넣지 않는다. |
+| `verify-signature <캡슐> --keyring <키링.json> [--sig <서명.json>] [--json]` | 캡슐 바이트와 sidecar 서명을 검증한다. 무효·미등록·폐기는 exit 3. |
+| `harness init <폴더> [--key-id <id>]` / `harness wrap --plan <JSON\|@파일> --dir <작업장> [--sign-key <키>]` | 검증 작업장을 만들거나 실행·영수증·캡슐·체인·서명을 한 번에 수행한다. |
+| `harness-status <작업장> [--keyring <키링>] [--deep] [--json]` | 작업장의 체인·서명·재현성을 읽기 전용으로 통합 판정한다. |
+
+### 앵커·정책·교환·정산 명령
+이 명령군은 작업 캡슐을 조직/수신자 검증 흐름으로 확장한다. 표준화된 JSON 봉투를 사용하며,
+판정 불일치는 종료 코드 3이다.
+
+| 명령 | 용도 |
+|---|---|
+| `anchor add <캡슐> --log <anchor.ndjson>` / `anchor checkpoint --log <로그> [-o <파일>]` / `anchor verify <캡슐> --log <로그> [--checkpoint <파일>] [--json]` | append-only 투명성 로그 등재·머클 체크포인트·등재/무결성 검증 |
+| `gate <캡슐> --policy <policy.json> [--keyring <키링>] [--anchor-log <로그>] [--deep] [--json]` | admissionPolicy를 재계산 결과에 적용하고 위반 `violations[]`를 보고 |
+| `bundle export <머리캡슐> -o <번들.lineage-bundle> [--anchor-log <로그> --checkpoint <파일>] [--domain <파일>]` / `bundle verify <번들> --trust-domain <domain.json> [--json]` | 계보 폐쇄집합을 오프라인 검증 가능한 번들로 교환 |
+| `disclose redact <캡슐> -o <가림> --opening-out <개봉>` / `disclose verify <가림> --opening <부분개봉> [--json]` / `disclose restore <가림> --opening <전체개봉> -o <복원>` | 값은 개봉 파일로 분리하고 가림본에는 salt 커밋만 남기는 선택적 공개 |
+| `settle propose --workorder <명세> --capsule <캡슐> --gate-envelope <게이트> -o <청구>` / `settle verify ...` / `settle record <청구> --ledger <원장>` | 작업 명세·캡슐·게이트의 세 해시로 청구를 고정하고 이중 청구를 원장에서 판정 |
+| `audit-report <캡슐 폴더> -o <보고서> [--deep] [--keyring] [--anchor-log] [--policy] [--sign-key]` | 재현·계보·귀속·앵커·게이트를 합산한 감사 보고서 생성 |
+| `recall-scope --contaminated <캡슐\|sha256> --among <폴더> [--ledger]` | 오염된 캡슐의 후손 폐쇄집합과 연관 청구 좌표 계산 |
+| `conformance <캡슐 폴더> --level <L1..L5> [--deep] [--keyring] [--anchor-log] [--policy] [--ledger]` | L1~L5 누적 요건의 적합성 자가진단 |
+
+---
+
+## 5. HWPX→HWP 저장 계약 분석 (hwp5-* 진단 도구)
 
 HWPX→HWP 직렬화(#178 어댑터) contract 분석·디버깅 전용. oracle(한컴 저장본)과 generated(rhwp 저장본)
 record 를 축별로 비교한다.
@@ -1054,29 +1874,69 @@ record 를 축별로 비교한다.
 | `hwp5-ctrl-data-trace <oracle> <generated> --out <path> [--section N] [--record-index N]` | CTRL_DATA ParameterSet 구조 추적 |
 | `hwp5-contract-probe <oracle> <generated> --out-dir <폴더>` | MEMO_SHAPE/ID_MAPPINGS + 누락 CTRL_DATA 축 판정 probe |
 | `hwp5-table-probe <oracle> <generated> --out-dir <폴더>` | TABLE/CTRL_HEADER(Table) field 축 판정 probe |
-| `hwp5-cell-header-probe <oracle> <generated> --out-dir <폴더>` | 표 셀 LIST_HEADER/PARA_HEADER 계약 probe |
+| `hwp5-cell-header-probe <oracle> <generated> --out-dir <폴더>` | 표 셀 LIST_HEADER/PARA_HEADER 계약 축 판정 probe |
 | `hwp5-mel-personnel-probe <oracle> <generated> --out-dir <폴더>` | mel-001 인원현황 표 축 판정 probe |
 | `hwp5-borderfill-diagonal-probe <oracle> <generated> --out-dir <폴더>` | BORDER_FILL 대각선 attr/payload 축 판정 probe |
 | `hwp5-first-para-control-probe <oracle> <generated> --out-dir <폴더>` | 첫 문단 control/PARA_TEXT/PARA_CHAR_SHAPE 계약 probe |
 | `hwp5-anchor-trace <파일> --needle <텍스트> [--section N] [--window N] [--out <path>]` | 특정 텍스트 주변 raw HWP5 record 추적 |
+| `hwp5-char-shape-audit <hancom-oracle.hwp> <generated.hwp> --out <보고서.md> [--source-hwpx <원본.hwpx>]` | CHAR_SHAPE sentinel 차이와 실제 PARA_CHAR_SHAPE 사용 위치 감사 |
+
+### `hwp5-char-shape-audit <hancom-oracle.hwp> <generated.hwp> --out <보고서.md> [--source-hwpx <원본.hwpx>]`
+
+Hancom Office가 저장한 HWP와 rhwp가 생성한 HWP의 DocInfo CHAR_SHAPE를 비교한다.
+문서를 수정하거나 변환하지 않는 **진단 전용** 명령이다.
+
+- positional 입력은 암호화·배포용이 아닌 HWP5 두 개다. 첫 번째는 Hancom 비교 입력, 두 번째는
+  rhwp 생성 입력이다.
+- `--out <보고서.md>`는 필수다. 부모 폴더가 없으면 생성하며 Markdown 보고서를 쓴다.
+- raw semantic key는 attr(46..50)와 shadow color(64..68)를 제외해 Hancom 값이 하나뿐인
+  unique_different 후보와 ambiguous/unmatched를 분류한다. 이는 Hancom record나 순번을
+  runtime serializer에 전달하는 기능이 아니다.
+- logical normalized payload는 inactive underline/strike/shadow sentinel을 제거한 비교다.
+  equivalent 결과만으로 serializer canonicalization을 적용하면 안 된다. 실제 PDF 변화는
+  별도 Hancom 검증으로 판정한다.
+- 생성 HWP의 PARA_CHAR_SHAPE 참조를 따라 style별 run 수, 문단 수, text sample을 함께 낸다.
+  PARA_LINE_SEG bit 0의 누적 쪽수는 저장본에 표식이 없으면 0일 수 있으며, **Hancom PDF 쪽번호와
+  동일하다고 가정하지 않는다.**
+- `--source-hwpx <원본.hwpx>`를 주면 `Contents/header.xml`의 charPr ID별
+  underline/strikeout/shadow child attribute signature를 raw 분류와 교차 집계한다. 동일 signature가
+  서로 다른 raw 분류에 함께 나타나면 source-derived production 선택 기준으로 사용할 수 없다.
+- 성공은 `0`, 파일/CFB/HWPX ZIP/XML 읽기 또는 보고서 쓰기 실패는 `1`, 인자 누락·알 수 없는 옵션은
+  `2`다. 성공 시 stdout에는 `written: <보고서 경로>` 한 줄만 출력한다.
+
+    # HWPX -> HWP5 fidelity 조사: Hancom 저장 HWP는 진단 비교 대상으로만 사용
+    rhwp hwp5-char-shape-audit hancom-saved.hwp rhwp-saved.hwp \
+      --source-hwpx source.hwpx \
+      --out output/char-shape-audit.md
 
 ---
 
-## 5. 내부 개발·회귀 도구 (test-*, gen-*)
+## 6. 내부 개발·회귀 도구 (test-*, gen-*, 진단 프로브)
 
 일반 사용자 대상 아님. 회귀 검증·픽스처 생성용.
 
 | 명령 | 용도 |
 |------|------|
-| `test-caption <파일>` | 캡션 라운드트립 검증 |
+| `test-caption <파일>` | 고정 fixture 캡션 라운드트립 검증 |
 | `test-field <파일>` | 필드 라운드트립 검증 |
 | `test-shape <입력> <출력>` | 도형 라운드트립 검증 |
 | `gen-table` | 표 테스트 HWP 생성 |
 | `gen-pua` | PUA 문자 테스트 HWP 생성 |
+| `ir-sweep <폴더> [옵션]` | HWP/HWPX 코퍼스의 IR 특성을 전수 집계하는 회귀 조사 도구 |
+| `dump-anchors <파일> [옵션]` | 조판 앵커 위치를 덤프하는 레이아웃 디버그 도구 |
+| `dump-carets <파일> [옵션]` | 편집 캐럿 후보 좌표를 덤프하는 UI/레이아웃 디버그 도구 |
+| `measure-width <텍스트> [옵션]` | 폰트·문자열 폭 측정 프로브 |
+| `core-pages <파일> [옵션]` | 문서 코어와 렌더 경로의 페이지 수를 비교하는 프로브 |
+
+`test-caption`은 임의 문서의 캡션을 탐색하는 명령이 아니라 고정 회귀 fixture 전용이다. 구역 0의
+`(para, control)` 좌표 `(0,2)`, `(0,3)`, `(1,0)`, `(1,1)`이 모두 그림이어야 하며, 네 그림에 지정한
+방향·세로 정렬·폭·간격을 적용하고 다시 확인한 뒤에만 SVG를 저장하고 종료 코드 0을 반환한다. 대상이
+하나라도 없거나 그림이 아니거나 적용값이 다르면 원인을 stderr에 기록하고 종료 코드 1을 반환하며,
+출력 폴더·SVG와 성공 메시지 `완료`를 남기지 않는다.
 
 ---
 
-## 6. 디버깅 워크플로우 (참고)
+## 7. 디버깅 워크플로우 (참고)
 
 레이아웃/간격 버그 디버깅 권장 순서(상세 CLAUDE.md):
 
@@ -1095,8 +1955,8 @@ record 를 축별로 비교한다.
 
 ## 비고
 - 본 문서는 `src/main.rs` 명령 디스패치 기준. CLI 추가/변경 시 `--help` 문자열과 본 문서를 함께 갱신한다.
-- 2026-07-04 현행화: dispatch 39개 명령 전수 등재 완료(§1~§5). 게이트·공용 명령은 정식 절,
-  조사 프로브(§4)·개발 보조(§5)는 묶음 등재.
+- 2026-07-04 현행화: 당시 dispatch 39개 명령을 전수 등재했다. 게이트·공용 명령은 정식 절,
+  조사 프로브·개발 보조는 묶음 등재했다.
 - 2026-08-03 현행화: 병합 PR에서 미뤄 뒀던 신규 명령 8종을 실물(`src/main.rs` 디스패치)
   기준으로 보강 — `table-to-csv`/`csv-to-table`(§1), `batch fill`(§1), `edit insert-image`(§2),
   `export-provenance-map`·`inspect hidden-text`/`injection`/`unicode`(§2). `edit redact`/
@@ -1106,3 +1966,18 @@ record 를 축별로 비교한다.
   `rhwp --help`/`capabilities` 를 직접 뽑지 못했다 — `src/main.rs` 소스(usage 문자열·JSON
   봉투 구성 코드)를 1차 근거로 삼았다. 실제 `--help`/`capabilities` 출력 대조와 예시 명령
   실행 검증은 빌드 가능한 환경(CI 등)에서 재확인이 필요하다.
+- 2026-08-05 현행화: `hwp5-char-shape-audit`를 HWP5 저장 계약 진단 명령으로 추가했다.
+  선택 `--source-hwpx`는 원본 `charPr` 장식 속성의 출처 교차 집계만 수행하며 문서를 변경하지 않는다.
+- 2026-08-08 현행화: `src/main.rs` 디스패치·`--help` 대비 뒤처진 드리프트 2건 정정 —
+  `digest` 에 `--sections`/`--pages a..b`(#3633 후속) 등재, `explain`(#3828) 절 신설.
+  봉투 필드는 `capabilities --mcp` 의 `hwp_digest`/`hwp_explain` recordFields 실물과 대조했다.
+- 2026-08-16 현행화: `src/main.rs` 공개 디스패치와 사용법·capabilities 계약을 다시 대조했다.
+  누락된 GPU PNG, LLM 청크, 스키마/온톨로지/에이전트 매니페스트, scan/threat-scan,
+  `dump-extents`, watermark 검사, 계획 실행·CAS SHA-256 저널, 영수증·감사·계보·정책 명령군,
+  내부 진단 프로브를 보완했다. `layout-anomaly --json` 봉투 필드와 exit 3 판정 의미도 함께 정정했다.
+
+## 명시적 폰트 환경
+
+`export-svg`, `export-render-tree`, `export-pdf`는 `--font-environment <JSON 파일>`로
+호출자가 지정한 대체 폰트를 조판과 출력에 함께 적용한다. 기본 동작과 저장 원본은 유지하며,
+설정 형식·WASM API·Visual Sweep 연계는 [명시적 조판 폰트 환경](font_environment.md)을 따른다.

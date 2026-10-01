@@ -2,7 +2,7 @@
 kind: guide
 status: active
 canonical: mydocs/manual/pr_review_workflow.md
-last_verified: 2026-07-25
+last_verified: 2026-08-12
 ---
 
 # 다수 PR과 update branch 처리
@@ -46,6 +46,29 @@ contributor 또는 maintainer가 Update branch를 수행해 PR head가 바뀌면
    `--dry-run`은 목록만). 이 경로도 **일반 `gh run cancel`을 먼저 시도하지 않고** force-cancel
    API를 쓴다. script를 쓸 수 없는 환경에서만 아래 수동 API 절차를 따른다.
 4. 수동 취소 뒤에도 완료 상태와 `cancelled` 결론을 재확인한다.
+
+### 한 기여자의 대량 PR 사후 정리 — `--author` 모드 (#4025)
+
+에이전트 오작동 등으로 **한 기여자의 PR 이 대량 생성돼 러너가 포화**된 경우
+(2026-08-04 실측: fork PR 69건, 진행 15 + 대기 39), 위 PR 단위 절차로는 풀리지 않는다
+— PR 모드는 **최신 head run 보존**이 설계 목적인데 사고에서는 그 최신 run 들이 러너를
+먹기 때문이다.
+
+```
+scripts/cancel_stale_pr_runs.sh --author <로그인> [--dry-run]
+```
+
+- 해당 author 의 **열린 PR head 브랜치 목록**과 대조해 목록 밖(devel·main·타 기여자)은
+  **취소하지 않는다.** 8/4 실측에서 이 대조가 devel CI 를 지켰다.
+- `gh run cancel` 1차 → 잔여분 `force-cancel` 2차. **1차만으로는 부족하다**
+  (8/4 실측: 1차 후 44건 잔여 — 취소 반영 지연·신규 큐잉).
+- 요약에 `대상 N건 → 잔여 M건 (보호 K건)` 을 출력한다. 잔여가 있으면 재실행한다.
+- 조회는 `status=in_progress|queued` 로 좁힌다(전량 `--paginate` 는 수 분 소요 실측).
+
+**선행 판단**: 정리 전에 원인을 확인한다. 기여자 실수인지 에이전트 오작동인지에 따라
+후속 커뮤니케이션 톤이 달라진다 — 8/4 에는 이 확인이 늦어 close 코멘트를 정정해야 했다.
+평시 `approval_policy` 는 `first_time_contributors` 를 유지하고
+(`all_external_contributors` 강화는 릴리즈 시에만), 사고는 이 도구로 사후 대응한다.
 
 러너 구성 전환 등으로 배정 가능한 label이 사라진 run은 `queued`에 고착될 수 있다. 이 run은 일반 cancel이
 끝나지 않고 같은 concurrency group을 계속 점유해, 후속 run이 job을 하나도 시작하지 못한 `pending`으로
@@ -137,7 +160,10 @@ collaborator가 외부 contributor PR의 source branch에 archive review·오늘
 
 3. collaborator commit 위로 `git merge <new-contributor-head>`를 실행하지 않는다. 그 merge는 대개
    current `devel`을 직접 parent로 갖지 않아 fast-pass가 `mydocs-only-merge-not-reusable`로 거부한다.
-   VS Code 그래프의 가시성은 같은 branch에서 contributor head를 조상으로 두는 선형 history로 유지한다.
+   current `devel`을 source에 이미 병합한 예외는 [review-only fast-pass](review_only_fast_pass.md)의
+   자동 merge tree 일치 조건을 충족할 때만 제한적으로 재사용할 수 있지만, 이 예외도 새 merge 생성을
+   정당화하지 않는다. VS Code 그래프의 가시성은 같은 branch에서 contributor head를 조상으로 두는 선형
+   history로 유지한다.
 4. collaborator commit이 이미 contributor source branch에 push됐거나, replay 범위에 merge·미확인 commit이
    있으면 history를 억지로 정리하거나 contributor branch를 force-push하지 않는다. 최신 source에서 full CI를
    받거나, 작업지시자의 명시 승인을 받아 별도 처리 경로를 선택한다.
@@ -154,6 +180,9 @@ collaborator가 외부 contributor PR의 source branch에 archive review·오늘
 - PR 안의 Merge branch devel commit은 검토 체리픽에서 제외한다.
 - 누적 branch는 충돌·테스트·시각 검증용 임시 branch다. review 문서는 원 PR 번호별로 작성한다.
 - 각 review 문서에 체리픽 순서, 적용 SHA, conflict, 선행 PR 의존성을 그 PR 기준으로 적는다.
+- 원 PR별 archive 검토 기록과 필요한 오늘할일은 통합 branch의 같은 PR diff에 둔다. 통합 PR 번호를 위한
+  별도 review 문서를 만들거나, 체리픽 통합 결과의 검토 기록만 담은 별도 docs-only PR을 만들지 않는다.
+  문서 보완은 동일 통합 PR의 code candidate CI 성공 뒤 trailing docs-only commit으로 처리한다.
 - 여러 PR을 한꺼번에 검증했어도 merge 전에는 각 PR의 최신 head, mergeable, required check를 개별 재확인한다.
 
 fetch·visibility branch·Cargo 검증은 [로컬 검증](local_validation.md)을, 렌더 영향 증적은

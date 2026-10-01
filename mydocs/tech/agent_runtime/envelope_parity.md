@@ -7,6 +7,9 @@ last_verified: 2026-08-03
 
 # 봉투 동등성 계약 — WASM 반환값 ↔ CLI `--json`
 
+> **v0.8.4 현행성 주의:** Node 바인딩을 근거로 든 코드 인용은 철회 전 이력이다.
+> #4655 이후 동등성의 현재 권위는 CLI `--json`과 WASM 계약 테스트다.
+
 > WASM 반환값이 CLI `--json` 봉투와 모양이 다르면 **문서가 둘로 갈리고 그 순간
 > 이 축은 실패한다.** 이 문서는 무엇이 같아야 하고, 무엇이 다를 수밖에 없으며,
 > 다른 것을 **어떤 규칙으로 매핑하는지**, 그리고 그 동등성을 **무엇으로 강제하는지**를
@@ -235,8 +238,8 @@ fn classify_hwp_error(msg: &str) -> LoadError {
 않고 사실만 적는다. 패리티 규칙은 이 현실을 덮어야 한다.
 
 **① `run --json` 은 실패에도 봉투를 낸다.** `capabilities.jsonContract.failure` 는
-"단건 명령 실패 시 stdout 0바이트; batch 는 error 레코드 + 최종 exit 1"이라고
-선언하는데, `run` 은 셋째 경우다:
+이 예외를 적는다 — "예외: run — 실패도 봉투를 stdout 으로 낸다(계획 안 문서 부재 등
+입력 오류 exit 1 + error, …)". `run` 은 셋째 경우다:
 
 ```console
 $ rhwp run --plan-json '{"planVersion":"1.0"}' --json

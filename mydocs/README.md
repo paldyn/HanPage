@@ -2,7 +2,7 @@
 kind: guide
 status: active
 canonical: mydocs/README.md
-last_verified: 2026-07-23
+last_verified: 2026-09-04
 ---
 
 # rhwp 문서 지도와 canonical manifest
@@ -34,7 +34,7 @@ front matter는 `mydocs/manual`, `mydocs/tech`, `mydocs/troubleshootings`의 모
 감사한 뒤 현재 탐색 비용을 실제로 줄이는 다음 경계만 채택했다.
 
 - `manual/verification/`: 시각 검증 정책과 실행 가이드
-- `manual/codex/`: 저장소 부트스트랩과 현행 문서·Git 절차
+- `manual/codex/`: 저장소 부트스트랩, 활성 프로젝트 메모리와 현행 문서·Git 절차
 - `manual/pr_review/`: canonical PR review 라우터가 조건별로 선택하는 역할·검증·후속 처리 가이드
 - `manual/memory/`: 과거 피드백과 memory 출처
 - `tech/investigations/issue-####/`: 특정 이슈의 가설·실험·관찰
@@ -46,36 +46,47 @@ front matter는 `mydocs/manual`, `mydocs/tech`, `mydocs/troubleshootings`의 모
 권위 관계가 분명한 문서는 기존 안정 경로를 유지한다. 이후 이동도 파일명 패턴이 아니라 내용과 참조
 비용을 확인한 독립 커밋으로 수행한다.
 
+이 원칙은 역할·권위 관계를 바꾸는 **정보구조 재분류**에 적용한다. 반면 `orders`, `plans`, `pr`,
+`report`, `working`의 root가 무한히 커지는 것을 막는 **월별 작업 증적 아카이빙**은 문서 역할을
+바꾸지 않는 별도 생명주기 절차다. 그 대상·경계·충돌·링크·검증 규칙은
+[문서·Git 워크플로](manual/codex/docs_and_git_workflow.md#monthly-archive-governance)를 따른다.
+
 ## Canonical manifest
 
 | 경로 | kind | status | canonical | last_verified |
 | --- | --- | --- | --- | --- |
-| [문서·Git 워크플로](manual/codex/docs_and_git_workflow.md) | canonical | active | `manual/codex/docs_and_git_workflow.md` | 2026-07-16 |
+| [프로젝트 로드맵](../ROADMAP.md) | canonical | active | `ROADMAP.md` | 2026-08-10 |
+| [문서·Git 워크플로](manual/codex/docs_and_git_workflow.md) | canonical | active | `manual/codex/docs_and_git_workflow.md` | 2026-08-07 |
+| [GitHub 저장소 운영 매뉴얼](manual/github_operations.md) | canonical | active | `manual/github_operations.md` | 2026-08-15 |
 | [Codex 문서 지도](manual/codex/README.md) | guide | active | `manual/codex/README.md` | 2026-07-17 |
+| [Codex 프로젝트 메모리 덤프](manual/codex/MEMORY.md) | memory | active | `manual/codex/MEMORY.md` | 2026-08-07 |
 | [Claude memory dump 색인](manual/memory/MEMORY.md) | memory | historical | `manual/codex/docs_and_git_workflow.md` | 2026-07-17 |
-| [PR 리뷰·통합 워크플로](manual/pr_review_workflow.md) | canonical | active | `manual/pr_review_workflow.md` | 2026-07-25 |
+| [PR 리뷰·통합 워크플로](manual/pr_review_workflow.md) | canonical | active | `manual/pr_review_workflow.md` | 2026-08-07 |
 | [PR review 조건별 가이드](manual/pr_review/README.md) | guide | active | `manual/pr_review_workflow.md` | 2026-07-25 |
+| [첫 기여자 외부 PR 처리](manual/pr_review/first_time_contributor.md) | guide | active | `manual/pr_review_workflow.md` | 2026-08-28 |
 | [에이전트 capability 카탈로그](manual/agent_capability_registry.md) | canonical | active | `manual/agent_capability_registry.md` | 2026-07-26 |
-| [개발 환경 가이드](manual/dev_environment_guide.md) | guide | active | `manual/dev_environment_guide.md` | 2026-07-17 |
+| [개발 환경 가이드](manual/dev_environment_guide.md) | guide | active | `manual/dev_environment_guide.md` | 2026-08-11 |
+| [Gym 벤치마크 수동 운영 매뉴얼](manual/gym_benchmark_operations.md) | canonical | active | `manual/gym_benchmark_operations.md` | 2026-09-03 |
 | [온보딩 가이드](manual/onboarding_guide.md) | guide | active | `manual/README.md` | 2026-07-17 |
 | [배포 가이드](manual/publish_guide.md) | guide | active | `manual/publish_guide.md` | 2026-07-17 |
 | [Hyper-Waterfall 문서 체계](manual/hyper_waterfall_docs_guide.md) | guide | active | `manual/codex/docs_and_git_workflow.md` | 2026-07-17 |
 | [AI 페어프로그래밍 기록](manual/ai_pair_programming_guide.md) | reference | historical | `manual/codex/docs_and_git_workflow.md` | 2026-07-17 |
-| [CLI 명령어 매뉴얼](manual/cli_commands.md) | canonical | active | `manual/cli_commands.md` | 2026-07-16 |
+| [CLI 명령어 매뉴얼](manual/cli_commands.md) | canonical | active | `manual/cli_commands.md` | 2026-08-23 |
 | [문서 링크와 메타데이터 로컬 검사](manual/markdown_link_check_guide.md) | guide | active | `manual/markdown_link_check_guide.md` | 2026-07-17 |
 | [시각 검증 문서 지도](manual/verification/README.md) | guide | active | `manual/verification/README.md` | 2026-07-16 |
 | [시각 검증 거버넌스](manual/verification/visual_verification_governance.md) | canonical | active | `manual/verification/visual_verification_governance.md` | 2026-07-16 |
-| [HWP 2020 MCP 사용법](manual/mcp_hwp2020Convert_usage.md) | guide | active | `manual/mcp_hwp2020Convert_usage.md` | 2026-07-16 |
+| [HWP 2024 MCP 사용법](manual/mcp_hwp2024Convert_usage.md) | guide | active | `manual/mcp_hwp2024Convert_usage.md` | 2026-08-24 |
 | [HWP 5.0 스펙 문서 정오표](tech/hwp_spec_errata.md) | canonical | active | `tech/hwp_spec_errata.md` | 2026-07-16 |
 | [한글 문서 파일 형식 5.0 개정 1.3](tech/한글문서파일형식_5.0_revision1.3.md) | reference | active | `tech/hwp_spec_errata.md` | 2026-07-16 |
 | [Document IR LineSeg 표준](tech/document_ir_lineseg_standard.md) | canonical | active | `tech/document_ir_lineseg_standard.md` | 2026-07-16 |
 | [렌더링 엔진 설계](tech/rendering_engine_design.md) | canonical | active | `tech/rendering_engine_design.md` | 2026-07-23 |
+| [Text IR v2 계약](tech/text-ir-v2.md) | canonical | active | `tech/text-ir-v2.md` | 2026-09-03 |
+| [수식 모듈 매뉴얼](manual/equation_module.md) | guide | active | `manual/equation_module.md` | 2026-08-18 |
 | [표 레이아웃 규칙](tech/table_layout_rules.md) | canonical | active | `tech/table_layout_rules.md` | 2026-07-16 |
-| [폰트 fallback 전략](tech/font_fallback_strategy.md) | canonical | active | `tech/font_fallback_strategy.md` | 2026-07-16 |
+| [조판 책임 경계와 변경 지도](tech/typesetting_architecture.md) | canonical | active | `tech/typesetting_architecture.md` | 2026-09-23 |
+| [폰트 fallback 전략](tech/font_fallback_strategy.md) | canonical | active | `tech/font_fallback_strategy.md` | 2026-08-25 |
 | [편집 action undo/redo 아키텍처](tech/edit_action_undo_redo_architecture.md) | canonical | active | `tech/edit_action_undo_redo_architecture.md` | 2026-07-16 |
 | [포맷 파서와 공통 Document IR 경계](tech/parser_architecture.md) | canonical | active | `tech/parser_architecture.md` | 2026-07-17 |
-| [바인딩 동등성 계약](tech/bindings/parity_contract.md) | canonical | active | `tech/bindings/parity_contract.md` | 2026-08-03 |
-| [바인딩 문서 지도](tech/bindings/README.md) | guide | active | `tech/bindings/README.md` | 2026-08-03 |
 | [ThorVG 결정 기록](tech/thorvg_decision.md) | decision | active | `tech/thorvg_decision.md` | 2026-07-16 |
 | [이전 개발 로드맵](tech/archive/dev_roadmap_v1_backup.md) | snapshot | historical | `tech/archive/README.md` | 2026-07-16 |
 | [이슈별 기술 조사 지도](tech/investigations/README.md) | guide | active | `tech/investigations/README.md` | 2026-07-17 |
@@ -94,6 +105,11 @@ front matter는 `mydocs/manual`, `mydocs/tech`, `mydocs/troubleshootings`의 모
 갱신하고, 외부 이력 호환이 필요한 옛 경로만 같은 commit의 redirect stub으로 남긴다. 기존 문서를 매번
 자동 재검사하거나 migration 목록을 별도 파일에 하드코딩하지 않는다. 필요한 작업에서만
 [문서 링크와 메타데이터 로컬 검사 가이드](manual/markdown_link_check_guide.md)에 따라 검사한다.
+
+다섯 작업 증적 폴더의 월별 archive 이동은 역할·현행성을 바꾸는 재분류가 아니므로 redirect stub을
+남기지 않는다. 당월 root와 이전 기록의 `archives/`를 구분하되, 경로를 이슈·PR 완료 상태로 해석하지
+않는다. 반복 실행과 차등 검증의 정본은
+[월별 아카이브 거버넌스](manual/codex/docs_and_git_workflow.md#monthly-archive-governance)다.
 
 이슈별 조사 문서는 `tech/investigations/issue-####/`에 두며, 이슈별 기준선이나 진단이 장기 기술
 계약으로 확정되면 해당 canonical 문서에 결론을 반영한다.

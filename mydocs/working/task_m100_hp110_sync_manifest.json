@@ -1,0 +1,288 @@
+{
+  "upstream_sha": "02530b9ed567a44663edb26c65fb565c4a79f00d",
+  "base_sha": "cf5d462dcda1b5ab71160033e1d454b42198ad18",
+  "fork_sha": "cecaf1bbfec9a10778484d30ebb747280e7a02af",
+  "automatic": [
+    {
+      "path": ".gitattributes",
+      "result": "upstream_lfs_policy_already_includes_fork_change"
+    },
+    {
+      "path": ".gitignore",
+      "result": "three_way_merge"
+    },
+    {
+      "path": "README.md",
+      "result": "three_way_merge"
+    },
+    {
+      "path": "README_EN.md",
+      "result": "three_way_merge"
+    },
+    {
+      "path": "npm/editor/README.md",
+      "result": "three_way_merge"
+    },
+    {
+      "path": "npm/editor/index.d.ts",
+      "result": "three_way_merge"
+    },
+    {
+      "path": "npm/editor/index.js",
+      "result": "three_way_merge"
+    },
+    {
+      "path": "npm/editor/package.json",
+      "result": "three_way_merge"
+    },
+    {
+      "path": "rhwp-studio/index.html",
+      "result": "three_way_merge"
+    },
+    {
+      "path": "rhwp-studio/public/rhwp.js",
+      "result": "take_upstream_generated_binding_then_fresh_wasm_build"
+    },
+    {
+      "path": "rhwp-studio/src/styles/menu-bar.css",
+      "result": "three_way_merge"
+    },
+    {
+      "path": "rhwp-studio/vite.config.ts",
+      "result": "three_way_merge"
+    },
+    {
+      "path": "rhwp-vscode/README.md",
+      "result": "three_way_merge"
+    },
+    {
+      "path": "rhwp-vscode/package.json",
+      "result": "three_way_merge"
+    }
+  ],
+  "conflicts": [
+    {
+      "path": ".github/workflows/deploy-pages.yml",
+      "conflict_file": "/private/tmp/hanpage-sync-reconcile/.github__workflows__deploy-pages.yml.conflict",
+      "result": "upstream_left_in_worktree_for_manual_port"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "conflict_file": "/private/tmp/hanpage-sync-reconcile/CONTRIBUTING.md.conflict",
+      "result": "upstream_left_in_worktree_for_manual_port"
+    },
+    {
+      "path": "Cargo.toml",
+      "conflict_file": "/private/tmp/hanpage-sync-reconcile/Cargo.toml.conflict",
+      "result": "upstream_left_in_worktree_for_manual_port"
+    },
+    {
+      "path": "npm/README.md",
+      "conflict_file": "/private/tmp/hanpage-sync-reconcile/npm__README.md.conflict",
+      "result": "upstream_left_in_worktree_for_manual_port"
+    },
+    {
+      "path": "rhwp-studio/package-lock.json",
+      "result": "regenerate_after_package_reconciliation"
+    },
+    {
+      "path": "rhwp-studio/package.json",
+      "conflict_file": "/private/tmp/hanpage-sync-reconcile/rhwp-studio__package.json.conflict",
+      "result": "upstream_left_in_worktree_for_manual_port"
+    },
+    {
+      "path": "rhwp-studio/src/command/commands/file.ts",
+      "conflict_file": "/private/tmp/hanpage-sync-reconcile/rhwp-studio__src__command__commands__file.ts.conflict",
+      "result": "upstream_left_in_worktree_for_manual_port"
+    },
+    {
+      "path": "rhwp-studio/src/core/font-loader.ts",
+      "conflict_file": "/private/tmp/hanpage-sync-reconcile/rhwp-studio__src__core__font-loader.ts.conflict",
+      "result": "upstream_left_in_worktree_for_manual_port"
+    },
+    {
+      "path": "rhwp-studio/src/main.ts",
+      "conflict_file": "/private/tmp/hanpage-sync-reconcile/rhwp-studio__src__main.ts.conflict",
+      "result": "upstream_left_in_worktree_for_manual_port"
+    },
+    {
+      "path": "rhwp-studio/src/ui/about-dialog.ts",
+      "conflict_file": "/private/tmp/hanpage-sync-reconcile/rhwp-studio__src__ui__about-dialog.ts.conflict",
+      "result": "upstream_left_in_worktree_for_manual_port"
+    }
+  ],
+  "relocations": [
+    {
+      "from": "mydocs/orders/20260710.md",
+      "to": "mydocs/orders/archives/20260710_hanpage.md"
+    },
+    {
+      "from": "mydocs/orders/20260804.md",
+      "to": "mydocs/orders/archives/20260804_hanpage.md"
+    },
+    {
+      "from": "mydocs/report/task_m100_1_report.md",
+      "to": "mydocs/report/archives/task_m100_hp1_report.md"
+    }
+  ],
+  "preserved": [
+    ".github/CODE_OF_CONDUCT.md",
+    ".github/SECURITY.md",
+    ".github/workflows/desktop-release.yml",
+    "HanPage-Desktop/.gitignore",
+    "HanPage-Desktop/README.md",
+    "HanPage-Desktop/package-lock.json",
+    "HanPage-Desktop/package.json",
+    "HanPage-Desktop/src-tauri/.gitignore",
+    "HanPage-Desktop/src-tauri/Cargo.lock",
+    "HanPage-Desktop/src-tauri/Cargo.toml",
+    "HanPage-Desktop/src-tauri/build.rs",
+    "HanPage-Desktop/src-tauri/capabilities/default.json",
+    "HanPage-Desktop/src-tauri/icons/128x128.png",
+    "HanPage-Desktop/src-tauri/icons/128x128@2x.png",
+    "HanPage-Desktop/src-tauri/icons/32x32.png",
+    "HanPage-Desktop/src-tauri/icons/64x64.png",
+    "HanPage-Desktop/src-tauri/icons/Square107x107Logo.png",
+    "HanPage-Desktop/src-tauri/icons/Square142x142Logo.png",
+    "HanPage-Desktop/src-tauri/icons/Square150x150Logo.png",
+    "HanPage-Desktop/src-tauri/icons/Square284x284Logo.png",
+    "HanPage-Desktop/src-tauri/icons/Square30x30Logo.png",
+    "HanPage-Desktop/src-tauri/icons/Square310x310Logo.png",
+    "HanPage-Desktop/src-tauri/icons/Square44x44Logo.png",
+    "HanPage-Desktop/src-tauri/icons/Square71x71Logo.png",
+    "HanPage-Desktop/src-tauri/icons/Square89x89Logo.png",
+    "HanPage-Desktop/src-tauri/icons/StoreLogo.png",
+    "HanPage-Desktop/src-tauri/icons/icon.icns",
+    "HanPage-Desktop/src-tauri/icons/icon.ico",
+    "HanPage-Desktop/src-tauri/icons/icon.png",
+    "HanPage-Desktop/src-tauri/src/lib.rs",
+    "HanPage-Desktop/src-tauri/src/main.rs",
+    "HanPage-Desktop/src-tauri/tauri.conf.json",
+    "assets/logo/favicon.ico",
+    "assets/logo/logo-1024.png",
+    "assets/logo/logo-128.png",
+    "assets/logo/logo-256.png",
+    "assets/logo/logo-300.png",
+    "assets/logo/logo-512.png",
+    "assets/logo/logo-64.png",
+    "assets/logo/logo-original-554x562.png",
+    "mydocs/manual/desktop_auto_update.md",
+    "mydocs/plans/task_m100_1.md",
+    "mydocs/plans/task_m100_1_impl.md",
+    "mydocs/plans/task_m100_1_impl_v2.md",
+    "mydocs/plans/task_m100_hp12.md",
+    "mydocs/plans/task_m100_hp13.md",
+    "mydocs/plans/task_m100_hp18.md",
+    "mydocs/plans/task_m100_hp23.md",
+    "mydocs/plans/task_m100_hp23_impl.md",
+    "mydocs/plans/task_m100_hp26.md",
+    "mydocs/plans/task_m100_hp26_impl.md",
+    "mydocs/plans/task_m100_hp28.md",
+    "mydocs/plans/task_m100_hp29.md",
+    "mydocs/plans/task_m100_hp38.md",
+    "mydocs/plans/task_m100_hp40.md",
+    "mydocs/plans/task_m100_hp5.md",
+    "mydocs/plans/task_m100_hp51.md",
+    "mydocs/plans/task_m100_hp59.md",
+    "mydocs/plans/task_m100_hp7.md",
+    "mydocs/pr/pr_1366_review.md",
+    "mydocs/report/task_m100_hp12_report.md",
+    "mydocs/report/task_m100_hp13_report.md",
+    "mydocs/report/task_m100_hp18_report.md",
+    "mydocs/report/task_m100_hp23_report.md",
+    "mydocs/report/task_m100_hp26_report.md",
+    "mydocs/report/task_m100_hp28_report.md",
+    "mydocs/report/task_m100_hp29_report.md",
+    "mydocs/report/task_m100_hp38_report.md",
+    "mydocs/report/task_m100_hp40_report.md",
+    "mydocs/report/task_m100_hp41_report.md",
+    "mydocs/report/task_m100_hp4_report.md",
+    "mydocs/report/task_m100_hp51_report.md",
+    "mydocs/report/task_m100_hp59_report.md",
+    "mydocs/report/task_m100_hp5_report.md",
+    "mydocs/report/task_m100_hp7_report.md",
+    "mydocs/working/task_m100_1_stage1.md",
+    "mydocs/working/task_m100_1_stage2.md",
+    "mydocs/working/task_m100_1_stage3.md",
+    "mydocs/working/task_m100_1_stage4.md",
+    "mydocs/working/task_m100_hp12_stage1.md",
+    "mydocs/working/task_m100_hp12_stage2.md",
+    "mydocs/working/task_m100_hp13_stage1.md",
+    "mydocs/working/task_m100_hp13_stage2.md",
+    "mydocs/working/task_m100_hp18_stage1.md",
+    "mydocs/working/task_m100_hp23_stage1.md",
+    "mydocs/working/task_m100_hp23_stage2.md",
+    "mydocs/working/task_m100_hp23_stage3.md",
+    "mydocs/working/task_m100_hp23_stage4.md",
+    "mydocs/working/task_m100_hp26_stage1.md",
+    "mydocs/working/task_m100_hp26_stage2.md",
+    "mydocs/working/task_m100_hp26_stage3.md",
+    "mydocs/working/task_m100_hp40_stage2.md",
+    "mydocs/working/task_m100_hp51_stage2.md",
+    "mydocs/working/task_m100_hp5_stage2.md",
+    "mydocs/working/task_m100_hp7_stage1.md",
+    "rhwp-chrome/PRIVACY.md",
+    "rhwp-firefox/PRIVACY.md",
+    "rhwp-studio/public/CNAME",
+    "rhwp-studio/public/LICENSE",
+    "rhwp-studio/public/favicon.ico",
+    "rhwp-studio/public/icons/icon-128.png",
+    "rhwp-studio/public/icons/icon-192.png",
+    "rhwp-studio/public/icons/icon-256.png",
+    "rhwp-studio/public/icons/icon-512.png",
+    "rhwp-studio/src/core/desktop-bridge.ts",
+    "rhwp-studio/src/ui/app-download.ts",
+    "rhwp-studio/src/ui/update-notice-text.ts",
+    "rhwp-studio/src/ui/update-notice.ts",
+    "rhwp-studio/tests/update-notice-message.test.ts",
+    "web/fonts/LICENSES.md",
+    "web/fonts/OFL.txt",
+    "mydocs/plans/task_m100_hp110.md",
+    "mydocs/orders/20261001.md"
+  ],
+  "strategy": "upstream-tree-on-HanPage-history",
+  "integration_status": "all manual conflicts resolved; local focused/browser verification passed; full Rust and remote/PR approval pending",
+  "resolved_manual_conflicts": [
+    {
+      "path": ".github/workflows/deploy-pages.yml",
+      "result": "resolved and verified in integrated worktree"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "result": "resolved and verified in integrated worktree"
+    },
+    {
+      "path": "Cargo.toml",
+      "result": "resolved and verified in integrated worktree"
+    },
+    {
+      "path": "npm/README.md",
+      "result": "resolved and verified in integrated worktree"
+    },
+    {
+      "path": "rhwp-studio/package-lock.json",
+      "result": "resolved and verified in integrated worktree"
+    },
+    {
+      "path": "rhwp-studio/package.json",
+      "result": "resolved and verified in integrated worktree"
+    },
+    {
+      "path": "rhwp-studio/src/command/commands/file.ts",
+      "result": "resolved and verified in integrated worktree"
+    },
+    {
+      "path": "rhwp-studio/src/core/font-loader.ts",
+      "result": "resolved and verified in integrated worktree"
+    },
+    {
+      "path": "rhwp-studio/src/main.ts",
+      "result": "resolved and verified in integrated worktree"
+    },
+    {
+      "path": "rhwp-studio/src/ui/about-dialog.ts",
+      "result": "resolved and verified in integrated worktree"
+    }
+  ],
+  "source_commit": "b6f4318dc8c8c50cdb0897887f72b3e59684dee8"
+}
