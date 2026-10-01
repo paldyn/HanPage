@@ -294,5 +294,11 @@
       "Open PR",
       "merge after current-head CI passes"
     ]
+  },
+  "security_corpus_correction": {
+    "commit": "b2034762f640bdf66721f52a7cda6c31cb8282e8",
+    "path": "tests/security_corpus_regression.rs",
+    "sha256": "4fd9103f51b63bda3bf3ca67c2ca828c685ed13281e2a9a4c6cd46daddeca5eb",
+    "scope": "verified genuine hidden classifications; exact path/hash/finding guard; detectors unchanged; injection/unicode coverage preserved"
   }
 }

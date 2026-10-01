@@ -154,18 +154,18 @@
       ],
       "dirty": false,
       "nativeIoMock": false,
-      "actualDownloadPath": "output/pr-review/hp110/font-pending-downloads/para-001.hwp",
-      "sha256": "6dc2a8a953d85b693d385ea0e6b06539b21f0249ba31e8e24463a13806a8e4fd"
+      "sha256": "6dc2a8a953d85b693d385ea0e6b06539b21f0249ba31e8e24463a13806a8e4fd",
+      "committedInputPath": "mydocs/pr/assets/task_m100_hp110_font-pending-edited.hwp"
     },
     {
       "scenario": "font-pending-real-hwp-download-reopen-text-preserved",
-      "path": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/output/pr-review/hp110/font-pending-downloads/para-001.hwp",
+      "path": "mydocs/pr/assets/task_m100_hp110_font-pending-edited.hwp",
       "sha256": "6dc2a8a953d85b693d385ea0e6b06539b21f0249ba31e8e24463a13806a8e4fd",
       "bytes": 16896,
-      "openMs": 5737,
+      "openMs": 5623,
       "browser": "Chrome/154.0.8037.58",
       "reopened": {
-        "fileName": "para-001.hwp",
+        "fileName": "task_m100_hp110_font-pending-edited.hwp",
         "pages": 3,
         "text": "오호라, 건곤(乾 font pending smoke坤)이 혼합하고 천지 개벽하는 법은 열 뒤 회가 있으니, 가론 자축인묘진사오미신유술해요, 세는 1만 8백년이라. 대개 건곤이 혼합하고 천지 만물이 형용을 알지 못하다가 자회에 비로소 하늘이 생긴지 1만 8백년 후에야 축회에 비로소 땅이 생기고, 땅이 생긴지 1만 8백년 후에야 인회에 비로소 사람과 만물이 생",
         "inputActive": true,
@@ -175,7 +175,8 @@
       "expectedText": "font pending smoke",
       "preserved": true,
       "nativeIoMock": false,
-      "pageErrors": []
+      "pageErrors": [],
+      "input_commit": "c973306239ea6e93efac5f4d3cb0e28b3cf9cb71"
     }
   ],
   "font_page_errors": [],

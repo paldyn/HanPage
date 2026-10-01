@@ -1,0 +1,19 @@
+{
+  "source": "samples/issue5723/coanchored_square_pair_center_slack.hwpx",
+  "source_sha256": "a15ef3aa092febb9540e68f9bae206a8a2b7f7a613b8b13eca65e3fa67126aea",
+  "members": {
+    "Contents/header.xml": {
+      "sha256": "4be9bb05a3aca2d67d41698a777ed87bbff84ced836304ce357d8be053ff5335",
+      "bytes": 1055909
+    },
+    "Contents/section0.xml": {
+      "sha256": "7babb08851b44abaf5525d10e5eae82674ad44de51c5bdf05fea33be10e7a1fc",
+      "bytes": 52681
+    }
+  },
+  "nodes": {
+    "borderFill_28": "<ns0:borderFill xmlns:ns0=\"http://www.hancom.co.kr/hwpml/2011/head\" id=\"28\" threeD=\"0\" shadow=\"0\" centerLine=\"NONE\" breakCellSeparateLine=\"0\"><ns0:slash type=\"NONE\" Crooked=\"0\" isCounter=\"0\" /><ns0:backSlash type=\"NONE\" Crooked=\"0\" isCounter=\"0\" /><ns0:leftBorder type=\"NONE\" width=\"0.12 mm\" color=\"#000000\" /><ns0:rightBorder type=\"NONE\" width=\"0.12 mm\" color=\"#000000\" /><ns0:topBorder type=\"NONE\" width=\"0.4 mm\" color=\"#000000\" /><ns0:bottomBorder type=\"NONE\" width=\"0.12 mm\" color=\"#000000\" /><ns0:diagonal type=\"SOLID\" width=\"0.1 mm\" color=\"#000000\" /></ns0:borderFill>",
+    "charPr_132": "<ns0:charPr xmlns:ns0=\"http://www.hancom.co.kr/hwpml/2011/head\" id=\"132\" height=\"900\" textColor=\"#FFFFFF\" shadeColor=\"none\" useFontSpace=\"0\" useKerning=\"0\" symMark=\"NONE\" borderFillIDRef=\"2\"><ns0:fontRef hangul=\"3\" latin=\"3\" hanja=\"3\" japanese=\"3\" other=\"3\" symbol=\"3\" user=\"3\" /><ns0:ratio hangul=\"95\" latin=\"95\" hanja=\"95\" japanese=\"95\" other=\"95\" symbol=\"95\" user=\"95\" /><ns0:spacing hangul=\"-11\" latin=\"-11\" hanja=\"-11\" japanese=\"-11\" other=\"-11\" symbol=\"-11\" user=\"-11\" /><ns0:relSz hangul=\"100\" latin=\"100\" hanja=\"100\" japanese=\"100\" other=\"100\" symbol=\"100\" user=\"100\" /><ns0:offset hangul=\"0\" latin=\"0\" hanja=\"0\" japanese=\"0\" other=\"0\" symbol=\"0\" user=\"0\" /><ns0:underline type=\"NONE\" shape=\"SOLID\" color=\"#000000\" /><ns0:strikeout shape=\"NONE\" color=\"#000000\" /><ns0:outline type=\"NONE\" /><ns0:shadow type=\"NONE\" color=\"#000000\" offsetX=\"0\" offsetY=\"0\" /></ns0:charPr>",
+    "paragraph_56": "<ns0:p xmlns:ns0=\"http://www.hancom.co.kr/hwpml/2011/paragraph\" id=\"56\" paraPrIDRef=\"65\" styleIDRef=\"0\" pageBreak=\"0\" columnBreak=\"0\" merged=\"0\"><ns0:run charPrIDRef=\"131\"><ns0:t>*</ns0:t></ns0:run><ns0:run charPrIDRef=\"128\"><ns0:t> </ns0:t></ns0:run><ns0:run charPrIDRef=\"129\"><ns0:t>1372 소비자상담센터 및 국제거래소비자포털</ns0:t></ns0:run><ns0:run charPrIDRef=\"128\"><ns0:t> 국제거래 관련 상담건 기준</ns0:t></ns0:run><ns0:run charPrIDRef=\"131\"><ns0:t> </ns0:t></ns0:run><ns0:run charPrIDRef=\"132\"><ns0:t>기준</ns0:t></ns0:run><ns0:linesegarray><ns0:lineseg textpos=\"0\" vertpos=\"11774\" vertsize=\"900\" textheight=\"900\" baseline=\"765\" spacing=\"180\" horzpos=\"0\" horzsize=\"24460\" flags=\"393216\" /><ns0:lineseg textpos=\"42\" vertpos=\"12854\" vertsize=\"900\" textheight=\"900\" baseline=\"765\" spacing=\"180\" horzpos=\"0\" horzsize=\"24460\" flags=\"1441792\" /></ns0:linesegarray></ns0:p>"
+  }
+}

@@ -1,0 +1,256 @@
+{
+  "schema_version": 1,
+  "snapshot_head_sha": "88317b1110432d37a61b08a1af3ed305dd56e9c0",
+  "upstream_source_sha": "02530b9ed567a44663edb26c65fb565c4a79f00d",
+  "native_binary": "target/pr-review/release-test/rhwp",
+  "native_binary_sha256": "75af5c7240359dfdc3a8f24f2ae621bab58388c2fa025bace119ed0c72cae4e1",
+  "render_backend": "layer",
+  "render_commands": [
+    [
+      "target/pr-review/release-test/rhwp",
+      "export-svg",
+      "samples/issue4690/30098_indent_over_stored_cs.hwp",
+      "-p",
+      "13",
+      "-o",
+      "output/pr-review/hp110/security-genuine-evidence/30098",
+      "--json"
+    ],
+    [
+      "target/pr-review/release-test/rhwp",
+      "export-svg",
+      "samples/issue5723/coanchored_square_pair_center_slack.hwpx",
+      "-p",
+      "0",
+      "-o",
+      "output/pr-review/hp110/security-genuine-evidence/coanchored",
+      "--json"
+    ]
+  ],
+  "security_semantics": "Hidden-text detection remains positive. Genuine-hidden classification must preserve injection/unicode coverage and validate exact hash/location/text/count; no detector sensitivity or negative-corpus assertion relaxation.",
+  "visual_scope": "Original native SVG inspected as code and rendered in local Chrome. This verifies white text against background colour, not native/WASM/Hancom rendering fidelity. Browser local fallback font widths do not establish Hancom layout equivalence.",
+  "cases": [
+    {
+      "id": "30098",
+      "samples": [
+        {
+          "path": "samples/issue4690/30098_indent_over_stored_cs.hwp",
+          "bytes": 92160,
+          "sha256": "de4d89bd8803bd3c8cc84b7e51ed36846af7cc938a97baf6fb458fc0b0eeb474"
+        },
+        {
+          "path": "samples/issue6086/30098_resident_registration_reform.hwp",
+          "bytes": 92160,
+          "sha256": "de4d89bd8803bd3c8cc84b7e51ed36846af7cc938a97baf6fb458fc0b0eeb474"
+        },
+        {
+          "path": "samples/issue6524/30098_float_host_split_lineseg.hwp",
+          "bytes": 92160,
+          "sha256": "de4d89bd8803bd3c8cc84b7e51ed36846af7cc938a97baf6fb458fc0b0eeb474"
+        }
+      ],
+      "all_aliases_byte_identical": true,
+      "detector_result": {
+        "clean": false,
+        "hiddenCharCount": 1,
+        "hiddenText": [
+          {
+            "cell": {
+              "cell": 43,
+              "control": 0,
+              "paragraph": 0
+            },
+            "charCount": 1,
+            "detail": {
+              "backgroundColor": "#FFFFFF",
+              "backgroundSource": "page",
+              "textColor": "#FFFFFF"
+            },
+            "excerpt": "장",
+            "kind": "same_as_background",
+            "page": 13,
+            "paragraph": 188,
+            "section": 0
+          }
+        ],
+        "includeOffPage": false,
+        "schemaVersion": "1.0",
+        "source": "samples/issue4690/30098_indent_over_stored_cs.hwp",
+        "thresholdPt": 1.0,
+        "untrustedContent": true,
+        "untrustedFields": [
+          "hiddenText[].excerpt"
+        ]
+      },
+      "native_layer_svg": "30098/30098_indent_over_stored_cs_014.svg",
+      "svg_sha256": "193e2cf608c07946f9b4b887b9fbd57613e932584d59d591e3d27a7b062720f2",
+      "page_png": "30098/page.png",
+      "unmodified_region_png": "30098/region.png",
+      "marked_region_png": "30098/region-marked.png",
+      "browser_glyph_bounds": [
+        {
+          "glyph": "장",
+          "bounds": {
+            "x": 602.9864501953125,
+            "y": 903.3844604492188,
+            "width": 10.06317138671875,
+            "height": 15.11370849609375
+          }
+        }
+      ],
+      "overlapping_filled_background_geometry": [
+        {
+          "glyph": "장",
+          "kind": "rect",
+          "attributes": {
+            "x": "0",
+            "y": "0",
+            "width": "793.7066666666667",
+            "height": "1122.5066666666667",
+            "fill": "#ffffff"
+          }
+        }
+      ],
+      "images_on_page": 0,
+      "other_filled_geometry_types": [],
+      "direct_visual_read": "검은 주변 본문·괘선은 보이고 흰 글자 위치는 원본 PNG에서 빈 흰 영역이다. 빨간 테두리는 위치 표시만 하며 원본 SVG·PNG는 변경하지 않았다.",
+      "classification": "genuine hidden text; clean remains false",
+      "evidence_note": "SVG glyph fill은 #ffffff이고 해당 bbox와 겹치는 채움은 흰 page rect뿐이다. target glyph bbox는 cell/body clipping 내부이며 coloured shape/image와 겹치지 않는다.",
+      "source_xml_extract": null,
+      "expected_finding": {
+        "cell": {
+          "cell": 43,
+          "control": 0,
+          "paragraph": 0
+        },
+        "charCount": 1,
+        "detail": {
+          "backgroundColor": "#FFFFFF",
+          "backgroundSource": "page",
+          "textColor": "#FFFFFF"
+        },
+        "excerpt": "장",
+        "kind": "same_as_background",
+        "page": 13,
+        "paragraph": 188,
+        "section": 0
+      }
+    },
+    {
+      "id": "coanchored",
+      "samples": [
+        {
+          "path": "samples/issue5723/coanchored_square_pair_center_slack.hwpx",
+          "bytes": 48244,
+          "sha256": "a15ef3aa092febb9540e68f9bae206a8a2b7f7a613b8b13eca65e3fa67126aea"
+        }
+      ],
+      "all_aliases_byte_identical": true,
+      "detector_result": {
+        "clean": false,
+        "hiddenCharCount": 2,
+        "hiddenText": [
+          {
+            "cell": {
+              "cell": 3,
+              "control": 0,
+              "paragraph": 1
+            },
+            "charCount": 2,
+            "detail": {
+              "backgroundColor": "#FFFFFF",
+              "backgroundSource": "page",
+              "textColor": "#FFFFFF"
+            },
+            "excerpt": "기준",
+            "kind": "same_as_background",
+            "page": 0,
+            "paragraph": 3,
+            "section": 0
+          }
+        ],
+        "includeOffPage": false,
+        "schemaVersion": "1.0",
+        "source": "samples/issue5723/coanchored_square_pair_center_slack.hwpx",
+        "thresholdPt": 1.0,
+        "untrustedContent": true,
+        "untrustedFields": [
+          "hiddenText[].excerpt"
+        ]
+      },
+      "native_layer_svg": "coanchored/coanchored_square_pair_center_slack.svg",
+      "svg_sha256": "e851b94f025edd14831e4f9aa904fd116587e25b7e4f5c264093718079bdf014",
+      "page_png": "coanchored/page.png",
+      "unmodified_region_png": "coanchored/region.png",
+      "marked_region_png": "coanchored/region-marked.png",
+      "browser_glyph_bounds": [
+        {
+          "glyph": "기",
+          "bounds": {
+            "x": 395.7182312011719,
+            "y": 560.5226440429688,
+            "width": 9.85565185546875,
+            "height": 13.16546630859375
+          }
+        },
+        {
+          "glyph": "준",
+          "bounds": {
+            "x": 405.8641662597656,
+            "y": 560.5226440429688,
+            "width": 9.85565185546875,
+            "height": 13.16546630859375
+          }
+        }
+      ],
+      "overlapping_filled_background_geometry": [
+        {
+          "glyph": "기",
+          "kind": "rect",
+          "attributes": {
+            "x": "0",
+            "y": "0",
+            "width": "793.7066666666667",
+            "height": "1122.5066666666667",
+            "fill": "#ffffff"
+          }
+        },
+        {
+          "glyph": "준",
+          "kind": "rect",
+          "attributes": {
+            "x": "0",
+            "y": "0",
+            "width": "793.7066666666667",
+            "height": "1122.5066666666667",
+            "fill": "#ffffff"
+          }
+        }
+      ],
+      "images_on_page": 0,
+      "other_filled_geometry_types": [],
+      "direct_visual_read": "검은 주변 본문·괘선은 보이고 흰 글자 위치는 원본 PNG에서 빈 흰 영역이다. 빨간 테두리는 위치 표시만 하며 원본 SVG·PNG는 변경하지 않았다.",
+      "classification": "genuine hidden text; clean remains false",
+      "evidence_note": "SVG glyph fill은 #ffffff이고 해당 bbox와 겹치는 채움은 흰 page rect뿐이다. target glyph bbox는 cell/body clipping 내부이며 coloured shape/image와 겹치지 않는다.",
+      "source_xml_extract": "coanchored/original-xml-extract.json",
+      "expected_finding": {
+        "cell": {
+          "cell": 3,
+          "control": 0,
+          "paragraph": 1
+        },
+        "charCount": 2,
+        "detail": {
+          "backgroundColor": "#FFFFFF",
+          "backgroundSource": "page",
+          "textColor": "#FFFFFF"
+        },
+        "excerpt": "기준",
+        "kind": "same_as_background",
+        "page": 0,
+        "paragraph": 3,
+        "section": 0
+      }
+    }
+  ]
+}

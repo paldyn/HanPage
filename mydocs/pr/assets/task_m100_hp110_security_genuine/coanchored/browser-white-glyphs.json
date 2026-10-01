@@ -1,0 +1,28 @@
+[
+  {
+    "text": "기",
+    "fill": "#ffffff",
+    "transform": "translate(395.72000000000014,570.6533333333333) scale(0.9747,1)",
+    "fontFamily": "'한컴 고딕','Malgun Gothic','맑은 고딕','Apple SD Gothic Neo','Noto Sans KR ExtraLight','Noto Sans KR','Pretendard','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',sans-serif",
+    "fontSize": "11.696153213770756",
+    "browserBounds": {
+      "x": 395.7182312011719,
+      "y": 560.5226440429688,
+      "width": 9.85565185546875,
+      "height": 13.16546630859375
+    }
+  },
+  {
+    "text": "준",
+    "fill": "#ffffff",
+    "transform": "translate(405.86600000000016,570.6533333333333) scale(0.9747,1)",
+    "fontFamily": "'한컴 고딕','Malgun Gothic','맑은 고딕','Apple SD Gothic Neo','Noto Sans KR ExtraLight','Noto Sans KR','Pretendard','HCR Batang','함초롬바탕','HCR Batang Ext','함초롬바탕 확장','HCR Batang ExtB','함초롬바탕 확장B','Source Han Serif K Old Hangul',sans-serif",
+    "fontSize": "11.696153213770756",
+    "browserBounds": {
+      "x": 405.8641662597656,
+      "y": 560.5226440429688,
+      "width": 9.85565185546875,
+      "height": 13.16546630859375
+    }
+  }
+]

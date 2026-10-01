@@ -21,7 +21,7 @@ Task #51의 pdf-large 제거 이력을 보존하기 위해 원본 Git history �
 | native I/O·updater·웹 다운로드 버튼 | upstream에 대응하는 Studio 구현이 없어 HanPage 기능을 이식했다. 웹/desktop 빌드의 PWA 분리, CNAME, 아이콘, 서명·업데이트 설정도 보존했다. |
 | pdf-large LFS 제거 | upstream 최신 tree도 제거되어 최신 .gitattributes를 사용했다. 과거 대형 파일 이력은 되살리지 않았다. |
 
-Rust 엔진 `src/`, `tests/`, `crates/`, `Cargo.lock`의 upstream 대비 diff는 0이다. 앱 버전은 HanPage Desktop 0.8.3을 유지하고 엔진·Studio는 upstream 0.8.6으로 갱신했다. 이 통합은 devel 대상이며 앱 배포·릴리스 태그 생성은 포함하지 않는다.
+Rust 엔진 `src/`, `crates/`, `Cargo.lock`의 upstream 대비 diff는 0이다. `tests/`는 아래 실제 genuine-hidden 입력 분류 보정 한 파일만 다르며 탐지 구현은 바꾸지 않았다. 앱 버전은 HanPage Desktop 0.8.3을 유지하고 엔진·Studio는 upstream 0.8.6으로 갱신했다. 이 통합은 devel 대상이며 앱 배포·릴리스 태그 생성은 포함하지 않는다.
 
 ## 실행한 검증
 
@@ -75,3 +75,14 @@ PDF 커밋 `3790cb0d7e35554a64e76af47b9c6e1be00d2d42`의 앞 커밋 대비 thin 
 - Dependabot 29개 중 26개에 upstream에서 이미 수용한 범위가 있다. #52/#55/#58은 Desktop workflow 변경도 있어 전부 대체된 것은 아니다. #56 Tauri·#30 cross-env는 Desktop 별도 범위다. 중복 PR의 close는 이 작업에서 실행하지 않았다.
 
 승인 뒤 primary 작업공간에 별도 Desktop 아이콘·설정 변경이 생겼으므로 최종 통합 커밋은 `88317b1110432d37a61b08a1af3ed305dd56e9c0` 기준의 격리 worktree에서 기록한다. primary의 사용자 변경은 staging·되돌림 없이 보존한다. 검증 source와 격리 후보의 엔진·Studio·workflow blob 동일성을 최종 제출 전에 확인한다.
+
+## 전체 회귀에서 확인한 코퍼스 분류 보정
+
+첫 전체 nextest 실행은 10,275 통과, 1 실패, 50 skip이었다(303.902초 test 실행, 빌드 포함 681.026초). 실패는 `security_corpus_regression::new_sample_documents_are_clean_across_all_three_detectors` 한 건이다. hidden/injection/unicode 모두 479건을 실제 검사했고, 숨김 텍스트 양성 3건을 정상 문서로 분류한 점이 드러났다. injection·unicode 실패는 없었다. 원본 실행 로그 `rust-nextest-imported-corpus-before.log`를 보존했다.
+
+- issue4690/30098 및 issue6086/30098 HWP는 이미 genuine-hidden으로 인정한 issue6524/30098 HWP와 바이트가 같다. SHA-256 `de4d89bd8803bd3c8cc84b7e51ed36846af7cc938a97baf6fb458fc0b0eeb474`, 14쪽 문단188·셀43의 흰 종이 위 흰 글자 `장` 한 자다.
+- issue5723/coanchored HWPX는 SHA-256 `a15ef3aa092febb9540e68f9bae206a8a2b7f7a613b8b13eca65e3fa67126aea`, 1쪽 문단3·셀3·셀문단1의 흰 글자 `기준` 두 자다. 원본 XML과 SVG에서 배경과 실제 글자 색·겹치는 도형을 확인했다.
+
+[원본 XML·탐지·SVG·직접 판독 근거](../pr/assets/task_m100_hp110_security_genuine/genuine-hidden-evidence.json)를 보존했다. 대표 영역은 [30098](../pr/assets/task_m100_hp110_security_genuine/30098/region-marked.png), [coanchored](../pr/assets/task_m100_hp110_security_genuine/coanchored/region-marked.png)다. 색·비가시 문자 분류의 근거이며 한컴 조판 fidelity 결과는 아니다.
+
+보정 `b2034762f640bdf66721f52a7cda6c31cb8282e8`은 세 파일의 정확한 경로·SHA-256·전체 예상 finding을 검증한 뒤 hidden positive로 분류한다. injection/unicode 검사와 음성 코퍼스 assertion은 유지한다. 기존 positive 보호 test에서 누락·바이트 변경·탐지 감소·추가 finding을 실패시키며 기존 nested genuine fixture도 올바른 경로로 검사한다. Rust test 수는 6개 그대로다. CI bootstrap은 이 test 한 파일의 upstream·후보 SHA-256만 추가로 고정하며 다른 engine/test/policy 변경은 계속 거부한다. Node bootstrap/manifest 31개 및 실제 Git identity가 통과했다. 수정 뒤 전체 Rust 검증은 진행 중이다.
