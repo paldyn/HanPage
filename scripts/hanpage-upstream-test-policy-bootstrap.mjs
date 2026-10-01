@@ -106,7 +106,7 @@ export function verifyBootstrap(root, metadata, runGit = null) {
     git(['cat-file', '-e', `${baseline}^{commit}`]);
   } catch {
     git([
-      'fetch', '--no-tags', '--no-write-fetch-head', '--depth=1',
+      'fetch', '--no-tags', '--no-write-fetch-head', '--depth=1', '--filter=blob:limit=64k',
       BOOTSTRAP.upstreamUrl, baseline,
     ]);
   }

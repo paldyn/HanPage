@@ -114,7 +114,7 @@ test('Git 검증은 exact upstream SHA와 HEAD의 tree를 대조한다', () => {
   });
   assert.equal(baseline, BOOTSTRAP.upstreamSha);
   assert.deepEqual(calls.find((args) => args[0] === 'fetch'), [
-    'fetch', '--no-tags', '--no-write-fetch-head', '--depth=1',
+    'fetch', '--no-tags', '--no-write-fetch-head', '--depth=1', '--filter=blob:limit=64k',
     'https://github.com/edwardkim/rhwp.git', '02530b9ed567a44663edb26c65fb565c4a79f00d',
   ]);
   assert.deepEqual(calls.find((args) => args[0] === 'diff'), [
