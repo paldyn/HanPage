@@ -22,12 +22,13 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use rhwp::document_core::queries::hidden_text::HiddenTextOptions;
+use rhwp::document_core::queries::hidden_text::{HiddenTextOptions, HiddenTextReport};
 use rhwp::document_core::queries::injection_scan::{
     Confidence, InjectionScanOptions, InjectionScanSummary,
 };
 use rhwp::document_core::{text_security as ts, DocumentCore};
 use rhwp::model::control::Control;
+use sha2::{Digest, Sha256};
 
 fn repo(rel: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
@@ -270,10 +271,114 @@ fn positive_corpus_unicode_vector_is_caught() {
 /// 추가할 때는 반드시 위와 같은 개별 근거를 함께 남긴다 — 근거 없이 이름만 늘리면
 /// 이 목록이 오탐을 숨기는 서랍이 된다.
 const KNOWN_GENUINE_HIDDEN_TEXT: &[&str] = &[
-    "synam-001.hwp",
-    "issue1892_hwp3_tab_roundtrip.hwp",
-    "30098_float_host_split_lineseg.hwp",
+    "samples/synam-001.hwp",
+    "samples/issue1892_hwp3_tab_roundtrip.hwp",
+    "samples/issue6524/30098_float_host_split_lineseg.hwp",
 ];
+
+/// 신규 표본의 진짜 은닉은 경로·원본 바이트·탐지 결과가 모두 고정될 때만 인정한다.
+///
+/// 두 30098 HWP는 위 issue6524 표본과 SHA-256까지 같은 문서다. 날짜줄의 흰 "장"
+/// 한 글자(section=0, body paragraph=188, cell=43, cell paragraph=0, page=13)는
+/// 같은 흰 종이 위에 그대로 남아 있다 — 기존 개별 SVG 확인 근거를 공유한다.
+///
+/// issue5723 HWPX는 원본 section1 문단 325..332를 자른 조판 회귀 표본이다.
+/// Contents/section0.xml의 오른쪽 바깥 셀 마지막 주석은 검정 "…상담건 기준" 뒤에
+/// charPrIDRef=132인 흰 "기준"을 하나 더 둔다. header.xml의 charPr[132]는
+/// textColor=#FFFFFF, shadeColor=none이며 cell borderFill[28]·table borderFill[4]도
+/// 채우기 없음이다. 흰 종이에 남은 실제 비가시 글자 두 개이며 공격 문장 여부와는
+/// 무관하다. 아래 전체 보고 일치 검증은 이 글자 외의 새 탐지를 면제하지 않는다.
+struct VerifiedGenuineHiddenFixture {
+    path: &'static str,
+    sha256: &'static str,
+    paragraph: usize,
+    page: u32,
+    cell: usize,
+    cell_paragraph: usize,
+    excerpt: &'static str,
+}
+
+const VERIFIED_GENUINE_HIDDEN_FIXTURES: &[VerifiedGenuineHiddenFixture] = &[
+    VerifiedGenuineHiddenFixture {
+        path: "samples/issue4690/30098_indent_over_stored_cs.hwp",
+        sha256: "de4d89bd8803bd3c8cc84b7e51ed36846af7cc938a97baf6fb458fc0b0eeb474",
+        paragraph: 188,
+        page: 13,
+        cell: 43,
+        cell_paragraph: 0,
+        excerpt: "장",
+    },
+    VerifiedGenuineHiddenFixture {
+        path: "samples/issue6086/30098_resident_registration_reform.hwp",
+        sha256: "de4d89bd8803bd3c8cc84b7e51ed36846af7cc938a97baf6fb458fc0b0eeb474",
+        paragraph: 188,
+        page: 13,
+        cell: 43,
+        cell_paragraph: 0,
+        excerpt: "장",
+    },
+    VerifiedGenuineHiddenFixture {
+        path: "samples/issue5723/coanchored_square_pair_center_slack.hwpx",
+        sha256: "a15ef3aa092febb9540e68f9bae206a8a2b7f7a613b8b13eca65e3fa67126aea",
+        paragraph: 3,
+        page: 0,
+        cell: 3,
+        cell_paragraph: 1,
+        excerpt: "기준",
+    },
+];
+
+fn assert_verified_genuine_hidden_fixture(
+    fixture: &VerifiedGenuineHiddenFixture,
+    data: &[u8],
+    report: &HiddenTextReport,
+) {
+    let sha256 = Sha256::digest(data)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    assert_eq!(
+        sha256, fixture.sha256,
+        "{} 원본 바이트가 바뀌었습니다 — 진짜 은닉의 개별 근거를 다시 확인하세요",
+        fixture.path
+    );
+    let char_count = fixture.excerpt.chars().count();
+    let expected = serde_json::json!({
+        "clean": false,
+        "hiddenCharCount": char_count,
+        "hiddenText": [{
+            "kind": "same_as_background",
+            "section": 0,
+            "paragraph": fixture.paragraph,
+            "page": fixture.page,
+            "cell": { "control": 0, "cell": fixture.cell, "paragraph": fixture.cell_paragraph },
+            "excerpt": fixture.excerpt,
+            "charCount": char_count,
+            "detail": {
+                "textColor": "#FFFFFF",
+                "backgroundColor": "#FFFFFF",
+                "backgroundSource": "page",
+            },
+        }],
+    });
+    assert_eq!(
+        serde_json::to_value(report).expect("은닉 보고 직렬화"),
+        expected,
+        "{} 진짜 은닉의 개수·위치·문자·색 근거가 달라졌습니다",
+        fixture.path
+    );
+}
+
+fn verify_genuine_hidden_fixture(path: &Path, data: &[u8], report: &HiddenTextReport) -> bool {
+    let Some(fixture) = VERIFIED_GENUINE_HIDDEN_FIXTURES
+        .iter()
+        .find(|fixture| repo(fixture.path).as_path() == path)
+    else {
+        return false;
+    };
+    assert_verified_genuine_hidden_fixture(fixture, data, report);
+    true
+}
 
 /// 제로폭 축의 같은 성격 목록 — **탐지가 맞았는데 표본이 실제로 그렇다**는 선언.
 ///
@@ -411,7 +516,11 @@ fn new_sample_documents_are_clean_across_all_three_detectors() {
 
         let hidden = core.detect_hidden_text(&HiddenTextOptions::default());
         checked_hidden += 1;
-        if !hidden.clean && !KNOWN_GENUINE_HIDDEN_TEXT.contains(&name.as_str()) {
+        let verified_genuine_hidden = verify_genuine_hidden_fixture(path, &data, &hidden);
+        let known_genuine_hidden = KNOWN_GENUINE_HIDDEN_TEXT
+            .iter()
+            .any(|rel| repo(rel).as_path() == path.as_path());
+        if !hidden.clean && !known_genuine_hidden && !verified_genuine_hidden {
             dirty.push(format!(
                 "  - [hidden-text] {name}: {}건",
                 hidden.hidden_text.len()
@@ -530,17 +639,29 @@ fn all_three_envelopes_share_a_consistent_clean_and_array_contract() {
 /// 어느 쪽이든 사람이 봐야 하므로 조용히 통과시키지 않는다.
 #[test]
 fn allowlisted_documents_still_actually_trigger_detection() {
-    for name in KNOWN_GENUINE_HIDDEN_TEXT {
-        let path = repo("samples").join(name);
+    for rel in KNOWN_GENUINE_HIDDEN_TEXT {
+        let path = repo(rel);
         if !path.exists() {
             continue; // 표본이 사라졌다면 이 시험의 관심사가 아니다.
         }
         let v = inspect_hidden_text(&path);
         assert_eq!(
             v["clean"], false,
-            "{name} 은 진짜 은닉 텍스트가 있다고 허용목록에 올렸는데 지금은 clean 입니다.\n\
+            "{rel} 은 진짜 은닉 텍스트가 있다고 허용목록에 올렸는데 지금은 clean 입니다.\n\
              탐지기가 퇴행했거나(고칠 것) 문서가 바뀌었습니다(목록에서 뺄 것). 봉투: {v}"
         );
+    }
+
+    // 세 신규 표본은 사라지거나 바뀌어도 통과시키지 않는다. 같은 이름의 다른 파일이나
+    // 추가 은닉을 담은 변형도 경로·SHA-256·전체 finding 검증에서 반드시 실패한다.
+    for fixture in VERIFIED_GENUINE_HIDDEN_FIXTURES {
+        let path = repo(fixture.path);
+        let data = std::fs::read(&path)
+            .unwrap_or_else(|error| panic!("{} 표본을 읽어야 합니다: {error}", fixture.path));
+        let core = DocumentCore::from_bytes(&data)
+            .unwrap_or_else(|error| panic!("{} 표본을 열어야 합니다: {error}", fixture.path));
+        let hidden = core.detect_hidden_text(&HiddenTextOptions::default());
+        assert_verified_genuine_hidden_fixture(fixture, &data, &hidden);
     }
 
     // 제로폭 축도 같은 규칙으로 지킨다 — 허용목록은 어느 축에서든 자기검증돼야 한다.

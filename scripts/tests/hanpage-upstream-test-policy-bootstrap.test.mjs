@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import {
   BOOTSTRAP,
   EQUIVALENT_PATHS,
+  SECURITY_CORPUS_CORRECTION,
   selectBootstrapBaseline,
   verifyBootstrap,
   verifyBootstrapEquivalentTrees,
@@ -74,6 +76,28 @@ test('동일 upstream source만 허용하며 Rust·test·policy 변경을 grandf
   }
   assert.throws(() => verifyBootstrapEquivalentTrees([], upstreamCargo, `${candidateCargo}autotests = false\n`), /only the package repository URL/);
   assert.throws(() => verifyBootstrapEquivalentTrees([], upstreamCargo, upstreamCargo), /only the package repository URL/);
+});
+
+test('genuine hidden 분류 보정은 exact test blob 하나만 허용하고 변조를 거부한다', () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+  const candidate = readFileSync(path.join(root, SECURITY_CORPUS_CORRECTION.path));
+  const corpusHashes = {
+    upstreamSha256: SECURITY_CORPUS_CORRECTION.upstreamSha256,
+    candidateSha256: createHash('sha256').update(candidate).digest('hex'),
+  };
+  const changed = [SECURITY_CORPUS_CORRECTION.path];
+  verifyBootstrapEquivalentTrees(changed, upstreamCargo, candidateCargo, corpusHashes);
+  for (const field of ['upstreamSha256', 'candidateSha256']) {
+    assert.throws(() => verifyBootstrapEquivalentTrees(changed, upstreamCargo, candidateCargo, {
+      ...corpusHashes, [field]: '0'.repeat(64),
+    }), /pinned upstream policy inputs/);
+  }
+  assert.throws(() => verifyBootstrapEquivalentTrees(changed, upstreamCargo, candidateCargo, {
+    ...corpusHashes, candidateSha256: createHash('sha256').update(candidate).update('\n// unreviewed change\n').digest('hex'),
+  }), /pinned upstream policy inputs/);
+  assert.throws(() => verifyBootstrapEquivalentTrees(changed, upstreamCargo, candidateCargo), /pinned upstream policy inputs/);
+  assert.throws(() => verifyBootstrapEquivalentTrees([...changed, 'src/lib.rs'], upstreamCargo, candidateCargo, corpusHashes), /pinned upstream policy inputs/);
+  assert.throws(() => verifyBootstrapEquivalentTrees(['tests/cases/unreviewed.rs'], upstreamCargo, candidateCargo, corpusHashes), /pinned upstream policy inputs/);
 });
 
 test('Git 검증은 exact upstream SHA와 HEAD의 tree를 대조한다', () => {

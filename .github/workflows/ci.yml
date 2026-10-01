@@ -1005,6 +1005,7 @@ jobs:
 
           # 이번 HanPage snapshot 통합만, exact upstream과 Rust/test/policy 입력이
           # 같음을 입증한 뒤 unchanged upstream 정책을 그 pinned tree에서 실행한다.
+          # genuine-hidden 코퍼스 분류 보정 한 파일만 exact 양쪽 SHA-256으로 추가 확인한다.
           # imported commit은 HanPage snapshot의 조상이 아니므로 3-way PR diff를
           # current HEAD로 우회하지 않고 upstream worktree의 exact baseline을 쓴다.
           node --test scripts/tests/hanpage-upstream-test-policy-bootstrap.test.mjs
