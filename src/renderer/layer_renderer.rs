@@ -14,6 +14,8 @@ use std::io::Cursor;
 const MAX_CANVASKIT_BITMAP_RESOURCE_BYTES: usize = 4 * 1024 * 1024;
 const MAX_CANVASKIT_BITMAP_DIMENSION: u32 = 8192;
 const MAX_CANVASKIT_BITMAP_PIXELS: u64 = 32 * 1024 * 1024;
+const BOUNDED_VERTICAL_HWP5_TABLE_CELL_REASON: &str = "boundedVerticalHwp5TableCellV1";
+const BOUNDED_VERTICAL_GLYPH_VARIANT_ID: &str = "verticalGlyphRun";
 
 pub type LayerRenderResult<T> = Result<T, HwpError>;
 
@@ -478,7 +480,18 @@ impl TextVariantCandidate {
                 }
             }
             TextVariantKind::GlyphOutline => {
-                if matches!(options.backend, VariantSelectionBackend::Canvas2D) {
+                let q3_variable_outline = self.glyph_outlines.iter().any(|outline| {
+                    outline.diagnostics.reason.as_deref() == Some("q3VariableOutlineProjectionV1")
+                });
+                if matches!(options.backend, VariantSelectionBackend::Canvas2D)
+                    || (q3_variable_outline
+                        && !matches!(
+                            options.backend,
+                            VariantSelectionBackend::CanvasKit
+                                | VariantSelectionBackend::CanvasKitBrowser
+                                | VariantSelectionBackend::NativeSkia
+                        ))
+                {
                     reasons.insert(VariantRejectReason::BackendDoesNotSupportVariant);
                 }
                 for outline in &self.glyph_outlines {
@@ -578,6 +591,16 @@ fn collect_glyph_run_reject_reasons(
     resources: &ResourceArena,
     reasons: &mut BTreeSet<VariantRejectReason>,
 ) {
+    let bounded_vertical_declared =
+        run.diagnostics.reason.as_deref() == Some(BOUNDED_VERTICAL_HWP5_TABLE_CELL_REASON);
+    let bounded_vertical_canvaskit =
+        is_bounded_vertical_hwp5_canvaskit_candidate(run, options.backend);
+    if bounded_vertical_declared && !bounded_vertical_canvaskit {
+        // Bounded provenance is an all-field capability claim. A malformed claim must not
+        // fall through to the generic horizontal GlyphRun lane after changing only its mode.
+        reasons.insert(VariantRejectReason::WritingModeAuthorityPending);
+        reasons.insert(VariantRejectReason::VerticalGlyphOrientationAuthorityPending);
+    }
     if run.glyph_ids.is_empty() {
         reasons.insert(VariantRejectReason::EmptyGlyphRun);
     }
@@ -602,10 +625,17 @@ fn collect_glyph_run_reject_reasons(
     {
         reasons.insert(VariantRejectReason::GlyphAdvanceCountMismatch);
     }
-    if !run.paint_style.is_fill_only_glyph_replay() {
+    let paint_supported = if options.backend == VariantSelectionBackend::NativeSkia {
+        run.paint_style.is_simple_glyph_run_replay()
+    } else {
+        run.paint_style.is_fill_only_glyph_replay()
+    };
+    if !paint_supported {
         reasons.insert(VariantRejectReason::UnsupportedPaintEffect);
     }
-    if run.shape_key.font_instance.synthetic_bold || run.shape_key.font_instance.synthetic_italic {
+    if (run.shape_key.font_instance.synthetic_bold || run.shape_key.font_instance.synthetic_italic)
+        && options.backend != VariantSelectionBackend::NativeSkia
+    {
         reasons.insert(VariantRejectReason::SyntheticStyleAuthorityPending);
     }
     if !matches!(run.direction, TextDirection::Ltr)
@@ -616,8 +646,9 @@ fn collect_glyph_run_reject_reasons(
     if run.bidi_level != Some(0) {
         reasons.insert(VariantRejectReason::BidiLevelAuthorityPending);
     }
-    if !matches!(run.writing_mode, WritingMode::HorizontalTb)
-        || !matches!(run.shape_key.writing_mode, WritingMode::HorizontalTb)
+    if (!matches!(run.writing_mode, WritingMode::HorizontalTb)
+        || !matches!(run.shape_key.writing_mode, WritingMode::HorizontalTb))
+        && !bounded_vertical_canvaskit
     {
         reasons.insert(VariantRejectReason::WritingModeAuthorityPending);
     }
@@ -629,6 +660,7 @@ fn collect_glyph_run_reject_reasons(
         GlyphRunOrientation::MixedPerGlyph => {
             reasons.insert(VariantRejectReason::MixedPerGlyphAuthorityPending);
         }
+        GlyphRunOrientation::VerticalUpright if bounded_vertical_canvaskit => {}
         GlyphRunOrientation::VerticalUpright | GlyphRunOrientation::VerticalSideways => {
             reasons.insert(VariantRejectReason::VerticalGlyphOrientationAuthorityPending);
         }
@@ -639,7 +671,9 @@ fn collect_glyph_run_reject_reasons(
             | VariantSelectionBackend::CanvasKitBrowser
             | VariantSelectionBackend::NativeSkia
     ) {
-        if !run.shape_key.font_instance.variations.is_empty() {
+        if !run.shape_key.font_instance.variations.is_empty()
+            && options.backend != VariantSelectionBackend::NativeSkia
+        {
             reasons.insert(VariantRejectReason::VariationUnsupported);
         }
         if matches!(
@@ -687,9 +721,56 @@ fn collect_glyph_run_reject_reasons(
         reasons.insert(VariantRejectReason::AdvanceNotFinite);
     }
     let font_size = run.shape_key.font_instance.size_px;
-    if !font_size.is_finite() || font_size <= 0.0 || font_size > 4096.0 {
+    if !font_size.is_finite()
+        || font_size <= 0.0
+        || font_size > crate::paint::MAX_GLYPH_FONT_SIZE_PX
+    {
         reasons.insert(VariantRejectReason::FontInstanceInvalid);
     }
+}
+
+fn is_bounded_vertical_hwp5_canvaskit_candidate(
+    run: &LayerGlyphRunPaint,
+    backend: VariantSelectionBackend,
+) -> bool {
+    matches!(
+        backend,
+        VariantSelectionBackend::CanvasKit | VariantSelectionBackend::CanvasKitBrowser
+    ) && run.diagnostics.reason.as_deref() == Some(BOUNDED_VERTICAL_HWP5_TABLE_CELL_REASON)
+        && run.variant.variant_id == BOUNDED_VERTICAL_GLYPH_VARIANT_ID
+        && run.variant.variant_kind == TextVariantKind::GlyphRun
+        && run.variant.part_index == 0
+        && run.variant.part_count == 1
+        && !run.variant.is_default_fallback
+        && run.variant.quality == Some(TextVariantQuality::Exact)
+        && matches!(
+            run.variant.requires.as_slice(),
+            [font_resources, glyph_run, vertical_upright]
+                if font_resources == "fontResources"
+                    && glyph_run == "text.glyphRun"
+                    && vertical_upright == "text.glyphRun.verticalUpright"
+        )
+        && matches!(run.writing_mode, WritingMode::VerticalRl)
+        && matches!(run.shape_key.writing_mode, WritingMode::VerticalRl)
+        && matches!(run.orientation, GlyphRunOrientation::VerticalUpright)
+        && run.glyph_transforms.is_none()
+        && matches!(run.direction, TextDirection::Ltr)
+        && matches!(run.shape_key.direction, TextDirection::Ltr)
+        && run.bidi_level == Some(0)
+        && run.shape_key.shaping_engine.0 == "rustybuzz-q4-vertical-v1"
+        && run.shape_key.fallback_policy.0 == "none"
+        && run.shape_key.font_instance.variations.is_empty()
+        && !run.shape_key.font_instance.synthetic_bold
+        && !run.shape_key.font_instance.synthetic_italic
+        && run.diagnostics.quality == TextVariantQuality::Exact
+        && matches!(
+            run.diagnostics.replay_eligibility,
+            GlyphRunReplayEligibility::Portable
+        )
+        && run.diagnostics.strict_visual_eligible
+        && run.diagnostics.cluster_mismatch_count == 0
+        && run.diagnostics.missing_glyph_count == 0
+        && run.diagnostics.used_fallback_font_count == 0
 }
 
 fn collect_glyph_run_font_resource_reject_reasons(
@@ -740,11 +821,48 @@ fn collect_glyph_run_font_resource_reject_reasons(
             {
                 reasons.insert(VariantRejectReason::FontBlobDigestMismatch);
             }
+            let parsed_face = ttf_parser::Face::parse(bytes, face.face_index);
             if (face.face_index != 0
-                && options.backend != VariantSelectionBackend::CanvasKitBrowser)
-                || ttf_parser::Face::parse(bytes, face.face_index).is_err()
+                && !matches!(
+                    options.backend,
+                    VariantSelectionBackend::CanvasKitBrowser | VariantSelectionBackend::NativeSkia
+                ))
+                || parsed_face.is_err()
             {
                 reasons.insert(VariantRejectReason::FaceIndexUnsupported);
+            }
+            if options.backend == VariantSelectionBackend::NativeSkia
+                && !run.shape_key.font_instance.variations.is_empty()
+            {
+                // This proves the portable instance contract, not Skia construction.
+                // Native replay must still prepare the exact Typeface before selecting
+                // any part of the strict variant or suppressing its TextRun fallback.
+                let variations = &run.shape_key.font_instance.variations;
+                let mut seen = BTreeSet::new();
+                let valid = variations.len()
+                    <= crate::renderer::shaping::MAX_SHAPING_VARIATION_AXES
+                    && parsed_face.as_ref().is_ok_and(|parsed| {
+                        variations.iter().all(|variation| {
+                            let Ok(tag_bytes) = <&[u8; 4]>::try_from(variation.tag.as_bytes())
+                            else {
+                                return false;
+                            };
+                            if !tag_bytes.iter().all(|byte| (0x20..=0x7e).contains(byte))
+                                || !variation.value.is_finite()
+                                || !seen.insert(variation.tag.as_str())
+                            {
+                                return false;
+                            }
+                            parsed.variation_axes().into_iter().any(|axis| {
+                                axis.tag == ttf_parser::Tag::from_bytes(tag_bytes)
+                                    && variation.value >= axis.min_value
+                                    && variation.value <= axis.max_value
+                            })
+                        })
+                    });
+                if !valid {
+                    reasons.insert(VariantRejectReason::VariationUnsupported);
+                }
             }
         }
         None => {
@@ -914,6 +1032,7 @@ fn collect_text_variant_diagnostics_reject_reasons(
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use crate::paint::{
         font_blob_resource_key, resource_digest_hex, BinaryResourceKind, BinaryResourceRef,
@@ -967,6 +1086,7 @@ mod tests {
                 border_fill_id: 0,
                 baseline: 12.0,
                 field_marker: FieldMarkerType::None,
+                layout_positions: None,
                 display_text: None,
             },
         )
@@ -1946,7 +2066,7 @@ mod tests {
     }
 
     #[test]
-    fn native_skia_rejects_variation_instances_until_exact_construction_is_proven() {
+    fn native_skia_rejects_variation_axes_missing_from_the_exact_face() {
         let mut op = glyph_run(diagnostics(), 42);
         if let PaintOp::GlyphRun { run, .. } = &mut op {
             run.shape_key.font_instance.variations = vec![VariationAxisValue {
@@ -1964,18 +2084,19 @@ mod tests {
     }
 
     #[test]
-    fn native_skia_rejects_non_default_collection_face_until_exact_construction_is_proven() {
+    fn native_skia_accepts_a_parseable_non_default_collection_face_contract() {
         let report = first_report_with_resource_setup(
             vec![text_op(), glyph_run(diagnostics(), 42)],
             native_skia_options(),
             |resources| add_portable_font_bytes(resources, FIXTURE_TTC, 1),
         );
 
-        assert_eq!(report.selected_variant_kind, Some(TextVariantKind::TextRun));
-        assert!(report.fallback_required);
-        assert!(report.rejected_variants[0]
-            .reasons
-            .contains(&VariantRejectReason::FaceIndexUnsupported));
+        assert_eq!(
+            report.selected_variant_kind,
+            Some(TextVariantKind::GlyphRun)
+        );
+        assert!(!report.fallback_required);
+        assert!(report.rejected_variants.is_empty());
     }
 
     #[test]

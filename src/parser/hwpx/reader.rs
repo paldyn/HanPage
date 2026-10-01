@@ -16,6 +16,24 @@ use zip::ZipArchive;
 
 use super::HwpxError;
 
+const CONTENT_MANIFEST_PATH: &str = "Contents/content.hpf";
+const DOCUMENT_HEADER_PATH: &str = "Contents/header.xml";
+
+/// ZIP 중앙 디렉터리에 HWPX 필수 엔트리 두 개가 모두 있는지 확인한다.
+///
+/// 파일 payload를 압축 해제하지 않고 이름만 exact lookup한다. 이 검사는 ZIP 매직을
+/// HWPX로 확정하기 전의 형식 경계이며, 실제 XML·암호 검증은 기존 parser가 소유한다.
+pub(crate) fn has_required_package_entries(data: &[u8]) -> bool {
+    let cursor = Cursor::new(data);
+    let Ok(mut archive) = ZipArchive::new(cursor) else {
+        return false;
+    };
+
+    let has_content_manifest = archive.by_name(CONTENT_MANIFEST_PATH).is_ok();
+    let has_document_header = archive.by_name(DOCUMENT_HEADER_PATH).is_ok();
+    has_content_manifest && has_document_header
+}
+
 /// XML 엔트리(section, header, content.hpf 등) 엔트리당 압축 해제 상한.
 ///
 /// [#1917 XML 축] 종전 32MB 는 실문서를 거부했다 — 정책연구 최종보고서
@@ -122,6 +140,33 @@ impl HwpxReader {
         }
         read_limited(&mut file, max_bytes)
             .map_err(|e| HwpxError::ZipError(format!("{} 읽기 실패: {}", path, e)))
+    }
+
+    /// ZIP central directory의 비압축 크기만 상한과 비교한다.
+    ///
+    /// BinData 존재 여부·길이처럼 실제 바이트가 필요 없는 질의가 ZIP payload를
+    /// materialize하지 않도록 쓴다. 실제 읽기는 반드시
+    /// [`Self::read_file_bytes_limited`]를 다시 거치므로, 손상된 size 메타데이터를
+    /// 신뢰해 상한을 우회하지 않는다.
+    pub fn file_size_limited(&mut self, path: &str, max_bytes: usize) -> Result<usize, HwpxError> {
+        let file = self
+            .archive
+            .by_name(path)
+            .map_err(|e| HwpxError::MissingFile(format!("{}: {}", path, e)))?;
+        let max_bytes = max_bytes.min(MAX_BINDATA_SIZE);
+        let size = usize::try_from(file.size()).map_err(|_| {
+            HwpxError::ZipError(format!(
+                "{} 읽기 실패: HWPX entry size does not fit usize",
+                path
+            ))
+        })?;
+        if size > max_bytes {
+            return Err(HwpxError::ZipError(format!(
+                "{} 읽기 실패: HWPX entry exceeds {} byte limit (possible decompression bomb)",
+                path, max_bytes
+            )));
+        }
+        Ok(size)
     }
 
     /// 아카이브 내 파일 목록을 반환한다.

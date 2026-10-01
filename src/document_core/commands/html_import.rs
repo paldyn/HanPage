@@ -6,7 +6,6 @@ use crate::error::HwpError;
 use crate::model::control::Control;
 use crate::model::event::DocumentEvent;
 use crate::model::paragraph::Paragraph;
-use crate::renderer::style_resolver::resolve_styles;
 
 impl DocumentCore {
     pub fn paste_html_native(
@@ -102,7 +101,7 @@ impl DocumentCore {
                 .text
                 .is_empty();
 
-            let mut insert_idx = if left_empty {
+            let insert_idx = if left_empty {
                 // 빈 왼쪽 문단을 첫 번째 파싱 문단으로 대체
                 self.document.sections[section_idx].paragraphs[para_idx] = parsed_paras[0].clone();
                 let idx = para_idx + 1;
@@ -159,7 +158,10 @@ impl DocumentCore {
 
             // 선택적 재구성: 원본 문단 재구성 + 삽입 문단 composed 추가
             self.recompose_paragraph(section_idx, para_idx);
-            for i in (para_idx + 1..=last_para_idx).rev() {
+            // 역순(.rev()) 삽입은 composed 길이가 paragraphs 보다 짧은 시점에
+            // index > len 으로 panic(문단+표 혼합 붙여넣기) 하고, panic 이 안 나도 기존/신규 항목이
+            // 교차돼 composed[i] != paragraphs[i] 가 된다. 텍스트 분기(아래)와 같이 정방향으로 append.
+            for i in para_idx + 1..=last_para_idx {
                 self.insert_composed_paragraph(section_idx, i);
             }
             self.paginate_if_needed();
@@ -365,13 +367,7 @@ impl DocumentCore {
         for i in cell_para_idx..=last_para_idx {
             self.reflow_cell_paragraph(section_idx, parent_para_idx, control_idx, cell_idx, i);
         }
-        if let Some(Control::Table(t)) = self.document.sections[section_idx].paragraphs
-            [parent_para_idx]
-            .controls
-            .get_mut(control_idx)
-        {
-            t.dirty = true;
-        }
+        self.mark_cell_control_dirty(section_idx, parent_para_idx, control_idx);
         self.mark_section_dirty(section_idx);
         self.paginate_if_needed();
 
@@ -435,7 +431,53 @@ impl DocumentCore {
     // === HTML 파서 ===
 
     /// HTML 문자열을 파싱하여 Paragraph 목록을 생성한다.
+    /// `<div>`/`<p><table>` 재귀 하강 깊이 상한. Gmail 등 웹메일 클립보드는 서명·본문을
+    /// 감싸는 wrapper `<div>`가 수십 겹인 경우가 흔하다(예: 실사용 리포트 — 서명 블록 하나에
+    /// `</div>` 8개 이상 연속). 이 깊이만큼 매번 `find_closing_tag_chars`로 전체 구간을
+    /// 다시 훑고 재귀하므로, 깊이가 무제한이면 붙여넣기 한 번이 브라우저를 "응답 없음"으로
+    /// 멈춰 세울 만큼 느려진다(실사용 확인). 이 상한을 넘으면 태그 트리 파싱을 포기하고
+    /// 태그만 제거한 평문 문단으로 폴백한다 — 서식은 잃어도 붙여넣기 자체는 항상 끝난다.
+    const HTML_PASTE_MAX_RECURSION_DEPTH: u32 = 16;
+
+    /// 파싱을 시도할 최대 HTML 바이트 크기. 이보다 크면 태그 트리 파싱 없이 평문으로
+    /// 폴백한다 — 크기 자체가 계산량의 또 다른 축이라 깊이 상한과 별개로 방어한다.
+    /// 400,000 은 실사용 한글 문서에 너무 빡빡하다 — 실측한 6쪽짜리 문서 하나가
+    /// 정리 후 399,057바이트로 상한 바로 아래였고, 그림을 넣거나 문단이 조금만 늘면 넘겨
+    /// 표·문단·그림이 통째로 평문이 됐다(실사용 신고). 실측 파싱 시간은 이 크기에서 1초 남짓이라
+    /// 2MB(= 한글 본문 약 70만 자)로 올린다. data: URI 페이로드는 아래에서 따로 제외한다.
+    const HTML_PASTE_MAX_BYTES: usize = 2_000_000;
+
     pub(crate) fn parse_html_to_paragraphs(&mut self, html: &str) -> Vec<Paragraph> {
+        self.parse_html_to_paragraphs_at_depth(html, 0)
+    }
+
+    /// 크기 상한은 **태그 트리 복잡도**를 막으려는 것이므로 `data:` URI 로 실린
+    /// 그림 바이트는 빼고 잰다. 안 그러면 그림이 있는 문서는 상한을 넘겨 평문으로 폴백해
+    /// 표·문단·그림이 통째로 사라진다(한글 붙여넣기 실사용 신고 2026-09-03, 602KB 중 242KB 가 그림).
+    fn html_markup_len(html: &str) -> usize {
+        let mut payload = 0usize;
+        let mut rest = html;
+        while let Some(idx) = rest.find("data:") {
+            let after = &rest[idx..];
+            let end = after.find(['"', '\'', ' ', '>']).unwrap_or(after.len());
+            payload += end;
+            rest = &after[end..];
+            if rest.is_empty() {
+                break;
+            }
+        }
+        html.len().saturating_sub(payload)
+    }
+
+    fn parse_html_to_paragraphs_at_depth(&mut self, html: &str, depth: u32) -> Vec<Paragraph> {
+        if depth >= Self::HTML_PASTE_MAX_RECURSION_DEPTH
+            || Self::html_markup_len(html) > Self::HTML_PASTE_MAX_BYTES
+        {
+            let mut fallback_paragraphs = Vec::new();
+            self.flush_text_to_paragraphs(&mut fallback_paragraphs, &html_strip_tags(html));
+            return fallback_paragraphs;
+        }
+
         let mut paragraphs: Vec<Paragraph> = Vec::new();
 
         // <!--StartFragment-->...<!--EndFragment--> 영역 추출 (없으면 전체 사용)
@@ -525,7 +567,7 @@ impl DocumentCore {
 
                     // <p> 내부에 <table>이 있으면 재귀적으로 처리
                     if p_inner.to_lowercase().contains("<table") {
-                        let sub_paras = self.parse_html_to_paragraphs(p_inner);
+                        let sub_paras = self.parse_html_to_paragraphs_at_depth(p_inner, depth + 1);
                         paragraphs.extend(sub_paras);
                         pos = p_end;
                         continue;
@@ -553,9 +595,78 @@ impl DocumentCore {
                         &div_inner
                     };
 
-                    let sub_paras = self.parse_html_to_paragraphs(div_inner);
+                    let sub_paras = self.parse_html_to_paragraphs_at_depth(div_inner, depth + 1);
                     paragraphs.extend(sub_paras);
                     pos = div_end;
+                    continue;
+                } else if tag_lower.starts_with("<ul") || tag_lower.starts_with("<ol") {
+                    // [Gmail 등 웹메일 서명 붙여넣기가 raw 태그로 나오던 결함] 목록 태그
+                    // 자체는 컨테이너일 뿐이라 <div>처럼 내부를 재귀 처리한다 — <li> 각각이
+                    // 실제 항목 문단이 된다.
+                    if !pending_text.trim().is_empty() {
+                        self.flush_text_to_paragraphs(&mut paragraphs, &pending_text);
+                        pending_text.clear();
+                    }
+                    let list_tag_name = if tag_lower.starts_with("<ul") {
+                        "ul"
+                    } else {
+                        "ol"
+                    };
+                    let list_content_start = tag_end + 1;
+                    let list_end = find_closing_tag_chars(&chars, pos, list_tag_name);
+                    let list_inner: String = chars[list_content_start..list_end.min(len)]
+                        .iter()
+                        .collect();
+                    let close_marker = format!("</{list_tag_name}>");
+                    let list_inner = if let Some(idx) = list_inner.rfind(&close_marker) {
+                        &list_inner[..idx]
+                    } else {
+                        &list_inner
+                    };
+                    let sub_paras = self.parse_html_to_paragraphs(list_inner);
+                    paragraphs.extend(sub_paras);
+                    pos = list_end;
+                    continue;
+                } else if tag_lower.starts_with("<li") {
+                    // <li> 내부 전체(중첩 span/strong 등 포함)를 한 문단으로 묶어
+                    // parse_inline_content 로 서식까지 보존해 파싱하고, 글머리 기호를
+                    // 앞에 붙인다. 표 없는 최상위 <p> 처리와 동일한 패턴.
+                    if !pending_text.trim().is_empty() {
+                        self.flush_text_to_paragraphs(&mut paragraphs, &pending_text);
+                        pending_text.clear();
+                    }
+                    let li_content_start = tag_end + 1;
+                    let li_end = find_closing_tag_chars(&chars, pos, "li");
+                    let li_inner: String =
+                        chars[li_content_start..li_end.min(len)].iter().collect();
+                    let li_inner = if let Some(idx) = li_inner.rfind("</li>") {
+                        &li_inner[..idx]
+                    } else {
+                        &li_inner
+                    };
+                    let mut para = Paragraph::default();
+                    self.parse_inline_content(&mut para, li_inner);
+                    if !para.text.trim().is_empty() {
+                        para.text = format!("• {}", para.text);
+                        para.char_offsets = para
+                            .text
+                            .chars()
+                            .scan(0u32, |acc, c| {
+                                let off = *acc;
+                                *acc += c.len_utf16() as u32;
+                                Some(off)
+                            })
+                            .collect();
+                        para.char_count = para.text.encode_utf16().count() as u32 + 1;
+                        // 글머리 기호("• ")만큼 스타일 구간을 오른쪽으로 밀어 정렬을 맞춘다.
+                        // start_pos 는 UTF-16 코드유닛 단위(위 char_offsets 와 동일 축).
+                        let bullet_len = "• ".encode_utf16().count() as u32;
+                        for cs in &mut para.char_shapes {
+                            cs.start_pos += bullet_len;
+                        }
+                        paragraphs.push(para);
+                    }
+                    pos = li_end;
                     continue;
                 } else if tag_lower.starts_with("<br") {
                     // <br> → 문단 구분
@@ -575,18 +686,26 @@ impl DocumentCore {
                 } else {
                     // 기타 태그 무시 (span 등 인라인은 <p> 밖에서 직접 올 수 있음)
                     if tag_lower.starts_with("<span") {
-                        // <span>...</span> 인라인 콘텐츠
+                        // [Gmail 등 웹메일 서명 붙여넣기가 raw 태그로 나오던 결함] 예전
+                        // 코드는 span 내부(중첩 <u>/<strong>/주석 포함)를 첫 ">" 뒤부터
+                        // 그대로 pending_text 에 밀어 넣어, 태그 자체가 문서에 문자로
+                        // 그대로 찍혔다. <p> 처리와 같은 방식으로 parse_inline_content 에
+                        // 넘겨 중첩 서식(굵게 등)까지 해석한 문단으로 만든다.
+                        if !pending_text.trim().is_empty() {
+                            self.flush_text_to_paragraphs(&mut paragraphs, &pending_text);
+                            pending_text.clear();
+                        }
                         let span_end = find_closing_tag_chars(&chars, pos, "span");
-                        let span_full: String =
-                            chars[tag_start..span_end.min(len)].iter().collect();
-                        let span_full = if let Some(idx) = span_full.rfind("</span>") {
-                            &span_full[..idx]
-                        } else {
-                            &span_full
-                        };
-                        // span 태그 내부 텍스트 추출
-                        if let Some(gt_pos) = span_full.find('>') {
-                            pending_text.push_str(&span_full[gt_pos + 1..]);
+                        let inner_start = tag_end + 1;
+                        let inner_end = span_end.saturating_sub(7); // "</span>".len()
+                        let span_inner: String = chars
+                            [inner_start..inner_end.max(inner_start).min(len)]
+                            .iter()
+                            .collect();
+                        let mut para = Paragraph::default();
+                        self.parse_inline_content(&mut para, &span_inner);
+                        if !para.text.trim().is_empty() {
+                            paragraphs.push(para);
                         }
                         pos = span_end;
                         continue;
@@ -606,12 +725,41 @@ impl DocumentCore {
             self.flush_text_to_paragraphs(&mut paragraphs, &pending_text);
         }
 
-        // 빈 결과 시 최소 처리
+        // 빈 결과 시 최소 처리 — flush_text_to_paragraphs 재사용으로 줄바꿈 분리와
+        // 긴 줄 강제 절단(FLUSH_LINE_CHAR_CAP)을 여기도 동일하게 적용한다.
+        // flush_text_to_paragraphs 가 자체적으로 decode_html_entities 를 수행하므로,
+        // 여기서는 태그만 벗긴 원문(html_strip_tags)을 넘겨 엔티티 이중 디코딩을 피한다.
         if paragraphs.is_empty() {
-            let plain = html_to_plain_text(html);
-            if !plain.is_empty() {
+            let stripped = html_strip_tags(html);
+            if !stripped.trim().is_empty() {
+                self.flush_text_to_paragraphs(&mut paragraphs, &stripped);
+            }
+        }
+
+        paragraphs
+    }
+
+    /// 개행이 전혀 없는 한 "줄"을 이 길이(문자 수) 단위로 강제 절단해 별도 문단으로 만든다.
+    ///
+    /// [붙여넣기 화면 겹침 방지] 웹페이지 렌더 결과가 아니라 원본 소스(view-source 등)를
+    /// 통째로 복사하면, 내부 텍스트에 실제 개행 문자가 전혀 없는 경우(예: 한 줄짜리 최소화
+    /// JS/JSON 블록)가 있다 — 실사용 확인: Daum 홈페이지 전체 소스(HTML 598KB) 붙여넣기가
+    /// 개행 없는 50만자 이상 단일 문단을 만들어 화면이 겹쳐 보이는 결과로 이어졌다. 문단
+    /// 하나가 이 정도로 크면 줄바꿈 계산 등 조판 경로가 원래 가정하지 않은 크기라 무너진다.
+    const FLUSH_LINE_CHAR_CAP: usize = 4000;
+
+    /// 텍스트를 문단으로 변환하여 추가한다 (줄바꿈 기준 분리, 개행 없는 긴 줄은 추가 절단).
+    pub(crate) fn flush_text_to_paragraphs(&self, paragraphs: &mut Vec<Paragraph>, text: &str) {
+        let decoded = decode_html_entities(text);
+        for line in decoded.split('\n') {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let chars: Vec<char> = trimmed.chars().collect();
+            for chunk in chars.chunks(Self::FLUSH_LINE_CHAR_CAP) {
                 let mut para = Paragraph::default();
-                para.text = plain;
+                para.text = chunk.iter().collect();
                 // [#3494] char_count 는 문단 종결자를 포함한다 (model/paragraph.rs:1042).
                 para.char_count = para.text.encode_utf16().count() as u32 + 1;
                 para.char_offsets = para
@@ -625,33 +773,6 @@ impl DocumentCore {
                     .collect();
                 paragraphs.push(para);
             }
-        }
-
-        paragraphs
-    }
-
-    /// 텍스트를 문단으로 변환하여 추가한다 (줄바꿈 기준 분리).
-    pub(crate) fn flush_text_to_paragraphs(&self, paragraphs: &mut Vec<Paragraph>, text: &str) {
-        let decoded = decode_html_entities(text);
-        for line in decoded.split('\n') {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            let mut para = Paragraph::default();
-            para.text = trimmed.to_string();
-            // [#3494] char_count 는 문단 종결자를 포함한다 (model/paragraph.rs:1042).
-            para.char_count = para.text.encode_utf16().count() as u32 + 1;
-            para.char_offsets = para
-                .text
-                .chars()
-                .scan(0u32, |acc, c| {
-                    let off = *acc;
-                    *acc += c.len_utf16() as u32;
-                    Some(off)
-                })
-                .collect();
-            paragraphs.push(para);
         }
     }
 
@@ -681,24 +802,19 @@ impl DocumentCore {
                 let tag_lower = tag_str.to_lowercase();
 
                 if tag_lower.starts_with("<span") {
+                    // [붙여넣기 무한루프/응답없음 방지] span_end_tag(깊이 인식 탐색)가 이미
+                    // 정확한 닫는 위치를 갖고 있는데, 예전 코드는 그 뒤에 또 "</span>" 리터럴을
+                    // 처음부터 선형 재탐색했다 — 중첩 span이 많은 Gmail류 클립보드(span 수백
+                    // 개)에서 O(n) 재탐색이 span마다 반복돼 실질적으로 O(n²)이 됐고, 게다가
+                    // 깊이를 무시한 첫 "</span>" 매치라 중첩 span에서는 내부 span의 닫는
+                    // 태그를 잘못 집는 경계 버그이기도 했다. span_end_tag 하나로 통일한다
+                    // ("</span>".len() == 7 만큼 빼면 내용 끝 위치).
                     let span_end_tag = find_closing_tag_chars(&chars, pos, "span");
                     let inner_start = tag_end + 1;
-                    let inner_end = {
-                        // char 배열에서 "</span>" 검색 (바이트 인덱스 혼동 방지)
-                        let close_chars: Vec<char> = "</span>".chars().collect();
-                        let mut found = None;
-                        for i in inner_start..len.saturating_sub(close_chars.len() - 1) {
-                            let slice: String = chars[i..i + close_chars.len().min(len - i)]
-                                .iter()
-                                .collect();
-                            if slice.to_lowercase() == "</span>" {
-                                found = Some(i);
-                                break;
-                            }
-                        }
-                        found.unwrap_or(span_end_tag)
-                    };
-                    let inner: String = chars[inner_start..inner_end.min(len)].iter().collect();
+                    let inner_end = span_end_tag.saturating_sub(7);
+                    let inner: String = chars[inner_start..inner_end.max(inner_start).min(len)]
+                        .iter()
+                        .collect();
                     let inner_text = decode_html_entities(&html_strip_tags(&inner));
 
                     if !inner_text.is_empty() {
@@ -858,15 +974,54 @@ impl DocumentCore {
         let css_lower = css.to_lowercase();
 
         // font-family
-        if let Some(font_name) = parse_css_value(&css_lower, "font-family") {
-            let clean_name = font_name
+        //
+        // 문서에 없는 글꼴이면 **새로 등록**한다.
+        // 종전에는 `find_font_id` 가 못 찾으면 조용히 기본 글꼴로 떨어졌다 — 표본 문서의
+        // `바탕` 이 양식의 `맑은 고딕` 으로 바뀌면서 줄 높이가 커져 **표 셀 안 둘째 줄이
+        // 행 경계에 잘렸고**, 글자 폭이 넓어져 쪽수도 어긋났다.
+        // 값은 대소문자를 보존해야 하므로 `css_lower` 가 아니라 원본 `css` 에서 읽는다
+        // (속성 이름은 `parse_css_value` 가 완전일치로 비교하므로
+        // `mso-fareast-font-family` 는 걸리지 않는다).
+        //
+        // 🔴 한글은 **동아시아 글꼴을 `mso-fareast-font-family` 에** 적는다. `font-family` 는
+        // 라틴 글꼴이다(실측: `<span style="font-family:바탕;mso-fareast-font-family:바탕">` 도 있고
+        // `mso-fareast-font-family` 만 있는 span 도 많다). 라틴만 읽으면 **본문 한글이 통째로
+        // 대상 문서 기본 글꼴로 떨어진다** — 표 셀 글자가 고딕으로 바뀌어 줄 높이가 커지고
+        // 셀에서 잘렸다.
+        // 슬롯 순서는 `serializer/hwpx/canonical_defaults.rs` FONTFACE_LANG_NAMES 와 같다:
+        // 0 HANGUL · 1 LATIN · 2 HANJA · 3 JAPANESE · 4 OTHER · 5 SYMBOL · 6 USER.
+        let first_family = |value: String| -> String {
+            value
+                .split(',')
+                .next()
+                .unwrap_or("")
+                .trim()
                 .trim_matches(|c: char| c == '\'' || c == '"')
                 .trim()
-                .to_string();
-            if !clean_name.is_empty() {
-                if let Some(font_id) = self.find_font_id(&clean_name) {
-                    cs.font_ids = [font_id; 7];
-                }
+                .to_string()
+        };
+        let latin_name = parse_css_value(css, "font-family")
+            .map(first_family)
+            .filter(|n| !n.is_empty());
+        let east_name = parse_css_value(css, "mso-fareast-font-family")
+            .map(first_family)
+            .filter(|n| !n.is_empty());
+        let east_ids = east_name
+            .as_deref()
+            .or(latin_name.as_deref())
+            .and_then(|n| self.find_or_register_font_ids(n));
+        let latin_ids = latin_name
+            .as_deref()
+            .or(east_name.as_deref())
+            .and_then(|n| self.find_or_register_font_ids(n));
+        if let Some(ids) = east_ids {
+            for lang_idx in [0usize, 2, 3] {
+                cs.font_ids[lang_idx] = ids[lang_idx];
+            }
+        }
+        if let Some(ids) = latin_ids {
+            for lang_idx in [1usize, 4, 5, 6] {
+                cs.font_ids[lang_idx] = ids[lang_idx];
             }
         }
 
@@ -875,6 +1030,22 @@ impl DocumentCore {
             if let Some(pt) = parse_pt_value(&size_str) {
                 // pt → HWPUNIT: 1pt = 100 HWPUNIT (base_size 단위)
                 cs.base_size = (pt * 100.0) as i32;
+            }
+        }
+
+        // letter-spacing(자간)
+        //
+        // 한글은 줄을 맞추려고 글자마다 `letter-spacing:-0.2pt` 같은 음수 자간을 넣어 내보낸다.
+        // 이를 버리면 같은 글이 원본보다 넓어져 **줄바꿈과 쪽수가 어긋난다**
+        // (실측: 원본 11쪽짜리 요약이 붙여넣기 뒤 12쪽, 문단마다 줄 하나씩 늘어남).
+        // `CharShape.spacings` 는 글꼴 크기 대비 **퍼센트**다
+        // (`renderer/style_resolver.rs`: letter_spacing_px = font_size × spacing / 100).
+        // 한글 자간 입력 범위(±50%)로 자른다.
+        if let Some(ls_str) = parse_css_value(&css_lower, "letter-spacing") {
+            if let Some(pt) = parse_pt_value(&ls_str) {
+                let base_pt = (f64::from(cs.base_size) / 100.0).max(1.0);
+                let pct = (pt / base_pt * 100.0).round().clamp(-50.0, 50.0) as i8;
+                cs.spacings = [pct; 7];
             }
         }
 
@@ -928,7 +1099,7 @@ impl DocumentCore {
         self.document.doc_info.char_shapes.push(cs);
         self.document.doc_info.raw_stream_dirty = true;
         // 스타일 세트 갱신
-        self.styles = resolve_styles(&self.document.doc_info, self.dpi);
+        self.rebuild_resolved_styles();
         new_id
     }
 
@@ -982,6 +1153,73 @@ impl DocumentCore {
             }
         }
 
+        // 여백·들여쓰기 — 한글은 개조식 문단을 `margin-left:15pt;text-indent:-15pt`
+        // 로 내보낸다. 종전에는 이 둘을 무시해 **둘째 줄부터 왼쪽으로 튀어나왔다**.
+        // CSS 길이(pt·px·cm·mm) → ParaShape 여백 단위(= HWPUNIT × 2).
+        //
+        // 🔴 ParaShape 의 margin_left/right·indent·spacing_* 는 **HWPUNIT 의 2배 스케일**로
+        // 저장한다(`renderer/style_resolver.rs` 가 `/2` 로 되돌린다. HWPX 파서도
+        // `hp:case`(HwpUnitChar) 값을 2배로 올려 읽는다 — `parser/hwpx/header.rs`).
+        // 1배로 넣으면 방향은 맞고 **크기가 정확히 절반**이 되어, 개조식 문단의 둘째 줄이
+        // 글머리표 아래로 덜 들어가 "왼쪽으로 튀어나온" 것처럼 보인다.
+        // 실측(2026-09-04): CSS `margin-left:30.3pt;text-indent:-30.3pt`
+        // → 1배 −3030 이면 내어쓰기 20.2px, 한글 원본(`hp:default` −6060)은 40.4px.
+        let css_len_to_hwpunit = |value: &str| -> Option<i32> {
+            let v = value.trim();
+            let (num, unit): (&str, &str) = if let Some(rest) = v.strip_suffix("pt") {
+                (rest, "pt")
+            } else if let Some(rest) = v.strip_suffix("px") {
+                (rest, "px")
+            } else if let Some(rest) = v.strip_suffix("cm") {
+                (rest, "cm")
+            } else if let Some(rest) = v.strip_suffix("mm") {
+                (rest, "mm")
+            } else {
+                (v, "pt")
+            };
+            let n: f64 = num.trim().parse().ok()?;
+            // 마지막 ×2 가 위에서 말한 ParaShape IR 스케일이다.
+            Some(match unit {
+                "px" => (n * 72.0 / 96.0 * 200.0).round() as i32,
+                "cm" => (n * 72.0 / 2.54 * 200.0).round() as i32,
+                "mm" => (n * 72.0 / 25.4 * 200.0).round() as i32,
+                _ => (n * 200.0).round() as i32,
+            })
+        };
+        let css_margin_left =
+            parse_css_value(&css_lower, "margin-left").and_then(|v| css_len_to_hwpunit(&v));
+        let css_text_indent =
+            parse_css_value(&css_lower, "text-indent").and_then(|v| css_len_to_hwpunit(&v));
+        if let Some(v) = parse_css_value(&css_lower, "margin-right") {
+            if let Some(hu) = css_len_to_hwpunit(&v) {
+                ps.margin_right = hu.max(0);
+            }
+        }
+        if css_margin_left.is_some() || css_text_indent.is_some() {
+            // CSS: 첫 줄 x = margin-left + text-indent, 나머지 = margin-left.
+            // HWP: 첫 줄 x = left(+indent 가 양수면 더함), 내어쓰기(indent<0)면 나머지가 left+|indent|.
+            // 따라서 left = margin-left + text-indent(첫 줄 위치), indent = text-indent 로 옮긴다.
+            let ml = css_margin_left.unwrap_or(0);
+            let ti = css_text_indent.unwrap_or(0);
+            ps.margin_left = (ml + ti).max(0);
+            ps.indent = ti;
+            // [#4898] 한컴은 hp:case(HwpUnitChar) 를 먼저 읽는다 — switch 로 되쓰면 여백이 절반이 된다.
+            // 한글이 내보낸 원본처럼 평문 표기로 적어야 내어쓰기가 그대로 보인다(실측: 31.4pt → 15.7pt 로 줄었다).
+            ps.hwpx_plain_para_margin = true;
+        }
+        if let Some(v) = parse_css_value(&css_lower, "margin-top") {
+            if let Some(hu) = css_len_to_hwpunit(&v) {
+                ps.spacing_before = hu.max(0);
+                ps.hwpx_plain_para_margin = true;
+            }
+        }
+        if let Some(v) = parse_css_value(&css_lower, "margin-bottom") {
+            if let Some(hu) = css_len_to_hwpunit(&v) {
+                ps.spacing_after = hu.max(0);
+                ps.hwpx_plain_para_margin = true;
+            }
+        }
+
         // 동일한 ParaShape 검색
         for (i, existing) in self.document.doc_info.para_shapes.iter().enumerate() {
             if *existing == ps {
@@ -992,7 +1230,7 @@ impl DocumentCore {
         let new_id = self.document.doc_info.para_shapes.len() as u16;
         self.document.doc_info.para_shapes.push(ps);
         self.document.doc_info.raw_stream_dirty = true;
-        self.styles = resolve_styles(&self.document.doc_info, self.dpi);
+        self.rebuild_resolved_styles();
         new_id
     }
 
@@ -1011,6 +1249,72 @@ impl DocumentCore {
             }
         }
         None
+    }
+
+    /// 글꼴 이름으로 ID 를 찾고, 문서에 없으면 **새로 등록**해 그 ID 를 돌려준다.
+    ///
+    /// 붙여넣기 원본의 글꼴이 대상 문서에 없을 때 조용히 기본 글꼴로
+    /// 떨어지면 줄 높이·글자 폭이 달라져 **표 셀 글자가 잘리고 쪽수가 어긋난다**
+    /// (표본: 본문 글꼴 `바탕` 이 대상 문서 기본 글꼴 `맑은 고딕` 으로 바뀌었다).
+    /// `Font` 는 `raw_data` 없이도 HWPX(`serializer/hwpx/header.rs`)·
+    /// HWP5(`serializer/hwp5/doc_info.rs` `serialize_face_name`) 양쪽이 모델 필드로 써낸다.
+    ///
+    /// 🔴 언어 슬롯마다 **글꼴 목록이 다르다**(실측한 문서: HANGUL·LATIN 8개, OTHER·USER 7개.
+    /// 같은 index 가 슬롯마다 다른 글꼴을 가리킨다).
+    /// 그래서 하나의 ID 를 7칸에 복사하면 안 되고, **슬롯마다 찾거나 넣어서 각자의 index** 를 쓴다.
+    fn find_or_register_font_ids(&mut self, name: &str) -> Option<[u16; 7]> {
+        let trimmed = name.trim();
+        // 총칭 글꼴은 등록하지 않는다 — 이름이 아니라 분류다.
+        const GENERIC: [&str; 8] = [
+            "serif",
+            "sans-serif",
+            "monospace",
+            "cursive",
+            "fantasy",
+            "system-ui",
+            "-apple-system",
+            "inherit",
+        ];
+        if trimmed.is_empty()
+            || trimmed.chars().count() > 64
+            || GENERIC.contains(&trimmed.to_lowercase().as_str())
+        {
+            return None;
+        }
+        let name_lower = trimmed.to_lowercase();
+        let faces = &mut self.document.doc_info.font_faces;
+        if faces.is_empty() {
+            return None;
+        }
+        let slot_count = faces.len().min(7);
+        let mut ids = [0u16; 7];
+        for (lang_idx, slot) in faces.iter_mut().take(7).enumerate() {
+            let idx = match slot
+                .iter()
+                .position(|font| font.name.to_lowercase() == name_lower)
+            {
+                Some(found) => found,
+                None => {
+                    // 한 문서에 무한정 늘리지 않는다(중복·악성 CSS 방어).
+                    if slot.len() >= 256 {
+                        return None;
+                    }
+                    slot.push(crate::model::style::Font {
+                        name: trimmed.to_string(),
+                        alt_type: 1, // TTF
+                        ..Default::default()
+                    });
+                    slot.len() - 1
+                }
+            };
+            ids[lang_idx] = u16::try_from(idx).ok()?;
+        }
+        // 슬롯이 7개보다 적은 문서는 남은 칸을 첫 슬롯 값으로 채운다.
+        let first = ids[0];
+        for id in ids.iter_mut().skip(slot_count) {
+            *id = first;
+        }
+        Some(ids)
     }
 }
 

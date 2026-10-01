@@ -42,8 +42,15 @@ fn para_has_equation_only(para: &Paragraph) -> bool {
             .any(|ctrl| matches!(ctrl, Control::Equation(_)))
 }
 
+/// [#4626] 빈 텍스트 판정은 `para_has_visible_text` 하나로 통일한다.
+///
+/// 종전의 `text.trim().is_empty()` 는 개체 대체 문자(`\u{FFFC}`)를 공백으로 보지
+/// 않아, **도형만 있는 문단의 표준형(`text == "\u{FFFC}"`)** 에서 `typeset.rs` 의
+/// 동명 술어와 반대 답을 냈다. 바로 위 형제 술어
+/// (`para_is_treat_as_char_equation_only`)는 이미 `para_has_visible_text` 를 쓴다 —
+/// 이 함수만 예외였다.
 fn para_is_treat_as_char_picture_only(para: &Paragraph) -> bool {
-    para.text.trim().is_empty()
+    !para_has_visible_text(para)
         && para.controls.iter().any(|ctrl| match ctrl {
             Control::Picture(pic) => pic.common.treat_as_char,
             Control::Shape(shape) => shape.common().treat_as_char,
@@ -87,6 +94,10 @@ pub(crate) struct HeightCursor {
     pub vpos_page_base: Option<i32>,
     /// 지연 기준 vpos. 첫 PageItem 이 신뢰 불가할 때 sequential y 에서 역산 (#412).
     pub vpos_lazy_base: Option<i32>,
+    /// native HWP5 의 저장 vpos 는 쪽 상대 절대 좌표 —
+    /// page_base 가 소거된 상황에서도 lazy 역산(부정확 기준) 대신 base=0 페이지
+    /// 경로를 쓴다 (재현 문서 C pi4: lazy 2748 로 저장 958 대신 921 에 그려져
+    /// 꽃 장식과 겹치던 실측).
     /// 직전 배치 문단 인덱스.
     pub prev_layout_para: Option<usize>,
     /// 직전 항목이 분할 표(PartialTable)였는지 (#991).
@@ -102,6 +113,10 @@ pub(crate) struct HeightCursor {
     /// HWPX 원본의 일부 LINE_SEG vpos 는 이전 쪽/단 조판 좌표가 남아 페이지 상단 본문을
     /// 과도하게 아래로 밀 수 있다. 원본 IR은 보존하고 조판 커서에서만 제한적으로 접는다.
     pub suppress_hwpx_stale_forward: bool,
+    /// [#5854] 저장 LINE_SEG 사다리가 통짜 합성값인 문서 — `vertical_pos` 가 실측
+    /// 조판 좌표가 아니므로 앵커 스냅 자체를 끈다. 켜 두면 글꼴로 다시 뽑은 줄
+    /// 진행을 매 항목마다 그 상수 사다리로 되돌려 놓는다.
+    pub uniform_filler_ladder: bool,
     /// [Task #1246] 현재 섹션 미주의 between-notes 마진(HU, 0=미적용). 새 미주 제목이 forward
     /// 흐름에서 이 마진보다 작은 간격을 가지면(다줄 풀이 끝 trailing 누락=문22) 끌어올린다.
     /// 생성자는 0 으로 두고 호출자(build_single_column)가 미주 흐름 컬럼에서만 설정한다.
@@ -111,7 +126,33 @@ pub(crate) struct HeightCursor {
     pub prev_item_content_bottom_y: Option<f64>,
     /// 직전 `vpos_adjust`에서 새 미주 제목 gap을 저장 end_y보다 위로 compact했는지.
     pub(crate) last_compacted_endnote_title_gap: bool,
+    /// [#5699 H1] 저장 사다리가 자리차지 표 밴드를 계상하지 않은 문서에서, 흐름이
+    /// 페인트된 표 밴드 위로 되감기지 못하게 하는 바닥(절대 y px). 기본 `f64::MIN`
+    /// = 비활성. 표 아이템 배치 후 자기모순 판별이 참일 때만 호출자가 올린다.
+    pub min_flow_floor: f64,
+    /// [#6753] 직전 문단이 `#2279 ①` 트림으로 흐름에서 **빼고 전진한 `spacing_before`**(px).
+    ///
+    /// lazy 기준 역산은 sequential `y_offset` 을 사다리 좌표에 맞대어 기준점을 구하는데,
+    /// 그 `y_offset` 에는 트림분이 빠져 있다. 그대로 역산하면 **트림된 `sb` 가 기준점에
+    /// 그대로 실려** 그 쪽 전체 좌표계가 그만큼 어긋난다.
+    ///
+    /// `27469` 5쪽 실측 — `pi=26` 이 `sb 40.00px`(3000 HU)을 트림당한 뒤 `pi=27` 에서 역산:
+    ///
+    /// ```text
+    ///   현행   16560 − (11962 + 1600) = 2998 HU   ← 트림된 sb 그 자체
+    ///   되돌림 16560 − (14962 + 1600) =   −2 HU   → 0 (페인트가 실제로 쓰는 기준)
+    /// ```
+    ///
+    /// 0 이면 종전과 완전히 같은 경로다(트림이 없었거나 sb 몫이 아닐 때).
+    pub trimmed_prev_spacing_before_px: f64,
+    /// [편집 세션] 저장 사다리의 전방 점프가 쪽 말미(하단 15%)로 향하면 기각한다.
+    /// 편집으로 앞 내용이 밀린 뒤의 저장 좌표는 이 쪽의 물리 상태와 무관해,
+    /// 점프하면 후속 분할 조각이 쪽 밖으로 밀린다(셀 Enter 재현).
+    pub session_edited: bool,
 }
+
+#[path = "height_cursor_lazy_base.rs"]
+mod lazy_base_rounding;
 
 impl HeightCursor {
     /// 컬럼 진입 시 생성. `vpos_page_base` 초기값은 호출자가 첫 PageItem 에서 산출.
@@ -140,9 +181,13 @@ impl HeightCursor {
             allow_start_height_backtrack,
             suppress_large_forward_jump,
             suppress_hwpx_stale_forward: false,
+            uniform_filler_ladder: false,
             endnote_between_notes_hu: 0,
             prev_item_content_bottom_y: None,
             last_compacted_endnote_title_gap: false,
+            min_flow_floor: f64::MIN,
+            trimmed_prev_spacing_before_px: 0.0,
+            session_edited: false,
         }
     }
 
@@ -161,6 +206,10 @@ impl HeightCursor {
         styles: &ResolvedStyleSet,
     ) -> f64 {
         self.last_compacted_endnote_title_gap = false;
+        // [#5854] 통짜 합성 사다리는 조판 좌표가 아니다 — 스냅 근거로 쓰지 않는다.
+        if self.uniform_filler_ladder {
+            return y_offset;
+        }
         let Some(prev_pi) = self.prev_layout_para else {
             return y_offset;
         };
@@ -202,7 +251,10 @@ impl HeightCursor {
         if seg.vertical_pos == 0 && prev_pi > 0 {
             return y_offset;
         }
-        let prev_vpos_end = seg.vertical_pos + seg.line_height + seg.line_spacing;
+        let prev_vpos_end = seg
+            .vertical_pos
+            .saturating_add(seg.line_height)
+            .saturating_add(seg.line_spacing);
         let curr_first_vpos = paragraphs
             .get(item_para)
             .and_then(|p| p.line_segs.first())
@@ -275,7 +327,17 @@ impl HeightCursor {
             };
             let vpos_continuous =
                 matches!(curr_first_vpos, Some(v) if v <= prev_vpos_end + curr_sb_hu);
-            let trailing_ls_hu = if vpos_continuous && prev_has_text {
+            // 저장 HWPX의 글자취급 그림만 든 문단도 그림 높이와 trailing
+            // 줄간격을 순차 커서가 이미 소비한다. 다음 저장 시작이 정확히
+            // 그 끝이면 빈 텍스트라는 이유로 같은 간격을 lazy 기준에 재가산하지 않는다.
+            let picture_spent_trailing = self.suppress_hwpx_stale_forward
+                && !synthetic_prev_seg
+                && para_is_treat_as_char_picture_only(prev_para)
+                && prev_para.controls.iter().any(|control| {
+                    matches!(control, Control::Picture(picture) if picture.common.treat_as_char)
+                })
+                && curr_first_vpos == Some(prev_vpos_end);
+            let trailing_ls_hu = if (vpos_continuous && prev_has_text) || picture_spent_trailing {
                 0
             } else {
                 paragraphs
@@ -284,13 +346,24 @@ impl HeightCursor {
                     .map(|s| s.line_spacing.max(0))
                     .unwrap_or(0)
             };
-            let y_delta_hu = ((y_offset - self.col_area_y) / self.dpi * 7200.0).round() as i32;
+            // [#6753] 역산 기준을 **트림 이전의 흐름 위치**로 맞춘다.
+            //
+            // `y_offset` 은 직전 문단이 `#2279 ①` 트림으로 `sb` 를 빼고 전진한 결과다.
+            // 그대로 역산하면 그 `sb` 가 기준점에 실려 쪽 전체가 그만큼 위로 쏠린다
+            // (`27469` 5쪽: 기준 2998 HU = 트림된 40.00px, 이후 모든 문단이
+            // `px(vpos − 2998) − sb` 로 놓여 페인트보다 40px 위에서 적합 판정된다).
+            //
+            // 트림이 없었으면 `trimmed_prev_spacing_before_px == 0.0` 이라 종전과 같은 식이다.
+            let untrimmed_y_offset = y_offset + self.trimmed_prev_spacing_before_px;
+            let y_delta_hu =
+                ((untrimmed_y_offset - self.col_area_y) / self.dpi * 7200.0).round() as i32;
             let lazy_base_corrected = prev_vpos_end - (y_delta_hu + trailing_ls_hu);
-            let lazy_base = if lazy_base_corrected >= 0 {
-                lazy_base_corrected
-            } else {
-                prev_vpos_end - y_delta_hu
-            };
+            let lazy_base = lazy_base_rounding::resolve_lazy_base(
+                prev_vpos_end,
+                y_delta_hu,
+                trailing_ls_hu,
+                self.trimmed_prev_spacing_before_px,
+            );
             if lazy_base < 0 {
                 // 역산 무효(자리차지 표 등): 이전 개체 높이가 sequential y 에 이미
                 // 반영된 상태다. 여기서 vpos 보정을 적용하면 단 상단으로 되감겨
@@ -357,6 +430,41 @@ impl HeightCursor {
                 })
             })
             .unwrap_or(false);
+        let curr_sb = paragraphs
+            .get(item_para)
+            .and_then(|p| styles.para_styles.get(p.para_shape_id as usize))
+            .map(|ps| ps.spacing_before)
+            .unwrap_or(0.0);
+        // A one-cell picture frame can store a host vpos that advances by
+        // exactly its before-spacing from the preceding line end. It carries
+        // no table height; using the preceding end and deducting that spacing
+        // again pulls its first fragment above the flow origin (issue2004 p4).
+        // Text tables with the same numeric gap still use the conservative
+        // host rule: issue1853 p10 otherwise paints its last line below body.
+        let one_cell_picture_frame = paragraphs.get(item_para).is_some_and(|para| {
+            para.controls.iter().any(|control| match control {
+                Control::Table(table) => {
+                    table.row_count == 1
+                        && table.col_count == 1
+                        && table.cells.len() == 1
+                        && table.cells[0].paragraphs.iter().any(|cell_para| {
+                            cell_para
+                                .controls
+                                .iter()
+                                .any(|control| matches!(control, Control::Picture(_)))
+                        })
+                }
+                _ => false,
+            })
+        });
+        let table_host_only_before_gap = self.suppress_hwpx_stale_forward
+            && !self.session_edited
+            && curr_has_topbottom_para_table
+            && one_cell_picture_frame
+            && curr_sb > 0.0
+            && curr_first_vpos.is_some_and(|v| {
+                v == prev_vpos_end.saturating_add((curr_sb * 7200.0 / self.dpi).round() as i32)
+            });
         // [Task #412] 현재 paragraph first vpos 우선(spacing_after 인코딩), reset 시 fallback.
         //
         // 단, 현재 문단이 para-relative TopAndBottom 표의 host 이면 first_vpos 가 표
@@ -389,15 +497,15 @@ impl HeightCursor {
             {
                 v
             }
-            Some(v) if v > seg.vertical_pos && !curr_has_topbottom_para_table => v,
+            Some(v)
+                if v > seg.vertical_pos
+                    && (!curr_has_topbottom_para_table || table_host_only_before_gap) =>
+            {
+                v
+            }
             _ => prev_vpos_end,
         };
         // [Task #643] sb_N 사전 차감 대상 (vpos_corrected_end_y 내부에서 차감).
-        let curr_sb = paragraphs
-            .get(item_para)
-            .and_then(|p| styles.para_styles.get(p.para_shape_id as usize))
-            .map(|ps| ps.spacing_before)
-            .unwrap_or(0.0);
         // [Task #1027 Stage A] 공유 클램프 함수.
         let allow_large_backward = (self.allow_vpos_rewind && vpos_rewind)
             || (self.allow_start_height_backtrack
@@ -546,7 +654,7 @@ impl HeightCursor {
             && !curr_is_equation_only_tail
             && matches!(
                 curr_first_vpos,
-                Some(v) if v - seg.vertical_pos >= seg.line_height + seg.line_spacing
+                Some(v) if v - seg.vertical_pos >= seg.line_height.saturating_add(seg.line_spacing)
             );
         let compact_endnote_page_tail_backtrack = self.suppress_large_forward_jump
             && is_page_path
@@ -629,7 +737,12 @@ impl HeightCursor {
         let current_line_advance_px = paragraphs
             .get(item_para)
             .and_then(|p| p.line_segs.first())
-            .map(|s| hwpunit_to_px((s.line_height + s.line_spacing).max(0), self.dpi))
+            .map(|s| {
+                hwpunit_to_px(
+                    (s.line_height.saturating_add(s.line_spacing)).max(0),
+                    self.dpi,
+                )
+            })
             .unwrap_or(0.0);
         let compact_endnote_page_no_separator_tail_pullup = self.suppress_large_forward_jump
             && is_page_path
@@ -1173,6 +1286,29 @@ impl HeightCursor {
             result = (result + title_after_equation_tail_extra_gap).min(col_bottom);
             self.shift_vpos_base_for_rendered_delta(title_after_equation_tail_extra_gap);
         }
+        // [#6550] 새 문항 제목을 **직전 미주의 콘텐츠 하단 위**로 스냅하면 앞 풀이의
+        // 마지막 줄과 겹친다(2023-09 18쪽 문26: 흐름 1044.3 → 저장 1035.9, 앞 줄 하단
+        // 1043.9 — `overlap 142.51×11.63px` + `text-overlap` 7건).
+        //
+        // 저장 vpos 를 따르는 보정들은 프레임 맞춤이 목적이지 겹침 허가가 아니다. 흐름이
+        // 이미 앞 콘텐츠 아래에 있을 때만(= 되감김이 아니라 스냅이 만든 침범일 때만)
+        // 바닥을 둔다. 흐름 자체가 위에 있으면 종전대로 둔다 — 그건 다른 축이다.
+        //
+        // ⚠ 범위는 **기본 「미주 사이」(≤1984HU) + 보통 높이 tail** 로만 좁힌다.
+        //   · 큰 미주 사이(5669HU)는 spacer 가 만든 trailing y 를 일부러 접는다
+        //     (`..._large_empty_spacer_collapses_trailing_gap_at_bottom`)
+        //   · 큰 수식/inline tail(lh>1500) 뒤 제목은 제한 폭 backtrack 이 계약이다
+        //     (`..._question_title_after_tall_tail_limited_backtrack`, #1284 PDF 핀)
+        if self.suppress_large_forward_jump
+            && current_is_endnote_title
+            && !follows_tall_inline_item
+            && self.endnote_between_notes_hu > 0
+            && self.endnote_between_notes_hu <= super::layout::ENDNOTE_BETWEEN_NOTES_BASE_FLOW_HU
+            && result < prev_content_floor_y
+            && y_offset >= prev_content_floor_y
+        {
+            result = prev_content_floor_y.min(y_offset);
+        }
         if compact_endnote_zero_gap_text_floor && result > end_y + 0.5 {
             self.shift_vpos_base_for_rendered_delta(result - end_y);
         }
@@ -1340,7 +1476,22 @@ impl HeightCursor {
             }
             return y_offset;
         }
+        // [편집 세션] 전방 점프 목적지가 쪽 말미(하단 15%)면 낡은 저장 좌표다 —
+        // fresh 흐름을 유지한다. 같은 쪽 소폭 재동기화(상단·중단)는 종전대로.
+        if self.session_edited
+            && result > y_offset
+            && result > self.col_area_y + self.col_area_height * 0.85
+        {
+            return y_offset;
+        }
         result
+    }
+
+    /// 활성 base 로 사영한 저장-사다리 기대 y. 렌더 점프가 사다리에 이미
+    /// 인코딩된 공간인지(기준점 이동 불필요) 가리는 데 쓴다 (#4533 2135039).
+    pub(crate) fn ladder_expected_y(&self, col_y: f64, first_vpos: i32) -> Option<f64> {
+        let base = self.vpos_page_base.or(self.vpos_lazy_base)?;
+        Some(col_y + hwpunit_to_px(first_vpos - base, self.dpi))
     }
 
     /// 이미 계산된 vpos 기준 y보다 실제 렌더 y를 아래로 밀었을 때, 후속 항목도
@@ -1359,6 +1510,25 @@ impl HeightCursor {
             self.vpos_lazy_base = Some(base - delta_hu);
         }
     }
+
+    /// [#4613 · #4599 밴드-플로우] 렌더가 저장 사다리보다 `delta_px` 만큼 **뒤로**(위로) 배치된
+    /// 경우의 역보정 — 낡은 사다리 전방 스냅을 기각해 줄을 자리차지 표 위 틈에 남길 때,
+    /// 후속 문단의 사다리 목표가 함께 위로 이동해야 상대 간격이 유지된다.
+    /// `shift_vpos_base_for_rendered_delta`(전방 밀림, base 감소)의 대칭이다.
+    pub(crate) fn shift_vpos_base_for_rendered_backtrack(&mut self, delta_px: f64) {
+        if delta_px <= 0.0 {
+            return;
+        }
+        let delta_hu = (delta_px / self.dpi * 7200.0).round() as i32;
+        if delta_hu <= 0 {
+            return;
+        }
+        if let Some(base) = self.vpos_page_base {
+            self.vpos_page_base = Some(base + delta_hu);
+        } else if let Some(base) = self.vpos_lazy_base {
+            self.vpos_lazy_base = Some(base + delta_hu);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1366,6 +1536,61 @@ mod tests {
     use super::*;
     use crate::model::paragraph::LineSeg;
     use crate::renderer::style_resolver::ResolvedParaStyle;
+
+    /// [#4626] 글자처럼 취급하는 도형 하나만 든 문단.
+    fn tac_shape_para(text: &str) -> Paragraph {
+        use crate::model::shape::{RectangleShape, ShapeObject};
+        let mut rect = RectangleShape::default();
+        rect.common.treat_as_char = true;
+        Paragraph {
+            text: text.to_string(),
+            controls: vec![Control::Shape(Box::new(ShapeObject::Rectangle(rect)))],
+            ..Default::default()
+        }
+    }
+
+    /// 도형만 있는 문단의 **표준형**은 `text == "\u{FFFC}"` 다. 종전 판정은
+    /// `trim()` 이 개체 대체 문자를 공백으로 보지 않아 여기서 `false` 를 냈고,
+    /// `typeset.rs` 의 동명 술어(`true`)와 정면으로 어긋났다.
+    #[test]
+    fn object_replacement_only_para_is_treat_as_char_picture_only() {
+        assert!(
+            para_is_treat_as_char_picture_only(&tac_shape_para("\u{FFFC}")),
+            "개체 대체 문자만 있는 문단을 도형 전용으로 보지 않았다"
+        );
+    }
+
+    /// 같은 파일의 형제 술어와 같은 답을 내야 한다 — 빈 텍스트 판정의 단일 정의.
+    #[test]
+    fn empty_and_control_only_paras_agree_with_visible_text_helper() {
+        for text in ["", "\u{FFFC}", "\u{FFFC}\u{FFFC}", "\u{000D}"] {
+            let para = tac_shape_para(text);
+            assert_eq!(
+                para_is_treat_as_char_picture_only(&para),
+                !para_has_visible_text(&para),
+                "text={text:?} 에서 빈 텍스트 판정이 갈렸다"
+            );
+        }
+    }
+
+    /// 실제 글자가 있으면 도형 전용이 아니다.
+    #[test]
+    fn para_with_real_text_is_not_treat_as_char_picture_only() {
+        assert!(!para_is_treat_as_char_picture_only(&tac_shape_para("가")));
+        assert!(!para_is_treat_as_char_picture_only(&tac_shape_para(
+            "\u{FFFC}가"
+        )));
+    }
+
+    /// 도형이 없으면 텍스트가 비어도 도형 전용이 아니다.
+    #[test]
+    fn para_without_treat_as_char_shape_is_not_picture_only() {
+        let para = Paragraph {
+            text: "\u{FFFC}".to_string(),
+            ..Default::default()
+        };
+        assert!(!para_is_treat_as_char_picture_only(&para));
+    }
 
     // DPI=96 → 75 HWPUNIT = 1px (1 inch = 7200 HU = 96px). 손계산 정합용.
     const DPI: f64 = 96.0;
@@ -2366,5 +2591,20 @@ mod tests {
         assert_eq!(c.vpos_page_base, base_before, "base 무이동");
         // 보정 분기를 타지 않으므로 y_offset 유지(cram 아님) 또는 backtrack — 핵심은 base 무이동.
         let _ = got;
+    }
+
+    /// [#4613 · #4599 밴드-플로우] 후방 배치 역보정은 base 를 delta 만큼 늘려(전방 밀림 보정의
+    /// 대칭) 후속 문단의 사다리 목표를 함께 위로 이동시킨다.
+    #[test]
+    fn backtrack_shift_raises_vpos_base_symmetrically() {
+        let mut c = cursor(Some(6000));
+        c.shift_vpos_base_for_rendered_delta(10.0); // 전방 10px → base -750
+        assert_eq!(c.vpos_page_base, Some(5250));
+        c.shift_vpos_base_for_rendered_backtrack(10.0); // 후방 10px → base +750 복원
+        assert_eq!(c.vpos_page_base, Some(6000));
+        // 0 이하 무동작
+        c.shift_vpos_base_for_rendered_backtrack(0.0);
+        c.shift_vpos_base_for_rendered_backtrack(-3.0);
+        assert_eq!(c.vpos_page_base, Some(6000));
     }
 }

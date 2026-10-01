@@ -1,7 +1,13 @@
 import type { CommandDef, CommandServices } from '../types';
+import {
+  buildHtmlExportFile,
+  HTML_EXPORT_DETAILS,
+  type HtmlExportFormat,
+} from '@/command/export-html';
 import { PageSetupDialog } from '@/ui/page-setup-dialog';
 import { AboutDialog } from '@/ui/about-dialog';
 import { showSaveAs } from '@/ui/save-as-dialog';
+import { showConfirm } from '@/ui/confirm-dialog';
 import { showHwpSavePasswordDialog } from '@/ui/hwp-password-dialog';
 import { showUnsavedChangesDialog } from '@/ui/unsaved-changes-dialog';
 import { showHmlSaveFormatDialog } from '@/ui/hml-save-format-dialog';
@@ -14,9 +20,16 @@ import {
 } from '@/command/save-target';
 import { SAVE_FORMAT_DETAILS } from '@/command/save-format';
 import {
-  exportDocumentForFormat,
-  exportPasswordProtectedDocumentForFormat,
+  exportDocumentWithReportForFormat,
+  exportPasswordProtectedDocumentWithReportForFormat,
+  type SaveExportArtifact,
 } from '@/command/save-document-format';
+import {
+  buildContentLossNotice,
+  persistDownloadWithContentLoss,
+  persistWithContentLoss,
+  type ContentLossReport,
+} from '@/core/export-content-loss';
 import {
   readHmlSaveContext,
   resolveHmlSaveCapability,
@@ -40,72 +53,36 @@ import {
   type PrintSurface,
 } from '@/command/print-surface';
 import {
-  canUseOpenFilePicker,
-  pickOpenFileHandle,
   readFileFromHandle,
   saveDocumentToFileSystem,
   type FileSystemFileHandleLike,
   type SaveDocumentResult,
   type FileSystemWindowLike,
 } from '@/command/file-system-access';
+import { openDocumentViaPicker } from '../file-open-picker';
+import { saveDocumentToDesktop } from '../desktop-file-save';
+import { getDesktopOpenHandler, getDesktopSaveHandler } from '@/core/desktop-bridge';
 import { PdfPrintDialog } from '@/ui/pdf-print-dialog';
 import { userSettings } from '@/core/user-settings';
 import { showToast } from '@/ui/toast';
-import { clearRecentDocs, listRecentDocs, removeRecentDoc } from '@/recent/recent-store';
+import { addRecentDoc, clearRecentDocs, listRecentDocs, removeRecentDoc } from '@/recent/recent-store';
 import { openRecentEntry } from '@/recent/recent-open';
-import { getDesktopOpenHandler, getDesktopSaveHandler } from '@/core/desktop-bridge';
 
+import { t } from '../../i18n/index.ts';
 /**
  * 파일 열기 대화상자(File System Access picker, 미지원 시 숨김 input 폴백)를 열어
  * 문서를 로드한다. `file:open` 커맨드와 "최근 문서" 메타-only 항목 재열기가 공유한다.
  */
 async function openFileViaPicker(services: CommandServices): Promise<void> {
-  try {
-    const canReplace = await confirmSaveBeforeReplacingDocument(services);
-    if (!canReplace) return;
-
-    // [Task #1 데스크톱] 네이티브 열기 dialog 분기. 브라우저에선 핸들러가 null →
-    // 아래 File System Access / file-input 경로가 그대로 동작(웹 무변경).
-    const desktopOpen = getDesktopOpenHandler();
-    if (desktopOpen) {
-      await desktopOpen((bytes, fileName) => {
-        services.eventBus.emit('open-document-bytes', {
-          bytes,
-          fileName,
-          fileHandle: null,
-          skipUnsavedGuard: true, // 위에서 이미 confirmSaveBeforeReplacingDocument 수행
-        });
-      });
-      return;
-    }
-
-    const windowLike = window as FileSystemWindowLike;
-    const nativeOpenPickerAvailable = canUseOpenFilePicker(windowLike);
-    const handle = await pickOpenFileHandle(windowLike);
-    if (!handle) {
-      // File System Access API picker가 있었다면 null은 사용자 취소(예: Esc)다.
-      // 이때 숨김 input fallback을 다시 열면 파일 선택창이 곧바로 재오픈된다.
-      if (nativeOpenPickerAvailable) return;
-      const fileInput = document.getElementById('file-input') as HTMLInputElement | null;
-      if (fileInput) {
-        fileInput.dataset.skipUnsavedGuard = 'true';
-        fileInput.click();
-      }
-      return;
-    }
-
-    const { bytes, name } = await readFileFromHandle(handle);
-    services.eventBus.emit('open-document-bytes', {
-      bytes,
-      fileName: name,
-      fileHandle: handle,
-      skipUnsavedGuard: true,
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[file:open] 열기 실패:', msg);
-    alert(`파일 열기에 실패했습니다:\n${msg}`);
-  }
+  await openDocumentViaPicker({
+    canReplace: () => confirmSaveBeforeReplacingDocument(services),
+    desktopOpen: getDesktopOpenHandler(),
+    windowLike: window as FileSystemWindowLike,
+    findFileInput: () => document.getElementById('file-input') as HTMLInputElement | null,
+    emitOpenDocument: (payload) => services.eventBus.emit('open-document-bytes', payload),
+    warn: (message, error) => console.warn(message, error),
+    alert: (message) => alert(message),
+  });
 }
 
 /** 최근 문서 핸들의 읽기 권한을 확인/요청한다. 최종 'granted' 여부 반환. */
@@ -161,28 +138,35 @@ async function chooseSaveAsFormat(services: CommandServices): Promise<SaveFormat
   );
 }
 
-/** [Task #1 데스크톱] 네이티브 저장에 넘길 바이트 — createSaveBlob 과 동일한 암호 규칙. */
-function exportBytesForNativeSave(
-  services: CommandServices,
-  format: SaveFormat,
-  password?: string,
-): Uint8Array {
-  return password === undefined
-    ? exportDocumentForFormat(services.wasm, format)
-    : exportPasswordProtectedDocumentForFormat(services.wasm, requirePasswordSaveFormat(format), password);
+interface SavePayload {
+  blob: Blob;
+  contentLoss: ContentLossReport | null;
 }
 
-function createSaveBlob(
+function createSavePayload(
   services: CommandServices,
   format: SaveFormat,
   password?: string,
-): Blob {
-  const bytes = password === undefined
-    ? exportDocumentForFormat(services.wasm, format)
-    : exportPasswordProtectedDocumentForFormat(services.wasm, requirePasswordSaveFormat(format), password);
-  return new Blob([bytes as unknown as BlobPart], {
-    type: SAVE_FORMAT_DETAILS[format].mimeType,
-  });
+): SavePayload {
+  const artifact: SaveExportArtifact = password === undefined
+    ? exportDocumentWithReportForFormat(services.wasm, format)
+    : exportPasswordProtectedDocumentWithReportForFormat(
+      services.wasm,
+      requirePasswordSaveFormat(format),
+      password,
+    );
+  return {
+    blob: new Blob([artifact.bytes as unknown as BlobPart], {
+      type: SAVE_FORMAT_DETAILS[format].mimeType,
+    }),
+    contentLoss: artifact.contentLoss,
+  };
+}
+
+function showExportContentLoss(report: ContentLossReport): void {
+  const message = buildContentLossNotice(report);
+  if (!message) return;
+  showToast({ message, durationMs: 0, confirmLabel: t('command.file.showExportContentLoss.message') });
 }
 
 function requirePasswordSaveFormat(format: SaveFormat): Exclude<SaveFormat, 'hml'> {
@@ -215,6 +199,10 @@ async function tryFileSystemSave(
   forceSaveAs: boolean,
   currentHandle: FileSystemFileHandleLike | null,
 ): Promise<SaveDocumentResult | 'cancelled'> {
+  const desktopSave = getDesktopSaveHandler();
+  if (desktopSave) {
+    return saveDocumentToDesktop({ blob, suggestedName, forceSaveAs, save: desktopSave });
+  }
   try {
     return await saveDocumentToFileSystem({
       blob,
@@ -234,6 +222,7 @@ async function tryFileSystemSave(
 function completeHandleSave(
   services: CommandServices,
   sourceFormat: string,
+  saveFormat: SaveFormat,
   result: SaveDocumentResult,
   reason: 'save' | 'save-as',
   passwordProtected = false,
@@ -241,8 +230,25 @@ function completeHandleSave(
   if (sourceFormat === 'hml') markConvertedHmlSaveHandle(result.handle);
   services.wasm.currentFileHandle = result.handle;
   services.wasm.fileName = result.fileName;
+  void addRecentDoc({
+    fileName: result.fileName,
+    sourceFormat: saveFormat,
+    handle: result.handle,
+  }).catch(() => undefined);
+  services.refreshDocumentStatus();
   services.wasm.requiresPasswordForSave = passwordProtected;
   services.documentState.markClean(reason);
+}
+
+function exportHtmlBasedFile(services: CommandServices, format: HtmlExportFormat): void {
+  const label = HTML_EXPORT_DETAILS[format].label;
+  try {
+    const file = buildHtmlExportFile(services.wasm, format, services.wasm.fileName);
+    downloadBlob(new Blob([file.content], { type: file.mimeType }), file.fileName);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    alert(t('command.file.exportHtmlBasedFile.message', { p1: label, p2: message }));
+  }
 }
 
 function downloadBlob(blob: Blob, fileName: string): void {
@@ -250,8 +256,11 @@ function downloadBlob(blob: Blob, fileName: string): void {
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = fileName;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  try {
+    anchor.click();
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 }
 
 async function promptFallbackName(
@@ -273,12 +282,27 @@ async function promptSaveAsOptions(
   services: CommandServices,
   format: SaveFormat,
 ): Promise<SaveAsOptions | null> {
+  const protectedDoc = services.wasm.requiresPasswordForSave;
+  const passwordFormat = format !== 'hml';
   const selection = await showSaveAs(
     saveBaseNameFor(services.wasm.fileName, format),
     format,
-    { allowPassword: format !== 'hml' },
+    {
+      allowPassword: passwordFormat,
+      inheritPassword: protectedDoc && passwordFormat,
+    },
   );
   if (selection === null) return null;
+
+  if (protectedDoc && format === 'hml') {
+    const confirmed = await showConfirm(
+      '보호 해제',
+      'HML 형식은 문서 암호를 지원하지 않습니다. 암호 없이 저장하면 보호가 해제됩니다. 계속할까요?',
+    );
+    if (!confirmed) return null;
+    return { fileName: selection.fileName, password: null };
+  }
+
   if (!selection.configurePassword) {
     return { fileName: selection.fileName, password: null };
   }
@@ -298,42 +322,52 @@ async function saveAsFormat(services: CommandServices, format: SaveFormat): Prom
 
     flushDeferredPaginationBeforeExplicitOutput(services, 'save-as');
     const saveName = options.fileName;
-    // [Task #1 데스크톱] 네이티브 저장 dialog 분기. 브라우저에선 핸들러가 null →
-    // 아래 File System Access / 다운로드 폴백이 그대로 동작(웹 무변경).
-    const desktopSave = getDesktopSaveHandler();
-    if (desktopSave) {
-      const bytes = exportBytesForNativeSave(services, format, password ?? undefined);
-      const r = await desktopSave({ bytes, suggestedName: saveName, saveAs: true });
-      if (r.status === 'saved') {
-        services.wasm.fileName = r.fileName;
-        services.documentState.markClean('save-as');
-        return;
-      }
-      if (r.status === 'cancelled') return;
-      reportSaveError('file:save-as', new Error(r.message));
-      return;
-    }
-    const blob = createSaveBlob(services, format, password ?? undefined);
+    const payload = createSavePayload(services, format, password ?? undefined);
     const originalHandle = sourceFormat === 'hml' ? services.wasm.currentFileHandle : null;
-    const result = await tryFileSystemSave(
-      services,
-      format,
-      blob,
-      saveName,
-      true,
-      originalHandle,
+    const result = await persistWithContentLoss(
+      payload.contentLoss,
+      () => tryFileSystemSave(
+        services,
+        format,
+        payload.blob,
+        saveName,
+        true,
+        originalHandle,
+      ),
+      (saveResult) => saveResult !== 'cancelled' && saveResult.method !== 'fallback',
+      (saveResult) => completeHandleSave(
+        services,
+        sourceFormat,
+        format,
+        saveResult as SaveDocumentResult,
+        'save-as',
+        password !== null,
+      ),
+      showExportContentLoss,
     );
     if (result === 'cancelled') return;
     if (result.method !== 'fallback') {
-      completeHandleSave(services, sourceFormat, result, 'save-as', password !== null);
       return;
     }
     const downloadName = await promptFallbackName(saveName, format);
     if (!downloadName) return;
-    services.wasm.fileName = downloadName;
-    services.wasm.requiresPasswordForSave = password !== null;
-    downloadBlob(blob, downloadName);
-    services.documentState.markClean('save-as');
+    persistDownloadWithContentLoss(
+      payload.contentLoss,
+      () => downloadBlob(payload.blob, downloadName),
+      () => {
+        // download 시작이 실패하면 현재 backing copy의 보호 의도를 유지한다 (#5986).
+        services.wasm.fileName = downloadName;
+        void addRecentDoc({
+          fileName: downloadName,
+          sourceFormat: format,
+          handle: null,
+        }).catch(() => undefined);
+        services.refreshDocumentStatus();
+        services.wasm.requiresPasswordForSave = password !== null;
+        services.documentState.markClean('save-as');
+      },
+      showExportContentLoss,
+    );
   } catch (error) {
     reportSaveError('file:save-as', error);
   } finally {
@@ -344,7 +378,7 @@ async function saveAsFormat(services: CommandServices, format: SaveFormat): Prom
 function reportSaveError(scope: string, error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
   console.error(`[${scope}] 저장 실패:`, message);
-  alert(`파일 저장에 실패했습니다:\n${message}`);
+  alert(t('command.file.reportSaveError.message', { p1: message }));
 }
 
 export type SaveCurrentDocumentResult = 'saved' | 'cancelled' | 'failed' | 'unsupported';
@@ -375,43 +409,43 @@ export async function saveCurrentDocument(services: CommandServices): Promise<Sa
       password = await showHwpSavePasswordDialog(fileNameForFormat(services.wasm.fileName, passwordFormat));
       if (password === null) return 'cancelled';
     }
-    // [Task #1 데스크톱] 네이티브 저장 dialog 분기(웹 무변경).
-    const desktopSave = getDesktopSaveHandler();
-    if (desktopSave) {
-      const bytes = exportBytesForNativeSave(services, target.format, password ?? undefined);
-      const r = await desktopSave({
-        bytes,
-        suggestedName: target.suggestedName,
-        saveAs: target.forceSaveAs,
-      });
-      if (r.status === 'saved') {
-        services.wasm.fileName = r.fileName;
-        services.documentState.markClean('save');
-        return 'saved';
-      }
-      if (r.status === 'cancelled') return 'cancelled';
-      reportSaveError('file:save', new Error(r.message));
-      return 'failed';
-    }
-    const blob = createSaveBlob(services, target.format, password ?? undefined);
-    const result = await tryFileSystemSave(
-      services,
-      target.format,
-      blob,
-      target.suggestedName,
-      target.forceSaveAs,
-      services.wasm.currentFileHandle,
+    const payload = createSavePayload(services, target.format, password ?? undefined);
+    const result = await persistWithContentLoss(
+      payload.contentLoss,
+      () => tryFileSystemSave(
+        services,
+        target.format,
+        payload.blob,
+        target.suggestedName,
+        target.forceSaveAs,
+        services.wasm.currentFileHandle,
+      ),
+      (saveResult) => saveResult !== 'cancelled' && saveResult.method !== 'fallback',
+      (saveResult) => completeHandleSave(
+        services,
+        sourceFormat,
+        target.format,
+        saveResult as SaveDocumentResult,
+        'save',
+        password !== null,
+      ),
+      showExportContentLoss,
     );
     if (result === 'cancelled') return 'cancelled';
     if (result.method !== 'fallback') {
-      completeHandleSave(services, sourceFormat, result, 'save', password !== null);
       return 'saved';
     }
     const downloadName = await fallbackNameForCurrentSave(services, target);
     if (!downloadName) return 'cancelled';
-    downloadBlob(blob, downloadName);
-    services.wasm.requiresPasswordForSave = password !== null;
-    services.documentState.markClean('save');
+    persistDownloadWithContentLoss(
+      payload.contentLoss,
+      () => downloadBlob(payload.blob, downloadName),
+      () => {
+        services.wasm.requiresPasswordForSave = password !== null;
+        services.documentState.markClean('save');
+      },
+      showExportContentLoss,
+    );
     return 'saved';
   } catch (error) {
     reportSaveError('file:save', error);
@@ -435,17 +469,31 @@ async function fallbackNameForCurrentSave(
 
 export async function confirmSaveBeforeReplacingDocument(
   services: CommandServices,
+  options: {
+    /**
+     * embed 프로파일용: false면 다이얼로그의 '저장' 선택지를 막는다. 이 경로의
+     * 저장은 registry를 우회한 직접 호출이라 커맨드 미등록으로는 닫히지 않는다.
+     * 자동 discard는 데이터 손실 위험이 있으므로 선택은 사용자에게 남긴다.
+     */
+    allowLocalSave?: boolean;
+  } = {},
 ): Promise<boolean> {
   const ctx = services.getContext();
   if (!ctx.hasDocument || !ctx.isDirty) return true;
 
+  const allowLocalSave = options.allowLocalSave !== false;
   const choice = await showUnsavedChangesDialog({
     fileName: services.wasm.fileName,
-    canSave: true, // HWPX 직접 저장 활성화로 모든 출처 저장 가능
+    canSave: allowLocalSave, // full: HWPX 직접 저장 활성화로 모든 출처 저장 가능
+    ...(allowLocalSave ? {} : {
+      saveUnavailableReason: '저장은 호스트 애플리케이션이 담당합니다.',
+    }),
   });
 
   if (choice === 'cancel') return false;
   if (choice === 'discard') return true;
+  // canSave=false면 다이얼로그가 'save'를 낼 수 없다 — 방어적으로 취소와 동일 취급.
+  if (!allowLocalSave) return false;
 
   const result = await saveCurrentDocument(services);
   return result === 'saved';
@@ -467,7 +515,7 @@ function setupPrintDocument(
   viewport.content = 'width=device-width, initial-scale=1.0';
   doc.head.append(meta, viewport);
   doc.title = previewWindow
-    ? `${fileName} — 인쇄 미리보기`
+    ? t('command.file.doc.tooltip', { p1: fileName })
     : pdfPrintTitle(fileName);
   appendPrintStyle(doc, printPages);
 
@@ -490,24 +538,24 @@ function appendPrintPreviewBar(
   const bar = doc.createElement('div');
   bar.className = 'print-preview-bar';
   bar.setAttribute('role', 'toolbar');
-  bar.setAttribute('aria-label', '인쇄 미리보기 도구');
+  bar.setAttribute('aria-label', t('command.file.appendPrintPreviewBar.label'));
 
   const printButton = doc.createElement('button');
   printButton.id = 'print-btn';
   printButton.type = 'button';
   printButton.className = 'print-preview-primary';
-  printButton.textContent = '인쇄';
+  printButton.textContent = t('command.file.printButton.text');
   printButton.addEventListener('click', () => printWindow.print());
 
   const closeButton = doc.createElement('button');
   closeButton.id = 'close-btn';
   closeButton.type = 'button';
-  closeButton.textContent = '닫기';
+  closeButton.textContent = t('command.file.closeButton.text');
   closeButton.addEventListener('click', () => printWindow.close());
 
   const title = doc.createElement('span');
   title.className = 'print-preview-title';
-  title.textContent = `${fileName} — ${pageCount}쪽`;
+  title.textContent = t('command.file.title.text', { p1: fileName, p2: pageCount });
 
   bar.append(printButton, closeButton, title);
   doc.body.appendChild(bar);
@@ -538,12 +586,15 @@ async function preparePrintPages(
   onProgress: (currentPage: number, pageCount: number) => void,
 ): Promise<PrintPage[]> {
   const wasm = services.wasm;
-  const pageCount = wasm.pageCount;
+  // Capture a portable pagination consistently; restore Canvas before yielding.
+  const pages = wasm.withPortableMetrics(() => Array.from({ length: wasm.pageCount }, (_, i) => ({
+    svg: wasm.renderPageSvgWithProfile(i, 'print'), info: wasm.getPageInfo(i),
+  })));
+  const pageCount = pages.length;
   const printPages: PrintPage[] = [];
   for (let i = 0; i < pageCount; i++) {
     onProgress(i + 1, pageCount);
-    const svg = wasm.renderPageSvgWithProfile(i, 'print');
-    const pageInfo = wasm.getPageInfo(i);
+    const { svg, info: pageInfo } = pages[i];
     printPages.push(createPrintPage(svg, pageInfo, i));
     if (i % 5 === 0) await new Promise(resolve => setTimeout(resolve, 0));
   }
@@ -554,7 +605,7 @@ let printJobActive = false;
 
 function beginPrintJob(): boolean {
   if (printJobActive) {
-    showToast({ message: '인쇄 문서를 준비하고 있습니다.', durationMs: 2500 });
+    showToast({ message: t('command.file.beginPrintJob.message'), durationMs: 2500 });
     return false;
   }
   printJobActive = true;
@@ -623,11 +674,11 @@ async function runPdfPrint(services: CommandServices): Promise<void> {
     restoreStatus = false;
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[file:print-to-pdf]', msg);
-    if (statusEl) statusEl.textContent = `PDF 준비 실패: ${msg}`;
+    if (statusEl) statusEl.textContent = t('command.file.statusEl.text', { p1: msg });
     if (dialogVisible && dialog) {
       dialog.showError(msg);
     } else {
-      showToast({ message: `PDF 준비에 실패했습니다: ${msg}`, durationMs: 5000 });
+      showToast({ message: t('command.file.runPdfPrint.message', { p1: msg }), durationMs: 5000 });
     }
   } finally {
     if (originalDocumentTitle !== null) {
@@ -682,11 +733,11 @@ async function runPrintPreview(services: CommandServices): Promise<void> {
     restoreStatus = false;
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[file:print]', msg);
-    if (statusEl) statusEl.textContent = `인쇄 미리보기 실패: ${msg}`;
+    if (statusEl) statusEl.textContent = t('command.file.statusEl.text.x2f5125', { p1: msg });
     if (err instanceof PrintPreviewBlockedError) {
-      alert('인쇄 미리보기 팝업이 차단되었습니다. 팝업 허용 후 다시 시도해주세요.');
+      alert(t('command.file.runPrintPreview.message'));
     } else {
-      showToast({ message: `인쇄 미리보기에 실패했습니다: ${msg}`, durationMs: 5000 });
+      showToast({ message: t('command.file.runPrintPreview.message.xc4753b', { p1: msg }), durationMs: 5000 });
     }
   } finally {
     if (!keepPreviewOpen) surface?.close();
@@ -698,7 +749,7 @@ async function runPrintPreview(services: CommandServices): Promise<void> {
 export const fileCommands: CommandDef[] = [
   {
     id: 'file:new-doc',
-    label: '새로 만들기',
+    label: t('command.file.newDoc.label'),
     icon: 'icon-new-doc',
     shortcutLabel: 'Alt+N',
     canExecute: () => true,
@@ -708,7 +759,7 @@ export const fileCommands: CommandDef[] = [
   },
   {
     id: 'file:open',
-    label: '열기',
+    label: t('command.file.open.label'),
     execute: openFileViaPicker,
   },
   {
@@ -717,14 +768,14 @@ export const fileCommands: CommandDef[] = [
     // 파일 이동/삭제(getFile 실패)는 항목 제거 + 안내. 결과 규칙은
     // recent-open.ts(openRecentEntry) — 테스트 가능한 순수 로직으로 분리.
     id: 'file:open-recent',
-    label: '최근 문서 열기',
+    label: t('command.file.openRecent.registryLabel'),
     async execute(services, params) {
       const id = typeof params?.id === 'string' ? params.id : undefined;
       if (!id) return;
       const recents = await listRecentDocs();
       const entry = recents.find((r) => r.id === id);
       if (!entry) {
-        showToast({ message: '최근 문서 정보를 찾을 수 없습니다.', durationMs: 2500 });
+        showToast({ message: t('command.file.execute.message'), durationMs: 2500 });
         return;
       }
 
@@ -742,16 +793,16 @@ export const fileCommands: CommandDef[] = [
   {
     // 최근 문서 목록 전체 삭제.
     id: 'file:clear-recent',
-    label: '최근 문서 목록 지우기',
+    label: t('command.file.clearRecent.registryLabel'),
     async execute() {
-      if (!confirm('최근 문서 목록을 모두 지우시겠습니까?')) return;
+      if (!confirm(t('command.file.execute.message.xb74439'))) return;
       await clearRecentDocs();
-      showToast({ message: '최근 문서 목록을 지웠습니다.', durationMs: 2200 });
+      showToast({ message: t('command.file.execute.message.x93673a'), durationMs: 2200 });
     },
   },
   {
     id: 'file:save',
-    label: '저장',
+    label: t('command.file.save.label'),
     icon: 'icon-save',
     shortcutLabel: 'Ctrl+S',
     canExecute: (ctx) => ctx.hasDocument,
@@ -763,7 +814,7 @@ export const fileCommands: CommandDef[] = [
     // [Task #833] 다른 이름으로 저장 — currentFileHandle 무시 + 항상 picker.
     // 출처 포맷 유지(HWPX→HWPX, HWP→HWP).
     id: 'file:save-as',
-    label: '다른 이름으로 저장',
+    label: t('command.file.saveAs.registryLabel'),
     shortcutLabel: 'Ctrl+Shift+S',
     canExecute: (ctx) => ctx.hasDocument,
     async execute(services) {
@@ -774,7 +825,7 @@ export const fileCommands: CommandDef[] = [
   {
     // [#1613] HWP 형식으로 저장 — 출처 무관 HWP 출력.
     id: 'file:save-as-hwp',
-    label: 'HWP 형식으로 저장',
+    label: t('command.file.saveAsHwp.registryLabel'),
     canExecute: (ctx) => ctx.hasDocument,
     async execute(services) {
       await saveAsFormat(services, 'hwp');
@@ -783,7 +834,7 @@ export const fileCommands: CommandDef[] = [
   {
     // [#1613] HWPX 형식으로 저장 — 출처 무관 HWPX 출력.
     id: 'file:save-as-hwpx',
-    label: 'HWPX 형식으로 저장',
+    label: t('command.file.saveAsHwpx.registryLabel'),
     canExecute: (ctx) => ctx.hasDocument,
     async execute(services) {
       await saveAsFormat(services, 'hwpx');
@@ -791,7 +842,8 @@ export const fileCommands: CommandDef[] = [
   },
   {
     id: 'file:page-setup',
-    label: '편집 용지',
+    opensDialog: true,
+    label: t('command.file.pageSetup.label'),
     icon: 'icon-page-setup',
     shortcutLabel: 'F7',
     canExecute: (ctx) => ctx.hasDocument,
@@ -802,15 +854,33 @@ export const fileCommands: CommandDef[] = [
   },
   {
     id: 'file:print-to-pdf',
-    label: 'PDF로 저장…',
+    label: t('command.file.printToPdf.label'),
     canExecute: (ctx) => ctx.hasDocument,
     async execute(services) {
       await runPdfPrint(services);
     },
   },
   {
+    // 문서 전체를 selection HTML 조립 기반의 단일 HTML 파일로 내보낸다.
+    id: 'file:export-html',
+    label: t('command.file.exportHtml.label'),
+    canExecute: (ctx) => ctx.hasDocument,
+    execute(services) {
+      exportHtmlBasedFile(services, 'html');
+    },
+  },
+  {
+    // Word 가 여는 HTML 기반 .doc 문서로 내보낸다 (OOXML 아님).
+    id: 'file:export-doc',
+    label: t('command.file.exportDoc.label'),
+    canExecute: (ctx) => ctx.hasDocument,
+    execute(services) {
+      exportHtmlBasedFile(services, 'doc');
+    },
+  },
+  {
     id: 'file:print',
-    label: '인쇄',
+    label: t('command.file.print.label'),
     icon: 'icon-print',
     shortcutLabel: 'Ctrl+P',
     canExecute: (ctx) => ctx.hasDocument,
@@ -820,7 +890,8 @@ export const fileCommands: CommandDef[] = [
   },
   {
     id: 'file:about',
-    label: '제품 정보',
+    opensDialog: true,
+    label: t('command.file.about.label'),
     icon: 'icon-help',
     execute() {
       new AboutDialog().show();

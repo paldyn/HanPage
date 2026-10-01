@@ -84,7 +84,7 @@ let saveHandler: DesktopSaveHandler | null = null;
  */
 export interface DesktopBridgeDeps {
   /** 펜딩 큐에서 꺼낸 문서 바이트를 기존 오픈 흐름으로 흘려보낸다(unsaved-guard 적용됨). */
-  openDocument: (bytes: Uint8Array, fileName: string) => void;
+  openDocument: (bytes: Uint8Array, fileName: string) => void | Promise<void>;
   /** 네이티브 메뉴 명령을 스튜디오 커맨드 디스패처로 전달한다(예: `file:open`). */
   dispatchCommand: (commandId: string) => void;
 }
@@ -98,7 +98,7 @@ export interface DesktopBridgeDeps {
  *    꺼내 `openDocument` 으로 오픈. 초기 1회(콜드 스타트) + `EVT_DOCS_READY` 수신 시(웜).
  * 2. **메뉴 명령** — `EVT_MENU` 페이로드(커맨드 id)를 `dispatchCommand` 로 디스패치.
  */
-export function initDesktopBridge(deps?: DesktopBridgeDeps): void {
+export async function initDesktopBridge(deps?: DesktopBridgeDeps): Promise<void> {
   if (!isDesktopRuntime()) return; // 웹: no-op
 
   const invoke = tauriInvoke();
@@ -128,33 +128,37 @@ export function initDesktopBridge(deps?: DesktopBridgeDeps): void {
 
   if (!deps) return;
 
-  // 펜딩 큐(파일 연결/최근 문서/argv) 에 쌓인 문서를 꺼내 기존 오픈 흐름으로.
-  const drainPending = async () => {
-    try {
-      const docs = await invoke<OpenedFile[]>('cmd_take_pending_documents');
-      for (const d of docs) deps.openDocument(new Uint8Array(d.data), d.name);
-    } catch (e) {
-      console.error('[desktop-bridge] 펜딩 문서 처리 실패:', e);
-    }
+  // 큐 읽기부터 문서 열기 완료까지 같은 체인에 둔다. 등록 중 이벤트가 큐를 먼저
+  // 비웠더라도 초기 drain은 그 열기를 기다리며, 미저장 확인·문서 교체도 경합하지 않는다.
+  let pendingDrain: Promise<void> = Promise.resolve();
+  const drainPending = (): Promise<void> => {
+    pendingDrain = pendingDrain.then(async () => {
+      try {
+        const docs = await invoke<OpenedFile[]>('cmd_take_pending_documents');
+        for (const d of docs) await deps.openDocument(new Uint8Array(d.data), d.name);
+      } catch (e) {
+        console.error('[desktop-bridge] 펜딩 문서 처리 실패:', e);
+      }
+    });
+    return pendingDrain;
   };
-  void drainPending(); // 콜드 스타트: setup 에서 미리 큐잉된 문서 즉시 처리
-
   const listen = tauriListen();
   if (listen) {
     // 웜 스타트: 이미 실행 중인 창에 새 문서가 큐잉되면 알림 받아 드레인.
-    // [#50] listen() 등록은 비동기다. 위 drainPending() 과 등록 완료 사이에 도착한
-    // EVT_DOCS_READY 는 수신자가 없어 유실되고, 문서가 큐에 남아 영영 열리지 않는다
-    // (macOS 파일 연결 더블클릭이 이 구간에 걸린다). 등록 직후 한 번 더 드레인한다.
-    void listen(EVT_DOCS_READY, () => {
-      void drainPending();
-    }).then(() => {
-      void drainPending();
-    });
+    // [#50] listen() 등록 전에 도착한 EVT_DOCS_READY는 유실될 수 있다.
+    // 등록 뒤 초기 drain으로 큐를 다시 읽어 콜드 스타트 파일도 빠짐없이 연다.
+    try {
+      await listen(EVT_DOCS_READY, () => { void drainPending(); });
+    } catch (error) {
+      console.warn('[desktop-bridge] 문서 알림 구독 실패, 초기 큐는 계속 엽니다:', error);
+    }
     // 네이티브 메뉴 → 스튜디오 커맨드.
     void listen<string>(EVT_MENU, (e) => {
       deps.dispatchCommand(e.payload);
     });
   }
+  // 새 upstream의 시작 빈 문서가 파일 연결 문서를 덮지 않도록 초기 오픈 완료까지 기다린다.
+  await drainPending();
 }
 
 // ─── 업데이트 (#59) ────────────────────────────────────────────────────────

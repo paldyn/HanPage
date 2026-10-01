@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   detectPlatformKind,
   formatShortcutLabel,
+  getCellSelectionArrowAction,
   getNavigationAction,
   shouldSuppressUnmappedNavigation,
   type NavigationKeyInput,
@@ -85,6 +86,14 @@ test('Windows/Linux keymap은 Alt+Arrow 단어 이동을 처리하지 않는다'
   assert.equal(shouldSuppressUnmappedNavigation(key({ key: 'ArrowLeft', altKey: true }), 'mac'), false);
 });
 
+test('셀 선택 Arrow ownership은 지속 가능한 resize만 소비하고 Alt/Shift는 탐색한다', () => {
+  assert.equal(getCellSelectionArrowAction(key({ key: 'ArrowRight', ctrlKey: true })), 'resize');
+  assert.equal(getCellSelectionArrowAction(key({ key: 'ArrowDown', metaKey: true })), 'resize');
+  assert.equal(getCellSelectionArrowAction(key({ key: 'ArrowLeft', altKey: true })), 'navigate');
+  assert.equal(getCellSelectionArrowAction(key({ key: 'ArrowUp', shiftKey: true })), 'navigate');
+  assert.equal(getCellSelectionArrowAction(key({ key: 'Enter', shiftKey: true })), null);
+});
+
 test('Home/End는 플랫폼 공통 줄 처음/끝으로 처리하고 Ctrl/Meta 조합은 기존 경로에 남긴다', () => {
   assert.equal(action({ key: 'Home' }, 'mac'), 'lineStart');
   assert.equal(action({ key: 'End' }, 'mac'), 'lineEnd');
@@ -116,6 +125,8 @@ test('formatShortcutLabel은 macOS에서 modifier를 Apple 기호로 치환한�
   assert.equal(formatShortcutLabel('Alt+Shift+V', 'mac'), '⌥⇧V');
   assert.equal(formatShortcutLabel('Shift+Alt+J', 'mac'), '⇧⌥J');
   assert.equal(formatShortcutLabel('Shift+Num +', 'mac'), '⇧Num +');
+  assert.equal(formatShortcutLabel('Ctrl++', 'mac'), '⌘+');
+  assert.equal(formatShortcutLabel('Ctrl+-', 'mac'), '⌘-');
 });
 
 test('formatShortcutLabel은 한컴 표 줄/칸 단축키를 플랫폼별로 표시한다', () => {

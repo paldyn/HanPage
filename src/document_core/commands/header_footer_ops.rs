@@ -1,34 +1,22 @@
 //! 머리말/꼬리말 생성·조회·텍스트 편집 관련 native 메서드
 
-use crate::document_core::helpers::{
-    build_tab_def_from_json, json_has_border_keys, json_has_tab_keys, parse_json_i16_array,
-    parse_para_shape_mods,
+use super::clipboard::{
+    clip_paragraph_text_range_for_clipboard, strip_structural_controls_for_text_clipboard,
 };
-use crate::document_core::DocumentCore;
+use super::formatting::{char_shape_mods_affect_text_flow, para_shape_mods_affect_text_flow};
+use crate::document_core::helpers::{
+    build_tab_def_from_json, json_has_border_keys, json_has_tab_keys, parse_char_shape_mods,
+    parse_json_i16_array, parse_para_shape_mods,
+};
+use crate::document_core::{
+    header_footer_apply_from_u8, header_footer_apply_to_u8, ClipboardData, DocumentCore,
+};
 use crate::error::HwpError;
 use crate::model::control::Control;
 use crate::model::event::DocumentEvent;
 use crate::model::header_footer::{Footer, Header, HeaderFooterApply};
 use crate::model::paragraph::{ParaMeta, Paragraph};
-use crate::renderer::composer::reflow_line_segs;
-
-/// applyTo u8 값 → HeaderFooterApply 변환
-fn apply_from_u8(v: u8) -> HeaderFooterApply {
-    match v {
-        1 => HeaderFooterApply::Even,
-        2 => HeaderFooterApply::Odd,
-        _ => HeaderFooterApply::Both,
-    }
-}
-
-/// HeaderFooterApply → u8 변환
-fn apply_to_u8(a: HeaderFooterApply) -> u8 {
-    match a {
-        HeaderFooterApply::Both => 0,
-        HeaderFooterApply::Even => 1,
-        HeaderFooterApply::Odd => 2,
-    }
-}
+use crate::renderer::composer::{reflow_line_segs, ParagraphBox};
 
 /// HeaderFooterApply → 표시 레이블
 fn apply_label(a: HeaderFooterApply) -> &'static str {
@@ -40,29 +28,18 @@ fn apply_label(a: HeaderFooterApply) -> &'static str {
 }
 
 impl DocumentCore {
-    /// 구역의 문단들에서 특정 apply_to의 머리말 또는 꼬리말 컨트롤 위치를 찾는다.
-    /// 반환: (para_index, control_index)
-    fn find_header_footer_control(
+    /// 머리말/꼬리말 정의를 편집할 대표 페이지(구역 첫 페이지)를 반환한다.
+    ///
+    /// 반환: JSON `{"ok":true,"pageIndex":N,"sectionIdx":N}`
+    pub fn get_header_footer_preview_page_native(
         &self,
         section_idx: usize,
-        is_header: bool,
-        apply_to: HeaderFooterApply,
-    ) -> Option<(usize, usize)> {
-        let section = self.document.sections.get(section_idx)?;
-        for (pi, para) in section.paragraphs.iter().enumerate() {
-            for (ci, ctrl) in para.controls.iter().enumerate() {
-                match ctrl {
-                    Control::Header(h) if is_header && h.apply_to == apply_to => {
-                        return Some((pi, ci));
-                    }
-                    Control::Footer(f) if !is_header && f.apply_to == apply_to => {
-                        return Some((pi, ci));
-                    }
-                    _ => {}
-                }
-            }
-        }
-        None
+    ) -> Result<String, HwpError> {
+        let page_index = self.header_footer_preview_page_for_section(section_idx)?;
+        Ok(format!(
+            "{{\"ok\":true,\"pageIndex\":{},\"sectionIdx\":{}}}",
+            page_index, section_idx
+        ))
     }
 
     /// 머리말/꼬리말 조회 — JSON 반환
@@ -82,7 +59,7 @@ impl DocumentCore {
                 self.document.sections.len()
             )));
         }
-        let apply = apply_from_u8(apply_to);
+        let apply = header_footer_apply_from_u8(apply_to);
         if let Some((pi, ci)) = self.find_header_footer_control(section_idx, is_header, apply) {
             let section = &self.document.sections[section_idx];
             let ctrl = &section.paragraphs[pi].controls[ci];
@@ -100,7 +77,7 @@ impl DocumentCore {
             let label = apply_label(at);
             Ok(format!(
                 "{{\"ok\":true,\"exists\":true,\"kind\":\"{}\",\"applyTo\":{},\"label\":\"{}\",\"paraIndex\":{},\"controlIndex\":{},\"paraCount\":{},\"text\":\"{}\"}}",
-                kind, apply_to_u8(at), label, pi, ci, paragraphs.len(),
+                kind, header_footer_apply_to_u8(at), label, pi, ci, paragraphs.len(),
                 super::super::helpers::json_escape(&text)
             ))
         } else {
@@ -125,7 +102,7 @@ impl DocumentCore {
                 self.document.sections.len()
             )));
         }
-        let apply = apply_from_u8(apply_to);
+        let apply = header_footer_apply_from_u8(apply_to);
         if self
             .find_header_footer_control(section_idx, is_header, apply)
             .is_some()
@@ -138,7 +115,9 @@ impl DocumentCore {
             )));
         }
 
-        // 빈 문단 생성
+        // 새 머리말/꼬리말도 본문과 같은 문서 기본 문단 모양(0번)을 사용한다.
+        // blank2010의 0번 모양은 양쪽 정렬이다. 합성 HF에는 저장 LINE_SEG를 미리
+        // 만들지 않아 파일명·쪽번호 같은 동적 필드가 현재 문서 문맥으로 해석되게 한다.
         let empty_para = Paragraph::default();
 
         // 컨트롤 생성
@@ -198,7 +177,7 @@ impl DocumentCore {
         apply_to: u8,
         hf_para_idx: usize,
     ) -> Result<&mut Paragraph, HwpError> {
-        let apply = apply_from_u8(apply_to);
+        let apply = header_footer_apply_from_u8(apply_to);
         let (pi, ci) = self
             .find_header_footer_control(section_idx, is_header, apply)
             .ok_or_else(|| {
@@ -246,13 +225,57 @@ impl DocumentCore {
         apply_to: u8,
         hf_para_idx: usize,
     ) -> Option<&Paragraph> {
-        let apply = apply_from_u8(apply_to);
+        let apply = header_footer_apply_from_u8(apply_to);
         let (pi, ci) = self.find_header_footer_control(section_idx, is_header, apply)?;
         let ctrl = &self.document.sections[section_idx].paragraphs[pi].controls[ci];
         match ctrl {
             Control::Header(h) => h.paragraphs.get(hf_para_idx),
             Control::Footer(f) => f.paragraphs.get(hf_para_idx),
             _ => None,
+        }
+    }
+
+    /// 머리말/꼬리말 정의의 전체 문단 슬라이스를 얻는다.
+    pub(crate) fn get_hf_paragraphs_ref(
+        &self,
+        section_idx: usize,
+        is_header: bool,
+        apply_to: u8,
+    ) -> Result<&[Paragraph], HwpError> {
+        let apply = header_footer_apply_from_u8(apply_to);
+        let (pi, ci) = self
+            .find_header_footer_control(section_idx, is_header, apply)
+            .ok_or_else(|| {
+                HwpError::RenderError("머리말/꼬리말 정의를 찾을 수 없음".to_string())
+            })?;
+        match &self.document.sections[section_idx].paragraphs[pi].controls[ci] {
+            Control::Header(header) => Ok(&header.paragraphs),
+            Control::Footer(footer) => Ok(&footer.paragraphs),
+            _ => Err(HwpError::RenderError(
+                "컨트롤이 머리말/꼬리말이 아닙니다".to_string(),
+            )),
+        }
+    }
+
+    /// 머리말/꼬리말 정의의 전체 문단 벡터를 얻는다.
+    fn get_hf_paragraphs_mut(
+        &mut self,
+        section_idx: usize,
+        is_header: bool,
+        apply_to: u8,
+    ) -> Result<&mut Vec<Paragraph>, HwpError> {
+        let apply = header_footer_apply_from_u8(apply_to);
+        let (pi, ci) = self
+            .find_header_footer_control(section_idx, is_header, apply)
+            .ok_or_else(|| {
+                HwpError::RenderError("머리말/꼬리말 정의를 찾을 수 없음".to_string())
+            })?;
+        match &mut self.document.sections[section_idx].paragraphs[pi].controls[ci] {
+            Control::Header(header) => Ok(&mut header.paragraphs),
+            Control::Footer(footer) => Ok(&mut footer.paragraphs),
+            _ => Err(HwpError::RenderError(
+                "컨트롤이 머리말/꼬리말이 아닙니다".to_string(),
+            )),
         }
     }
 
@@ -276,7 +299,7 @@ impl DocumentCore {
 
         let hf_para = self.get_hf_paragraph_mut(section_idx, is_header, apply_to, hf_para_idx)?;
         let new_chars_count = text.chars().count();
-        hf_para.insert_text_at(char_offset, text);
+        let inserted_at = hf_para.insert_text_at(char_offset, text);
 
         // 리플로우 (머리말/꼬리말 영역 폭 기반)
         self.reflow_hf_paragraph(section_idx, is_header, apply_to, hf_para_idx);
@@ -286,13 +309,19 @@ impl DocumentCore {
         self.mark_section_dirty(section_idx);
         self.paginate_if_needed();
 
-        let new_offset = char_offset + new_chars_count;
-        self.event_log.push(DocumentEvent::TextInserted {
-            section: section_idx,
-            para: 0,
-            offset: char_offset,
-            len: new_chars_count,
-        });
+        let new_offset = inserted_at + new_chars_count;
+        self.event_log
+            .push(DocumentEvent::HeaderFooterTextReplaced {
+                section: section_idx,
+                is_header,
+                apply_to,
+                start_para: hf_para_idx,
+                start_offset: inserted_at,
+                end_para: hf_para_idx,
+                end_offset: inserted_at,
+                inserted_end_para: hf_para_idx,
+                inserted_end_offset: new_offset,
+            });
         Ok(super::super::helpers::json_ok_with(&format!(
             "\"charOffset\":{}",
             new_offset
@@ -321,8 +350,14 @@ impl DocumentCore {
         // [Task #2337] undo 재삽입용으로 삭제될 텍스트를 먼저 확보한다. char 단위 슬라이스는
         // delete_text_at 의 클램핑(text_len - char_offset)과 동일 범위이며, Rust char 경계로
         // 잘라 studio(UTF-16) 측 조인 모호성을 피한다. 역연산 삭제 커맨드가 재삽입에 쓴다.
-        let deleted_text: String = hf_para.text.chars().skip(char_offset).take(count).collect();
-        hf_para.delete_text_at(char_offset, count);
+        let actual_offset = char_offset.min(hf_para.text.chars().count());
+        let deleted_text: String = hf_para
+            .text
+            .chars()
+            .skip(actual_offset)
+            .take(count)
+            .collect();
+        hf_para.delete_text_at(actual_offset, count);
 
         // 리플로우
         self.reflow_hf_paragraph(section_idx, is_header, apply_to, hf_para_idx);
@@ -332,15 +367,22 @@ impl DocumentCore {
         self.mark_section_dirty(section_idx);
         self.paginate_if_needed();
 
-        self.event_log.push(DocumentEvent::TextDeleted {
-            section: section_idx,
-            para: 0,
-            offset: char_offset,
-            count,
-        });
+        let deleted_count = deleted_text.chars().count();
+        self.event_log
+            .push(DocumentEvent::HeaderFooterTextReplaced {
+                section: section_idx,
+                is_header,
+                apply_to,
+                start_para: hf_para_idx,
+                start_offset: actual_offset,
+                end_para: hf_para_idx,
+                end_offset: actual_offset + deleted_count,
+                inserted_end_para: hf_para_idx,
+                inserted_end_offset: actual_offset,
+            });
         Ok(super::super::helpers::json_ok_with(&format!(
             "\"charOffset\":{},\"deletedText\":\"{}\"",
-            char_offset,
+            actual_offset,
             super::super::helpers::json_escape(&deleted_text)
         )))
     }
@@ -362,7 +404,7 @@ impl DocumentCore {
             )));
         }
 
-        let apply = apply_from_u8(apply_to);
+        let apply = header_footer_apply_from_u8(apply_to);
         let (pi, ci) = self
             .find_header_footer_control(section_idx, is_header, apply)
             .ok_or_else(|| {
@@ -442,7 +484,7 @@ impl DocumentCore {
             ));
         }
 
-        let apply = apply_from_u8(apply_to);
+        let apply = header_footer_apply_from_u8(apply_to);
         let (pi, ci) = self
             .find_header_footer_control(section_idx, is_header, apply)
             .ok_or_else(|| {
@@ -503,7 +545,7 @@ impl DocumentCore {
                 section_idx
             )));
         }
-        let apply = apply_from_u8(apply_to);
+        let apply = header_footer_apply_from_u8(apply_to);
         let (pi, ci) = self
             .find_header_footer_control(section_idx, is_header, apply)
             .ok_or_else(|| {
@@ -519,16 +561,329 @@ impl DocumentCore {
         };
 
         let para_count = paragraphs.len();
-        let char_count = if hf_para_idx < para_count {
-            paragraphs[hf_para_idx].text.chars().count()
+        let (char_count, text) = if let Some(paragraph) = paragraphs.get(hf_para_idx) {
+            (paragraph.text.chars().count(), paragraph.text.as_str())
         } else {
-            0
+            (0, "")
         };
 
         Ok(format!(
-            "{{\"ok\":true,\"paraCount\":{},\"charCount\":{}}}",
-            para_count, char_count
+            "{{\"ok\":true,\"paraCount\":{},\"charCount\":{},\"text\":\"{}\"}}",
+            para_count,
+            char_count,
+            super::super::helpers::json_escape(text)
         ))
+    }
+
+    /// 머리말/꼬리말의 선택 범위를 평문으로 원자 치환한다.
+    ///
+    /// 범위는 문단/문자 사전식 순서로 정렬하고 모든 경계를 mutation 전에 검증한다.
+    /// `replacement_text`의 줄바꿈은 새 HF 문단으로 보존한다.
+    #[allow(clippy::too_many_arguments)]
+    pub fn replace_range_in_header_footer_native(
+        &mut self,
+        section_idx: usize,
+        is_header: bool,
+        apply_to: u8,
+        start_hf_para_idx: usize,
+        start_char_offset: usize,
+        end_hf_para_idx: usize,
+        end_char_offset: usize,
+        replacement_text: &str,
+    ) -> Result<String, HwpError> {
+        let ((start_para, start_offset), (end_para, end_offset)) =
+            if (start_hf_para_idx, start_char_offset) > (end_hf_para_idx, end_char_offset) {
+                (
+                    (end_hf_para_idx, end_char_offset),
+                    (start_hf_para_idx, start_char_offset),
+                )
+            } else {
+                (
+                    (start_hf_para_idx, start_char_offset),
+                    (end_hf_para_idx, end_char_offset),
+                )
+            };
+
+        {
+            let paragraphs = self.get_hf_paragraphs_ref(section_idx, is_header, apply_to)?;
+            if start_para >= paragraphs.len() || end_para >= paragraphs.len() {
+                return Err(HwpError::RenderError(format!(
+                    "머리말/꼬리말 문단 범위 초과 (start={}, end={}, total={})",
+                    start_para,
+                    end_para,
+                    paragraphs.len()
+                )));
+            }
+            let start_len = paragraphs[start_para].text.chars().count();
+            let end_len = paragraphs[end_para].text.chars().count();
+            if start_offset > start_len || end_offset > end_len {
+                return Err(HwpError::RenderError(format!(
+                    "머리말/꼬리말 문자 범위 초과 (start={}/{}, end={}/{})",
+                    start_offset, start_len, end_offset, end_len
+                )));
+            }
+        }
+
+        let normalized = replacement_text.replace("\r\n", "\n").replace('\r', "\n");
+        let lines: Vec<&str> = normalized.split('\n').collect();
+        let (cursor_para, cursor_offset);
+        {
+            let paragraphs = self.get_hf_paragraphs_mut(section_idx, is_header, apply_to)?;
+
+            // 끝 문단의 선택 뒤 suffix를 서식·인라인 컨트롤과 함께 보존한다.
+            let suffix = {
+                let mut end_snapshot = paragraphs[end_para].clone();
+                end_snapshot.split_at(end_offset)
+            };
+
+            // 시작 문단은 선택 앞 prefix만 남긴다. 다문단이면 선택에 포함된 나머지
+            // 문단을 제거하고 이 prefix가 결과의 첫 문단을 소유한다.
+            let _discarded_tail = paragraphs[start_para].split_at(start_offset);
+            if end_para > start_para {
+                paragraphs.drain((start_para + 1)..=end_para);
+            }
+
+            paragraphs[start_para].insert_text_at(start_offset, lines[0]);
+            let mut result_para = start_para;
+            if lines.len() == 1 {
+                cursor_offset = start_offset + lines[0].chars().count();
+            } else {
+                for line in lines.iter().skip(1) {
+                    let mut next = Paragraph::new_empty_like(&paragraphs[result_para]);
+                    next.insert_text_at(0, line);
+                    result_para += 1;
+                    paragraphs.insert(result_para, next);
+                }
+                cursor_offset = lines.last().map(|line| line.chars().count()).unwrap_or(0);
+            }
+            paragraphs[result_para].merge_from(&suffix);
+            cursor_para = result_para;
+        }
+
+        let para_count = self
+            .get_hf_paragraphs_ref(section_idx, is_header, apply_to)?
+            .len();
+        for hf_para_idx in 0..para_count {
+            self.reflow_hf_paragraph(section_idx, is_header, apply_to, hf_para_idx);
+        }
+        self.document.sections[section_idx].raw_stream = None;
+        self.rebuild_section(section_idx);
+        self.event_log
+            .push(DocumentEvent::HeaderFooterTextReplaced {
+                section: section_idx,
+                is_header,
+                apply_to,
+                start_para,
+                start_offset,
+                end_para,
+                end_offset,
+                inserted_end_para: cursor_para,
+                inserted_end_offset: cursor_offset,
+            });
+
+        Ok(super::super::helpers::json_ok_with(&format!(
+            "\"hfParaIndex\":{},\"charOffset\":{}",
+            cursor_para, cursor_offset
+        )))
+    }
+
+    /// 머리말/꼬리말 선택 범위를 내부 클립보드에 복사한다.
+    #[allow(clippy::too_many_arguments)]
+    pub fn copy_selection_in_header_footer_native(
+        &mut self,
+        section_idx: usize,
+        is_header: bool,
+        apply_to: u8,
+        start_hf_para_idx: usize,
+        start_char_offset: usize,
+        end_hf_para_idx: usize,
+        end_char_offset: usize,
+    ) -> Result<String, HwpError> {
+        if (start_hf_para_idx, start_char_offset) > (end_hf_para_idx, end_char_offset) {
+            return Err(HwpError::RenderError(
+                "시작 위치가 끝 위치보다 뒤에 있음".to_string(),
+            ));
+        }
+
+        let mut clip_paragraphs = {
+            let paragraphs = self.get_hf_paragraphs_ref(section_idx, is_header, apply_to)?;
+            if start_hf_para_idx >= paragraphs.len() || end_hf_para_idx >= paragraphs.len() {
+                return Err(HwpError::RenderError(format!(
+                    "머리말/꼬리말 문단 범위 초과 (start={}, end={}, total={})",
+                    start_hf_para_idx,
+                    end_hf_para_idx,
+                    paragraphs.len()
+                )));
+            }
+            let start_len = paragraphs[start_hf_para_idx].text.chars().count();
+            let end_len = paragraphs[end_hf_para_idx].text.chars().count();
+            if start_char_offset > start_len || end_char_offset > end_len {
+                return Err(HwpError::RenderError(
+                    "머리말/꼬리말 문자 범위 초과".to_string(),
+                ));
+            }
+
+            let mut selected = Vec::new();
+            if start_hf_para_idx == end_hf_para_idx {
+                selected.push(clip_paragraph_text_range_for_clipboard(
+                    &paragraphs[start_hf_para_idx],
+                    start_char_offset,
+                    end_char_offset,
+                ));
+            } else {
+                selected.push(clip_paragraph_text_range_for_clipboard(
+                    &paragraphs[start_hf_para_idx],
+                    start_char_offset,
+                    start_len,
+                ));
+                selected.extend(
+                    paragraphs[(start_hf_para_idx + 1)..end_hf_para_idx]
+                        .iter()
+                        .cloned(),
+                );
+                selected.push(clip_paragraph_text_range_for_clipboard(
+                    &paragraphs[end_hf_para_idx],
+                    0,
+                    end_char_offset,
+                ));
+            }
+            selected
+        };
+
+        for paragraph in &mut clip_paragraphs {
+            strip_structural_controls_for_text_clipboard(paragraph);
+        }
+        let plain_text = clip_paragraphs
+            .iter()
+            .map(|paragraph| paragraph.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let escaped = super::super::helpers::json_escape(&plain_text);
+        self.clipboard = Some(ClipboardData {
+            paragraphs: clip_paragraphs,
+            plain_text,
+            copied_table_text_reflowed: false,
+        });
+        Ok(super::super::helpers::json_ok_with(&format!(
+            "\"text\":\"{}\"",
+            escaped
+        )))
+    }
+
+    /// 머리말/꼬리말 캐럿 위치의 글자 속성을 조회한다.
+    pub fn get_char_properties_in_header_footer_native(
+        &self,
+        section_idx: usize,
+        is_header: bool,
+        apply_to: u8,
+        hf_para_idx: usize,
+        char_offset: usize,
+    ) -> Result<String, HwpError> {
+        let paragraph = self
+            .get_hf_paragraph_ref(section_idx, is_header, apply_to, hf_para_idx)
+            .ok_or_else(|| {
+                HwpError::RenderError("머리말/꼬리말 문단을 찾을 수 없음".to_string())
+            })?;
+        if char_offset > paragraph.text.chars().count() {
+            return Err(HwpError::RenderError(
+                "머리말/꼬리말 문자 범위 초과".to_string(),
+            ));
+        }
+        Ok(self.build_char_properties_json(paragraph, char_offset))
+    }
+
+    /// 머리말/꼬리말의 단일·다문단 선택 범위에 글자 서식을 적용한다.
+    #[allow(clippy::too_many_arguments)]
+    pub fn apply_char_format_in_header_footer_native(
+        &mut self,
+        section_idx: usize,
+        is_header: bool,
+        apply_to: u8,
+        start_hf_para_idx: usize,
+        start_char_offset: usize,
+        end_hf_para_idx: usize,
+        end_char_offset: usize,
+        props_json: &str,
+    ) -> Result<String, HwpError> {
+        if (start_hf_para_idx, start_char_offset) > (end_hf_para_idx, end_char_offset) {
+            return Err(HwpError::RenderError(
+                "시작 위치가 끝 위치보다 뒤에 있음".to_string(),
+            ));
+        }
+        {
+            let paragraphs = self.get_hf_paragraphs_ref(section_idx, is_header, apply_to)?;
+            if start_hf_para_idx >= paragraphs.len() || end_hf_para_idx >= paragraphs.len() {
+                return Err(HwpError::RenderError(
+                    "머리말/꼬리말 문단 범위 초과".to_string(),
+                ));
+            }
+            if start_char_offset > paragraphs[start_hf_para_idx].text.chars().count()
+                || end_char_offset > paragraphs[end_hf_para_idx].text.chars().count()
+            {
+                return Err(HwpError::RenderError(
+                    "머리말/꼬리말 문자 범위 초과".to_string(),
+                ));
+            }
+        }
+
+        let mut mods = parse_char_shape_mods(props_json);
+        if json_has_border_keys(props_json) {
+            mods.border_fill_id = Some(self.create_border_fill_from_json(props_json));
+        }
+
+        let affects_flow = char_shape_mods_affect_text_flow(&mods);
+        let mut changed_paragraphs = Vec::new();
+        for hf_para_idx in start_hf_para_idx..=end_hf_para_idx {
+            let paragraph_len = self
+                .get_hf_paragraph_ref(section_idx, is_header, apply_to, hf_para_idx)
+                .map(|paragraph| paragraph.text.chars().count())
+                .unwrap_or(0);
+            let range_start = if hf_para_idx == start_hf_para_idx {
+                start_char_offset
+            } else {
+                0
+            };
+            let range_end = if hf_para_idx == end_hf_para_idx {
+                end_char_offset
+            } else {
+                paragraph_len
+            };
+            if range_end <= range_start {
+                continue;
+            }
+
+            let base_ids = self
+                .get_hf_paragraph_ref(section_idx, is_header, apply_to, hf_para_idx)
+                .ok_or_else(|| {
+                    HwpError::RenderError(format!("머리말/꼬리말 문단 {hf_para_idx} 누락"))
+                })?
+                .char_shape_ids_in_range(range_start, range_end);
+            let ids = self.document.modified_char_shape_ids(base_ids, &mods);
+            self.get_hf_paragraph_mut(section_idx, is_header, apply_to, hf_para_idx)?
+                .try_map_char_shape_range(range_start, range_end, |id| {
+                    ids.get(&id).copied().ok_or_else(|| {
+                        HwpError::RenderError(format!("글자 모양 변환 ID {id} 누락"))
+                    })
+                })?;
+            changed_paragraphs.push((hf_para_idx, range_start, range_end));
+        }
+
+        if affects_flow {
+            for (hf_para_idx, _, _) in &changed_paragraphs {
+                self.reflow_hf_paragraph(section_idx, is_header, apply_to, *hf_para_idx);
+            }
+        }
+        self.document.sections[section_idx].raw_stream = None;
+        self.rebuild_section(section_idx);
+        for (hf_para_idx, range_start, range_end) in changed_paragraphs {
+            self.event_log.push(DocumentEvent::CharFormatChanged {
+                section: section_idx,
+                para: hf_para_idx,
+                start: range_start,
+                end: range_end,
+            });
+        }
+        Ok("{\"ok\":true}".to_string())
     }
 
     /// 머리말/꼬리말 삭제 (컨트롤 자체를 제거)
@@ -545,7 +900,7 @@ impl DocumentCore {
                 self.document.sections.len()
             )));
         }
-        let apply = apply_from_u8(apply_to);
+        let apply = header_footer_apply_from_u8(apply_to);
         let (pi, ci) = self
             .find_header_footer_control(section_idx, is_header, apply)
             .ok_or_else(|| {
@@ -585,7 +940,7 @@ impl DocumentCore {
     ) -> Result<String, HwpError> {
         let mut items = Vec::new();
         let mut current_index: i32 = -1;
-        let current_apply = apply_from_u8(current_apply_to);
+        let current_apply = header_footer_apply_from_u8(current_apply_to);
 
         for (si, section) in self.document.sections.iter().enumerate() {
             for (pi, para) in section.paragraphs.iter().enumerate() {
@@ -597,7 +952,7 @@ impl DocumentCore {
                     };
                     let kind = if is_header { "머리말" } else { "꼬리말" };
                     let label = apply_label(apply);
-                    let at = apply_to_u8(apply);
+                    let at = header_footer_apply_to_u8(apply);
 
                     if si == current_section_idx
                         && is_header == current_is_header
@@ -679,8 +1034,8 @@ impl DocumentCore {
                         if let Some(para) = section.paragraphs.get(para_idx) {
                             if let Some(ctrl) = para.controls.get(ctrl_idx) {
                                 match ctrl {
-                                    Control::Header(h) => apply_to_u8(h.apply_to),
-                                    Control::Footer(f) => apply_to_u8(f.apply_to),
+                                    Control::Header(h) => header_footer_apply_to_u8(h.apply_to),
+                                    Control::Footer(f) => header_footer_apply_to_u8(f.apply_to),
                                     _ => 0,
                                 }
                             } else {
@@ -728,17 +1083,10 @@ impl DocumentCore {
             self.hidden_header_footer.insert(key);
             true
         };
-        // 렌더 트리 캐시 무효화
-        let mut cache = self.page_tree_cache.borrow_mut();
-        if let Some(slot) = cache.get_mut(page_num as usize) {
-            *slot = None;
-        }
+        // 숨김 상태는 page tree와 두 파생 표현 모두에 반영되므로 한 페이지의
+        // 캐시 계보를 원자적으로 무효화한다.
+        self.invalidate_page_tree_cache_page(page_num);
         Ok(format!("{{\"ok\":true,\"hidden\":{}}}", hidden))
-    }
-
-    /// 특정 페이지의 머리말/꼬리말이 감추기 상태인지 확인한다.
-    pub fn is_header_footer_hidden(&self, page_num: u32, is_header: bool) -> bool {
-        self.hidden_header_footer.contains(&(page_num, is_header))
     }
 
     /// 머리말/꼬리말 문단 리플로우
@@ -760,19 +1108,27 @@ impl DocumentCore {
             hwpunit_to_px(text_width, self.dpi)
         };
 
+        // [#4324] 호출부(apply_para_format_in_hf_native)가 이 직전에
+        // find_or_create_para_shape 로 새 para_shape 를 만들 수 있다. 캐시된
+        // self.styles 는 직전 rebuild_section 스냅샷이라 그 새 id 를 포함하지 않을 수
+        // 있어(margin_left/right 가 0.0 으로 폴백) 여백을 무시한 폭으로 리플로우해버린다.
+        // formatting.rs 의 reflow_cell_paragraph(twin, text_editing.rs)와 동일하게
+        // doc_info 에서 매번 새로 resolve 한다.
+        let styles = self.resolve_render_styles();
+
         // 문단 여백 적용
         let para_shape_id =
             match self.get_hf_paragraph_ref(section_idx, is_header, apply_to, hf_para_idx) {
                 Some(p) => p.para_shape_id,
                 None => return,
             };
-        let para_style = self.styles.para_styles.get(para_shape_id as usize);
+        let para_style = styles.para_styles.get(para_shape_id as usize);
         let margin_left = para_style.map(|s| s.margin_left).unwrap_or(0.0);
         let margin_right = para_style.map(|s| s.margin_right).unwrap_or(0.0);
         let final_width = (available_width - margin_left - margin_right).max(0.0);
 
         // 가변 참조로 리플로우 실행
-        let apply = apply_from_u8(apply_to);
+        let apply = header_footer_apply_from_u8(apply_to);
         if let Some((pi, ci)) = self.find_header_footer_control(section_idx, is_header, apply) {
             let ctrl = &mut self.document.sections[section_idx].paragraphs[pi].controls[ci];
             let paragraphs = match ctrl {
@@ -781,7 +1137,13 @@ impl DocumentCore {
                 _ => return,
             };
             if let Some(para) = paragraphs.get_mut(hf_para_idx) {
-                reflow_line_segs(para, final_width, &self.styles, self.dpi);
+                // 머리말/꼬리말 본문 상자 — 본문 열과 별개 흐름이므로 미스냅.
+                reflow_line_segs(
+                    para,
+                    ParagraphBox::content_width_px(final_width, self.dpi),
+                    &styles,
+                    self.dpi,
+                );
             }
         }
     }
@@ -858,8 +1220,12 @@ impl DocumentCore {
             para.para_shape_id = new_id;
         }
 
-        // 줄간격 변경 시 LineSeg 재계산
-        if mods.line_spacing.is_some() || mods.line_spacing_type.is_some() {
+        // 줄바꿈에 영향을 주는 변경 시 LineSeg 재계산.
+        //
+        // [#4324] formatting.rs의 apply_para_format_native/apply_para_format_in_cell_native
+        // 와 동일한 게이트 결함 — 줄간격만 보고 여백/들여쓰기/줄나눔 단위를 놓쳤다.
+        // para_shape_mods_affect_text_flow(formatting.rs:16 부근)로 판정을 통일한다.
+        if para_shape_mods_affect_text_flow(&mods) {
             self.reflow_hf_paragraph(section_idx, is_header, apply_to, hf_para_idx);
         }
 
@@ -906,12 +1272,18 @@ impl DocumentCore {
         self.paginate_if_needed();
 
         let new_offset = inserted_at + 1;
-        self.event_log.push(DocumentEvent::TextInserted {
-            section: section_idx,
-            para: 0,
-            offset: inserted_at,
-            len: 1,
-        });
+        self.event_log
+            .push(DocumentEvent::HeaderFooterTextReplaced {
+                section: section_idx,
+                is_header,
+                apply_to,
+                start_para: hf_para_idx,
+                start_offset: inserted_at,
+                end_para: hf_para_idx,
+                end_offset: inserted_at,
+                inserted_end_para: hf_para_idx,
+                inserted_end_offset: new_offset,
+            });
         Ok(super::super::helpers::json_ok_with(&format!(
             "\"charOffset\":{},\"insertedAt\":{},\"insertedLength\":1",
             new_offset, inserted_at
@@ -948,7 +1320,7 @@ impl DocumentCore {
             )));
         }
 
-        let apply = apply_from_u8(apply_to);
+        let apply = header_footer_apply_from_u8(apply_to);
 
         // 1) 기존 HF가 있으면 삭제
         if self
@@ -1093,7 +1465,7 @@ mod tests {
         use crate::model::document::{Document, Section, SectionDef};
         use crate::model::page::PageDef;
         let mut doc = Document::default();
-        let mut section = Section {
+        let section = Section {
             section_def: SectionDef {
                 page_def: PageDef {
                     width: 59528,  // A4 폭
@@ -1110,6 +1482,7 @@ mod tests {
             },
             paragraphs: vec![Paragraph::default()],
             raw_stream: None,
+            raw_provenance: None,
         };
         doc.sections.push(section);
         let mut core = DocumentCore::new_empty();
@@ -1167,6 +1540,13 @@ mod tests {
 
         let result = core.get_header_footer_native(0, true, 0).unwrap();
         assert!(result.contains("Hello"));
+
+        let info = core
+            .get_header_footer_para_info_native(0, true, 0, 0)
+            .unwrap();
+        let value: serde_json::Value = serde_json::from_str(&info).unwrap();
+        assert_eq!(value["charCount"], 5);
+        assert_eq!(value["text"], "Hello");
     }
 
     /// 필드 삽입의 반환 오프셋은 실제로 삽입된 자리를 가리킨다.
@@ -1496,8 +1876,8 @@ mod tests {
                         if let Some(para) = section.paragraphs.get(pi) {
                             if let Some(ctrl) = para.controls.get(ci) {
                                 let apply_to = match ctrl {
-                                    Control::Header(h) => apply_to_u8(h.apply_to),
-                                    Control::Footer(f) => apply_to_u8(f.apply_to),
+                                    Control::Header(h) => header_footer_apply_to_u8(h.apply_to),
+                                    Control::Footer(f) => header_footer_apply_to_u8(f.apply_to),
                                     _ => 255,
                                 };
                                 eprintln!(
@@ -1641,6 +2021,96 @@ mod tests {
             para.controls.len(),
             para.ctrl_data_records.len(),
             "삽입 후 두 배열 길이가 정합해야 한다"
+        );
+    }
+
+    /// [#4324] `reflow_hf_paragraph`가 `self.styles`(직전 rebuild_section 스냅샷)를
+    /// 읽으면, `apply_para_format_in_hf_native`가 그 직전에 `find_or_create_para_shape`로
+    /// 막 만든 새 para_shape_id는 그 스냅샷의 `para_styles` 범위 밖이라
+    /// margin_left/margin_right가 0.0으로 폴백한다 — 여백을 무시한(옛) 폭으로
+    /// 리플로우해버려 이 이슈가 고치려던 결함이 머리말/꼬리말 경로에서 그대로 남는다.
+    ///
+    /// 재현: `rebuild_section`으로 self.styles 스냅샷을 "margin 0, para_shape 1개"
+    /// 상태로 고정한 뒤(직전 명령이 남긴 스냅샷과 같은 전제), marginLeft 적용 전/후의
+    /// 줄 수를 비교한다.
+    #[test]
+    fn para_format_margin_change_in_header_reflows_with_correct_width_not_stale_styles() {
+        use crate::model::document::{Document, Section, SectionDef};
+        use crate::model::page::PageDef;
+        use crate::model::paragraph::CharShapeRef;
+
+        let mut doc = Document::default();
+        let section = Section {
+            section_def: SectionDef {
+                page_def: PageDef {
+                    width: 28504,
+                    height: 84188,
+                    margin_left: 4252,
+                    margin_right: 4252,
+                    margin_top: 5668,
+                    margin_bottom: 4252,
+                    margin_header: 4252,
+                    margin_footer: 4252,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            paragraphs: vec![Paragraph::default()],
+            raw_stream: None,
+            raw_provenance: None,
+        };
+        // text_width = 28504 - 4252 - 4252 = 20000 HWPUNIT (≈266.7px) — formatting.rs의
+        // 셀 재현 테스트와 같은 축척.
+        doc.sections.push(section);
+        let mut core = DocumentCore::new_empty();
+        core.document = doc;
+        core.composed = vec![Vec::new()];
+        core.dirty_sections = vec![true];
+        core.dirty_paragraphs = vec![None];
+
+        core.create_header_footer_native(0, true, 0)
+            .expect("머리말 생성이 성공해야 함");
+
+        let text = "A".repeat(200);
+        {
+            let para = core.get_hf_paragraph_mut(0, true, 0, 0).unwrap();
+            para.text = text.clone();
+            para.char_offsets = (0..text.chars().count() as u32).collect();
+            // 공통 IR 의 char_count 는 문단 종결자를 포함한다 (model/paragraph.rs).
+            para.char_count = text.chars().count() as u32 + 1;
+            para.char_shapes = vec![CharShapeRef {
+                start_pos: 0,
+                char_shape_id: 0,
+            }];
+            para.has_para_text = true;
+        }
+
+        // self.styles 스냅샷을 지금(margin 0, para_shape 1개) 상태로 고정한다.
+        core.rebuild_section(0);
+
+        // 기준선: 여백 0 상태에서 실제 폭으로 리플로우한 줄 수.
+        core.reflow_hf_paragraph(0, true, 0, 0);
+        let before_lines = core
+            .get_hf_paragraph_ref(0, true, 0, 0)
+            .unwrap()
+            .line_segs
+            .len();
+
+        // marginLeft 적용 — 기존 para_shape(margin 0)와 달라 새 id가 만들어진다.
+        // self.styles가 stale이면 새 id 조회가 None → margin 0 폴백 → 폭이 그대로다.
+        core.apply_para_format_in_hf_native(0, true, 0, 0, r#"{"marginLeft":8000}"#)
+            .expect("서식 적용이 성공해야 함");
+        let after_lines = core
+            .get_hf_paragraph_ref(0, true, 0, 0)
+            .unwrap()
+            .line_segs
+            .len();
+
+        assert!(
+            after_lines > before_lines,
+            "marginLeft 적용으로 사용 가능 폭이 줄었으면 줄 수가 늘어야 함 \
+             (before={before_lines}줄, after={after_lines}줄 — self.styles가 stale이면 \
+             새 para_shape_id 조회가 None이 되어 margin=0으로 폴백, after==before로 남는다)"
         );
     }
 }
