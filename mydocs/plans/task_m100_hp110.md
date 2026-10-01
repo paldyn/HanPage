@@ -2,6 +2,7 @@
 
 - Issue: [paldyn/HanPage#110](https://github.com/paldyn/HanPage/issues/110)
 - 사용자 승인: 2026-10-01 "합치자. 우리가 추가한 기능 하고 겹치는게 있으면 말해주고"
+- 추가 명시 승인: 2026-10-01 "승인" — 전체 Rust 검증, remote push, Open PR 생성 및 최신 CI 통과 뒤 merge.
 - 브랜치: `codex/upstream-sync-20261001`
 - HanPage 기준: `cecaf1bbfec9a10778484d30ebb747280e7a02af`
 - 지난 upstream 고정점: `cf5d462dcda1b5ab71160033e1d454b42198ad18`

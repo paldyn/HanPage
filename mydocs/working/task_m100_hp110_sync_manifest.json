@@ -241,7 +241,7 @@
     "mydocs/orders/20261001.md"
   ],
   "strategy": "upstream-tree-on-HanPage-history",
-  "integration_status": "all manual conflicts resolved; local focused/browser verification passed; full Rust and remote/PR approval pending",
+  "integration_status": "approved full Rust verification and remote push/Open PR/merge; full regression in progress",
   "resolved_manual_conflicts": [
     {
       "path": ".github/workflows/deploy-pages.yml",
@@ -284,5 +284,15 @@
       "result": "resolved and verified in integrated worktree"
     }
   ],
-  "source_commit": "b6f4318dc8c8c50cdb0897887f72b3e59684dee8"
+  "source_commit": "b6f4318dc8c8c50cdb0897887f72b3e59684dee8",
+  "approval": {
+    "date": "2026-10-01",
+    "user_text": "승인",
+    "scope": [
+      "full Rust gates",
+      "remote push",
+      "Open PR",
+      "merge after current-head CI passes"
+    ]
+  }
 }
