@@ -300,6 +300,7 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
 
   setTestCase('자동 확인은 하단만 표시 · 초기 조회 · 늦은 이벤트 · 편집 보존');
   check(!(await snapshot(page)).visible && (await snapshot(page)).entryLabel === '업데이트 준비됨', '초기 ready 조회는 큰 알림 없이 하단의 업데이트 준비 상태만 표시한다');
+  await createNewDocument(page);
   await page.evaluate(() => window.__inputHandler.focus());
   await typeText(page, 'QUIET_BACKGROUND_SEED');
   await page.evaluate(() => { window.__quietUpdateFocus = document.activeElement; });
@@ -661,8 +662,9 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
     description: '실제 Studio DOM·문서·저장 경로, Tauri IPC와 전송 상태 이벤트만 통제 대역. 실제 설치·재시작은 미실행.',
     baseline: previous,
     quietBaseline: previousQuiet,
+    quietDocumentBefore: quietBefore,
     sourceHead: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
-    sourceFiles: Object.fromEntries(['src/main.ts', 'src/ui/update-notice.ts', 'src/core/desktop-bridge.ts', 'src/ui/update-notice-text.ts', 'src/styles/update-notice.css', 'src/ui/about-dialog.ts', 'src/i18n/locales/ko.ts', 'src/i18n/locales/en.ts'].map(file => [file, createHash('sha256').update(readFileSync(file)).digest('hex')])),
+    sourceFiles: Object.fromEntries(['src/main.ts', 'src/ui/update-notice.ts', 'src/core/desktop-bridge.ts', 'src/ui/update-notice-text.ts', 'src/styles/update-notice.css', 'src/ui/about-dialog.ts', 'src/i18n/locales/ko.ts', 'src/i18n/locales/en.ts', 'e2e/desktop-update-ui.test.mjs'].map(file => [file, createHash('sha256').update(readFileSync(file)).digest('hex')])),
     pass: results.filter(result => result.pass).length,
     fail: results.filter(result => !result.pass).length,
     results, screenshots, layoutChecks, browserErrors: errors, browserDialogs,
