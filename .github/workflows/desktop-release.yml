@@ -7,6 +7,7 @@ name: Desktop Release
 #
 # 트리거: `hanpage-desktop-v*` 태그 push (→ GitHub Release 생성/첨부) + workflow_dispatch
 #   (→ 릴리스 없이 빌드만, 산출물은 워크플로 아티팩트로 업로드 = 테스트용).
+# 태그 빌드도 초안 릴리스로 생성하고, 양 플랫폼 검증 완료 뒤 공개한다.
 #
 # CLI 바이너리 릴리스(`release-binary.yml`, `v*` 태그)와 태그 패턴을 분리해 충돌을
 # 회피한다. `main` push 가 아니므로 Pages 배포(`deploy-pages.yml`)와도 트리거 분리.
@@ -63,28 +64,27 @@ jobs:
         uses: jetli/wasm-pack-action@v0.4.0
 
       - name: Build WASM
-        # CI 한정 wasm-opt 비활성화: macOS 러너 wasm-pack 의 번들 wasm-opt 가 구버전이라
+        # CI 한정 --no-opt: macOS 러너 wasm-pack 의 번들 wasm-opt 가 구버전이라
         # 다중 table wasm 파싱 실패("Only 1 table definition allowed in MVP"). 커밋된
         # Cargo.toml 은 그대로 두어 GitHub Pages(deploy-pages.yml 의 wasm-pack 빌드)는
         # 최적화 유지·산출물 불변. wasm-opt 는 최적화 단계일 뿐이라 기능 영향 없음.
         shell: bash
         run: |
-          printf '\n[package.metadata.wasm-pack.profile.release]\nwasm-opt = false\n' >> Cargo.toml
-          wasm-pack build --target web --release
+          scripts/wasm-pack-locked.sh --target web --release --no-opt
 
       # --- Node 의존성 (studio: 프런트 빌드, desktop: @tauri-apps/cli) ---
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22.22.1
 
       - name: Install studio deps
         working-directory: rhwp-studio
-        run: npm install
+        run: npm ci
 
       - name: Install desktop deps
         working-directory: HanPage-Desktop
-        run: npm install
+        run: npm ci
 
       # --- 릴리스 표시명: 태그 hanpage-desktop-v{ver} → "HanPage Desktop-v{ver}" ---
       # GitHub Actions 식 표현식엔 문자열 치환 함수가 없어 bash 로 접두어를 제거한다.
@@ -131,9 +131,10 @@ jobs:
           # 태그 push 시에만 릴리스 생성. dispatch 는 빈 tagName → 빌드만 수행.
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: ${{ startsWith(github.ref, 'refs/tags/') && steps.relname.outputs.name || '' }}
-          releaseDraft: false
+          # 양 플랫폼 자산·updater 서명·공증을 확인한 뒤 명시적으로 공개한다.
+          releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} -- --locked
 
       # --- dispatch 테스트 빌드: 릴리스가 없으므로 아티팩트로 업로드 ---
       - name: Upload bundle (dispatch test)
