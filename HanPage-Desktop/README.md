@@ -76,7 +76,7 @@ Tauri가 Windows 창 아이콘으로 첫 프레임을 읽으므로 고해상도 
 
 앱 버전은 `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`,
 `src-tauri/Cargo.lock`의 앱 항목과 `src-tauri/tauri.conf.json`에서 함께 맞춘다.
-엔진·Studio 버전과 독립적으로 관리하며 현재 릴리스 후보는 0.8.6이다.
+엔진·Studio 버전과 독립적으로 관리하며 현재 릴리스 후보는 0.8.7이다.
 
 검증·병합된 commit에 `hanpage-desktop-v{버전}` 태그를 push하면
 `desktop-release.yml`이 macOS aarch64와 Windows x64를 빌드하여 **초안 릴리스**에

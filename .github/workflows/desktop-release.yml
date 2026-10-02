@@ -62,15 +62,29 @@ jobs:
 
       - name: Install wasm-pack
         uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          # latest 조회 실패 시 action은0.9.1로 fallback해 --no-opt를 거부한다.
+          version: v0.13.1
 
-      - name: Build WASM
+      - name: Build WASM (macOS)
+        if: runner.os != 'Windows'
         # CI 한정 --no-opt: macOS 러너 wasm-pack 의 번들 wasm-opt 가 구버전이라
         # 다중 table wasm 파싱 실패("Only 1 table definition allowed in MVP"). 커밋된
         # Cargo.toml 은 그대로 두어 GitHub Pages(deploy-pages.yml 의 wasm-pack 빌드)는
         # 최적화 유지·산출물 불변. wasm-opt 는 최적화 단계일 뿐이라 기능 영향 없음.
         shell: bash
         run: |
+          test "$(wasm-pack --version)" = "wasm-pack 0.13.1"
           scripts/wasm-pack-locked.sh --target web --release --no-opt
+
+      - name: Build WASM (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if ((wasm-pack --version) -ne 'wasm-pack 0.13.1') {
+            throw 'Expected pinned wasm-pack 0.13.1'
+          }
+          .\scripts\wasm-pack-locked.ps1 --target web --release --no-opt
 
       # --- Node 의존성 (studio: 프런트 빌드, desktop: @tauri-apps/cli) ---
       - name: Setup Node.js

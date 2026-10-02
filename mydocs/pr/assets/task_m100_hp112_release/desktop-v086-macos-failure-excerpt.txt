@@ -1,0 +1,16 @@
+Bundle macOS (aarch64)	Build WASM	﻿2026-10-02T01:05:25.5763210Z ##[group]Run scripts/wasm-pack-locked.sh --target web --release --no-opt
+Bundle macOS (aarch64)	Build WASM	2026-10-02T01:05:25.5763920Z scripts/wasm-pack-locked.sh --target web --release --no-opt
+Bundle macOS (aarch64)	Build WASM	2026-10-02T01:05:25.5832080Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+Bundle macOS (aarch64)	Build WASM	2026-10-02T01:05:25.5832410Z env:
+Bundle macOS (aarch64)	Build WASM	2026-10-02T01:05:25.5832610Z   CARGO_HOME: /Users/runner/.cargo
+Bundle macOS (aarch64)	Build WASM	2026-10-02T01:05:25.5832840Z   CARGO_INCREMENTAL: 0
+Bundle macOS (aarch64)	Build WASM	2026-10-02T01:05:25.5833060Z   CARGO_TERM_COLOR: always
+Bundle macOS (aarch64)	Build WASM	2026-10-02T01:05:25.5833320Z   CACHE_ON_FAILURE: false
+Bundle macOS (aarch64)	Build WASM	2026-10-02T01:05:25.5833550Z ##[endgroup]
+Bundle macOS (aarch64)	Build WASM	2026-10-02T01:05:26.4446790Z error: Found argument '--no-opt' which wasn't expected, or isn't valid in this context
+Bundle macOS (aarch64)	Build WASM	2026-10-02T01:05:26.4447490Z
+Bundle macOS (aarch64)	Build WASM	2026-10-02T01:05:26.4447660Z USAGE:
+Bundle macOS (aarch64)	Build WASM	2026-10-02T01:05:26.4447930Z     wasm-pack build --release --target <target>
+Bundle macOS (aarch64)	Build WASM	2026-10-02T01:05:26.4448180Z
+Bundle macOS (aarch64)	Build WASM	2026-10-02T01:05:26.4448290Z For more information try --help
+Bundle macOS (aarch64)	Build WASM	2026-10-02T01:05:26.4512760Z ##[error]Process completed with exit code 1.

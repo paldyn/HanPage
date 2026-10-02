@@ -1,0 +1,215 @@
+{
+  "schema": "hanpage-pr-ci-audit/v1",
+  "observed_at_utc": "2026-10-02T01:05:04.399341+00:00",
+  "repository": "paldyn/HanPage",
+  "pull_request_number": 113,
+  "pull_request_url": "https://github.com/paldyn/HanPage/pull/113",
+  "reviewed_pair": {
+    "head_sha": "1afd7a501c4b5485e5e6fe96a327419d283be282",
+    "base_sha": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+    "source_sha": "0ac1f1bd784a59eacd6bafab30d4d522211678a5",
+    "synthetic_merge_sha": "addd86004151f2121181231176ec4f11c3e498ff",
+    "synthetic_merge_parents": [
+      "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+      "1afd7a501c4b5485e5e6fe96a327419d283be282"
+    ],
+    "synthetic_merge_tree": "58280ed2c9bcb71599a08a5a5f562d234742835c",
+    "head_tree": "58280ed2c9bcb71599a08a5a5f562d234742835c",
+    "merge_tree_equals_head_tree": true
+  },
+  "latest_pr_api_snapshot": {
+    "state": "closed",
+    "merged": true,
+    "merged_at": "2026-10-02T01:01:12Z",
+    "merge_commit_sha": "d523c04493ddf8296bc5d56e2c90c38f4da4fe96",
+    "head_sha": "1afd7a501c4b5485e5e6fe96a327419d283be282",
+    "base_sha": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+    "mergeable": null,
+    "mergeable_state": "unknown"
+  },
+  "premerge_root_gate_observation": {
+    "head_sha": "1afd7a501c4b5485e5e6fe96a327419d283be282",
+    "base_sha": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+    "mergeable": "MERGEABLE",
+    "merge_state_status": "CLEAN",
+    "all_checks_completed": true,
+    "success": 28,
+    "skipped": 4,
+    "source": "Parent root reported independent final API gate before merge; distinguish from the potentially post-merge API snapshot."
+  },
+  "verdict": "latest-head CI completed successfully",
+  "summary": {
+    "run_count": 6,
+    "successful_runs": 5,
+    "normally_skipped_runs": 1,
+    "commit_check_count": 32,
+    "check_conclusion_counts": {
+      "success": 28,
+      "skipped": 4
+    },
+    "job_count": 31,
+    "successful_jobs": 27,
+    "skipped_jobs": 4,
+    "bad_or_unfinished_checks": 0
+  },
+  "canonical_aggregate": {
+    "name": "Build & Test",
+    "id": 110656462275,
+    "conclusion": "success",
+    "url": "https://github.com/paldyn/HanPage/actions/runs/36946850727/job/110656462275"
+  },
+  "ci_classification": {
+    "lane": "full",
+    "fast_pass": false,
+    "reason": "ci-execution-surface-change",
+    "impact_reason": "fail-closed:workflow-contract",
+    "frontend_mode": "package",
+    "rust_required": true,
+    "native_skia_required": true,
+    "codeql_languages": [
+      "javascript-typescript",
+      "python",
+      "rust"
+    ],
+    "observed_log_lines": [
+      "2026-10-02T00:37:27.9655767Z fast_pass=false reason=ci-execution-surface-change candidate_sha=",
+      "2026-10-02T00:37:29.7803224Z CI impact input: event=pull_request files=59",
+      "2026-10-02T00:37:30.0652295Z   RUST_REQUIRED: true",
+      "2026-10-02T00:37:30.0652480Z   FRONTEND_MODE: package",
+      "2026-10-02T00:37:30.0652662Z   RENDER_REQUIRED: true",
+      "2026-10-02T00:37:30.0652844Z   NATIVE_SKIA_REQUIRED: true",
+      "2026-10-02T00:37:30.0653078Z   CODEQL_LANGUAGES: javascript-typescript,python,rust",
+      "2026-10-02T00:37:30.0653340Z   CLASSIFICATION_STATUS: full",
+      "2026-10-02T00:37:30.0653539Z   CLASSIFIER_VERSION: 7",
+      "2026-10-02T00:37:30.0653740Z   IMPACT_REASON: fail-closed:workflow-contract"
+    ]
+  },
+  "ghas": {
+    "id": 110652047903,
+    "app_slug": "github-advanced-security",
+    "conclusion": "success",
+    "output": {
+      "title": "No new alerts in code changed by this pull request",
+      "summary": "[View all branch alerts](/paldyn/HanPage/security/code-scanning?query=pr%3A113+tool%3ACodeQL+is%3Aopen).",
+      "text": null,
+      "annotations_count": 0,
+      "annotations_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110652047903/annotations"
+    },
+    "url": "https://github.com/paldyn/HanPage/runs/110652047903",
+    "transient_state": "Earlier neutral/missing Rust configuration during Rust analysis was superseded by final success."
+  },
+  "normal_check_skips": [
+    {
+      "name": "WASM Build",
+      "reason": "Standalone CI WASM lane is limited to workflow_dispatch/v* tags. Actual package worker built fresh WASM."
+    },
+    {
+      "name": "Frontend unit gates",
+      "reason": "Full package lane executed Studio unit tests and broader package/browser gates."
+    },
+    {
+      "name": "Workflow promotion preflight",
+      "reason": "Only devel-to-main promotion PRs qualify; current PR targets devel."
+    },
+    {
+      "name": "cancel-stale-runs / pull_request_target",
+      "reason": "Same-repository PR; normal pull_request cancellation workflow succeeded."
+    }
+  ],
+  "actual_test_results": {
+    "rust_regression_archives": {
+      "archives": {
+        "A": {
+          "job_id": 110652880410,
+          "job_url": "https://github.com/paldyn/HanPage/actions/runs/36946850727/job/110652880410",
+          "elapsed_seconds": 64.471,
+          "tests_run": 3873,
+          "passed": 3873,
+          "skipped": 13,
+          "summary_line": "2026-10-02T00:47:37.7293110Z      Summary [  64.471s] 3873 tests run: 3873 passed, 13 skipped",
+          "log_sha256": "652a678c1c6b5f430f0df948ceeca58572786d8f901393026f24151c56533459"
+        },
+        "B": {
+          "job_id": 110653491234,
+          "job_url": "https://github.com/paldyn/HanPage/actions/runs/36946850727/job/110653491234",
+          "elapsed_seconds": 493.416,
+          "tests_run": 2072,
+          "passed": 2072,
+          "skipped": 5,
+          "summary_line": "2026-10-02T00:58:32.3078198Z      Summary [ 493.416s] 2072 tests run: 2072 passed (4 slow), 5 skipped",
+          "log_sha256": "3391f92c19ed6533f9253572e2a23f03529744c2f00a0887dd6a87e738c98555"
+        },
+        "C": {
+          "job_id": 110653550361,
+          "job_url": "https://github.com/paldyn/HanPage/actions/runs/36946850727/job/110653550361",
+          "elapsed_seconds": 202.577,
+          "tests_run": 2102,
+          "passed": 2102,
+          "skipped": 22,
+          "summary_line": "2026-10-02T00:52:46.0990492Z      Summary [ 202.577s] 2102 tests run: 2102 passed (1 slow), 22 skipped",
+          "log_sha256": "c15af65d8d3b3b6aaf17d27ccf7256b6d81cd767a5cf7ed10f5efd5768f3f207"
+        },
+        "D": {
+          "job_id": 110653368198,
+          "job_url": "https://github.com/paldyn/HanPage/actions/runs/36946850727/job/110653368198",
+          "elapsed_seconds": 207.055,
+          "tests_run": 2036,
+          "passed": 2036,
+          "skipped": 10,
+          "summary_line": "2026-10-02T00:51:56.0474138Z      Summary [ 207.055s] 2036 tests run: 2036 passed (1 slow), 10 skipped",
+          "log_sha256": "cc8c00c5e48928918691343c0e1f250acb4a7cf0c3a27665d133c8fafceb10f5"
+        }
+      },
+      "passed": 10083,
+      "skipped": 50,
+      "failed": 0,
+      "scope": "Default-feature archive regression executions; normal skips excluded from passing count."
+    },
+    "studio_unit": {
+      "tests": 1832,
+      "passed": 1830,
+      "failed": 0,
+      "skipped": 2,
+      "job_id": 110651053689
+    },
+    "responsive": {
+      "passed": 2666,
+      "failed": 0,
+      "job_id": 110651053689
+    },
+    "adapter": {
+      "present_adapters": [
+        "svg",
+        "null",
+        "trace",
+        "png",
+        "skia"
+      ],
+      "pairs": 26,
+      "skip_missing": 0,
+      "skip_unexported": 0,
+      "passed": 7,
+      "failed": 0,
+      "job_id": 110650920225
+    },
+    "proptest": {
+      "rust_suites": 9,
+      "passed": 63,
+      "failed": 0,
+      "ignored": 0,
+      "job_id": 110650919661
+    },
+    "native_skia": {
+      "passed_executions": 69,
+      "failed": 0,
+      "ignored": 0,
+      "job_id": 110651053578,
+      "scope": "Feature-specific executions may overlap default archive names; no distinct-case grand total asserted."
+    }
+  },
+  "scope_limits": [
+    "Desktop OS installer, notarization, updater signatures, and public release publication remain separate root-owned release gates.",
+    "No full Gym benchmark or standalone Render Diff result claimed for this Desktop PR."
+  ],
+  "original_audit_sha256": "a8bca8cb8585b9698d5779d82798271a4b00f6b7da3a84f4a24ae9317ecf28b9"
+}

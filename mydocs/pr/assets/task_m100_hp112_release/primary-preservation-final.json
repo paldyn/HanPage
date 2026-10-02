@@ -1,0 +1,8 @@
+{
+  "primary_head": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+  "original_input_files": 39,
+  "all_original_hashes_preserved": true,
+  "primary_sync_performed": false,
+  "temporary_stash_created": false,
+  "reason": "Automatic approval review rejected stash/fast-forward/drop because user original changes could be lost; kept the original checkout unchanged and continued the approved release from the isolated worktree."
+}
