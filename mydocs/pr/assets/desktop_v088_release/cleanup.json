@@ -1,0 +1,22 @@
+{
+  "checked_at_utc": "2026-10-02T05:22:24.213161+00:00",
+  "local_ui_branch_removed": true,
+  "local_ui_branch_previous_sha": "17f4c8059dcb9b975a88369ef99d9a1b201a77fd",
+  "remote_ui_branch_preserved": true,
+  "remote_branch": "paldyn/HanPage:codex/desktop-update-ui-20261002",
+  "remote_preservation_reason": "Canonical cleanup excludes fork head branches and requires clean primary; original 39 user changes remain. No remote deletion attempted.",
+  "removed_owned_temporary_paths": [
+    "HanPage-Desktop/node_modules (own symlink only)",
+    "rhwp-studio/node_modules (own symlink only)",
+    "pkg (own verified generated directory)",
+    "output/pr-review/desktop088 (own completed review artifacts/logs only)"
+  ],
+  "shared_target_pr_review_preserved": true,
+  "other_review_outputs_preserved": true,
+  "worktree_archive": "retained",
+  "worktree_path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage",
+  "worktree_retention_reason": "App archive_worktree returned: This worktree is protected by a pinned task or workspace.",
+  "archive_protection_bypassed": false,
+  "primary39_bytes_and_sha256_reconfirmed_after_cleanup": true,
+  "primary_head_reconfirmed_after_cleanup": "c5b6022532371fd07a2f5e978fb21e4c3cc37758"
+}

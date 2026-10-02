@@ -85,3 +85,10 @@ exact merge SHA에 `hanpage-desktop-v0.8.8` 태그를 생성한다. 양 플랫�
 - [Mac app archive](../assets/desktop_v088_release/desktop-v088-macos-bundle.json)와 [DMG 내부 앱](../assets/desktop_v088_release/desktop-v088-dmg.json)의 두 버전 0.8.8·arm64·source ICNS·Developer ID 팀·엄격한 codesign·공증·stapler 통과. DMG 무결성·읽기 전용 마운트와 해제도 확인했다. [Windows outer PE 아이콘](../assets/desktop_v088_release/desktop-v088-windows-icon.json)의 전체 그룹·7개 source 프레임 일치, 오류 0.
 - [공개 Release](https://github.com/paldyn/HanPage/releases/tag/hanpage-desktop-v0.8.8), ID401555774, 공개 시각 2026-10-02 14:19:19 KST. [공개 확인](../assets/desktop_v088_release/desktop-v088-public-verification.json)에서 GitHub latest·6개 digest·source SHA·익명 앱 endpoint의 0.8.8 manifest가 검증 초안과 바이트 동일함을 확인했다.
 - 사용자 앱 설치·실행·재시작과 Windows GUI/내부 NSIS app·uninstaller 검사 미실행. 첫 0.8.7→0.8.8 안내는 기존 UI이며 새 UI는 설치 이후 적용된다. 사용자 primary의 기존 39개 변경과 공유 target을 보존한다.
+
+
+## 실제 정리 결과
+
+[정리 기록](../assets/desktop_v088_release/cleanup.json)에 실제 실행 결과를 보존했다. 이번 작업의 local UI branch, ignored `output/pr-review/desktop088`, 두 node_modules symlink와 hash 확인한 generated pkg를 제거했다. 영구 검증 자료는 devel의 tracked assets에 보존했다. primary의 기존 39개 byte/hash와 HEAD를 다시 확인했고 공유 `target/pr-review`와 다른 검토 산출물은 유지했다.
+
+managed worktree `/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage`는 app `archive_worktree`가 “This worktree is protected by a pinned task or workspace.”를 반환해 **유지**했다. pin 해제·직접 filesystem 제거로 보호를 우회하지 않았다. `paldyn/HanPage:codex/desktop-update-ui-20261002` remote branch는 canonical fork 예외와 원본 사용자 dirty 작업 보존 조건에 따라 삭제를 시도하지 않았다. 로컬 devel은 원본 checkout 전환 없이 CAS로 최종 origin/devel에 맞췄다.
