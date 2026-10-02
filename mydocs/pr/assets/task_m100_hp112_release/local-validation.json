@@ -1,0 +1,66 @@
+{
+  "source_sha": "0ac1f1bd784a59eacd6bafab30d4d522211678a5",
+  "baseline": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+  "desktop_version": "0.8.6",
+  "local_build_exit": 0,
+  "cargo_locked": true,
+  "node": "22.22.1",
+  "local_app_bundle_exit": 0,
+  "workflow_contract_tests": {
+    "passed": 9,
+    "exit": 0,
+    "python": "3.13"
+  },
+  "initial_attempts": {
+    "node20.11_frontend": "failed before Cargo; rerun supported22.22.1 passed",
+    "python3.9_contracts": "tomllib import error; rerun bundled3.13 passed",
+    "python3.13_yaml_probe": "yaml unavailable; Ruby YAML parse passed"
+  },
+  "engine_source_unchanged": true,
+  "wasm_sha256": "5c7a9a16c22cc6e0086d14d38df0386c5e63a1c75fe194a49848111c95011d12",
+  "icon_visual_read": true,
+  "logo_inputs": 39,
+  "source_changes": 45,
+  "files": [
+    {
+      "path": "logo-input-snapshot.json",
+      "bytes": 7727,
+      "sha256": "0a0d1a903728ba41e0d2c3340d8e08008bd15f3959ec7373a8f06a21ee1765e5"
+    },
+    {
+      "path": "local-package-verification.json",
+      "bytes": 342,
+      "sha256": "3df873979f78d50ee218a097f7348a16744a4b77f3631f4b1cfc30c2b7053c0f"
+    },
+    {
+      "path": "workflow-yaml-validation.json",
+      "bytes": 64,
+      "sha256": "74141f7c6ad7162dd66ca860fde18b108213958a25f478ba969f96bae5ec3396"
+    },
+    {
+      "path": "desktop-local-build.log",
+      "bytes": 1316,
+      "sha256": "e7a8ef93633b99a3fb44f4428b6d85986c0d455e37f423d6ff74724c237f589b"
+    },
+    {
+      "path": "desktop-local-build-node22.log",
+      "bytes": 11822,
+      "sha256": "a77566f3062d4c397d2b835275cc773ae804f11313f8d13268285c04ea5cea4b"
+    },
+    {
+      "path": "desktop-local-app-bundle.log",
+      "bytes": 466,
+      "sha256": "71e2bbfb369401d2b303e5b7ecf9d463dfccce4395b49268032be1067c0e0a8b"
+    },
+    {
+      "path": "workflow-contract-tests.log",
+      "bytes": 870,
+      "sha256": "7d803152a96b8228f979b175525019fb4b1b6025bc04244865dff286b9589cee"
+    },
+    {
+      "path": "workflow-contract-tests-python313.log",
+      "bytes": 107,
+      "sha256": "8e6056c575b51b08b1fce113098592f021adde4e75a00c08383d916aba4b5a90"
+    }
+  ]
+}
