@@ -28,6 +28,7 @@
     }
   },
   "bundle": {
+    "publisher": "PALDYN",
     "active": true,
     "createUpdaterArtifacts": true,
     "targets": "all",

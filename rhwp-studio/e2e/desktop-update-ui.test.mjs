@@ -2,7 +2,7 @@
  * Desktop 업데이트 실제 DOM 회귀. Tauri IPC만 대역 처리하며 실제 설치·재시작은 하지 않는다.
  *
  * node e2e/run-with-vite.mjs -- node e2e/desktop-update-ui.test.mjs --mode=headless
- * --baseline=<Git ref>를 추가하면 이전 업데이트 모듈만 실제 제품 entry에 주입해 비교한다.
+ * --baseline=<Git ref>는 이전 토스트를, --quiet-baseline=<Git ref>는 이전 자동 카드를 비교한다.
  */
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
@@ -15,8 +15,10 @@ import {
 
 const outputDir = path.resolve(process.env.DESKTOP_UPDATE_OUTPUT || '../output/desktop-update-ui/e2e');
 const baselineRef = process.argv.find(arg => arg.startsWith('--baseline='))?.slice('--baseline='.length);
+const quietBaselineRef = process.argv.find(arg => arg.startsWith('--quiet-baseline='))?.slice('--quiet-baseline='.length);
 const results = [];
 const screenshots = [];
+const layoutChecks = [];
 const check = (condition, message) => {
   results.push({ pass: Boolean(condition), message });
   assert(condition, message);
@@ -117,6 +119,37 @@ async function captureCard(page, name) {
   console.log(`  Card Screenshot: ${file}`);
 }
 
+/** 조용한 자동 확인 화면의 하단 진입점도 실제 픽셀로 보존한다. */
+async function captureStatusBar(page, name) {
+  const clip = await page.$eval('#status-bar', el => {
+    const rect = el.getBoundingClientRect();
+    const x = Math.max(0, rect.x - 4);
+    const y = Math.max(0, rect.y - 8);
+    return { x, y, width: Math.min(innerWidth - x, rect.width + 8), height: Math.min(innerHeight - y, rect.height + 12) };
+  });
+  mkdirSync(outputDir, { recursive: true });
+  const file = path.join(outputDir, `${name}.png`);
+  await page.screenshot({ path: file, clip });
+  screenshots.push(file);
+  console.log(`  Status Bar Screenshot: ${file}`);
+}
+
+async function clickFileMenu(page, command) {
+  await page.click('.menu-item[data-menu="file"] .menu-title');
+  await page.click(`.menu-item[data-menu="file"] .md-item[data-cmd="${command}"]`);
+}
+
+async function quietDocumentSnapshot(page) {
+  return page.evaluate(() => ({
+    text: window.__wasm.getTextRange(0, 0, 0, 200),
+    dirty: window.__documentState.isDirty(),
+    fileName: window.__wasm.fileName,
+    focusPreserved: document.activeElement === window.__quietUpdateFocus,
+    visibleCard: Boolean(document.querySelector('#desktop-update-card:not([hidden])')),
+    modal: Boolean(document.querySelector('.dialog-update-blocker')),
+  }));
+}
+
 async function snapshot(page) {
   return page.evaluate(() => {
     const card = document.getElementById('desktop-update-card');
@@ -134,6 +167,7 @@ async function snapshot(page) {
       detail: card?.querySelector('.dialog-update-detail')?.textContent,
       version: card?.querySelector('.dialog-update-version')?.textContent,
       entryState: document.getElementById('desktop-update-entry')?.dataset.state,
+      entryLabel: (document.querySelector('#desktop-update-entry .stb-update-label') ?? document.getElementById('desktop-update-entry'))?.textContent?.trim(),
       applyCount: window.__updateMock?.count('cmd_update_apply') || 0,
       checkCount: window.__updateMock?.count('cmd_update_check') || 0,
       dirty: window.__documentState?.isDirty(),
@@ -143,7 +177,7 @@ async function snapshot(page) {
 
 async function state(page, next) {
   await page.evaluate(value => window.__updateMock.setState(value), next);
-  await page.waitForFunction(value => document.querySelector('#desktop-update-card')?.dataset.state === value, {}, next.state);
+  await page.waitForFunction(value => document.querySelector('#desktop-update-entry')?.dataset.state === value, {}, next.state);
 }
 
 async function waitState(page, value) {
@@ -205,6 +239,37 @@ async function baseline(browser) {
   return { ref: baselineRef, before, beforeApply, expected: { updateButton: 'FAIL', persistentEntry: 'FAIL', applyingProgress: 'FAIL' } };
 }
 
+/** 이전 카드 코드를 같은 제품 진입점에서 실행하여 자동 팝업 결함만 재현한다. */
+async function quietBaseline(browser) {
+  if (!quietBaselineRef) return null;
+  const source = execFileSync('git', ['show', `${quietBaselineRef}:rhwp-studio/src/ui/update-notice.ts`], { encoding: 'utf8' });
+  const module = (await transformWithOxc(source, 'update-notice.ts', { target: 'es2022' })).code
+    .replaceAll('@/core/desktop-bridge', '/src/core/desktop-bridge.ts')
+    .replaceAll('@/ui/update-notice-text', '/src/ui/update-notice-text.ts');
+  const page = await createPage(browser);
+  const errors = [];
+  page.on('pageerror', error => errors.push(String(error)));
+  await installNativeMock(page);
+  await page.setRequestInterception(true);
+  page.on('request', request => {
+    if (new URL(request.url()).pathname === '/src/ui/update-notice.ts') {
+      void request.respond({ status: 200, contentType: 'application/javascript', body: module });
+    } else void request.continue();
+  });
+  await loadApp(page);
+  await page.waitForSelector(visibleCard);
+  const initial = await snapshot(page);
+  check(errors.length === 0 && initial.visible && initial.entryState === 'ready', '이전 코드의 정상 실행에서 초기 ready 조회의 자동 팝업 계약은 FAIL이다');
+  await capture(page, 'before-v088-ready-auto-card');
+  await page.click('.dialog-update-later');
+  await page.evaluate(() => window.__updateMock.ready('0.8.9'));
+  await page.waitForSelector(visibleCard);
+  const nextVersion = await snapshot(page);
+  check(nextVersion.visible && nextVersion.version?.includes('0.8.9'), '이전 코드의 다른 버전 ready 이벤트에서도 자동 팝업 계약은 FAIL이다');
+  await page.close();
+  return { ref: quietBaselineRef, initial, nextVersion, browserErrors: errors, expected: { initialReadyAutoPopup: 'FAIL', nextVersionReadyAutoPopup: 'FAIL' } };
+}
+
 runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page, browser }) => {
   const errors = [];
   const browserDialogs = [];
@@ -215,22 +280,101 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
     else void dialog.dismiss();
   });
   const previous = await baseline(browser);
+  const previousQuiet = await quietBaseline(browser);
   await installNativeMock(page);
   await loadApp(page);
-  await page.waitForSelector(visibleCard);
+  await page.waitForSelector('#desktop-update-entry[data-state="ready"]');
   await page.waitForFunction(() => window.__wasm.pageCount > 0);
-  await page.evaluate(() => window.__updateMock.ready());
 
-  setTestCase('준비 완료 · 나중에 · 재진입 · 키보드');
+  setTestCase('자동 확인은 하단만 표시 · 초기 조회 · 늦은 이벤트 · 편집 보존');
+  check(!(await snapshot(page)).visible && (await snapshot(page)).entryLabel === '업데이트 준비됨', '초기 ready 조회는 큰 알림 없이 하단의 업데이트 준비 상태만 표시한다');
+  await page.evaluate(() => window.__inputHandler.focus());
+  await typeText(page, 'QUIET_BACKGROUND_SEED');
+  await page.evaluate(() => { window.__quietUpdateFocus = document.activeElement; });
+  const quietBefore = await quietDocumentSnapshot(page);
+  check(quietBefore.dirty && quietBefore.text.includes('QUIET_BACKGROUND_SEED'), '자동 업데이트 경계의 실제 미저장 편집 내용을 준비한다');
+  for (const [next, label] of [
+    [{ state: 'idle' }, '업데이트 확인'],
+    [{ state: 'checking' }, '업데이트 확인 중'],
+    [{ state: 'downloading', downloaded: 41 * mib, total: 100 * mib }, '업데이트 받는 중 41%'],
+    [{ state: 'downloading', downloaded: 5 * mib, total: null }, '업데이트 받는 중'],
+    [{ state: 'verifying' }, '업데이트 파일 확인 중'],
+    [{ state: 'error', message: '백그라운드 연결 실패', retryable: false }, '업데이트 실패'],
+    [{ state: 'error', message: '적용 재시도 가능', retryable: true }, '다시 업데이트'],
+    [{ state: 'upToDate', version: '0.8.8' }, '업데이트 확인'],
+    [{ state: 'ready', version: '0.8.8' }, '업데이트 준비됨'],
+  ]) {
+    await state(page, next);
+    const quietAfter = await quietDocumentSnapshot(page);
+    check((await snapshot(page)).entryLabel === label, `백그라운드 ${next.state} 상태를 하단에 정확히 표시한다 (${label})`);
+    check(!quietAfter.visibleCard && !quietAfter.modal && quietAfter.focusPreserved
+      && quietAfter.text === quietBefore.text && quietAfter.dirty === quietBefore.dirty && quietAfter.fileName === quietBefore.fileName,
+    `백그라운드 ${next.state} 변화는 팝업·포커스·편집 내용을 바꾸지 않는다`);
+  }
+  for (const version of ['0.8.8', '0.8.9', '0.8.9']) {
+    await page.evaluate(value => window.__updateMock.ready(value), version);
+    const quietAfter = await quietDocumentSnapshot(page);
+    check(!quietAfter.visibleCard && !quietAfter.modal && quietAfter.focusPreserved
+      && quietAfter.text === quietBefore.text && quietAfter.dirty === quietBefore.dirty,
+    `늦은 ready·다른 버전·중복 이벤트도 조용히 준비 상태만 갱신한다 (${version})`);
+  }
+  setTestCase('Desktop 최소·일반 크기에서 하단 업데이트와 확대 제어의 경계');
+  for (const [width, height] of [[800, 600], [1280, 900]]) {
+    await page.setViewport({ width, height });
+    // 가장 긴 단계 문구를 실제 하단 버튼에 넣어 이웃 제어와의 경계를 검사한다.
+    await state(page, { state: 'verifying' });
+    const layout = await page.evaluate(() => {
+      const box = el => {
+        const rect = el.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height };
+      };
+      const isVisible = el => el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().width > 0;
+      const footer = document.getElementById('status-bar');
+      const entry = document.getElementById('desktop-update-entry');
+      const label = entry.querySelector('.stb-update-label') ?? entry;
+      const zoom = footer.querySelector('.stb-right');
+      const left = ['sb-page', 'sb-section', 'sb-mode', 'sb-cell-selection'].map(id => document.getElementById(id)).filter(isVisible);
+      const zoomControls = Array.from(zoom.children).filter(isVisible);
+      return {
+        viewport: { width: innerWidth, height: innerHeight },
+        footer: box(footer), entry: box(entry), label: box(label), zoom: box(zoom),
+        left: left.map(box), zoomControls: zoomControls.map(box),
+        entryScrollWidth: entry.scrollWidth, entryClientWidth: entry.clientWidth,
+      };
+    });
+    layoutChecks.push(layout);
+    const inside = (child, parent) => child.left >= parent.left - 0.5 && child.right <= parent.right + 0.5
+      && child.top >= parent.top - 0.5 && child.bottom <= parent.bottom + 0.5;
+    check(layout.entry.width > 0 && inside(layout.entry, layout.footer) && inside(layout.label, layout.entry)
+      && layout.footer.left >= 0 && layout.footer.right <= width && layout.footer.bottom <= height
+      && layout.entryScrollWidth <= layout.entryClientWidth && layout.entry.right <= layout.zoom.left + 0.5
+      && layout.left.every(item => item.right <= layout.entry.left + 0.5)
+      // 기존 확대 버튼의 24px 클릭 영역은 22px 상태줄보다 높다. 새 버튼이 영향을
+      // 주는 가로 경계는 확대 제어까지, 새 진입점·문구는 세로 경계까지 검사한다.
+      && layout.zoomControls.every(item => item.left >= layout.footer.left - 0.5 && item.right <= layout.footer.right + 0.5),
+    `${width}×${height}에서 하단 업데이트 문구가 잘리거나 상태·확대 제어와 겹치지 않는다`);
+  }
+  await page.evaluate(() => window.__updateMock.ready('0.8.9'));
+  await capture(page, 'after-quiet-ready-light');
+  await captureStatusBar(page, 'after-quiet-statusbar-light');
+  await page.evaluate(() => { window.__theme.setThemeMode('dark'); window.__updateMock.ready(); });
+  check(!(await snapshot(page)).visible, '다크 테마에서도 백그라운드 준비 완료가 큰 알림을 열지 않는다');
+  await capture(page, 'after-quiet-ready-dark');
+  await captureStatusBar(page, 'after-quiet-statusbar-dark');
+  await page.evaluate(() => window.__theme.setThemeMode('light'));
+  await page.click('#desktop-update-entry');
+  await page.waitForSelector(visibleCard);
+
+  setTestCase('수동 준비 완료 · 나중에 · 재진입 · 키보드');
   let actual = await snapshot(page);
   check(actual.primary === '업데이트' && !actual.disabled, '주 동작은 활성화된 업데이트 버튼이다');
   check(actual.version === 'v0.8.7 → v0.8.8', '현재 버전과 적용할 버전을 표시한다');
-  check(await page.$eval(visibleCard, el => el.getAttribute('aria-modal') === 'false'), '자동 알림은 작업을 막지 않는 카드다');
+  check(await page.$eval(visibleCard, el => el.getAttribute('aria-modal') === 'false'), '수동으로 연 상세도 적용을 누르기 전에는 작업을 막지 않는다');
   await capture(page, 'after-macos-ready-light');
   await captureCard(page, 'ready-card');
   await page.click(`${visibleCard} .dialog-update-later`);
   check(!(await snapshot(page)).visible, '나중에를 누르면 카드가 닫힌다');
-  check(await page.$eval('#desktop-update-entry', el => el.textContent === '업데이트 준비됨'), '나중에 이후에도 상태 표시줄 진입점이 남는다');
+  check(await page.$eval('#desktop-update-entry', el => el.textContent.trim() === '업데이트 준비됨'), '나중에 이후에도 상태 표시줄 진입점이 남는다');
   check((await snapshot(page)).applyCount === 0, '나중에는 업데이트 적용 IPC를 호출하지 않는다');
   await page.click('#desktop-update-entry');
   await page.waitForSelector(visibleCard);
@@ -246,6 +390,17 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
   await page.evaluate(() => window.__updateMock.emit('hanpage://menu', 'app:check-update'));
   await page.waitForSelector(visibleCard);
   check((await snapshot(page)).state === 'ready', 'macOS 네이티브 업데이트 확인 메뉴도 같은 카드를 다시 연다');
+  await page.click('.dialog-update-later');
+  await page.evaluate(() => { window.__inputHandler.focus(); window.__quietUpdateFocus = document.activeElement; });
+  await page.evaluate(() => window.__updateMock.ready('0.8.9'));
+  const dismissedReady = await quietDocumentSnapshot(page);
+  check(!dismissedReady.visibleCard && dismissedReady.focusPreserved && dismissedReady.text === quietBefore.text && dismissedReady.dirty,
+    '나중에 닫은 뒤 다른 버전이 준비돼도 재팝업 없이 미저장 작업을 유지한다');
+  await page.evaluate(() => window.__updateMock.ready());
+  await clickFileMenu(page, 'app:check-update');
+  await page.waitForSelector(visibleCard);
+  check((await snapshot(page)).state === 'ready' && (await snapshot(page)).checkCount === 0,
+    'Desktop 파일 메뉴는 준비된 상세를 재다운로드 없이 명시적으로 연다');
 
   setTestCase('실시간 다운로드 · 길이 미상 · 파일 확인');
   await state(page, { state: 'downloading', downloaded: 41 * mib, total: 100 * mib });
@@ -433,6 +588,9 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
   const windows = await createPage(browser);
   await installNativeMock(windows, { platform: 'Win32' });
   await loadApp(windows);
+  await windows.waitForSelector('#desktop-update-entry[data-state="ready"]');
+  check(!(await snapshot(windows)).visible, 'Windows 초기 준비 완료도 큰 알림을 자동으로 표시하지 않는다');
+  await windows.click('#desktop-update-entry');
   await windows.waitForSelector(visibleCard);
   check((await snapshot(windows)).primary === '업데이트', 'Windows도 설치 대신 업데이트 버튼을 표시한다');
   check(await windows.$eval('#desktop-update-description', el => el.textContent.includes('설치 프로그램')), 'Windows에서는 적용 후 설치 프로그램이 열리는 동작을 안내한다');
@@ -441,29 +599,58 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
   await windows.waitForSelector(visibleCard);
   check((await snapshot(windows)).visible, 'Windows도 상태 표시줄에서 나중에 닫은 업데이트를 다시 연다');
   await capture(windows, 'after-windows-ready-light');
+  await windows.click('.dialog-update-later');
+  await windows.evaluate(() => document.getElementById('studio-root').classList.add('rhwp-chrome-no-status'));
+  check(await windows.$eval('#status-bar', el => getComputedStyle(el).display === 'none'), '상태 표시줄 숨김 설정은 자동 업데이트가 임의로 변경하지 않는다');
+  await clickFileMenu(windows, 'app:check-update');
+  await windows.waitForSelector(visibleCard);
+  check((await snapshot(windows)).visible && (await snapshot(windows)).state === 'ready' && (await snapshot(windows)).checkCount === 0,
+    'Windows에서도 숨긴 상태 표시줄 대신 파일 메뉴로 준비된 업데이트를 다시 연다');
   await windows.close();
   const race = await createPage(browser);
   await installNativeMock(race, { staleSnapshot: true });
   await loadApp(race);
   await race.waitForSelector('#desktop-update-entry[data-state="downloading"]');
+  check(!(await snapshot(race)).visible, '초기 조회 경합 중 최신 다운로드 이벤트도 자동 팝업을 만들지 않는다');
   await race.click('#desktop-update-entry');
   await race.waitForSelector(visibleCard);
   check((await snapshot(race)).state === 'downloading' && (await snapshot(race)).progressNow === '20', '조회 중 도착한 최신 이벤트를 오래된 ready 응답이 덮어쓰지 않는다');
   await race.close();
   const web = await createPage(browser);
-  await loadApp(web);
-  check(await web.evaluate(() => !document.querySelector('#desktop-update-entry') && !document.querySelector('#desktop-update-card')), '일반 웹에서는 업데이트 전용 UI와 네이티브 동작이 생기지 않는다');
-  await web.close();
+  await loadApp(web, '/?lang=ko');
+  check(await web.evaluate(() => !document.querySelector('#desktop-update-entry') && !document.querySelector('#desktop-update-card')
+    && !document.querySelector('#desktop-update-menu') && !document.querySelector('.md-item[data-cmd="app:check-update"]')),
+    '일반 웹에서는 업데이트 카드·상태 버튼·파일 메뉴가 모두 생기지 않는다');
+
+  setTestCase('실제 한국어·영어 제품 정보 · PALDYN 재배포 표기');
+  for (const [locale, aboutPage] of [['ko', web], ['en', await createPage(browser)]]) {
+    if (locale === 'en') await loadApp(aboutPage, '/?lang=en');
+    await clickFileMenu(aboutPage, 'file:about');
+    await aboutPage.waitForSelector('.modal-overlay .about-body');
+    const about = await aboutPage.evaluate(() => ({
+      locale: document.documentElement.lang,
+      product: document.querySelector('.about-product-name-ko')?.textContent,
+      notices: Array.from(document.querySelectorAll('.about-notice')).map(el => el.textContent),
+      copyright: document.querySelector('.about-copyright')?.textContent,
+    }));
+    check(about.locale === locale && about.product?.includes('HanPage') && about.copyright?.includes('PALDYN')
+      && !about.copyright?.includes('paldyn'), `${locale} 실제 제품 정보는 HanPage 재배포자를 PALDYN으로 표시한다`);
+    check(about.notices.some(notice => notice.includes('rhwp') && notice.includes('MIT') && notice.includes('Edward Kim'))
+      && about.copyright?.includes('Edward Kim'), `${locale} 실제 제품 정보는 기반 rhwp의 MIT·Edward Kim 저작권을 보존한다`);
+    await capture(aboutPage, `after-about-${locale}-paldyn`);
+    await aboutPage.close();
+  }
   check(errors.length === 0, '실제 Studio 경로에서 처리되지 않은 브라우저 예외가 없다');
 
   mkdirSync(outputDir, { recursive: true });
   writeFileSync(path.join(outputDir, 'results.json'), `${JSON.stringify({
     description: '실제 Studio DOM·문서·저장 경로, Tauri IPC와 전송 상태 이벤트만 통제 대역. 실제 설치·재시작은 미실행.',
     baseline: previous,
+    quietBaseline: previousQuiet,
     sourceHead: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
-    sourceFiles: Object.fromEntries(['src/main.ts', 'src/ui/update-notice.ts', 'src/core/desktop-bridge.ts', 'src/ui/update-notice-text.ts', 'src/styles/update-notice.css'].map(file => [file, createHash('sha256').update(readFileSync(file)).digest('hex')])),
+    sourceFiles: Object.fromEntries(['src/main.ts', 'src/ui/update-notice.ts', 'src/core/desktop-bridge.ts', 'src/ui/update-notice-text.ts', 'src/styles/update-notice.css', 'src/ui/about-dialog.ts', 'src/i18n/locales/ko.ts', 'src/i18n/locales/en.ts'].map(file => [file, createHash('sha256').update(readFileSync(file)).digest('hex')])),
     pass: results.filter(result => result.pass).length,
     fail: results.filter(result => !result.pass).length,
-    results, screenshots, browserErrors: errors, browserDialogs,
+    results, screenshots, layoutChecks, browserErrors: errors, browserDialogs,
   }, null, 2)}\n`);
 }, { skipLoadApp: true });

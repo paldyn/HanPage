@@ -43,8 +43,10 @@
 .dialog-update-later:hover:enabled, .dialog-update-close:hover:enabled { background: var(--ui-hover); }
 .dialog-update-card button:disabled { opacity: .55; cursor: default; }
 .dialog-update-card button:focus-visible, .stb-update-button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
-.stb-update-button { border: 0; border-radius: 6px; background: transparent; color: var(--ui-text-secondary); cursor: pointer; font: 11px var(--font-family-ui); padding: 3px 8px; white-space: nowrap; }
+.stb-update-button { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; height: 18px; margin-left: 6px; border: 0; border-radius: 6px; background: transparent; color: var(--ui-text-secondary); cursor: pointer; font: 11px var(--font-family-ui); padding: 0 7px; white-space: nowrap; }
+.stb-update-button svg { width: 12px; height: 12px; flex-shrink: 0; }
 .stb-update-button[data-state="ready"] { background: var(--ui-accent-bg-light); color: var(--accent-strong); font-weight: 600; }
+.stb-update-button[data-state="error"] { color: var(--ui-danger); }
 .stb-update-button:hover { background: var(--ui-hover); }
 @keyframes dialog-update-moving { 0% { transform: translateX(-110%); } 100% { transform: translateX(390%); } }
 @media (max-width: 480px) { .dialog-update-card { top: 16px; right: 16px; padding: 20px; } .stb-update-button { font-size: 10px; padding-inline: 4px; } }

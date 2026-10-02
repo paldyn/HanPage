@@ -1,14 +1,14 @@
 /** Desktop 전용 업데이트 카드. 백그라운드 다운로드와 수동 재진입은 같은 상태를 표시한다. */
 import {
-  applyUpdate, checkUpdate, getUpdateStatus, isDesktopRuntime, onUpdateReady, onUpdateStatus,
+  applyUpdate, checkUpdate, getUpdateStatus, isDesktopRuntime, MENU_CHECK_UPDATE, onUpdateReady, onUpdateStatus,
   type DesktopUpdateReady, type DesktopUpdateStatus,
 } from '@/core/desktop-bridge';
 import { formatMb, updateProgress, updateReadyMessage, updateStatusMessage } from '@/ui/update-notice-text';
+import { t } from '@/i18n/index.ts';
 export { formatMb, updateReadyMessage, updateStatusMessage };
 
 let status: DesktopUpdateStatus = { state: 'idle' };
 let readyInfo: DesktopUpdateReady | null = null;
-let shownVersion = '';
 let installed = false;
 let applying = false;
 let beforeApply: () => Promise<boolean> = async () => true;
@@ -116,11 +116,16 @@ function render(): void {
   const percent = updateProgress(status);
   if (entry) {
     entry.dataset.state = status.state;
-    entry.textContent = status.state === 'ready' || (status.state === 'error' && status.retryable)
-      ? '업데이트 준비됨' : status.state === 'downloading'
-        ? `업데이트 받는 중${percent === null ? '' : ` ${percent}%`}`
-        : status.state === 'applying' ? '업데이트 적용 중' : '업데이트 확인';
-    entry.title = '업데이트 확인 · 알림을 닫았어도 여기에서 다시 열 수 있습니다';
+    const label = status.state === 'ready' ? '업데이트 준비됨'
+      : status.state === 'downloading' ? `업데이트 받는 중${percent === null ? '' : ` ${percent}%`}`
+      : status.state === 'checking' ? '업데이트 확인 중'
+      : status.state === 'verifying' ? '업데이트 파일 확인 중'
+      : status.state === 'applying' ? '업데이트 적용 중'
+      : status.state === 'error' ? (status.retryable ? '다시 업데이트' : '업데이트 실패')
+      : '업데이트 확인';
+    entry.querySelector('.stb-update-label')!.textContent = label;
+    entry.setAttribute('aria-label', `${label} · 상세 안내 열기`);
+    entry.title = '업데이트 상세 안내 · 파일 메뉴에서도 다시 열 수 있습니다';
   }
   if (!card) return;
   card.dataset.state = status.state;
@@ -205,11 +210,7 @@ function receiveStatus(next: DesktopUpdateStatus): void {
   status = next;
   if (next.state === 'ready') {
     if (readyInfo?.version !== next.version) readyInfo = { version: next.version, currentVersion: '', notes: null };
-    // 한 버전은 자동으로 한 번만 안내한다. '나중에' 후에는 상시 버튼/메뉴로 연다.
-    if (shownVersion !== next.version) {
-      shownVersion = next.version;
-      showCard();
-    }
+    // 백그라운드 완료는 상태 표시줄만 갱신한다. 상세 안내는 사용자 요청으로 연다.
   }
   render();
 }
@@ -258,10 +259,22 @@ export function installUpdateNotice(options?: { beforeApply?: () => Promise<bool
   entry.id = 'desktop-update-entry';
   entry.className = 'stb-update-button';
   entry.type = 'button';
+  entry.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v11m-4-4 4 4 4-4M5 16v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3"/></svg><span class="stb-update-label" aria-live="polite"></span>';
   entry.addEventListener('click', () => { void handleManualUpdateCheck(); });
   const statusBar = document.getElementById('status-bar');
   if (statusBar) statusBar.insertBefore(entry, statusBar.querySelector('.stb-right'));
   else document.body.appendChild(entry);
+  // 상태 표시줄을 숨겨도 모든 Desktop 플랫폼에서 같은 상세 안내에 접근한다.
+  const aboutItem = document.querySelector('.md-item[data-cmd="file:about"]');
+  if (aboutItem) {
+    const menuEntry = document.createElement('div');
+    menuEntry.id = 'desktop-update-menu';
+    menuEntry.className = 'md-item';
+    menuEntry.dataset.cmd = MENU_CHECK_UPDATE;
+    menuEntry.innerHTML = '<span class="md-icon"></span><span class="md-label"></span>';
+    menuEntry.querySelector('.md-label')!.textContent = t('command.app.checkUpdate.label');
+    aboutItem.before(menuEntry);
+  }
   render();
   void (async () => {
     try {
@@ -276,7 +289,7 @@ export function installUpdateNotice(options?: { beforeApply?: () => Promise<bool
   })();
 }
 
-/** macOS 메뉴와 모든 Desktop 플랫폼의 상태 표시줄이 같은 카드를 연다. */
+/** 파일 메뉴·macOS 앱 메뉴·상태 표시줄이 같은 카드를 연다. */
 export async function handleManualUpdateCheck(): Promise<void> {
   if (!isDesktopRuntime()) return;
   const snapshotAt = eventCount;
