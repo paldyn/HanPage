@@ -1,0 +1,30 @@
+import hashlib,json,pathlib,plistlib,subprocess,sys,tarfile
+archive=pathlib.Path(sys.argv[1]);out=pathlib.Path(sys.argv[2]);icon=pathlib.Path(sys.argv[3])
+assert not out.exists(), 'Use a fresh extraction destination'
+out.mkdir(parents=True)
+with tarfile.open(archive,'r:gz') as tf:
+    for member in tf.getmembers():
+        dest=(out/member.name).resolve()
+        assert dest==out.resolve() or out.resolve() in dest.parents,member.name
+    tf.extractall(out,filter='data')
+apps=list(out.glob('*.app'));assert len(apps)==1,apps
+app=apps[0];contents=app/'Contents'
+info=plistlib.loads((contents/'Info.plist').read_bytes())
+assert info['CFBundleShortVersionString']=='0.8.7',info
+assert info['CFBundleVersion']=='0.8.7',info
+assert info['CFBundleIdentifier']=='com.paldyn.hanpage',info
+actual=contents/'Resources'/info['CFBundleIconFile']
+if not actual.exists():actual=actual.with_suffix('.icns')
+assert actual.read_bytes()==icon.read_bytes(),'Packaged ICNS differs'
+binary=contents/'MacOS'/info['CFBundleExecutable']
+arch=subprocess.check_output(['lipo','-archs',str(binary)],text=True).strip()
+assert arch=='arm64',arch
+checks=[('codesign_verify',['codesign','--verify','--deep','--strict','--verbose=2',str(app)]),('codesign_identity',['codesign','--display','--verbose=4',str(app)]),('gatekeeper',['spctl','--assess','--verbose=4','--type','execute',str(app)]),('stapler',['xcrun','stapler','validate',str(app)])]
+results=[]
+for name,args in checks:
+    r=subprocess.run(args,text=True,capture_output=True)
+    results.append({'check':name,'exit_code':r.returncode,'stdout':r.stdout,'stderr':r.stderr})
+result={'app':str(app),'version':info['CFBundleShortVersionString'],'bundle_identifier':info['CFBundleIdentifier'],'architecture':arch,'archive_bytes':archive.stat().st_size,'archive_sha256':hashlib.sha256(archive.read_bytes()).hexdigest(),'icon_sha256':hashlib.sha256(actual.read_bytes()).hexdigest(),'icon_matches_source':True,'checks':results,'developer_id_identity_present':any('Developer ID Application:' in r['stderr'] for r in results if r['check']=='codesign_identity'),'notarized_gatekeeper_source':any('source=Notarized Developer ID' in r['stderr'] for r in results if r['check']=='gatekeeper'),'all_checks_passed':all(r['exit_code']==0 for r in results)}
+print(json.dumps(result,indent=2))
+assert result['all_checks_passed'],'macOS signature/notarization gate failed'
+assert result['developer_id_identity_present'] and result['notarized_gatekeeper_source']

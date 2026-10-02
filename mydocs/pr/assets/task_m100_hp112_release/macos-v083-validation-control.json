@@ -1,0 +1,44 @@
+{
+  "app": "output/pr-review/hp112/macos-v083-control-extracted/HanPage.app",
+  "version": "0.8.3",
+  "bundle_identifier": "com.paldyn.hanpage",
+  "architecture": "arm64",
+  "archive_bytes": 40127263,
+  "archive_sha256": "c9566cbcb751f479bebe550c8bd2f037ed6eb0ff6f5cb57f20e8bff57504a368",
+  "icon_sha256": "2d9189bc2b10a4feed80aeec343bf0ed157c0b65ca0d8a0d7b973168f3afbf3d",
+  "icon_matches_source": true,
+  "checks": [
+    {
+      "check": "codesign_verify",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "output/pr-review/hp112/macos-v083-control-extracted/HanPage.app: valid on disk\noutput/pr-review/hp112/macos-v083-control-extracted/HanPage.app: satisfies its Designated Requirement\n"
+    },
+    {
+      "check": "codesign_identity",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "Executable=<workspace>/output/pr-review/hp112/macos-v083-control-extracted/HanPage.app/Contents/MacOS/HanPage\nIdentifier=com.paldyn.hanpage\nFormat=app bundle with Mach-O thin (arm64)\nCodeDirectory v=20500 size=375742 flags=0x10000(runtime) hashes=11735+3 location=embedded\nVersionPlatform=1\nVersionMin=720896\nVersionSDK=918784\nHash type=sha256 size=32\nCandidateCDHash sha256=042f11fa40ae16278a41db161b91b813794c4666\nCandidateCDHashFull sha256=042f11fa40ae16278a41db161b91b813794c46665df8f40145f7dde2aaa95c51\nHash choices=sha256\nCMSDigest=042f11fa40ae16278a41db161b91b813794c46665df8f40145f7dde2aaa95c51\nCMSDigestType=2\nExecutable Segment base=0\nExecutable Segment limit=44597248\nExecutable Segment flags=0x1\nPage size=4096\nCDHash=042f11fa40ae16278a41db161b91b813794c4666\nSignature size=8968\nAuthority=Developer ID Application: Wonmo Lee (8L78W6D8XF)\nAuthority=Developer ID Certification Authority\nAuthority=Apple Root CA\nTimestamp=Aug 4, 2026 at 11:02:55 PM\nNotarization Ticket=stapled\nInfo.plist entries=16\nTeamIdentifier=8L78W6D8XF\nRuntime Version=14.5.0\nSealed Resources version=2 rules=13 files=1\nInternal requirements count=1 size=180\n"
+    },
+    {
+      "check": "gatekeeper",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "output/pr-review/hp112/macos-v083-control-extracted/HanPage.app: accepted\nsource=Notarized Developer ID\n"
+    },
+    {
+      "check": "stapler",
+      "exit_code": 0,
+      "stdout": "Processing: <workspace>/output/pr-review/hp112/macos-v083-control-extracted/HanPage.app\nThe validate action worked!\n",
+      "stderr": ""
+    }
+  ],
+  "developer_id_identity_present": true,
+  "notarized_gatekeeper_source": true,
+  "all_checks_passed": true,
+  "control_source_commit": "8a69fec108ebe70e37e071fade2650b99fcbbeed",
+  "control_source_icon_path": "HanPage-Desktop/src-tauri/icons/icon.icns",
+  "scope": "Prior published0.8.3 validates readonly extraction/signature/Gatekeeper/stapler checker pipeline; this is not new0.8.7 acceptance evidence",
+  "helper_change_for_control": "Only expected CFBundleShortVersionString/CFBundleVersion changed from0.8.7 to0.8.3; all checks remained identical",
+  "control_helper_sha256": "3ee3f5c9fdd3e5fa770ea962a2fa9126c6b7966878de27b6276e9d28f233743a"
+}

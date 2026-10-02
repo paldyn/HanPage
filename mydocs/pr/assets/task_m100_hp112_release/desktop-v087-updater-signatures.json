@@ -1,0 +1,33 @@
+{
+  "version": "0.8.7",
+  "platform_keys": [
+    "darwin-aarch64",
+    "darwin-aarch64-app",
+    "windows-x86_64",
+    "windows-x86_64-nsis"
+  ],
+  "updater_payloads": [
+    {
+      "platform": "darwin-aarch64",
+      "asset": "HanPage_aarch64.app.tar.gz",
+      "bytes": 42682044,
+      "sha256": "e9fc3a97c87e99b63c3142da7fa8a469ec788b64278cc35f94d08a1b83b24945",
+      "signature_verified": true,
+      "tampered_payload_rejected": true,
+      "algorithm": "ED",
+      "key_id_hex": "835d6b3831e133aa",
+      "trusted_comment": "timestamp:1790908613\tfile:HanPage.app.tar.gz"
+    },
+    {
+      "platform": "windows-x86_64",
+      "asset": "HanPage_0.8.7_x64-setup.exe",
+      "bytes": 39860953,
+      "sha256": "3e4696923e5edbd7a6ca0e088815de951ac10f99e9c400f6c6a31a7cfb70a083",
+      "signature_verified": true,
+      "tampered_payload_rejected": true,
+      "algorithm": "ED",
+      "key_id_hex": "835d6b3831e133aa",
+      "trusted_comment": "timestamp:1790906402\tfile:HanPage_0.8.7_x64-setup.exe"
+    }
+  ]
+}

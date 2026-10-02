@@ -1,0 +1,715 @@
+{
+  "schema": "hanpage.desktop-release-retry-audit.v1",
+  "observed_at_utc": "2026-10-02T02:39:14.624203+00:00",
+  "repository": "paldyn/HanPage",
+  "run_id": 36952025097,
+  "run_url": "https://github.com/paldyn/HanPage/actions/runs/36952025097",
+  "source_sha": "b762cbdbbe0d57b379bb8cf29393599e078c9eaa",
+  "tag": "hanpage-desktop-v0.8.7",
+  "release_id": 401478979,
+  "retry_authorization": {
+    "source": "human user confirmed Apple agreement accepted; root reran only failed Mac job",
+    "accepted_agreement_message": "동의완료",
+    "source_or_tag_changed": false,
+    "rerun_performed_by_auditor": false
+  },
+  "attempt_history": [
+    {
+      "attempt": 1,
+      "conclusion": "failure",
+      "macos": {
+        "job_id": 110666824555,
+        "conclusion": "failure",
+        "wasm_exact_version_guard_and_build": "success",
+        "native_compile": "success (3m41s)",
+        "code_sign_commands": "executed; package not uploaded",
+        "notarization": "HTTP 403: required Apple agreement missing or expired",
+        "started_at": "2026-10-02T01:40:12Z",
+        "completed_at": "2026-10-02T01:58:04Z"
+      },
+      "windows": {
+        "job_id": 110666824771,
+        "conclusion": "success",
+        "wasm_exact_version_guard_and_ps_wrapper": "success",
+        "started_at": "2026-10-02T01:40:07Z",
+        "completed_at": "2026-10-02T02:01:19Z"
+      }
+    },
+    {
+      "attempt": 2,
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-02T02:19:13Z",
+      "run_started_at": "2026-10-02T02:19:12Z",
+      "macos": {
+        "id": 110676136988,
+        "name": "Bundle macOS (aarch64)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-02T02:19:21Z",
+        "completed_at": "2026-10-02T02:38:02Z"
+      },
+      "windows_reused": {
+        "displayed_job_id": 110676137763,
+        "original_execution_job_id": 110666824771,
+        "conclusion": "success",
+        "started_at": "2026-10-02T01:40:07Z",
+        "completed_at": "2026-10-02T02:01:19Z",
+        "new_windows_compile_performed": false,
+        "identity_basis": "displayed attempt2 job retains original attempt1 start/end and step timestamps"
+      }
+    }
+  ],
+  "existing_windows_payload": {
+    "name": "HanPage_0.8.7_x64-setup.exe",
+    "asset_id": 604578896,
+    "bytes": 39860953,
+    "sha256": "3e4696923e5edbd7a6ca0e088815de951ac10f99e9c400f6c6a31a7cfb70a083",
+    "signature_asset_id": 604578947,
+    "signature_verified": true,
+    "tampered_payload_rejected": true,
+    "key_id_hex": "835d6b3831e133aa",
+    "icon_status": "expected_icon_present",
+    "matching_payload_and_rgba_frames": 7,
+    "evidence_owner": "root; auditor reads saved proof only"
+  },
+  "observations": [
+    {
+      "at_utc": "2026-10-02T02:20:56.022082+00:00",
+      "attempt": 2,
+      "macos_job_id": 110676136988,
+      "active_step": "Checkout",
+      "windows_displayed_job_id": 110676137763,
+      "windows_execution_reused_from_attempt1": true
+    },
+    {
+      "at_utc": "2026-10-02T02:22:16.016968+00:00",
+      "attempt": 2,
+      "run_status": "in_progress",
+      "run_conclusion": null,
+      "macos_job_id": 110676136988,
+      "macos_status": "in_progress",
+      "macos_conclusion": null,
+      "active_steps": [
+        "Build WASM (macOS)"
+      ],
+      "milestones": [
+        {
+          "name": "Install wasm-pack",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "at_utc": "2026-10-02T02:32:40.653987+00:00",
+      "attempt": 2,
+      "run_status": "in_progress",
+      "run_conclusion": null,
+      "macos_job_id": 110676136988,
+      "macos_status": "in_progress",
+      "macos_conclusion": null,
+      "active_steps": [
+        "Build & bundle (tauri-action)"
+      ],
+      "milestones": [
+        {
+          "name": "Install wasm-pack",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build WASM (macOS)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Prepare notarization API key (macOS)",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "at_utc": "2026-10-02T02:37:37.075492+00:00",
+      "attempt": 2,
+      "run_status": "in_progress",
+      "run_conclusion": null,
+      "macos_job_id": 110676136988,
+      "macos_status": "in_progress",
+      "macos_conclusion": null,
+      "active_steps": [
+        "Post Cache Rust build"
+      ],
+      "milestones": [
+        {
+          "name": "Install wasm-pack",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build WASM (macOS)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Prepare notarization API key (macOS)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build & bundle (tauri-action)",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "at_utc": "2026-10-02T02:39:14.624203+00:00",
+      "attempt": 2,
+      "run_status": "completed",
+      "run_conclusion": "success",
+      "macos_job_id": 110676136988,
+      "macos_status": "completed",
+      "macos_conclusion": "success",
+      "active_steps": [],
+      "milestones": [
+        {
+          "name": "Install wasm-pack",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build WASM (macOS)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Prepare notarization API key (macOS)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build & bundle (tauri-action)",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "path": "<workspace>/output/pr-review/hp112/desktop-v087-attempt1-contract-hold.json",
+      "sha256": "c9b018b66dee66a4dd8ddda63c9e483051966a027facd32646dd3dd964d0ff52"
+    },
+    {
+      "path": "<workspace>/output/pr-review/hp112/desktop-v087-jobs-attempt1.json",
+      "sha256": "f1860d409c565675180bd886ac13a10f8a77407b6f8241ad3c2332357b2de326"
+    },
+    {
+      "path": "<workspace>/output/pr-review/hp112/desktop-v087-windows-signature.json",
+      "sha256": "3f5b7403e3664eed7da66696d8827211f96c50586fa4464534369fd9c785516f"
+    },
+    {
+      "path": "<workspace>/output/pr-review/hp112/desktop-v087-windows-icon.json",
+      "sha256": "745bac138c6c2e359bb2c3b94f625817d3add62a1c013db51e200cb0847ed443"
+    },
+    {
+      "path": "<workspace>/output/pr-review/hp112/desktop-v087-macos-job.txt",
+      "sha256": "c961a8bb9b06c419a40d363165bcc74dc39c2c23cea748f9dc55ed0de7c784c6"
+    },
+    {
+      "path": "<workspace>/output/pr-review/hp112/desktop-v087-macos-retry-request.json",
+      "sha256": "c011bc6a65d2998ced242faf42da6a04416b740f097e6d309c33f8275ed7a149"
+    }
+  ],
+  "poll_interval_seconds": 65,
+  "publication_status": "draft; root verifies actual Mac assets before publishing",
+  "remote_source_tag_release_secret_mutations_performed_by_auditor": false,
+  "last_api_poll_at_utc": "2026-10-02T02:39:14.624203+00:00",
+  "last_state": {
+    "run_status": "completed",
+    "run_conclusion": "success",
+    "macos_job_id": 110676136988,
+    "macos_status": "completed",
+    "macos_conclusion": "success",
+    "active_steps": [],
+    "milestones": [
+      {
+        "name": "Install wasm-pack",
+        "conclusion": "success"
+      },
+      {
+        "name": "Build WASM (macOS)",
+        "conclusion": "success"
+      },
+      {
+        "name": "Prepare notarization API key (macOS)",
+        "conclusion": "success"
+      },
+      {
+        "name": "Build & bundle (tauri-action)",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "attempt2_run": {
+    "id": 36952025097,
+    "head_sha": "b762cbdbbe0d57b379bb8cf29393599e078c9eaa",
+    "head_branch": "hanpage-desktop-v0.8.7",
+    "event": "push",
+    "run_attempt": 2,
+    "status": "completed",
+    "conclusion": "success",
+    "created_at": "2026-10-02T02:19:13Z",
+    "updated_at": "2026-10-02T02:38:03Z",
+    "run_started_at": "2026-10-02T02:19:12Z",
+    "html_url": "https://github.com/paldyn/HanPage/actions/runs/36952025097"
+  },
+  "attempt2_jobs": [
+    {
+      "id": 110676136988,
+      "name": "Bundle macOS (aarch64)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-02T02:19:21Z",
+      "completed_at": "2026-10-02T02:38:02Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/36952025097/job/110676136988",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-02T02:19:22Z",
+          "completed_at": "2026-10-02T02:19:25Z"
+        },
+        {
+          "name": "Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-02T02:19:25Z",
+          "completed_at": "2026-10-02T02:21:53Z"
+        },
+        {
+          "name": "Install Rust toolchain",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-02T02:21:53Z",
+          "completed_at": "2026-10-02T02:22:04Z"
+        },
+        {
+          "name": "Cache Rust build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-02T02:22:04Z",
+          "completed_at": "2026-10-02T02:22:08Z"
+        },
+        {
+          "name": "Install wasm-pack",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-02T02:22:08Z",
+          "completed_at": "2026-10-02T02:22:09Z"
+        },
+        {
+          "name": "Build WASM (macOS)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-02T02:22:09Z",
+          "completed_at": "2026-10-02T02:31:19Z"
+        },
+        {
+          "name": "Build WASM (Windows)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 7,
+          "started_at": "2026-10-02T02:31:19Z",
+          "completed_at": "2026-10-02T02:31:19Z"
+        },
+        {
+          "name": "Setup Node.js",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-02T02:31:19Z",
+          "completed_at": "2026-10-02T02:31:27Z"
+        },
+        {
+          "name": "Install studio deps",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-02T02:31:27Z",
+          "completed_at": "2026-10-02T02:31:33Z"
+        },
+        {
+          "name": "Install desktop deps",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-10-02T02:31:33Z",
+          "completed_at": "2026-10-02T02:31:35Z"
+        },
+        {
+          "name": "Compute release name",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-10-02T02:31:35Z",
+          "completed_at": "2026-10-02T02:31:35Z"
+        },
+        {
+          "name": "Prepare notarization API key (macOS)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-10-02T02:31:35Z",
+          "completed_at": "2026-10-02T02:31:35Z"
+        },
+        {
+          "name": "Build & bundle (tauri-action)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-10-02T02:31:35Z",
+          "completed_at": "2026-10-02T02:37:00Z"
+        },
+        {
+          "name": "Upload bundle (dispatch test)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 14,
+          "started_at": "2026-10-02T02:37:00Z",
+          "completed_at": "2026-10-02T02:37:00Z"
+        },
+        {
+          "name": "Post Setup Node.js",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 26,
+          "started_at": "2026-10-02T02:37:00Z",
+          "completed_at": "2026-10-02T02:37:00Z"
+        },
+        {
+          "name": "Post Cache Rust build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27,
+          "started_at": "2026-10-02T02:37:00Z",
+          "completed_at": "2026-10-02T02:37:55Z"
+        },
+        {
+          "name": "Post Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 28,
+          "started_at": "2026-10-02T02:37:55Z",
+          "completed_at": "2026-10-02T02:37:56Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 29,
+          "started_at": "2026-10-02T02:37:56Z",
+          "completed_at": "2026-10-02T02:37:57Z"
+        }
+      ]
+    },
+    {
+      "id": 110676137763,
+      "name": "Bundle Windows (x64)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-02T01:40:07Z",
+      "completed_at": "2026-10-02T02:01:19Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/36952025097/job/110676137763",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-02T01:40:08Z",
+          "completed_at": "2026-10-02T01:40:10Z"
+        },
+        {
+          "name": "Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-02T01:40:10Z",
+          "completed_at": "2026-10-02T01:42:09Z"
+        },
+        {
+          "name": "Install Rust toolchain",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-02T01:42:09Z",
+          "completed_at": "2026-10-02T01:42:24Z"
+        },
+        {
+          "name": "Cache Rust build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-02T01:42:24Z",
+          "completed_at": "2026-10-02T01:42:36Z"
+        },
+        {
+          "name": "Install wasm-pack",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-02T01:42:36Z",
+          "completed_at": "2026-10-02T01:42:37Z"
+        },
+        {
+          "name": "Build WASM (macOS)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 6,
+          "started_at": "2026-10-02T01:42:37Z",
+          "completed_at": "2026-10-02T01:42:37Z"
+        },
+        {
+          "name": "Build WASM (Windows)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-10-02T01:42:37Z",
+          "completed_at": "2026-10-02T01:52:08Z"
+        },
+        {
+          "name": "Setup Node.js",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-02T01:52:08Z",
+          "completed_at": "2026-10-02T01:52:19Z"
+        },
+        {
+          "name": "Install studio deps",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-02T01:52:19Z",
+          "completed_at": "2026-10-02T01:52:36Z"
+        },
+        {
+          "name": "Install desktop deps",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-10-02T01:52:36Z",
+          "completed_at": "2026-10-02T01:52:38Z"
+        },
+        {
+          "name": "Compute release name",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-10-02T01:52:38Z",
+          "completed_at": "2026-10-02T01:52:38Z"
+        },
+        {
+          "name": "Prepare notarization API key (macOS)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 12,
+          "started_at": "2026-10-02T01:52:38Z",
+          "completed_at": "2026-10-02T01:52:38Z"
+        },
+        {
+          "name": "Build & bundle (tauri-action)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-10-02T01:52:38Z",
+          "completed_at": "2026-10-02T02:00:07Z"
+        },
+        {
+          "name": "Upload bundle (dispatch test)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 14,
+          "started_at": "2026-10-02T02:00:07Z",
+          "completed_at": "2026-10-02T02:00:07Z"
+        },
+        {
+          "name": "Post Setup Node.js",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 26,
+          "started_at": "2026-10-02T02:00:07Z",
+          "completed_at": "2026-10-02T02:00:08Z"
+        },
+        {
+          "name": "Post Cache Rust build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27,
+          "started_at": "2026-10-02T02:00:08Z",
+          "completed_at": "2026-10-02T02:01:15Z"
+        },
+        {
+          "name": "Post Checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 28,
+          "started_at": "2026-10-02T02:01:15Z",
+          "completed_at": "2026-10-02T02:01:18Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 29,
+          "started_at": "2026-10-02T02:01:18Z",
+          "completed_at": "2026-10-02T02:01:18Z"
+        }
+      ]
+    }
+  ],
+  "attempt2_macos_log": {
+    "path": "<validation-temporary>/hanpage_desktop_v087_attempt2_macos_110676136988.log",
+    "sha256": "a13f3b1889c8fdb044d3411e9d2a1c68f621b5ffab1064e813b46f4b1075e10b",
+    "signals": [
+      "2026-10-02T02:22:08.9293120Z Installing wasm-pack v0.13.1 ...",
+      "2026-10-02T02:22:09.4075590Z ##[group]Run test \"$(wasm-pack --version)\" = \"wasm-pack 0.13.1\"",
+      "2026-10-02T02:22:09.4076000Z test \"$(wasm-pack --version)\" = \"wasm-pack 0.13.1\"",
+      "2026-10-02T02:35:54.4828920Z      Signing with identity \"***\"",
+      "2026-10-02T02:35:54.4829780Z Signing with identity \"***\"",
+      "2026-10-02T02:35:55.9208510Z Signing with identity \"***\"",
+      "2026-10-02T02:35:57.8859090Z Signing with identity \"***\"",
+      "2026-10-02T02:35:58.1415280Z Notarizing <runner-workspace>/HanPage-Desktop/src-tauri/target/release/bundle/macos/HanPage.app",
+      "2026-10-02T02:36:24.8826630Z Notarizing Finished with status Accepted for id ad78ce80-c5f2-47cd-b084-88a8855b5f55 (Processing complete)",
+      "2026-10-02T02:36:51.4653040Z      Signing with identity \"***\"",
+      "2026-10-02T02:36:51.4653630Z Signing with identity \"***\"",
+      "2026-10-02T02:36:53.8582820Z Uploading HanPage_0.8.7_aarch64.dmg...",
+      "2026-10-02T02:36:56.0968070Z Uploading HanPage_aarch64.app.tar.gz...",
+      "2026-10-02T02:36:58.1804820Z Uploading HanPage_aarch64.app.tar.gz.sig...",
+      "2026-10-02T02:36:59.9838750Z Uploading latest.json..."
+    ]
+  },
+  "post_attempt2_draft": {
+    "id": 401478979,
+    "tag_name": "hanpage-desktop-v0.8.7",
+    "target_commitish": "b762cbdbbe0d57b379bb8cf29393599e078c9eaa",
+    "draft": true,
+    "published_at": null,
+    "updated_at": "2026-10-02T02:37:00Z",
+    "assets": [
+      {
+        "id": 604644711,
+        "name": "HanPage_0.8.7_aarch64.dmg",
+        "size": 43424814,
+        "digest": "sha256:c92ff3f6b6f6271e935e3831ebd5cbd3bb0193600e5b698a6227815939ba240d",
+        "state": "uploaded",
+        "created_at": "2026-10-02T02:36:54Z",
+        "updated_at": "2026-10-02T02:36:56Z"
+      },
+      {
+        "id": 604578896,
+        "name": "HanPage_0.8.7_x64-setup.exe",
+        "size": 39860953,
+        "digest": "sha256:3e4696923e5edbd7a6ca0e088815de951ac10f99e9c400f6c6a31a7cfb70a083",
+        "state": "uploaded",
+        "created_at": "2026-10-02T02:00:04Z",
+        "updated_at": "2026-10-02T02:00:05Z"
+      },
+      {
+        "id": 604578947,
+        "name": "HanPage_0.8.7_x64-setup.exe.sig",
+        "size": 416,
+        "digest": "sha256:52dffca9bbb3a2de99d0503f8d1f58960f1eecd8267c43382575a4e3771a19e5",
+        "state": "uploaded",
+        "created_at": "2026-10-02T02:00:06Z",
+        "updated_at": "2026-10-02T02:00:06Z"
+      },
+      {
+        "id": 604644753,
+        "name": "HanPage_aarch64.app.tar.gz",
+        "size": 42682044,
+        "digest": "sha256:e9fc3a97c87e99b63c3142da7fa8a469ec788b64278cc35f94d08a1b83b24945",
+        "state": "uploaded",
+        "created_at": "2026-10-02T02:36:56Z",
+        "updated_at": "2026-10-02T02:36:58Z"
+      },
+      {
+        "id": 604644777,
+        "name": "HanPage_aarch64.app.tar.gz.sig",
+        "size": 404,
+        "digest": "sha256:f70c3b8fe1aba8add06500fc06a7671cb66dafb09dadb193934437b79f23d316",
+        "state": "uploaded",
+        "created_at": "2026-10-02T02:36:58Z",
+        "updated_at": "2026-10-02T02:36:59Z"
+      },
+      {
+        "id": 604644843,
+        "name": "latest.json",
+        "size": 2437,
+        "digest": "sha256:e222e1bc9252621fa941fd45e19fd7a0f97b6fab9e2667cd31569bdf367d7c06",
+        "state": "uploaded",
+        "created_at": "2026-10-02T02:37:00Z",
+        "updated_at": "2026-10-02T02:37:00Z"
+      }
+    ],
+    "existing_windows_payload_and_signature_unchanged": true
+  },
+  "post_attempt2_manifest": {
+    "asset_id": 604644843,
+    "sha256": "e222e1bc9252621fa941fd45e19fd7a0f97b6fab9e2667cd31569bdf367d7c06",
+    "version": "0.8.7",
+    "platform_keys": [
+      "darwin-aarch64",
+      "darwin-aarch64-app",
+      "windows-x86_64",
+      "windows-x86_64-nsis"
+    ],
+    "complete_expected_four_platforms": true,
+    "platform_urls": {
+      "windows-x86_64": "https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v0.8.7/HanPage_0.8.7_x64-setup.exe",
+      "windows-x86_64-nsis": "https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v0.8.7/HanPage_0.8.7_x64-setup.exe",
+      "darwin-aarch64": "https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v0.8.7/HanPage_aarch64.app.tar.gz",
+      "darwin-aarch64-app": "https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v0.8.7/HanPage_aarch64.app.tar.gz"
+    },
+    "platform_signatures_present": {
+      "windows-x86_64": true,
+      "windows-x86_64-nsis": true,
+      "darwin-aarch64": true,
+      "darwin-aarch64-app": true
+    },
+    "cryptographic_verification": "root performs artifact and signature verification separately"
+  },
+  "final_outcomes": {
+    "attempt2_overall": "success",
+    "macos_job_id": 110676136988,
+    "macos_conclusion": "success",
+    "windows_displayed_job_id": 110676137763,
+    "windows_original_execution_job_id": 110666824771,
+    "windows_conclusion": "success (reused attempt1 execution)",
+    "wasm_pack_install": "v0.13.1",
+    "exact_version_guard": "passed",
+    "macos_locked_wrapper": "scripts/wasm-pack-locked.sh; passed",
+    "wasm_compile": "success (8m59s compiler release profile)",
+    "native_compile": "success (4m13s compiler release profile)",
+    "compile_log_lines": [
+      "2026-10-02T02:31:14.5454940Z     Finished `release` profile [optimized] target(s) in 8m 59s",
+      "2026-10-02T02:35:53.2197230Z     Finished `release` profile [optimized] target(s) in 4m 13s"
+    ],
+    "code_signing": "app executable, app bundle, notarization zip and DMG signing commands completed without errors; identity masked in CI log",
+    "notarization": {
+      "status": "Accepted",
+      "id": "ad78ce80-c5f2-47cd-b084-88a8855b5f55",
+      "at_utc": "2026-10-02T02:36:24.8826630Z"
+    },
+    "updater_signature": "one updater signature successfully generated",
+    "uploaded_assets": "DMG, app.tar.gz, app.tar.gz.sig and updated latest.json uploaded; all six release assets observed uploaded",
+    "existing_windows_installer_and_signature_preserved": true,
+    "full_manifest_version": "0.8.7",
+    "full_manifest_four_platforms": true,
+    "manifest_all_signatures_present": true,
+    "draft_held": true,
+    "source_and_tag_identity_preserved": true,
+    "mac_artifact_crypto_codesign_gatekeeper_stapler_icon_verification": "root verifies downloaded payload separately; not claimed by this CI audit",
+    "stapler_cli_line_in_ci_log": false
+  },
+  "audit_scope_note": "Historical prepublication CI/asset snapshot at observed_at_utc; actual subsequent public release is recorded in desktop-v087-public-verification.json",
+  "original_audit_sha256": "31d783300adde8256ee46b340b7418564b4a715259c83357ae49894770d8b79f"
+}

@@ -1,0 +1,11 @@
+{
+  "checked_at_utc": "2026-10-02T02:41:48.683436+00:00",
+  "primary_head": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+  "original_files": 39,
+  "all_original_bytes_and_hashes_preserved": true,
+  "primary_checkout_sync_performed": false,
+  "temporary_stash_created": false,
+  "rejected_sync_not_bypassed": true,
+  "release_publicly_verified": "0.8.7",
+  "local_devel_CAS_issue_close_and_owned_cleanup": "planned after final operating commit push"
+}

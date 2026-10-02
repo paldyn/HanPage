@@ -1,0 +1,23 @@
+{
+  "checked_at_utc": "2026-10-02T02:39:46.181023+00:00",
+  "release_id": 401478979,
+  "tag": "hanpage-desktop-v0.8.7",
+  "source_commit": "b762cbdbbe0d57b379bb8cf29393599e078c9eaa",
+  "release_url": "https://github.com/paldyn/HanPage/releases/tag/hanpage-desktop-v0.8.7",
+  "published_at": "2026-10-02T02:39:24Z",
+  "draft": false,
+  "prerelease": false,
+  "github_latest_release_matches": true,
+  "unauthenticated_app_endpoint": "https://github.com/paldyn/HanPage/releases/latest/download/latest.json",
+  "public_manifest_version": "0.8.7",
+  "public_platform_keys": [
+    "darwin-aarch64",
+    "darwin-aarch64-app",
+    "windows-x86_64",
+    "windows-x86_64-nsis"
+  ],
+  "public_manifest_sha256": "e222e1bc9252621fa941fd45e19fd7a0f97b6fab9e2667cd31569bdf367d7c06",
+  "public_manifest_identical_to_signature_verified_draft": true,
+  "all6_public_asset_api_digests_match_verified_downloads": true,
+  "install_or_restart_user_app_performed": false
+}

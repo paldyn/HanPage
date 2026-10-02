@@ -1,0 +1,17 @@
+2026-10-02T02:22:08.9293120Z Installing wasm-pack v0.13.1 ...
+2026-10-02T02:22:09.4075590Z ##[group]Run test "$(wasm-pack --version)" = "wasm-pack 0.13.1"
+2026-10-02T02:22:09.4076000Z test "$(wasm-pack --version)" = "wasm-pack 0.13.1"
+2026-10-02T02:35:54.4828920Z      Signing with identity "***"
+2026-10-02T02:35:54.4829780Z Signing with identity "***"
+2026-10-02T02:35:55.9208510Z Signing with identity "***"
+2026-10-02T02:35:57.8859090Z Signing with identity "***"
+2026-10-02T02:35:58.1415280Z Notarizing <runner-workspace>/HanPage-Desktop/src-tauri/target/release/bundle/macos/HanPage.app
+2026-10-02T02:36:24.8826630Z Notarizing Finished with status Accepted for id ad78ce80-c5f2-47cd-b084-88a8855b5f55 (Processing complete)
+2026-10-02T02:36:51.4653040Z      Signing with identity "***"
+2026-10-02T02:36:51.4653630Z Signing with identity "***"
+2026-10-02T02:36:53.8582820Z Uploading HanPage_0.8.7_aarch64.dmg...
+2026-10-02T02:36:56.0968070Z Uploading HanPage_aarch64.app.tar.gz...
+2026-10-02T02:36:58.1804820Z Uploading HanPage_aarch64.app.tar.gz.sig...
+2026-10-02T02:36:59.9838750Z Uploading latest.json...
+2026-10-02T02:31:14.5454940Z     Finished `release` profile [optimized] target(s) in 8m 59s
+2026-10-02T02:35:53.2197230Z     Finished `release` profile [optimized] target(s) in 4m 13s

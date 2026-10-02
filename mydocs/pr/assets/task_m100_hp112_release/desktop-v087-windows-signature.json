@@ -1,0 +1,39 @@
+{
+  "checked_at_utc": "2026-10-02T02:02:23.218085+00:00",
+  "version": "0.8.7",
+  "draft": true,
+  "release_id": 401478979,
+  "platform_keys": [
+    "windows-x86_64",
+    "windows-x86_64-nsis"
+  ],
+  "assets": [
+    {
+      "name": "HanPage_0.8.7_x64-setup.exe",
+      "bytes": 39860953,
+      "sha256": "3e4696923e5edbd7a6ca0e088815de951ac10f99e9c400f6c6a31a7cfb70a083",
+      "matches_api_size_and_digest": true
+    },
+    {
+      "name": "HanPage_0.8.7_x64-setup.exe.sig",
+      "bytes": 416,
+      "sha256": "52dffca9bbb3a2de99d0503f8d1f58960f1eecd8267c43382575a4e3771a19e5",
+      "matches_api_size_and_digest": true
+    },
+    {
+      "name": "latest.json",
+      "bytes": 1283,
+      "sha256": "961faa0f18a6da9d9e7c5c6b9ca9e01543d2d1bc39a09748fc372740f4de958b",
+      "matches_api_size_and_digest": true
+    }
+  ],
+  "signature_verified": true,
+  "tampered_payload_rejected": true,
+  "signature_identity": {
+    "algorithm": "ED",
+    "key_id_hex": "835d6b3831e133aa",
+    "trusted_comment": "timestamp:1790906402\tfile:HanPage_0.8.7_x64-setup.exe"
+  },
+  "macos_missing": true,
+  "publication_gate": "HOLD until macOS notarization and complete four-platform manifest pass"
+}

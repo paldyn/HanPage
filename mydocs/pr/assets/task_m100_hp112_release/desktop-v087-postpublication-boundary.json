@@ -1,0 +1,40 @@
+{
+  "checked_at_utc": "2026-10-02T02:41:14.818038+00:00",
+  "source_commit": "b762cbdbbe0d57b379bb8cf29393599e078c9eaa",
+  "published_release": "hanpage-desktop-v0.8.7",
+  "allowed_runs": [
+    {
+      "id": 36952025097,
+      "name": "Desktop Release",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "b762cbdbbe0d57b379bb8cf29393599e078c9eaa",
+      "created_at": "2026-10-02T01:40:04Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/36952025097"
+    },
+    {
+      "id": 36951978286,
+      "name": "Close Issues on devel Push",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "b762cbdbbe0d57b379bb8cf29393599e078c9eaa",
+      "created_at": "2026-10-02T01:39:29Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/36951978286"
+    },
+    {
+      "id": 36951978285,
+      "name": "Refresh nextest target duration data",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "b762cbdbbe0d57b379bb8cf29393599e078c9eaa",
+      "created_at": "2026-10-02T01:39:29Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/36951978285"
+    }
+  ],
+  "unexpected_release_event_runs": false,
+  "validation_CI_rerun_after_merge": false,
+  "tagged_source_release_event_handlers": []
+}

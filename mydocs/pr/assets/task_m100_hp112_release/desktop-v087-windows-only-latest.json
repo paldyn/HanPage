@@ -1,0 +1,15 @@
+{
+  "version": "0.8.7",
+  "notes": "",
+  "pub_date": "2026-10-02T02:00:06.831Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTRFhXczRNZUV6cXY2ZGF3VlZ4a1JBSllYWTY4amVZMERURVdwUER4ZUt6SUpjdnRuaUZSNUNjT1R3NVhWQi9ZcmlYc25KZm9uUGNlV3NuNUNzZEVoeHZwbjZYZUhCSkFzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwOTA2NDAyCWZpbGU6SGFuUGFnZV8wLjguN194NjQtc2V0dXAuZXhlCmI5dm11N09LSW9ValFTZ0YxUlZsb01keVo4eUNHbDNVS0JpTnNUM0NzSUorVnhINU83WU1ya2xmVmFnUmFkSEJSdUlvTnRVaGhINXBCWkRzdXp5SERBPT0K",
+      "url": "https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v0.8.7/HanPage_0.8.7_x64-setup.exe"
+    },
+    "windows-x86_64-nsis": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTRFhXczRNZUV6cXY2ZGF3VlZ4a1JBSllYWTY4amVZMERURVdwUER4ZUt6SUpjdnRuaUZSNUNjT1R3NVhWQi9ZcmlYc25KZm9uUGNlV3NuNUNzZEVoeHZwbjZYZUhCSkFzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwOTA2NDAyCWZpbGU6SGFuUGFnZV8wLjguN194NjQtc2V0dXAuZXhlCmI5dm11N09LSW9ValFTZ0YxUlZsb01keVo4eUNHbDNVS0JpTnNUM0NzSUorVnhINU83WU1ya2xmVmFnUmFkSEJSdUlvTnRVaGhINXBCWkRzdXp5SERBPT0K",
+      "url": "https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v0.8.7/HanPage_0.8.7_x64-setup.exe"
+    }
+  }
+}

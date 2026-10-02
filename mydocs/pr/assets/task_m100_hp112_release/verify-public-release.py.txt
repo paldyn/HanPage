@@ -1,0 +1,22 @@
+import datetime,hashlib,json,pathlib,sys
+folder=pathlib.Path(sys.argv[1])
+release=json.loads((folder/'desktop-v087-public-release.json').read_text())
+latest=json.loads((folder/'desktop-v087-public-latest-release.json').read_text())
+inventory=json.loads((folder/'desktop-v087-draft-inventory.json').read_text())
+public=(folder/'public-latest-v087.json').read_bytes()
+draft=(folder/'release-v087/latest.json').read_bytes()
+manifest=json.loads(public)
+assert release['id']==latest['id']==inventory['release_id']==401478979
+assert release['tag_name']==latest['tag_name']=='hanpage-desktop-v0.8.7'
+assert release['draft'] is False and release['prerelease'] is False and release['published_at']
+assert release['target_commitish']=='b762cbdbbe0d57b379bb8cf29393599e078c9eaa'
+expected={a['name']:a for a in inventory['assets']}
+assert {a['name'] for a in release['assets']}==set(expected)
+for a in release['assets']:
+    e=expected[a['name']]
+    assert a['state']=='uploaded' and a['size']==e['bytes'] and a['digest']=='sha256:'+e['sha256']
+assert public==draft,'Published updater response differs from verified draft manifest'
+assert manifest['version']=='0.8.7'
+assert set(manifest['platforms'])=={'darwin-aarch64','darwin-aarch64-app','windows-x86_64','windows-x86_64-nsis'}
+assert all(p['url'].startswith('https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v0.8.7/') for p in manifest['platforms'].values())
+print(json.dumps({'checked_at_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'release_id':release['id'],'tag':release['tag_name'],'source_commit':release['target_commitish'],'release_url':release['html_url'],'published_at':release['published_at'],'draft':False,'prerelease':False,'github_latest_release_matches':True,'unauthenticated_app_endpoint':'https://github.com/paldyn/HanPage/releases/latest/download/latest.json','public_manifest_version':manifest['version'],'public_platform_keys':sorted(manifest['platforms']),'public_manifest_sha256':hashlib.sha256(public).hexdigest(),'public_manifest_identical_to_signature_verified_draft':True,'all6_public_asset_api_digests_match_verified_downloads':True,'install_or_restart_user_app_performed':False},indent=2))

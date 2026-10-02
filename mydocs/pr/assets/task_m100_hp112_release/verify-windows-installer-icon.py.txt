@@ -1,0 +1,292 @@
+#!/usr/bin/env python3
+"""Read-only PE RT_ICON/RT_GROUP_ICON audit against an ICO; never runs EXEs.
+
+PE and ICO parsing uses the standard library. Pillow is optional for decoded
+RGBA equivalence (run with Codex's bundled Python to enable it). No files are
+written by this program. Its JSON covers only the outer PE icon resources,
+not the NSIS compressed app/uninstaller or UI/banner bitmaps.
+
+Exit 0: one selected group has every expected frame, by pixels or exact payload.
+Exit 1: valid resources do not match. Exit 2: invalid input or incomplete audit.
+"""
+import argparse
+from collections import Counter
+from hashlib import sha256
+from io import BytesIO
+import json
+from pathlib import Path
+import struct
+import sys
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+
+
+def digest(data):
+    return sha256(data).hexdigest()
+
+
+def unpack(fmt, data, offset):
+    size = struct.calcsize(fmt)
+    if offset < 0 or offset + size > len(data):
+        raise ValueError(f"Out-of-bounds structure: offset={offset}, bytes={size}")
+    return struct.unpack_from(fmt, data, offset)
+
+
+def frame_record(payload, width, height, planes, bits, **extra):
+    record = dict(width=width, height=height, planes=planes, bit_count=bits,
+                  payload_bytes=len(payload), payload_sha256=digest(payload),
+                  encoding="PNG" if payload.startswith(b"\x89PNG\r\n\x1a\n") else "DIB",
+                  **extra)
+    if Image is None:
+        record["pixels_unavailable"] = "Pillow is not installed in this Python"
+        return record
+    # A one-frame ICO preserves ICO alpha/mask semantics, including DIB frames.
+    entry = struct.pack("<BBBBHHII", 0 if width == 256 else width,
+                        0 if height == 256 else height, 0, 0,
+                        planes, bits, len(payload), 22)
+    ico = struct.pack("<HHH", 0, 1, 1) + entry + payload
+    try:
+        with Image.open(BytesIO(ico)) as image:
+            image.load()
+            rgba = image.convert("RGBA")
+            record["decoded_width"], record["decoded_height"] = rgba.size
+            record["decoded_dimensions_match_directory"] = rgba.size == (width, height)
+            record["rgba_sha256"] = digest(rgba.tobytes())
+            record["rgba_hash_semantics"] = "row-major RGBA8, top-left origin, no scaling"
+    except Exception as error:
+        record["decode_error"] = f"{type(error).__name__}: {error}"
+    return record
+
+
+def read_ico(path):
+    data = path.read_bytes()
+    reserved, kind, count = unpack("<HHH", data, 0)
+    if reserved != 0 or kind != 1 or not 1 <= count <= 256:
+        raise ValueError("Invalid ICO header/count")
+    unpack(f"<{count * 16}s", data, 6)
+    frames = []
+    for index in range(count):
+        w, h, colors, reserved, planes, bits, size, offset = unpack("<BBBBHHII", data, 6 + 16 * index)
+        if reserved != 0 or offset < 6 + 16 * count or not size or offset + size > len(data):
+            raise ValueError(f"Invalid ICO frame {index}")
+        frames.append(frame_record(data[offset:offset + size], w or 256, h or 256,
+                                   planes, bits, index=index, color_count=colors,
+                                   file_offset=offset))
+    return dict(path=str(path.resolve()), file_bytes=len(data), file_sha256=digest(data),
+                frame_count=count, frames=frames)
+
+
+def pe_resources(path):
+    data = path.read_bytes()
+    if data[:2] != b"MZ":
+        raise ValueError("Not a DOS/PE image")
+    pe_offset, = unpack("<I", data, 0x3c)
+    if data[pe_offset:pe_offset + 4] != b"PE\0\0":
+        raise ValueError("Missing PE signature")
+    machine, section_count, timestamp, symbols, symbol_count, optional_size, flags = unpack("<HHIIIHH", data, pe_offset + 4)
+    optional_offset = pe_offset + 24
+    magic, = unpack("<H", data, optional_offset)
+    if magic == 0x10b:
+        count_offset, directory_offset, pe_kind = 92, 96, "PE32"
+    elif magic == 0x20b:
+        count_offset, directory_offset, pe_kind = 108, 112, "PE32+"
+    else:
+        raise ValueError(f"Unsupported PE optional-header magic {magic:#x}")
+    if optional_size < directory_offset + 24:
+        raise ValueError("PE optional header has no resource-directory slot")
+    directory_count, = unpack("<I", data, optional_offset + count_offset)
+    if directory_count < 3:
+        raise ValueError("PE has no resource data directory")
+    resource_rva, resource_size = unpack("<II", data, optional_offset + directory_offset + 16)
+    headers_size, = unpack("<I", data, optional_offset + 60)
+    sections = []
+    for index in range(section_count):
+        offset = optional_offset + optional_size + 40 * index
+        name, virtual_size, virtual_address, raw_size, raw_offset = unpack("<8sIIII", data, offset)
+        if raw_offset + raw_size > len(data):
+            raise ValueError("Section raw range extends past EOF")
+        sections.append(dict(name=name.rstrip(b"\0").decode("ascii", "replace"),
+                             virtual_size=virtual_size, virtual_address=virtual_address,
+                             raw_size=raw_size, raw_offset=raw_offset))
+
+    def map_rva(rva, size):
+        if size < 0:
+            raise ValueError("Negative resource size")
+        if rva < headers_size and rva + size <= min(headers_size, len(data)):
+            return rva
+        for section in sections:
+            delta = rva - section["virtual_address"]
+            if 0 <= delta and delta + size <= section["raw_size"]:
+                return section["raw_offset"] + delta
+        raise ValueError(f"RVA {rva:#x} size {size} has no raw-file mapping")
+
+    if not resource_rva or resource_size < 16:
+        raise ValueError("Empty PE resource directory")
+    root = map_rva(resource_rva, resource_size)
+    leaves, active = [], set()
+
+    def resource_offset(relative, size):
+        if relative < 0 or relative + size > resource_size:
+            raise ValueError("Resource directory reference exceeds declared range")
+        return root + relative
+
+    def resource_name(value):
+        if not value & 0x80000000:
+            return value
+        relative = value & 0x7fffffff
+        length, = unpack("<H", data, resource_offset(relative, 2))
+        offset = resource_offset(relative + 2, length * 2)
+        return data[offset:offset + length * 2].decode("utf-16-le", "strict")
+
+    def walk(relative, keys):
+        if len(keys) > 8 or relative in active:
+            raise ValueError("Resource tree cycle or excessive depth")
+        active.add(relative)
+        offset = resource_offset(relative, 16)
+        characteristics, timestamp, major, minor, named, ids = unpack("<IIHHHH", data, offset)
+        count = named + ids
+        resource_offset(relative + 16, count * 8)
+        for index in range(count):
+            name_value, target = unpack("<II", data, offset + 16 + index * 8)
+            path_keys = keys + [resource_name(name_value)]
+            if target & 0x80000000:
+                walk(target & 0x7fffffff, path_keys)
+            else:
+                value_offset = resource_offset(target, 16)
+                rva, size, code_page, reserved = unpack("<IIII", data, value_offset)
+                file_offset = map_rva(rva, size)
+                leaves.append(dict(keys=path_keys, code_page=code_page, data_rva=rva,
+                                   file_offset=file_offset, payload=data[file_offset:file_offset + size]))
+        active.remove(relative)
+
+    walk(0, [])
+    info = dict(path=str(path.resolve()), file_bytes=len(data), file_sha256=digest(data),
+                pe_kind=pe_kind, machine_hex=f"0x{machine:04x}",
+                resource_rva=resource_rva, resource_size=resource_size,
+                resource_leaf_count=len(leaves), sections=sections)
+    return info, leaves
+
+
+def multiset(frames, field):
+    if any(field not in frame for frame in frames):
+        return None
+    return Counter((f["width"], f["height"], f[field]) for f in frames)
+
+
+def compare(source, frames):
+    payload = multiset(frames, "payload_sha256")
+    source_payload = multiset(source, "payload_sha256")
+    pixels = multiset(frames, "rgba_sha256")
+    source_pixels = multiset(source, "rgba_sha256")
+    payload_equal = payload == source_payload
+    pixels_equal = None if pixels is None or source_pixels is None else pixels == source_pixels
+    pixel_dimensions_valid = all(f.get("decoded_dimensions_match_directory", False) for f in frames + source)
+    if pixels_equal is True and not pixel_dimensions_valid:
+        pixels_equal = False
+    shared_payload = sum((payload & source_payload).values()) if payload is not None else 0
+    shared_pixels = sum((pixels & source_pixels).values()) if pixels is not None and source_pixels is not None else None
+    return dict(frame_count_matches_source=len(frames) == len(source),
+                frame_dimensions_multiset_matches_source=Counter((f["width"], f["height"]) for f in frames) == Counter((f["width"], f["height"]) for f in source),
+                payload_multiset_matches_source=payload_equal,
+                rgba_multiset_matches_source=pixels_equal,
+                matching_payload_frames=shared_payload,
+                matching_rgba_frames=shared_pixels,
+                frame_order_is_not_required=True,
+                full_source_match=payload_equal or pixels_equal is True)
+
+
+def audit(exe_path, ico_path, selected_group):
+    expected = read_ico(ico_path)
+    pe, leaves = pe_resources(exe_path)
+    icons = [leaf for leaf in leaves if len(leaf["keys"]) == 3 and leaf["keys"][0] == 3]
+    groups = [leaf for leaf in leaves if len(leaf["keys"]) == 3 and leaf["keys"][0] == 14]
+    group_records, icon_records = [], []
+    for leaf in icons:
+        icon_records.append(dict(resource_id=leaf["keys"][1], language_id=leaf["keys"][2],
+                                 file_offset=leaf["file_offset"], payload_bytes=len(leaf["payload"]),
+                                 payload_sha256=digest(leaf["payload"]),
+                                 encoding="PNG" if leaf["payload"].startswith(b"\x89PNG\r\n\x1a\n") else "DIB"))
+    for leaf in groups:
+        group_id, language = leaf["keys"][1:]
+        payload = leaf["payload"]
+        record = dict(group_id=group_id, language_id=language,
+                      selected=selected_group is None or str(group_id) == selected_group,
+                      directory_payload_sha256=digest(payload),
+                      file_offset=leaf["file_offset"], frames=[], errors=[])
+        try:
+            reserved, kind, count = unpack("<HHH", payload, 0)
+            if reserved != 0 or kind != 1 or not 1 <= count <= 256 or len(payload) != 6 + count * 14:
+                raise ValueError("Invalid RT_GROUP_ICON header/count/length")
+            record["frame_count"] = count
+            for index in range(count):
+                w, h, colors, reserved, planes, bits, size, resource_id = unpack("<BBBBHHIH", payload, 6 + 14 * index)
+                candidates = [i for i in icons if i["keys"][1] == resource_id and i["keys"][2] == language]
+                resolution = "same language"
+                if not candidates:
+                    candidates = [i for i in icons if i["keys"][1] == resource_id]
+                    resolution = "unique resource ID across languages"
+                if len(candidates) != 1:
+                    raise ValueError(f"RT_ICON {resource_id} resolves to {len(candidates)} entries")
+                icon = candidates[0]
+                if len(icon["payload"]) != size:
+                    raise ValueError(f"RT_ICON {resource_id} length disagrees with group")
+                record["frames"].append(frame_record(icon["payload"], w or 256, h or 256, planes, bits,
+                                                     index=index, resource_id=resource_id,
+                                                     language_id=icon["keys"][2], resolution=resolution,
+                                                     file_offset=icon["file_offset"], color_count=colors))
+            record["comparison"] = compare(expected["frames"], record["frames"])
+        except Exception as error:
+            record["errors"].append(f"{type(error).__name__}: {error}")
+        group_records.append(record)
+    selected = [record for record in group_records if record["selected"]]
+    exact_payload = any(r.get("comparison", {}).get("payload_multiset_matches_source") for r in selected)
+    exact_pixels = any(r.get("comparison", {}).get("rgba_multiset_matches_source") is True for r in selected)
+    decoding_errors = [f.get("decode_error") for f in expected["frames"] if f.get("decode_error")]
+    decoding_errors += [f.get("decode_error") for r in selected for f in r["frames"] if f.get("decode_error")]
+    structural_errors = [error for r in selected for error in r["errors"]]
+    if not selected:
+        status, exit_code = "incomplete_no_selected_icon_group", 2
+    elif structural_errors or decoding_errors:
+        status, exit_code = "incomplete_audit_error", 2
+    elif exact_payload or exact_pixels:
+        status, exit_code = "expected_icon_present", 0
+    elif Image is None:
+        status, exit_code = "incomplete_pixels_unavailable_and_payloads_differ", 2
+    else:
+        status, exit_code = "expected_icon_absent", 1
+    report = dict(schema="hanpage.outer-pe-icon-audit.v1", status=status, exit_code=exit_code,
+                  expected_ico=expected, exe=pe,
+                  pillow_available=Image is not None,
+                  pillow_version=None if Image is None else __import__("PIL").__version__,
+                  scope="Outer PE RT_ICON/RT_GROUP_ICON only; no installation or EXE execution; NSIS compressed app/uninstaller and banner bitmaps not inspected",
+                  selected_group_id=selected_group,
+                  rt_icon_count=len(icons), rt_group_icon_count=len(groups),
+                  rt_icons=icon_records, groups=group_records,
+                  selected_any_group_payload_matches_source=exact_payload,
+                  selected_any_group_rgba_matches_source=exact_pixels,
+                  all_selected_groups_match_source=bool(selected) and all(r.get("comparison", {}).get("full_source_match", False) for r in selected),
+                  audit_errors=structural_errors + decoding_errors)
+    return report, exit_code
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--exe", required=True, type=Path, help="Read-only installer/PE image path")
+    parser.add_argument("--ico", required=True, type=Path, help="Expected original/active ICO path")
+    parser.add_argument("--group-id", help="Select a numeric or named RT_GROUP_ICON ID (otherwise audit all groups)")
+    args = parser.parse_args()
+    try:
+        report, code = audit(args.exe, args.ico, args.group_id)
+    except Exception as error:
+        report, code = dict(schema="hanpage.outer-pe-icon-audit.v1", status="input_or_parser_error",
+                            exe_path=str(args.exe.resolve()), ico_path=str(args.ico.resolve()),
+                            error=f"{type(error).__name__}: {error}", exit_code=2), 2
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

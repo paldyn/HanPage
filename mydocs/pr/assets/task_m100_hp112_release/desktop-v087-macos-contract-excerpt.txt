@@ -1,0 +1,8 @@
+2026-10-02T01:57:52.6579450Z [1m[92m    Finished[0m `release` profile [optimized] target(s) in 3m 41s
+2026-10-02T01:57:52.8957170Z        Built application at: <runner-workspace>/HanPage-Desktop/src-tauri/target/release/HanPage
+2026-10-02T01:57:53.0554150Z     Bundling HanPage.app (<runner-workspace>/HanPage-Desktop/src-tauri/target/release/bundle/macos/HanPage.app)
+2026-10-02T01:57:53.8480040Z Signing <runner-workspace>/HanPage-Desktop/src-tauri/target/release/bundle/macos/HanPage.app/Contents/MacOS/HanPage
+2026-10-02T01:57:54.9490290Z Signing <runner-workspace>/HanPage-Desktop/src-tauri/target/release/bundle/macos/HanPage.app
+2026-10-02T01:57:56.9810790Z Notarizing <runner-workspace>/HanPage-Desktop/src-tauri/target/release/bundle/macos/HanPage.app
+2026-10-02T01:57:58.9300160Z failed to bundle project failed codesign application: failed to notarize app: Error: HTTP status code: 403. A required agreement is missing or has expired. This request requires an in-effect agreement that has not been signed or has expired. Ensure your team has signed the necessary legal agreements and that they are not expired.
+2026-10-02T01:57:58.9502030Z        Error failed to bundle project failed codesign application: failed to notarize app: Error: HTTP status code: 403. A required agreement is missing or has expired. This request requires an in-effect agreement that has not been signed or has expired. Ensure your team has signed the necessary legal agreements and that they are not expired.

@@ -1,0 +1,15 @@
+{
+  "requested_at_utc": "2026-10-02T02:19:00Z",
+  "repository": "paldyn/HanPage",
+  "run_id": 36952025097,
+  "new_attempt": 2,
+  "source_commit": "b762cbdbbe0d57b379bb8cf29393599e078c9eaa",
+  "tag": "hanpage-desktop-v0.8.7",
+  "only_failed_job_rerun": 110666824555,
+  "user_confirmed_apple_agreement_accepted": true,
+  "user_message": "동의완료",
+  "source_or_tag_modified": false,
+  "verified_windows_assets_reused": true,
+  "publication_still_draft_pending_final_gates": true,
+  "requested_at_utc_is_approximate": true
+}

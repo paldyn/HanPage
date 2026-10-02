@@ -1,0 +1,529 @@
+{
+  "schema_version": 1,
+  "repository": "paldyn/HanPage",
+  "pr_number": 114,
+  "pr_url": "https://github.com/paldyn/HanPage/pull/114",
+  "observed_ci_snapshot_utc": "2026-10-02 01:39:30 UTC",
+  "evidence_origin": {
+    "audit_filename": "hanpage_pr114_final_ci_audit.json",
+    "audit_sha256": "11ed1788140dbdd47786dae14b96486871732420ff8d8ddc7d05e87b349002cb",
+    "audit_bytes": 64611,
+    "summary_basis": "Saved final audit and saved postmerge duration audit; no new CI polling or remote actions."
+  },
+  "identity": {
+    "source_commit": "549411762fecb5a833de3e30d3e82d3aab8319f2",
+    "latest_pr_head": "440d57b0616adc8a10ce4415b0383a9372064aa5",
+    "pr_base": "d523c04493ddf8296bc5d56e2c90c38f4da4fe96",
+    "head_branch": "codex/desktop-release-0-8-7",
+    "base_branch": "devel",
+    "synthetic_merge": {
+      "parents": [
+        "d523c04493ddf8296bc5d56e2c90c38f4da4fe96",
+        "440d57b0616adc8a10ce4415b0383a9372064aa5"
+      ],
+      "sha": "9ca90b95c307549c822bb5145dfd08f2d1d275e2",
+      "tree": "78fce1c59e0ddc3f638894030a6c73d94e876e05"
+    },
+    "actual_merge": {
+      "parents": [
+        "d523c04493ddf8296bc5d56e2c90c38f4da4fe96",
+        "440d57b0616adc8a10ce4415b0383a9372064aa5"
+      ],
+      "sha": "b762cbdbbe0d57b379bb8cf29393599e078c9eaa",
+      "tree": "78fce1c59e0ddc3f638894030a6c73d94e876e05"
+    },
+    "head_tree": "78fce1c59e0ddc3f638894030a6c73d94e876e05",
+    "synthetic_actual_and_head_tree_identical": true,
+    "checkout_evidence": "Frontend package and all four regression worker logs identify refs/pull/114/merge at the synthetic merge SHA. Both merge commits have the exact [base, head] parents."
+  },
+  "final_gate": {
+    "latest_head_checks": {
+      "total": 32,
+      "success": 28,
+      "legitimate_skips": 4,
+      "failure": 0,
+      "pending": 0
+    },
+    "generated_runs": {
+      "total": 6,
+      "success": 5,
+      "skipped": 1
+    },
+    "generated_jobs": {
+      "total": 31,
+      "success": 27,
+      "skipped": 4
+    },
+    "build_and_test": {
+      "check_id": 110666420405,
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110666420405",
+      "actual_archive_count": "archive_total=10083 shard_total=10083"
+    },
+    "codeql": {
+      "languages": [
+        "javascript-typescript",
+        "python",
+        "rust"
+      ],
+      "all_language_analyses": "success",
+      "ghas_check_id": 110662331252,
+      "ghas_app": "github-advanced-security",
+      "ghas_conclusion": "success",
+      "ghas_title": "No new alerts in code changed by this pull request",
+      "ghas_url": "https://github.com/paldyn/HanPage/runs/110662331252"
+    },
+    "merge_gate_provenance": {
+      "root_premerge_gate": {
+        "head": "440d57b0616adc8a10ce4415b0383a9372064aa5",
+        "base": "d523c04493ddf8296bc5d56e2c90c38f4da4fe96",
+        "mergeable": "MERGEABLE",
+        "merge_state_status": "CLEAN",
+        "check_success": 28,
+        "check_skipped": 4,
+        "verified_independently_by_root": true
+      },
+      "independent_subagent_final_api": {
+        "state": "merged",
+        "merge_sha": "b762cbdbbe0d57b379bb8cf29393599e078c9eaa",
+        "snapshot_utc": "2026-10-02 01:39:30 UTC",
+        "mergeable": "UNKNOWN after merge"
+      },
+      "merged_at": "2026-10-02T01:39:26Z",
+      "note": "Root independently verified CLEAN/MERGEABLE and exact head/base before merging. The subagent's final API snapshot occurred after merge; it does not claim an independently captured premerge CLEAN state."
+    },
+    "github_required_checks_cli": {
+      "exit_code": 1,
+      "message": "no required checks reported on the branch",
+      "canonical_maintainer_gate": "Build & Test succeeded independently of CLI-enforced required-check reporting"
+    }
+  },
+  "classification": {
+    "fast_pass": false,
+    "reason": "ci-execution-surface-change",
+    "event": "pull_request",
+    "files": 23,
+    "rust_required": true,
+    "frontend_mode": "package",
+    "render_required": true,
+    "native_skia_required": true,
+    "codeql_languages": [
+      "javascript-typescript",
+      "python",
+      "rust"
+    ],
+    "classification_status": "full",
+    "impact_reason": "fail-closed:workflow-contract"
+  },
+  "legitimate_skips": [
+    {
+      "job_id": 110661292831,
+      "name": "WASM Build",
+      "reason": "Job runs only for workflow_dispatch or refs/tags/v*. This event is pull_request; fresh WASM actually succeeded inside Frontend package gates.",
+      "source": ".github/workflows/ci.yml:1906"
+    },
+    {
+      "job_id": 110661633916,
+      "name": "Frontend unit gates",
+      "reason": "frontend_mode=package, so the unit-only lane skips. Studio unit tests actually run in the successful package lane.",
+      "source": ".github/workflows/ci.yml:1318"
+    },
+    {
+      "job_id": 110661634169,
+      "name": "Workflow promotion preflight",
+      "reason": "Only canonical same-repo devel -> main PRs run this gate. This PR targets devel; aggregate verified CANONICAL_PROMOTION=false/PROMOTION_RESULT=skipped.",
+      "source": ".github/workflows/ci.yml:1575"
+    },
+    {
+      "job_id": 110661287394,
+      "name": "cancel-stale-runs",
+      "event": "pull_request_target",
+      "reason": "Same-repo PR uses the successful pull_request cancellation workflow; pull_request_target is reserved for forks.",
+      "source": ".github/workflows/cancel-stale-pr-runs.yml:43"
+    }
+  ],
+  "actual_test_counts": {
+    "archives": {
+      "A": {
+        "job_id": 110663572517,
+        "passed": 3873,
+        "failed": 0,
+        "skipped": 13,
+        "elapsed_seconds": 90.154,
+        "slow": 0,
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110663572517"
+      },
+      "B": {
+        "job_id": 110663766635,
+        "passed": 2072,
+        "failed": 0,
+        "skipped": 5,
+        "elapsed_seconds": 522.892,
+        "slow": 4,
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110663766635"
+      },
+      "C": {
+        "job_id": 110663920262,
+        "passed": 2102,
+        "failed": 0,
+        "skipped": 22,
+        "elapsed_seconds": 122.768,
+        "slow": 1,
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110663920262"
+      },
+      "D": {
+        "job_id": 110663175664,
+        "passed": 2036,
+        "failed": 0,
+        "skipped": 10,
+        "elapsed_seconds": 378.726,
+        "slow": 2,
+        "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110663175664"
+      }
+    },
+    "archive_total": {
+      "passed": 10083,
+      "failed": 0,
+      "skipped": 50
+    },
+    "frontend": {
+      "studio_unit": {
+        "tests": 1832,
+        "passed": 1830,
+        "failed": 0,
+        "skipped": 2
+      },
+      "responsive": {
+        "passed": 2666,
+        "failed": 0
+      },
+      "undo_depth": {
+        "stack": 260,
+        "slots": 0,
+        "consecutive_undo": 260,
+        "passed": true
+      },
+      "job_id": 110661632518
+    },
+    "adapter": {
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "adapters": 5,
+      "pairs": 26,
+      "skip_missing": 0,
+      "skip_unexported": 0,
+      "job_id": 110661345421
+    },
+    "proptest": {
+      "passed": 63,
+      "failed": 0,
+      "ignored": 0,
+      "suite_count": 9,
+      "job_id": 110661344323
+    },
+    "native_skia": {
+      "passed_executions": 69,
+      "failed": 0,
+      "ignored": 0,
+      "excluded_from_archive_grand_total": true,
+      "job_id": 110661632473
+    },
+    "lint_internal_rust": {
+      "passed_executions": 318,
+      "failed": 0,
+      "ignored": 0,
+      "excluded_from_archive_grand_total": true,
+      "job_id": 110661632465
+    },
+    "counting_note": "Archive total sums only A/B/C/D. Adapter, Proptest, Native Skia and lint executions are reported separately and are not added to a unique-test grand total.",
+    "provenance": "Counts come from completed job stdout summaries, not inferred from check success."
+  },
+  "workflows": [
+    {
+      "name": "Cancel stale PR runs",
+      "event": "pull_request",
+      "run_id": 36950208053,
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208053",
+      "status": "completed",
+      "conclusion": "success",
+      "run_attempt": 1,
+      "head_sha": "440d57b0616adc8a10ce4415b0383a9372064aa5"
+    },
+    {
+      "name": "CodeQL",
+      "event": "pull_request",
+      "run_id": 36950208351,
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208351",
+      "status": "completed",
+      "conclusion": "success",
+      "run_attempt": 1,
+      "head_sha": "440d57b0616adc8a10ce4415b0383a9372064aa5"
+    },
+    {
+      "name": "Adapter inter-diff",
+      "event": "pull_request",
+      "run_id": 36950208282,
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208282",
+      "status": "completed",
+      "conclusion": "success",
+      "run_attempt": 1,
+      "head_sha": "440d57b0616adc8a10ce4415b0383a9372064aa5"
+    },
+    {
+      "name": "Proptest roundtrip",
+      "event": "pull_request",
+      "run_id": 36950208226,
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208226",
+      "status": "completed",
+      "conclusion": "success",
+      "run_attempt": 1,
+      "head_sha": "440d57b0616adc8a10ce4415b0383a9372064aa5"
+    },
+    {
+      "name": "CI",
+      "event": "pull_request",
+      "run_id": 36950208276,
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276",
+      "status": "completed",
+      "conclusion": "success",
+      "run_attempt": 1,
+      "head_sha": "440d57b0616adc8a10ce4415b0383a9372064aa5"
+    },
+    {
+      "name": "Cancel stale PR runs",
+      "event": "pull_request_target",
+      "run_id": 36950206217,
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950206217",
+      "status": "completed",
+      "conclusion": "skipped",
+      "run_attempt": 1,
+      "head_sha": "440d57b0616adc8a10ce4415b0383a9372064aa5"
+    }
+  ],
+  "latest_head_check_inventory": [
+    {
+      "id": 110666420405,
+      "name": "Build & Test",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110666420405"
+    },
+    {
+      "id": 110663920262,
+      "name": "test-archive-c-shard-1 / Default-feature tests (Archive C)",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110663920262"
+    },
+    {
+      "id": 110663766635,
+      "name": "test-archive-b-shard-1 / Default-feature tests (Archive B)",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110663766635"
+    },
+    {
+      "id": 110663572517,
+      "name": "test-archive-a-shard-1 / Default-feature tests (Archive A)",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110663572517"
+    },
+    {
+      "id": 110663175664,
+      "name": "test-archive-d-shard-1 / Default-feature tests (Archive D)",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110663175664"
+    },
+    {
+      "id": 110662331252,
+      "name": "CodeQL",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/runs/110662331252"
+    },
+    {
+      "id": 110661654904,
+      "name": "build-test-archive-b / Build test archive (b)",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110661654904"
+    },
+    {
+      "id": 110661654854,
+      "name": "build-test-archive-d / Build test archive (d)",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110661654854"
+    },
+    {
+      "id": 110661654843,
+      "name": "build-test-archive-c / Build test archive (c)",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110661654843"
+    },
+    {
+      "id": 110661634169,
+      "name": "Workflow promotion preflight",
+      "conclusion": "skipped",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110661634169"
+    },
+    {
+      "id": 110661633916,
+      "name": "Frontend unit gates",
+      "conclusion": "skipped",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110661633916"
+    },
+    {
+      "id": 110661632669,
+      "name": "build-test-archive-a / Build test archive (a)",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110661632669"
+    },
+    {
+      "id": 110661632538,
+      "name": "Resolve nextest target duration policy",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110661632538"
+    },
+    {
+      "id": 110661632518,
+      "name": "Frontend package gates",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110661632518"
+    },
+    {
+      "id": 110661632473,
+      "name": "Native Skia tests",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110661632473"
+    },
+    {
+      "id": 110661632465,
+      "name": "Lint (fmt, clippy, WASM check)",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110661632465"
+    },
+    {
+      "id": 110661498239,
+      "name": "Analyze (javascript-typescript)",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208351/job/110661498239"
+    },
+    {
+      "id": 110661498238,
+      "name": "Analyze (rust)",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208351/job/110661498238"
+    },
+    {
+      "id": 110661498236,
+      "name": "Analyze (python)",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208351/job/110661498236"
+    },
+    {
+      "id": 110661466990,
+      "name": "CI preflight",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110661466990"
+    },
+    {
+      "id": 110661345421,
+      "name": "adapter inter-diff",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208282/job/110661345421"
+    },
+    {
+      "id": 110661344323,
+      "name": "prop roundtrip",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208226/job/110661344323"
+    },
+    {
+      "id": 110661320363,
+      "name": "adapter inter-diff preflight",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208282/job/110661320363"
+    },
+    {
+      "id": 110661314563,
+      "name": "CodeQL preflight",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208351/job/110661314563"
+    },
+    {
+      "id": 110661306773,
+      "name": "Proptest preflight",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208226/job/110661306773"
+    },
+    {
+      "id": 110661292831,
+      "name": "WASM Build",
+      "conclusion": "skipped",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110661292831"
+    },
+    {
+      "id": 110661291819,
+      "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208276/job/110661291819"
+    },
+    {
+      "id": 110661289352,
+      "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208282/job/110661289352"
+    },
+    {
+      "id": 110661287394,
+      "name": "cancel-stale-runs",
+      "conclusion": "skipped",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950206217/job/110661287394"
+    },
+    {
+      "id": 110661286711,
+      "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208226/job/110661286711"
+    },
+    {
+      "id": 110661285296,
+      "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208351/job/110661285296"
+    },
+    {
+      "id": 110661261364,
+      "name": "cancel-stale-runs",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36950208053/job/110661261364"
+    }
+  ],
+  "duration_policy_hold": {
+    "source_filename": "hanpage_desktop_v087_duration_audit.json",
+    "source_sha256": "3b49d15e3036bd7ed027e2377f9274ef1775b236d56de0b1ae63a4ff11473a61",
+    "observed_at_utc": "2026-10-02T01:41:33.417415+00:00",
+    "head_sha": "b762cbdbbe0d57b379bb8cf29393599e078c9eaa",
+    "run": {
+      "id": 36951978285,
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36951978285",
+      "status": "completed",
+      "conclusion": "success",
+      "event": "push"
+    },
+    "measured_pr_ci_candidate_run_id": 36950208276,
+    "ready": false,
+    "reason": "no-verified-pr-duration-measurements",
+    "rejected_candidate_reason": "postmerge-duration: original measured worker unavailable:b",
+    "policy_branch_update": "skipped",
+    "full_ci_rerun_performed": false,
+    "successful_step": "Collect verified PR duration measurements",
+    "skipped_step": "Refresh duration policy data branch",
+    "log_sha256": "7214c0170e4e31a0f3c13ed54d3b5e6f605cf073b0a80e52da33c4e2a85f8cc3",
+    "notice": "Duration candidate 36950208276 not used: postmerge-duration: original measured worker unavailable:b",
+    "interpretation": "The collector completed successfully but held the duration policy update because it could not verify the original measured B worker. This is an evidence hold, not a PR test failure. Actual PR B log independently showed 2072 passed/5 skipped."
+  },
+  "audit_integrity_note": "The initial Archive C summary parser did not accept the optional slow count; it was corrected using the already-fetched successful log. No tests failed or CI rerun occurred.",
+  "limits": [
+    "These results prove the generated PR #114 CI gates at the fixed head and synthetic merge tree. They do not prove Desktop release artifacts, signatures, notarization, updater behavior, or publication; that release is a separate validation.",
+    "The classifier reported render_required=true, but no absent standalone Render Diff, Skill or Gym execution is claimed.",
+    "CI passes and contract tests do not establish Hancom rendering fidelity.",
+    "Duration refresh workflow success includes a deliberate evidence hold; the duration policy data branch update was skipped."
+  ]
+}

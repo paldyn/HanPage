@@ -1,0 +1,250 @@
+{
+  "schema": "hanpage.desktop-release-attempt.v1",
+  "observed_at_utc": "2026-10-02T02:03:46.077579+00:00",
+  "repository": "paldyn/HanPage",
+  "version": "0.8.7",
+  "source_tag_commit": "b762cbdbbe0d57b379bb8cf29393599e078c9eaa",
+  "tag": "hanpage-desktop-v0.8.7",
+  "run_id": 36952025097,
+  "attempt": 1,
+  "run_url": "https://github.com/paldyn/HanPage/actions/runs/36952025097",
+  "overall_result": "FAILURE / external Apple legal-agreement gate",
+  "jobs": [
+    {
+      "id": 110666824555,
+      "name": "Bundle macOS (aarch64)",
+      "conclusion": "failure",
+      "started_at": "2026-10-02T01:40:12Z",
+      "completed_at": "2026-10-02T01:58:04Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/36952025097/job/110666824555",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Checkout",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Rust toolchain",
+          "conclusion": "success"
+        },
+        {
+          "name": "Cache Rust build",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install wasm-pack",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build WASM (macOS)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build WASM (Windows)",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Setup Node.js",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install studio deps",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install desktop deps",
+          "conclusion": "success"
+        },
+        {
+          "name": "Compute release name",
+          "conclusion": "success"
+        },
+        {
+          "name": "Prepare notarization API key (macOS)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build & bundle (tauri-action)",
+          "conclusion": "failure"
+        },
+        {
+          "name": "Upload bundle (dispatch test)",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Setup Node.js",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Cache Rust build",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Checkout",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 110666824771,
+      "name": "Bundle Windows (x64)",
+      "conclusion": "success",
+      "started_at": "2026-10-02T01:40:07Z",
+      "completed_at": "2026-10-02T02:01:19Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/36952025097/job/110666824771",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Checkout",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Rust toolchain",
+          "conclusion": "success"
+        },
+        {
+          "name": "Cache Rust build",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install wasm-pack",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build WASM (macOS)",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Build WASM (Windows)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Setup Node.js",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install studio deps",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install desktop deps",
+          "conclusion": "success"
+        },
+        {
+          "name": "Compute release name",
+          "conclusion": "success"
+        },
+        {
+          "name": "Prepare notarization API key (macOS)",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Build & bundle (tauri-action)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Upload bundle (dispatch test)",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Setup Node.js",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Cache Rust build",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Checkout",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ],
+  "macos": {
+    "wasm_build": "SUCCESS",
+    "native_compile": "SUCCESS, 3m41s",
+    "code_signing": "Signing commands executed before notarization request; completed signed archive was not uploaded or independently verified",
+    "notarization": "HTTP403 required agreement missing or expired",
+    "failure_log_sha256": "c961a8bb9b06c419a40d363165bcc74dc39c2c23cea748f9dc55ed0de7c784c6",
+    "failure_excerpt": "desktop-v087-macos-contract-excerpt.txt",
+    "user_action_required": "Account Holder must check and accept any pending or expired Apple Developer legal agreement; cannot infer completed acceptance from elapsed time",
+    "official_role_reference": "https://developer.apple.com/help/account/access/roles/",
+    "retry_planned": "Only failed macOS release job at same unchanged source/tag after user confirms account state; no retry has been performed"
+  },
+  "windows": {
+    "build": "SUCCESS",
+    "signature_verified": true,
+    "tampered_payload_rejected": true,
+    "key_id_hex": "835d6b3831e133aa",
+    "outer_installer_icon_match": "expected_icon_present",
+    "matching_icon_frames": 7,
+    "gui_installation_executed": false
+  },
+  "draft": {
+    "release_id": 401478979,
+    "tag_name": "hanpage-desktop-v0.8.7",
+    "draft": true,
+    "assets": [
+      {
+        "name": "HanPage_0.8.7_x64-setup.exe",
+        "bytes": 39860953,
+        "digest": "sha256:3e4696923e5edbd7a6ca0e088815de951ac10f99e9c400f6c6a31a7cfb70a083"
+      },
+      {
+        "name": "HanPage_0.8.7_x64-setup.exe.sig",
+        "bytes": 416,
+        "digest": "sha256:52dffca9bbb3a2de99d0503f8d1f58960f1eecd8267c43382575a4e3771a19e5"
+      },
+      {
+        "name": "latest.json",
+        "bytes": 1283,
+        "digest": "sha256:961faa0f18a6da9d9e7c5c6b9ca9e01543d2d1bc39a09748fc372740f4de958b"
+      }
+    ],
+    "manifest_platforms": [
+      "windows-x86_64",
+      "windows-x86_64-nsis"
+    ],
+    "publication_gate": "HOLD; macOS payload/signature missing, requires all6assets and4platformkeys"
+  },
+  "public_updater": {
+    "version": "0.8.3",
+    "platform_keys": [
+      "darwin-aarch64",
+      "darwin-aarch64-app",
+      "windows-x86_64",
+      "windows-x86_64-nsis"
+    ],
+    "sha256": "83c763fbac6f32ef26198252769c95b3caaae8017e89f1f48a5b5ec90366ae7d",
+    "unchanged": true
+  },
+  "postrelease_work_remaining": [
+    "macOS notarization and package verification",
+    "full updater manifest and asset verification",
+    "publish release and verify public latest endpoint",
+    "single final docs/assets operating commit",
+    "local devel CAS without primary checkout mutation",
+    "Issue112 closure without comments",
+    "owned artifact cleanup after permanent evidence exists"
+  ],
+  "limits": [
+    "No app installation/restart or Windows GUI test",
+    "No source/secret/permission change for this account failure",
+    "Primary original39files and unfinished release temporary evidence retained"
+  ]
+}

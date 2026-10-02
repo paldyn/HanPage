@@ -1,0 +1,41 @@
+{
+  "app": "output/pr-review/hp112/macos-v087-extracted/HanPage.app",
+  "version": "0.8.7",
+  "bundle_identifier": "com.paldyn.hanpage",
+  "architecture": "arm64",
+  "archive_bytes": 42682044,
+  "archive_sha256": "e9fc3a97c87e99b63c3142da7fa8a469ec788b64278cc35f94d08a1b83b24945",
+  "icon_sha256": "8260b6100180a8c589c5b63943d77587fc575bbc74d591d3249557a6df8d70c4",
+  "icon_matches_source": true,
+  "checks": [
+    {
+      "check": "codesign_verify",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "output/pr-review/hp112/macos-v087-extracted/HanPage.app: valid on disk\noutput/pr-review/hp112/macos-v087-extracted/HanPage.app: satisfies its Designated Requirement\n"
+    },
+    {
+      "check": "codesign_identity",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "Executable=<workspace>/output/pr-review/hp112/macos-v087-extracted/HanPage.app/Contents/MacOS/HanPage\nIdentifier=com.paldyn.hanpage\nFormat=app bundle with Mach-O thin (arm64)\nCodeDirectory v=20500 size=419262 flags=0x10000(runtime) hashes=13095+3 location=embedded\nVersionPlatform=1\nVersionMin=720896\nVersionSDK=918784\nHash type=sha256 size=32\nCandidateCDHash sha256=dd6d8dc4e34bb4a78ba186dd5241c32258e4d5ec\nCandidateCDHashFull sha256=dd6d8dc4e34bb4a78ba186dd5241c32258e4d5ec78ada5d4a779510db07b3289\nHash choices=sha256\nCMSDigest=dd6d8dc4e34bb4a78ba186dd5241c32258e4d5ec78ada5d4a779510db07b3289\nCMSDigestType=2\nExecutable Segment base=0\nExecutable Segment limit=50167808\nExecutable Segment flags=0x1\nPage size=4096\nCDHash=dd6d8dc4e34bb4a78ba186dd5241c32258e4d5ec\nSignature size=8968\nAuthority=Developer ID Application: Wonmo Lee (8L78W6D8XF)\nAuthority=Developer ID Certification Authority\nAuthority=Apple Root CA\nTimestamp=Oct 2, 2026 at 11:35:56 AM\nNotarization Ticket=stapled\nInfo.plist entries=16\nTeamIdentifier=8L78W6D8XF\nRuntime Version=14.5.0\nSealed Resources version=2 rules=13 files=1\nInternal requirements count=1 size=180\n"
+    },
+    {
+      "check": "gatekeeper",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "output/pr-review/hp112/macos-v087-extracted/HanPage.app: accepted\nsource=Notarized Developer ID\n"
+    },
+    {
+      "check": "stapler",
+      "exit_code": 0,
+      "stdout": "Processing: <workspace>/output/pr-review/hp112/macos-v087-extracted/HanPage.app\nThe validate action worked!\n",
+      "stderr": ""
+    }
+  ],
+  "developer_id_identity_present": true,
+  "notarized_gatekeeper_source": true,
+  "all_checks_passed": true,
+  "team_identifier_matches_previous_public_app": true,
+  "verification_scope": "Read-only downloaded actual 0.8.7 app, without launching/installing/restarting user app"
+}

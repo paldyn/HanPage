@@ -1,0 +1,36 @@
+import base64, hashlib, json, sys
+from pathlib import Path
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+from cryptography.exceptions import InvalidSignature
+
+def verify(data, key_outer, sig_outer):
+    decode=lambda x:base64.b64decode(x,validate=True)
+    k=decode(key_outer).decode().splitlines();s=decode(sig_outer).decode().splitlines()
+    assert len(k)==2 and len(s)==4
+    kp,sp,gs=decode(k[1]),decode(s[1]),decode(s[3])
+    assert len(kp)==42 and len(sp)==74 and len(gs)==64
+    assert kp[:2] in (b'Ed',b'ED') and kp[2:10]==sp[2:10]
+    assert sp[:2] in (b'Ed',b'ED') and s[2].startswith('trusted comment: ')
+    comment=s[2][len('trusted comment: '):].encode()
+    message=hashlib.blake2b(data,digest_size=64).digest() if sp[:2]==b'ED' else data
+    key=Ed25519PublicKey.from_public_bytes(kp[10:]);key.verify(sp[10:],message);key.verify(gs,sp[10:]+comment)
+    return {'algorithm':sp[:2].decode(),'key_id_hex':kp[2:10].hex(),'trusted_comment':comment.decode()}
+
+folder=Path(sys.argv[1]);config=json.loads(Path(sys.argv[2]).read_text());manifest=json.loads((folder/'latest.json').read_text())
+expected=sys.argv[3];assert manifest['version']==expected
+keys={'darwin-aarch64','darwin-aarch64-app','windows-x86_64','windows-x86_64-nsis'}
+assert set(manifest['platforms'])==keys
+results=[]
+for platform in ['darwin-aarch64','windows-x86_64']:
+    item=manifest['platforms'][platform];url=item['url']
+    assert url.startswith('https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v'+expected+'/'),url
+    name=url.rsplit('/',1)[1];assert name==('HanPage_aarch64.app.tar.gz' if platform.startswith('darwin') else 'HanPage_'+expected+'_x64-setup.exe'),name;data=(folder/name).read_bytes();sig=(folder/(name+'.sig')).read_text().strip()
+    assert item['signature']==sig
+    alias=platform+('-app' if platform.startswith('darwin') else '-nsis')
+    assert manifest['platforms'][alias]['url']==url and manifest['platforms'][alias]['signature']==sig
+    v=verify(data,config['plugins']['updater']['pubkey'],sig)
+    try:verify(data[:-1]+bytes([data[-1]^1]),config['plugins']['updater']['pubkey'],sig)
+    except InvalidSignature:negative=True
+    else:raise AssertionError('corrupted payload accepted')
+    results.append({'platform':platform,'asset':name,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest(),'signature_verified':True,'tampered_payload_rejected':negative,**v})
+print(json.dumps({'version':expected,'platform_keys':sorted(keys),'updater_payloads':results},indent=2))

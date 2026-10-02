@@ -1,0 +1,14 @@
+import hashlib,json,pathlib,sys
+folder=pathlib.Path(sys.argv[1]);metadata=json.loads(pathlib.Path(sys.argv[2]).read_text());version=sys.argv[3]
+assert metadata['tag_name']=='hanpage-desktop-v'+version
+assert metadata['draft'] is True and metadata['prerelease'] is False
+expected={f'HanPage_{version}_aarch64.dmg',f'HanPage_{version}_x64-setup.exe',f'HanPage_{version}_x64-setup.exe.sig','HanPage_aarch64.app.tar.gz','HanPage_aarch64.app.tar.gz.sig','latest.json'}
+assert {a['name'] for a in metadata['assets']}==expected
+checks=[]
+for a in metadata['assets']:
+    assert a['state']=='uploaded'
+    p=folder/a['name'];assert p.is_file() and p.stat().st_size==a['size'],a['name']
+    digest=hashlib.sha256(p.read_bytes()).hexdigest()
+    if a.get('digest'):assert a['digest']=='sha256:'+digest
+    checks.append({'name':a['name'],'bytes':a['size'],'sha256':digest,'api_digest':a.get('digest'),'size_matches_api':True})
+print(json.dumps({'tag':metadata['tag_name'],'release_id':metadata['id'],'draft':True,'assets':checks,'all_assets_complete':True},indent=2))

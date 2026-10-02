@@ -1,0 +1,372 @@
+{
+  "schema": "hanpage.desktop-release-validation-controls.v1",
+  "prepared_at_utc": "2026-10-02T01:48:59.051823+00:00",
+  "release_context": {
+    "version": "0.8.7",
+    "run_id": 36952025097,
+    "state": "building as reported by the coordinating agent",
+    "v087_artifact_verification_status": "not yet performed by this evidence-packaging task"
+  },
+  "provenance": {
+    "signature": {
+      "context": "repository/output/pr-review/hp112/signature-control-v083-result.json",
+      "bytes": 1017,
+      "sha256": "b6f0ffe08f187124d013e0f751e3894645eaff4195f87ea1baba54751a862c14"
+    },
+    "negative": {
+      "context": "validation-temporary/hanpage_windows_icon_negative_v083_20261002.json",
+      "bytes": 14008,
+      "sha256": "c779f832df70abdfd518b35889cb42ca1a7ec7a2527e845a5f183e351e59c418"
+    },
+    "positive": {
+      "context": "validation-temporary/hanpage_windows_icon_positive_v083_20261002.json",
+      "bytes": 13948,
+      "sha256": "d031e7125c07c453a0d2b3d4a0b6e3a348464802880d69cc3f5707c4e3759f7f"
+    },
+    "installed_updater": {
+      "context": "repository/output/pr-review/hp112/installed-updater-contract.json",
+      "bytes": 151,
+      "sha256": "f4b85dfc2aa1edaebad1ea3906705e7c5f920eb4da45574eeb4a15e9ba017526"
+    },
+    "installed_app": {
+      "context": "repository/output/pr-review/hp112/installed-app-before.json",
+      "bytes": 328,
+      "sha256": "0203c2f2ed637f3df30793dd2e389f9b99a9de47dc1f0c1b4bee186219d6855a"
+    },
+    "release_boundary": {
+      "context": "repository/output/pr-review/hp112/release-event-boundary-audit.json",
+      "bytes": 386,
+      "sha256": "f17db2cca8e11d4794e439189e6c272db4421ef60fbc201191f1d64682c7dd5c"
+    },
+    "primary_final": {
+      "context": "repository/output/pr-review/hp112/primary-preservation-final.json",
+      "bytes": 426,
+      "sha256": "ac83062a77c944775dd1adde02596f780d79a2b2a63a9ff3f0f9374f1ffe84df"
+    },
+    "snapshot": {
+      "context": "repository/output/pr-review/hp112/logo-input-snapshot.json",
+      "bytes": 7727,
+      "sha256": "0a0d1a903728ba41e0d2c3340d8e08008bd15f3959ec7373a8f06a21ee1765e5"
+    },
+    "icon_tool": {
+      "context": "validation-temporary/hanpage_windows_icon_verify_20261002.py",
+      "bytes": 15269,
+      "sha256": "ddb561a88f55d0d8dac464ed1f5b1de66539a4744c0cf6cadd8cced4a344319b"
+    }
+  },
+  "updater_public_key_identity": {
+    "source_context": "repository/HanPage-Desktop/src-tauri/tauri.conf.json (unchanged original 0.8.3 config)",
+    "public_key_algorithm": "Ed",
+    "key_id_packet_hex": "835d6b3831e133aa",
+    "key_id_little_endian_display_hex": "aa33e131386b5d83",
+    "public_key_text_sha256": "90046ede9558e71ec15280e8ee1d25594e302b74c9f33d4cb91ac16664997141",
+    "public_key_packet_sha256": "aeeadba09a9693876933588b3b61509f296c3a6fe9d3b460c36a4370001fe480",
+    "public_key_raw_32_sha256": "93435a67da952d7ca85b3a1ac1a0192b343132861cfd52f6055dca67635f6097",
+    "updater_endpoint": [
+      "https://github.com/paldyn/HanPage/releases/latest/download/latest.json"
+    ]
+  },
+  "signature_control_v083": {
+    "version": "0.8.3",
+    "platform_keys": [
+      "darwin-aarch64",
+      "darwin-aarch64-app",
+      "windows-x86_64",
+      "windows-x86_64-nsis"
+    ],
+    "updater_payloads": [
+      {
+        "platform": "darwin-aarch64",
+        "asset": "HanPage_aarch64.app.tar.gz",
+        "bytes": 40127263,
+        "sha256": "c9566cbcb751f479bebe550c8bd2f037ed6eb0ff6f5cb57f20e8bff57504a368",
+        "signature_verified": true,
+        "tampered_payload_rejected": true,
+        "algorithm": "ED",
+        "key_id_hex": "835d6b3831e133aa",
+        "trusted_comment": "timestamp:1785852225\tfile:HanPage.app.tar.gz",
+        "current_payload_hash_matches_recorded": true,
+        "signature_file_sha256": "96a9ce43f94197d78379a387a20e90ecd054e0beeebcee54fbf4f36cfa98ea9a",
+        "signature_packet_key_id_hex": "835d6b3831e133aa",
+        "signature_key_id_matches_current_public_key": true,
+        "signature_packet_algorithm": "ED",
+        "signature_verification_provenance": "Prior recorded actual verification and tampered-payload control; cryptographic verification was not rerun by this evidence-packaging task."
+      },
+      {
+        "platform": "windows-x86_64",
+        "asset": "HanPage_0.8.3_x64-setup.exe",
+        "bytes": 38276503,
+        "sha256": "996047a3c3ec168a171741d39427f22bfe3d131f8e0f2bbef8e3752daee75013",
+        "signature_verified": true,
+        "tampered_payload_rejected": true,
+        "algorithm": "ED",
+        "key_id_hex": "835d6b3831e133aa",
+        "trusted_comment": "timestamp:1785852538\tfile:HanPage_0.8.3_x64-setup.exe",
+        "current_payload_hash_matches_recorded": true,
+        "signature_file_sha256": "d3d6baa2cab5d2c341a2cec8729ba67f4a85a0e7bc2368d39924e6b90af498b1",
+        "signature_packet_key_id_hex": "835d6b3831e133aa",
+        "signature_key_id_matches_current_public_key": true,
+        "signature_packet_algorithm": "ED",
+        "signature_verification_provenance": "Prior recorded actual verification and tampered-payload control; cryptographic verification was not rerun by this evidence-packaging task."
+      }
+    ],
+    "manifest_sha256": "83c763fbac6f32ef26198252769c95b3caaae8017e89f1f48a5b5ec90366ae7d",
+    "manifest_platform_keys_match_recorded": true
+  },
+  "windows_icon_controls": {
+    "method": "Read PE32/PE32+ resource sections and resolve RT_GROUP_ICON 14 to RT_ICON 3; compare full frame multisets by encoded payload SHA256 and unscaled decoded top-left RGBA8 SHA256. ICO frame order is ignored.",
+    "negative": {
+      "purpose": "Actual 0.8.3 installer outer icons compared with new HanPage source ICO",
+      "status": "expected_icon_absent",
+      "exit_code": 1,
+      "exe_sha256": "996047a3c3ec168a171741d39427f22bfe3d131f8e0f2bbef8e3752daee75013",
+      "expected_ico_sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+      "expected_ico_bytes": 100921,
+      "rt_icons": 7,
+      "rt_groups": 1,
+      "pillow_version": "12.3.0",
+      "groups": [
+        {
+          "group_id": 103,
+          "language_id": 1033,
+          "frames": 7,
+          "directory_sha256": "fed46e06346fb8f64b14c18408a82caf955929ac0e65151630539dc5bd194584",
+          "comparison": {
+            "frame_count_matches_source": true,
+            "frame_dimensions_multiset_matches_source": false,
+            "payload_multiset_matches_source": false,
+            "rgba_multiset_matches_source": false,
+            "matching_payload_frames": 0,
+            "matching_rgba_frames": 0,
+            "frame_order_is_not_required": true,
+            "full_source_match": false
+          },
+          "errors": []
+        }
+      ],
+      "audit_errors": []
+    },
+    "positive": {
+      "purpose": "Actual 0.8.3 installer compared with its extracted group103 ICO; validates parser agreement, not an independent source-asset provenance check",
+      "status": "expected_icon_present",
+      "exit_code": 0,
+      "exe_sha256": "996047a3c3ec168a171741d39427f22bfe3d131f8e0f2bbef8e3752daee75013",
+      "expected_ico_sha256": "95c36884a12b4bde8db9a3587f7bdb05e7232a4e9a095202ace4eba693412e05",
+      "expected_ico_bytes": 13902,
+      "rt_icons": 7,
+      "rt_groups": 1,
+      "pillow_version": "12.3.0",
+      "groups": [
+        {
+          "group_id": 103,
+          "language_id": 1033,
+          "frames": 7,
+          "directory_sha256": "fed46e06346fb8f64b14c18408a82caf955929ac0e65151630539dc5bd194584",
+          "comparison": {
+            "frame_count_matches_source": true,
+            "frame_dimensions_multiset_matches_source": true,
+            "payload_multiset_matches_source": true,
+            "rgba_multiset_matches_source": true,
+            "matching_payload_frames": 7,
+            "matching_rgba_frames": 7,
+            "frame_order_is_not_required": true,
+            "full_source_match": true
+          },
+          "errors": []
+        }
+      ],
+      "audit_errors": []
+    },
+    "old_exe_frame_proof": [
+      {
+        "resource_id": 7,
+        "language_id": 1033,
+        "width": 16,
+        "height": 16,
+        "bit_count": 0,
+        "encoding": "DIB",
+        "payload_sha256": "491e52ded039ec6684277e6f1f820e288763ae6d20e682bcfffb6cee4518ac23",
+        "rgba_sha256": "74247f8f9da8124de36a624e939ce179397af2a2e30a1b0d185422e04a61a771"
+      },
+      {
+        "resource_id": 4,
+        "language_id": 1033,
+        "width": 16,
+        "height": 16,
+        "bit_count": 8,
+        "encoding": "DIB",
+        "payload_sha256": "61f762babde9942f43ee97154b8734efeed0632a6ea778dc395793ae3e3e7507",
+        "rgba_sha256": "5ff2efd1717addef3ae78f4be74e9ceb9e4608688aa502843f33f79f16fb5f63"
+      },
+      {
+        "resource_id": 6,
+        "language_id": 1033,
+        "width": 32,
+        "height": 32,
+        "bit_count": 0,
+        "encoding": "DIB",
+        "payload_sha256": "ff06189b43a5c1d6cc5d1b7cbf6ab56b1157ec52807945d652274a211462cba5",
+        "rgba_sha256": "968ed5b7ecc795e499b57d77c15e656d10dd241b265ae0d8be592f28b0e0cf78"
+      },
+      {
+        "resource_id": 3,
+        "language_id": 1033,
+        "width": 32,
+        "height": 32,
+        "bit_count": 8,
+        "encoding": "DIB",
+        "payload_sha256": "9da1013c864092e49c2676b3ba68a0d4513457d77d251730ed73cc5f4a4813b1",
+        "rgba_sha256": "693f32be8c48342fbd3ee54d21f26a91a827e328845755582cd4147bd8e1468b"
+      },
+      {
+        "resource_id": 2,
+        "language_id": 1033,
+        "width": 48,
+        "height": 48,
+        "bit_count": 8,
+        "encoding": "DIB",
+        "payload_sha256": "50279c9885b490e74b49ac0273940b6e0891b62fc9ffb5c52e35422a694f248b",
+        "rgba_sha256": "b87895d68b3f1a28b3b502024f95dcf3b7ae098b22e893070e17e00d1009217e"
+      },
+      {
+        "resource_id": 5,
+        "language_id": 1033,
+        "width": 16,
+        "height": 16,
+        "bit_count": 32,
+        "encoding": "DIB",
+        "payload_sha256": "69e6579a37fcaec037634e7fecbfc6a26093ea81dc4bd555d8a12187d2cd0866",
+        "rgba_sha256": "3b9d772d8d9e92bb0d1f5d6bec1ce6d8aac8e8765b661b76db4c4679af768ac3"
+      },
+      {
+        "resource_id": 1,
+        "language_id": 1033,
+        "width": 32,
+        "height": 32,
+        "bit_count": 32,
+        "encoding": "DIB",
+        "payload_sha256": "d442adb90ba296c7e617d2f58d6fa6f308bcd8ef65e5e9c66db4dd27f93fcfbe",
+        "rgba_sha256": "6ec4ae9b014769bc6dd95a5e6aab2f9158b2ebfc9ccc47f556992642f9407363"
+      }
+    ],
+    "new_source_frame_proof": [
+      {
+        "width": 256,
+        "height": 256,
+        "bit_count": 32,
+        "encoding": "PNG",
+        "payload_sha256": "e54b8ef106a69a97208df5677ee2d34d703782acb8f36866b17aa077a140c0cf",
+        "rgba_sha256": "8a4b4be6fc5f64ee00d9e926577c735c733c639647285d2afa2ae85a936ae741"
+      },
+      {
+        "width": 128,
+        "height": 128,
+        "bit_count": 32,
+        "encoding": "PNG",
+        "payload_sha256": "ad9c70c86fda974e7d772acfb5b5b20ebd5aeecd40e6aa96fc26cd06a10fc38b",
+        "rgba_sha256": "4499b2f82673297c0a9621b41a8b50fabfbf7cb280c20ef3bdab3b7ee5bb57d3"
+      },
+      {
+        "width": 64,
+        "height": 64,
+        "bit_count": 32,
+        "encoding": "PNG",
+        "payload_sha256": "50e4e1692a3f1a216347117d4c13efaa0f5f19b072c8abe6e8f8f8ffc4cb7ef8",
+        "rgba_sha256": "6f0dba5a558a29bafd38a91019ef24ec75424ea2f8338ae201225f648b53f23f"
+      },
+      {
+        "width": 48,
+        "height": 48,
+        "bit_count": 32,
+        "encoding": "PNG",
+        "payload_sha256": "6c439f4660fbfef1cc96bf3c3f486dbe676383f1f88682eb2b3aca91eb678774",
+        "rgba_sha256": "9d26bdaef7fcb77ccc4e621efdadabe9c22c7a20e3db0e60fda20a8eb446ca09"
+      },
+      {
+        "width": 32,
+        "height": 32,
+        "bit_count": 32,
+        "encoding": "PNG",
+        "payload_sha256": "cf758a12b400a449ba2f7691302c3b5dff3f09663cce5b5cd99a396c487ebfc3",
+        "rgba_sha256": "4bb4f6c7a0bd9c4fccd9f1d323574322ea05612985c8cdf08a2869137f8f3bb2"
+      },
+      {
+        "width": 24,
+        "height": 24,
+        "bit_count": 32,
+        "encoding": "PNG",
+        "payload_sha256": "87af0946fe9493dbef838c485fa60030477d003348e0cb11ec13352362ff4139",
+        "rgba_sha256": "af37d5c2972a3693f605f05ed6105f57c289740e96312383a61f4d79cfeabe45"
+      },
+      {
+        "width": 16,
+        "height": 16,
+        "bit_count": 32,
+        "encoding": "PNG",
+        "payload_sha256": "5af7ea7713a067cb41c7fdf3d073949ad0191af9ee6baeb7bb5a58aa7706f4a7",
+        "rgba_sha256": "225f5b1fe36acf1ff28ad9008210a13295cf05ae65d88ee706ec7b433162cbd1"
+      }
+    ],
+    "limitations": [
+      "Outer installer PE icons only. NSIS compressed app executable, embedded uninstaller, banner bitmaps and installed GUI were not inspected.",
+      "Positive reference ICO was reconstructed from the same old EXE resource group. The old EXE versus new ICO negative control independently establishes that this control distinguishes the supplied new artwork from old installer resources."
+    ]
+  },
+  "installed_app_snapshot": {
+    "installed_mac_version_before": "0.8.2",
+    "identifier": "com.paldyn.hanpage",
+    "agent_installed_or_restarted_user_app": false,
+    "rollout_target": "0.8.6",
+    "expected_first_upgrade_ui": "0.8.2 legacy updater; new background-ready toast applies after update",
+    "source_head": "1afd7a501c4b5485e5e6fe96a327419d283be282"
+  },
+  "installed_updater_contract": {
+    "installed_mac_version": "0.8.2",
+    "same_updater_public_key_present": true,
+    "same_release_endpoint_present": true,
+    "binary_read_only": true
+  },
+  "installed_app_interpretation": {
+    "current_release_target": "0.8.7",
+    "historical_snapshot_rollout_target": "0.8.6",
+    "historical_installed_version": "0.8.2",
+    "snapshot_was_not_refreshed_here": true,
+    "agent_installed_or_restarted_user_app": false,
+    "app_installation_gui_update_not_claimed": true
+  },
+  "release_event_boundary_audit": {
+    "tagged_source_release_event_handlers": [],
+    "default_branch": "main",
+    "workflow_source_for_release": "event tag commit",
+    "evidence": [
+      "https://docs.github.com/en/actions/concepts/workflows-and-actions/workflows#workflow-triggers",
+      "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#release"
+    ],
+    "main_publication_workflow_is_not_event_source": true
+  },
+  "release_boundary_scope": "Preserves prior recorded audit of tagged workflow event source. This task made no GitHub/API or network calls and did not independently re-audit current run/source.",
+  "primary_original_preservation": {
+    "schema": "hanpage.primary-original-input-preservation.v1",
+    "checked_at_utc": "2026-10-02T01:48:59.051823+00:00",
+    "primary_context": "repository",
+    "primary_head": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+    "snapshot_baseline": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+    "snapshot_sha256": "0a0d1a903728ba41e0d2c3340d8e08008bd15f3959ec7373a8f06a21ee1765e5",
+    "original_input_files": 39,
+    "all_original_hashes_preserved": true,
+    "status_exact_snapshot": true,
+    "extra_dirty_or_untracked_paths": [],
+    "primary_sync_performed": false,
+    "temporary_stash_created": false,
+    "reason": "Automatic approval review rejected stash/fast-forward/drop because user original changes could be lost; kept the original checkout unchanged and continued the approved release from the isolated worktree."
+  },
+  "preservation_evidence": {
+    "context": "validation-temporary/hanpage_primary_preservation_v087_20261002.json",
+    "sha256": "49277744292b4020274255fcaa95668d2d1f32744b5a9de805bc4ea93c7b4c9d"
+  },
+  "task_limitations": [
+    "No fresh 0.8.7 payload, updater signature, macOS signing/notarization, or Windows icon acceptance result is asserted yet.",
+    "Static installed-app/updater contract records do not prove an installation, app launch, updater GUI interaction, or completed user upgrade.",
+    "Original primary config remains 0.8.3 with the supplied local logo changes; release is being prepared separately."
+  ]
+}
