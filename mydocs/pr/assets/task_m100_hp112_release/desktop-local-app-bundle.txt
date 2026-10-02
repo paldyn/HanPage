@@ -1,0 +1,8 @@
+
+> hanpage-desktop@0.8.6 tauri
+> tauri bundle --bundles app --no-sign --ci --config {"bundle":{"createUpdaterArtifacts":false}}
+
+    Bundling HanPage.app (/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review/release/bundle/macos/HanPage.app)
+        Warn Skipping signing due to --no-sign flag.
+    Finished 1 bundle at:
+        /Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review/release/bundle/macos/HanPage.app

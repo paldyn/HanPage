@@ -1,0 +1,17 @@
+E...
+======================================================================
+ERROR: test_release_channel_policy_workflow (unittest.loader._FailedTest)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_release_channel_policy_workflow
+Traceback (most recent call last):
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/unittest/loader.py", line 154, in loadTestsFromName
+    module = __import__(module_name)
+  File "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/scripts/tests/test_release_channel_policy_workflow.py", line 12, in <module>
+    import tomllib
+ModuleNotFoundError: No module named 'tomllib'
+
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.002s
+
+FAILED (errors=1)

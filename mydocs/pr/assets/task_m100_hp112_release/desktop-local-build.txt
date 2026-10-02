@@ -1,0 +1,29 @@
+
+> hanpage-desktop@0.8.6 build
+> tauri build --no-bundle --ci -- --locked
+
+        Info Looking up installed tauri packages to check mismatched versions...
+     Running beforeBuildCommand `npm run build:frontend`
+
+> hanpage-desktop@0.8.6 build:frontend
+> npm run copy-wasm && npm --prefix ../rhwp-studio run build:desktop
+
+
+> hanpage-desktop@0.8.6 copy-wasm
+> node -e "const fs=require('fs');for(const f of ['rhwp_bg.wasm','rhwp.js'])fs.copyFileSync('../pkg/'+f,'../rhwp-studio/public/'+f)"
+
+
+> rhwp-studio@0.8.6 build:desktop
+> tsc && cross-env VITE_TARGET=desktop vite build --base=./
+
+file:///Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/rhwp-studio/node_modules/rolldown/dist/shared/create-bundler-option-YGKfBl_D.mjs:8
+import { formatWithOptions, styleText } from "node:util";
+                            ^^^^^^^^^
+SyntaxError: The requested module 'node:util' does not provide an export named 'styleText'
+    at ModuleJob._instantiate (node:internal/modules/esm/module_job:132:21)
+    at async ModuleJob.run (node:internal/modules/esm/module_job:214:5)
+    at async ModuleLoader.import (node:internal/modules/esm/loader:329:24)
+
+Node.js v20.11.1
+beforeBuildCommand `npm run build:frontend` failed with exit code 1
+       Error beforeBuildCommand `npm run build:frontend` failed with exit code 1

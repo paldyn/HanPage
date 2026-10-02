@@ -1,0 +1,10 @@
+{
+  "version": "0.8.6",
+  "identifier": "com.paldyn.hanpage",
+  "icon_file": "icon.icns",
+  "icon_sha256": "8260b6100180a8c589c5b63943d77587fc575bbc74d591d3249557a6df8d70c4",
+  "source_icns_identical": true,
+  "desktop_dist_no_service_worker": true,
+  "desktop_dist_verified_wasm_identical": true,
+  "local_bundle_unsigned_test_only": true
+}
