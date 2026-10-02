@@ -132,9 +132,20 @@ async function captureStatusBar(page, name) {
   await page.screenshot({ path: file, clip });
   screenshots.push(file);
   console.log(`  Status Bar Screenshot: ${file}`);
+  const entryClip = await page.$eval('#desktop-update-entry', el => {
+    const rect = el.getBoundingClientRect();
+    const x = Math.max(0, rect.x - 16);
+    const y = Math.max(0, rect.y - 14);
+    return { x, y, width: Math.min(innerWidth - x, rect.width + 80), height: Math.min(innerHeight - y, rect.height + 28) };
+  });
+  const entryFile = path.join(outputDir, `${name}-entry.png`);
+  await page.screenshot({ path: entryFile, clip: entryClip });
+  screenshots.push(entryFile);
 }
 
 async function clickFileMenu(page, command) {
+  await page.bringToFront();
+  console.log(`  Menu: ${command} (${page.url()})`);
   await page.click('.menu-item[data-menu="file"] .menu-title');
   await page.click(`.menu-item[data-menu="file"] .md-item[data-cmd="${command}"]`);
 }
@@ -623,7 +634,9 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
     '일반 웹에서는 업데이트 카드·상태 버튼·파일 메뉴가 모두 생기지 않는다');
 
   setTestCase('실제 한국어·영어 제품 정보 · PALDYN 재배포 표기');
-  for (const [locale, aboutPage] of [['ko', web], ['en', await createPage(browser)]]) {
+  for (const locale of ['ko', 'en']) {
+    console.log(`  About: ${locale}`);
+    const aboutPage = locale === 'ko' ? web : await createPage(browser);
     if (locale === 'en') await loadApp(aboutPage, '/?lang=en');
     await clickFileMenu(aboutPage, 'file:about');
     await aboutPage.waitForSelector('.modal-overlay .about-body');

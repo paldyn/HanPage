@@ -259,7 +259,7 @@ export function installUpdateNotice(options?: { beforeApply?: () => Promise<bool
   entry.id = 'desktop-update-entry';
   entry.className = 'stb-update-button';
   entry.type = 'button';
-  entry.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v11m-4-4 4 4 4-4M5 16v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3"/></svg><span class="stb-update-label" aria-live="polite"></span>';
+  entry.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v11m-4-4 4 4 4-4M5 16v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3"/></svg><span class="stb-update-label"></span>';
   entry.addEventListener('click', () => { void handleManualUpdateCheck(); });
   const statusBar = document.getElementById('status-bar');
   if (statusBar) statusBar.insertBefore(entry, statusBar.querySelector('.stb-right'));
