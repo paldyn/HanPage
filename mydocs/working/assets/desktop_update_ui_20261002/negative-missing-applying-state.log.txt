@@ -1,0 +1,21 @@
+   Compiling hanpage-update-module-probe v0.0.0 (/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/desktop-update-ui/negative-probes/20261002T035548Z-88fd64a7/missing-applying-state)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running test.rs (/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review/debug/deps/negative_probe_missing_applying_state_88fd64a7-aa59640f73c8d48e)
+
+running 1 test
+
+thread 'deferred_download_is_reused_and_only_one_apply_can_take_it' (86180904) panicked at test.rs:74:5:
+assertion `left == right` failed
+  left: Ready { version: "0.8.8" }
+ right: Applying { version: "0.8.8" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test deferred_download_is_reused_and_only_one_apply_can_take_it ... FAILED
+
+failures:
+
+failures:
+    deferred_download_is_reused_and_only_one_apply_can_take_it
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test negative_probe_missing_applying_state_88fd64a7`

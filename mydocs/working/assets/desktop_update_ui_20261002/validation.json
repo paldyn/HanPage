@@ -1,0 +1,178 @@
+{
+  "code_head": "1399e07764bdf924c5ba4f6c77f9ad4f0fa40511",
+  "base_sha": "71f327f2ffdbc20bc3b8926d136ead049caeeb68",
+  "source_hashes": {
+    "HanPage-Desktop/src-tauri/src/lib.rs": "5421604600b4504970975752295a12376d9de2fb78dc4ee937605a16fc3288c5",
+    "HanPage-Desktop/src-tauri/src/update_state.rs": "254f3eddf64da97be527ce17a8f36e1974bff7f340e61fa6996b584800ec614d",
+    "rhwp-studio/src/main.ts": "057a19bcc28ea0d49b1751f0fa8530cdb567013965332e50d2f22b502bfde4a8",
+    "rhwp-studio/src/core/desktop-bridge.ts": "beef81d25c6009177638dd41e71d7b014882e45e8c3173e053bdaa4422efa55f",
+    "rhwp-studio/src/ui/update-notice.ts": "92ddd2d427547833ae60351cd0f7e1e56b6e54c26a36c3f632a095df049c676f",
+    "rhwp-studio/src/ui/update-notice-text.ts": "d824f9d5dff3c46904f0d3587f136294f9bcac8abae584a0c123040cc9e44ecd",
+    "rhwp-studio/src/styles/update-notice.css": "079f91c229ea78309ccd01511457ec80390dbf3a52fac62eff4ebceb6df27c58",
+    "rhwp-studio/src/style.css": "61ba7be5f693d79e49cdcfc04f87155af01461ae97458348ad84b1432c356952",
+    "rhwp-studio/e2e/desktop-update-ui.test.mjs": "f140e0284d6a19833c75301dd81f92a471c5a2aca0c97b9a5adfc4e49fc6af11",
+    "tests/cases/hanpage_desktop_update_state.rs": "e7c9454868a357e2417ddc97dd3dada54c63ad121bccdba4d334fbf784443611",
+    "tests/suites/suite-policy.json": "4f9e6a091c67a0415dd5fe4f8674ca8bbf1dcdcbc1887062c8a4872a3ca19e1d"
+  },
+  "studio": {
+    "pass": 1834,
+    "skip": 2,
+    "fail": 0
+  },
+  "native_state": {
+    "pass": 7,
+    "fail": 0,
+    "runner": "focused cargo test; nextest unavailable; no whole-suite claim"
+  },
+  "manifest_policy_tests": {
+    "pass": 23,
+    "fail": 0
+  },
+  "integration_targets": {
+    "current": 48,
+    "maximum": 48
+  },
+  "rust_lint": {
+    "native": "PASS",
+    "wasm32": "PASS",
+    "workspace_all_targets": "PASS",
+    "desktop_all_targets": "PASS"
+  },
+  "build": {
+    "workspace": "PASS",
+    "desktop": "PASS",
+    "typescript_vite_desktop": "PASS"
+  },
+  "wasm": {
+    "rhwp.js": "2b7e7bb01cbbff0cb0d3c9a3222c6cb187f9d9710045013bcfb077d7abef4133",
+    "rhwp_bg.wasm": "5c7a9a16c22cc6e0086d14d38df0386c5e63a1c75fe194a49848111c95011d12"
+  },
+  "negative_controls": {
+    "positive": 7,
+    "negative_detected": 2,
+    "code_head_mapped_by_matching_product_and_test_hashes": true
+  },
+  "primary_user_files": {
+    "count": 39,
+    "all_preserved": true
+  },
+  "not_executed": [
+    "actual updater download/install/restart",
+    "Windows native installer execution",
+    "new public release",
+    "whole nextest suite",
+    "GitHub PR/CI/push"
+  ],
+  "browser": {
+    "source_head": "1399e07764bdf924c5ba4f6c77f9ad4f0fa40511",
+    "pass": 55,
+    "fail": 0,
+    "ipc_mock_only": true,
+    "uncaught_errors": 0,
+    "images_sha256": {
+      "after-downloading-unknown.png": "70dad3408fa5f3d196474a4fc81399ef66f10b7094aba1fa5f113bdc960352ba",
+      "after-unsaved-small.png": "7bede4f5bcd58e7449d79347c3be57676adc48ad0e73042aed7bf4a5e2573397",
+      "ready-card.png": "148bb81e8bbb9976d987ec31872d37de0c3cc76e637c156e27cf1df491e10bbf",
+      "after-applying.png": "d082d9072176dee284ca160774a00da2d4992e46e5a1f2c322c4a7cfc92004fe",
+      "after-downloading-known.png": "628602d8260b981e3cabfc9d357f213868db1f182cc069b74f3f9593daeee1d6",
+      "before-v087-windows-ready.png": "8a6f8e4be4b33b5ae907f855e4095f7c35565398c2d1c02938775f4e041f3b78",
+      "after-macos-ready-light.png": "7e8d472d698291076f38c3a170806d1a6b48f54b0fc479f190b5470fa829fbee",
+      "applying-card.png": "5e1e84fe28d3f57378ce5eb5d5832be088bab2498a978d8f3c5f534495654735",
+      "after-windows-ready-light.png": "7fdf8d2091e0c8001e4414b16bd4db1fffc471a01d6ba56b75e63a79a1887824",
+      "after-ready-small-dark.png": "7811fcd83d93fcc99d06da57a245b2103cb43fa7ec632b6b3157fd082baab800",
+      "after-apply-error.png": "5a45fb4ea1d5db5d081141ae1c1cd1cb308b63525f0f4931f9c2a4e4a76aabbf",
+      "after-macos-ready-dark.png": "dd60eb3affd4f5961d791d744c599789b12575f5afad2b8fa6ec6c70b2bf1800"
+    },
+    "direct_visual_review": [
+      "ready light",
+      "ready dark",
+      "small dark",
+      "save dialog small",
+      "known download",
+      "applying moving bar"
+    ]
+  },
+  "logs_sha256": {
+    "studio-tests.log.txt": {
+      "sha256": "c32c1d649743f2cb6691fc6f274284de4cc6147c63c218c5156c2a51f7cf5732",
+      "raw_sha256": "c32c1d649743f2cb6691fc6f274284de4cc6147c63c218c5156c2a51f7cf5732",
+      "raw_archive": "studio-tests.log.gz"
+    },
+    "manifest-prepare.log.txt": {
+      "sha256": "d0712190b3d0a530119c6f0ee8a58c338ac04469d2fae6078a3fac618098f0c3",
+      "raw_sha256": "d0712190b3d0a530119c6f0ee8a58c338ac04469d2fae6078a3fac618098f0c3",
+      "raw_archive": "manifest-prepare.log.gz"
+    },
+    "manifest-policy-tests.log.txt": {
+      "sha256": "e8257f77ac606419d6756f773c650fdaefb406f88474ed80302c38e4ff70292c",
+      "raw_sha256": "e8257f77ac606419d6756f773c650fdaefb406f88474ed80302c38e4ff70292c",
+      "raw_archive": "manifest-policy-tests.log.gz"
+    },
+    "module-probe.log.txt": {
+      "sha256": "5b70324911133d561892ce2373155d09fcda65155ee25b2a77e821be37d9ede3",
+      "raw_sha256": "d34fd4e26d96cd2b10663767eb2785fdd5a11faad761a41fb8c00210986132e3",
+      "raw_archive": "module-probe.log.gz"
+    },
+    "negative-positive-control.log.txt": {
+      "sha256": "139b0d7fa558f0e8ee132bd1e1a1628171015712ae09f41567d747d23b02497b",
+      "raw_sha256": "0e541395aa96a38eb0e5da951be20dd2daf04a3b7f1c001f6829d3819eeba2f8",
+      "raw_archive": "negative-positive-control.log.gz"
+    },
+    "studio-build.log.txt": {
+      "sha256": "64e2f3d6acb4a47a57d6ab42506b35c6eeed4e1483398d93dad943b1cf65e381",
+      "raw_sha256": "7da225975604809630e9443dd071ea407db2dcc12d84413e718eca4c79ae4959",
+      "raw_archive": "studio-build.log.gz"
+    },
+    "root-workspace-build.log.txt": {
+      "sha256": "b4c780dc741cbf014368b4d5ec40ad00fae35da4bfeae760d29d64aef0e77441",
+      "raw_sha256": "b4c780dc741cbf014368b4d5ec40ad00fae35da4bfeae760d29d64aef0e77441",
+      "raw_archive": "root-workspace-build.log.gz"
+    },
+    "negative-missing-ready-restore.log.txt": {
+      "sha256": "3c1246b7f9f04990252b6b4c6871d63358dfd722d119eb3674ef998961d562ab",
+      "raw_sha256": "3c1246b7f9f04990252b6b4c6871d63358dfd722d119eb3674ef998961d562ab",
+      "raw_archive": "negative-missing-ready-restore.log.gz"
+    },
+    "native-state-tests.log.txt": {
+      "sha256": "830b9316e7a1a16df0550591314858b9e5a773eba2435646de488bbab32a7561",
+      "raw_sha256": "084f26907cd4cfd14a18f7cfe7acfdd11cddc0923c9142b154bbeb7a254fa281",
+      "raw_archive": "native-state-tests.log.gz"
+    },
+    "root-wasm-clippy.log.txt": {
+      "sha256": "04a501022f14f62d7bb86fb6528ccb9ff001407d788f5983845ae16a0b163359",
+      "raw_sha256": "04a501022f14f62d7bb86fb6528ccb9ff001407d788f5983845ae16a0b163359",
+      "raw_archive": "root-wasm-clippy.log.gz"
+    },
+    "desktop-clippy.log.txt": {
+      "sha256": "ad1f806604437fba7315206b45a8ba8d930b42851f386a5a57b0f445a4809094",
+      "raw_sha256": "ad1f806604437fba7315206b45a8ba8d930b42851f386a5a57b0f445a4809094",
+      "raw_archive": "desktop-clippy.log.gz"
+    },
+    "root-workspace-clippy.log.txt": {
+      "sha256": "3efdda984e8f29af68deeec9f6afc362fa03a37987f9866122f87a0fd3b21d3b",
+      "raw_sha256": "3efdda984e8f29af68deeec9f6afc362fa03a37987f9866122f87a0fd3b21d3b",
+      "raw_archive": "root-workspace-clippy.log.gz"
+    },
+    "desktop-build.log.txt": {
+      "sha256": "bec339c1d600c9baf263d6909919bf777c42796f1ad5424eca855dfb248d2b54",
+      "raw_sha256": "bec339c1d600c9baf263d6909919bf777c42796f1ad5424eca855dfb248d2b54",
+      "raw_archive": "desktop-build.log.gz"
+    },
+    "root-native-clippy.log.txt": {
+      "sha256": "ad5aca0d2ebc2f030a8a6463cbcdc243ab47f1cd6919b0ec2e95d5d31a3d955a",
+      "raw_sha256": "ad5aca0d2ebc2f030a8a6463cbcdc243ab47f1cd6919b0ec2e95d5d31a3d955a",
+      "raw_archive": "root-native-clippy.log.gz"
+    },
+    "negative-missing-applying-state.log.txt": {
+      "sha256": "2cf4295af3ee215f6ff8488c479b39a2f496c34591ed17b0167197f35397d44a",
+      "raw_sha256": "2cf4295af3ee215f6ff8488c479b39a2f496c34591ed17b0167197f35397d44a",
+      "raw_archive": "negative-missing-applying-state.log.gz"
+    },
+    "manifest-check.log.txt": {
+      "sha256": "fbeeb139a51559c9b4a7c40c3463eaf2eb8f0f78d6d95a96718f3f0d6dff159e",
+      "raw_sha256": "fbeeb139a51559c9b4a7c40c3463eaf2eb8f0f78d6d95a96718f3f0d6dff159e",
+      "raw_archive": "manifest-check.log.gz"
+    }
+  },
+  "log_format": "읽기용 txt의 줄 끝 공백만 정리; 원래 bytes는 같은 이름의 .log.gz에 보존"
+}

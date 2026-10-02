@@ -1,0 +1,152 @@
+TAP version 13
+# [RustTestSuite] 자동 배정: tests/second.rs -> regression_suite_001
+# [RustTestSuite] 자동 배정: tests/first.rs -> regression_suite_002
+# [RustTestSuite] 전체 재배정: 2 sources / 2 suites / 0 exceptions
+# [RustTestSuite] 생성: 2 harnesses, 0 exceptions
+# Subtest: Cargo CRLF 블록은 허용하지만 실제 target drift는 거절한다
+ok 1 - Cargo CRLF 블록은 허용하지만 실제 target drift는 거절한다
+  ---
+  duration_ms: 124.813041
+  type: 'test'
+  ...
+# Subtest: Cargo checkout은 core.autocrlf=true여도 저장소 속성에 따라 LF를 유지한다
+ok 2 - Cargo checkout은 core.autocrlf=true여도 저장소 속성에 따라 LF를 유지한다
+  ---
+  duration_ms: 136.745541
+  type: 'test'
+  ...
+# Subtest: 전체 integration source는 파생 산출물을 쓰지 않고 검증한다
+ok 3 - 전체 integration source는 파생 산출물을 쓰지 않고 검증한다
+  ---
+  duration_ms: 522.533125
+  type: 'test'
+  ...
+# Subtest: 일반 case는 weighted suite로 해석한다
+ok 4 - 일반 case는 weighted suite로 해석한다
+  ---
+  duration_ms: 270.784834
+  type: 'test'
+  ...
+# Subtest: 경로 의존 case는 기존 target 이름을 유지한다
+ok 5 - 경로 의존 case는 기존 target 이름을 유지한다
+  ---
+  duration_ms: 136.39375
+  type: 'test'
+  ...
+# Subtest: 명시적으로 허용한 CLI module blocker는 generated suite에 배정한다
+ok 6 - 명시적으로 허용한 CLI module blocker는 generated suite에 배정한다
+  ---
+  duration_ms: 273.485625
+  type: 'test'
+  ...
+# Subtest: Native Skia 함수 게이트 case는 generated suite에서 feature별로 실행한다
+ok 7 - Native Skia 함수 게이트 case는 generated suite에서 feature별로 실행한다
+  ---
+  duration_ms: 144.69975
+  type: 'test'
+  ...
+# Subtest: \#6308 전역 카운터·벽시계 테스트는 generated suite가 아니라 독립 target이다
+ok 8 - \#6308 전역 카운터·벽시계 테스트는 generated suite가 아니라 독립 target이다
+  ---
+  duration_ms: 543.817708
+  type: 'test'
+  ...
+# Subtest: CI slow archive case는 독립 target과 nextest 우선순위를 함께 유지한다
+ok 9 - CI slow archive case는 독립 target과 nextest 우선순위를 함께 유지한다
+  ---
+  duration_ms: 135.248417
+  type: 'test'
+  ...
+# Subtest: harness와 Cargo target 렌더링은 입력 순서와 무관하다
+ok 10 - harness와 Cargo target 렌더링은 입력 순서와 무관하다
+  ---
+  duration_ms: 0.515292
+  type: 'test'
+  ...
+# Subtest: 신규 source는 선택된 suite에 정확히 한 번만 배정한다
+ok 11 - 신규 source는 선택된 suite에 정확히 한 번만 배정한다
+  ---
+  duration_ms: 3.026416
+  type: 'test'
+  ...
+# Subtest: 개별 testcase에서 합산한 source 시간으로 suite를 재배정한다
+ok 12 - 개별 testcase에서 합산한 source 시간으로 suite를 재배정한다
+  ---
+  duration_ms: 2.789083
+  type: 'test'
+  ...
+# Subtest: PR base에 없던 integration source는 tests/cases 밖에서 거부한다
+ok 13 - PR base에 없던 integration source는 tests/cases 밖에서 거부한다
+  ---
+  duration_ms: 0.078375
+  type: 'test'
+  ...
+# Subtest: PR base에서 새로 추가된 integration source만 tests/cases 경로를 강제한다
+ok 14 - PR base에서 새로 추가된 integration source만 tests/cases 경로를 강제한다
+  ---
+  duration_ms: 0.049
+  type: 'test'
+  ...
+# Subtest: PR은 파생 suite 산출물과 Cargo generated target 블록을 커밋할 수 없다
+ok 15 - PR은 파생 suite 산출물과 Cargo generated target 블록을 커밋할 수 없다
+  ---
+  duration_ms: 0.164875
+  type: 'test'
+  ...
+# Subtest: PR base 검사도 커밋된 manifest 산출물을 실제 Git diff에서 거부한다
+ok 16 - PR base 검사도 커밋된 manifest 산출물을 실제 Git diff에서 거부한다
+  ---
+  duration_ms: 200.915125
+  type: 'test'
+  ...
+# Subtest: PR base 검사는 manifest와 맞지 않는 Cargo generated target registry를 거부한다
+ok 17 - PR base 검사는 manifest와 맞지 않는 Cargo generated target registry를 거부한다
+  ---
+  duration_ms: 195.817084
+  type: 'test'
+  ...
+# Subtest: CI가 삭제된 파생 산출물을 재생성해도 PR base 검사가 통과한다
+ok 18 - CI가 삭제된 파생 산출물을 재생성해도 PR base 검사가 통과한다
+  ---
+  duration_ms: 196.25875
+  type: 'test'
+  ...
+# Subtest: 기여자 가이드는 원본-only 제출을 안내한다
+ok 19 - 기여자 가이드는 원본-only 제출을 안내한다
+  ---
+  duration_ms: 1.05375
+  type: 'test'
+  ...
+# Subtest: 검토·개발 가이드는 파생 suite 준비 경로를 안내한다
+ok 20 - 검토·개발 가이드는 파생 suite 준비 경로를 안내한다
+  ---
+  duration_ms: 1.23925
+  type: 'test'
+  ...
+# Subtest: CI가 일반 PR base를 integration과 source unit 정책 검사에 전달한다
+ok 21 - CI가 일반 PR base를 integration과 source unit 정책 검사에 전달한다
+  ---
+  duration_ms: 0.814291
+  type: 'test'
+  ...
+# Subtest: CI는 same-repository devel-to-main exact promotion에서만 head를 정책 기준으로 쓴다
+ok 22 - CI는 same-repository devel-to-main exact promotion에서만 head를 정책 기준으로 쓴다
+  ---
+  duration_ms: 0.287166
+  type: 'test'
+  ...
+# Subtest: CI lint checkout은 PR base 3-way diff를 위해 전체 Git 계보를 가져온다
+ok 23 - CI lint checkout은 PR base 3-way diff를 위해 전체 Git 계보를 가져온다
+  ---
+  duration_ms: 0.222666
+  type: 'test'
+  ...
+1..23
+# tests 23
+# suites 0
+# pass 23
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2951.019833

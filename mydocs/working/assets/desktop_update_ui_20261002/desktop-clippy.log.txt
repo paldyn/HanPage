@@ -1,0 +1,2 @@
+    Checking rhwp-desktop v0.8.7 (/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/HanPage-Desktop/src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.83s

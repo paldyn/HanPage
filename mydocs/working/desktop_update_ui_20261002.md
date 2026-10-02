@@ -24,7 +24,7 @@
 
 - Node 22.22.1: `npm test` — 1,834 PASS / 2 SKIP / 0 FAIL.
 - `npm run build:desktop` — TypeScript와 Vite PASS.
-- 실제 Studio·WASM·문서 입력·직렬화 저장 + Tauri IPC/상태 이벤트 대역 브라우저 검사 — 55 PASS / 0 FAIL. 설치·재시작은 실행하지 않았다. 최종 source commit에서 같은 검사와 대표 PNG를 다시 고정한다.
+- 실제 Studio·WASM·문서 입력·직렬화 저장 + Tauri IPC/상태 이벤트 대역 브라우저 검사 — 55 PASS / 0 FAIL. 설치·재시작은 실행하지 않았다. 최종 code SHA `1399e07764bdf924c5ba4f6c77f9ad4f0fa40511`에서 재실행·재캡처했고 source 5파일 SHA가 일치한다.
 - 제품 상태 모듈의 회귀 7개 — PASS. 호스트에 `cargo nextest`가 없어 focused 검사에 한해 `cargo test --locked --profile release-test --test regression_suite_003 hanpage_desktop_update_state:: -- --nocapture`를 사용했다. 전체 nextest 대체로 보고하지 않는다.
 - `cargo fmt --all`, fmt check, root native Clippy, WASM32 Clippy, workspace build, workspace all-targets Clippy — 순차 PASS.
 - Desktop 독립 crate fmt check / `cargo clippy --locked --manifest-path HanPage-Desktop/src-tauri/Cargo.toml --all-targets -- -D warnings` / build — PASS.
@@ -36,4 +36,19 @@
 
 로컬 source와 UI 검증 완료. 실제 서명된 새 버전 다운로드·앱 교체·Windows 설치·새 공개 릴리스는 미실행이다. 앱 버전은 0.8.7을 유지했다. 다음 업데이트 배포는 신규 승인과 정확한 버전·PR head·필수 CI·서명/공증/공개 산출물 검증을 거쳐야 한다. 이 UI는 변경을 포함한 버전을 설치한 이후의 알림부터 적용된다.
 
-최종 code SHA, 명령 로그, source hash, 대표 PNG, 음성 대조와 사용자 변경 보존 기록은 같은 이름의 `assets/desktop_update_ui_20261002/`에 연결한다.
+최종 code SHA: `1399e07764bdf924c5ba4f6c77f9ad4f0fa40511`. 이후 증적 커밋은 코드·테스트·정책 파일을 변경하지 않는다.
+
+- [최종 검증·source hash](assets/desktop_update_ui_20261002/validation.json)
+- [55개 실제 화면 검사](assets/desktop_update_ui_20261002/browser-results.json)
+- [Native 실제 회귀 7개](assets/desktop_update_ui_20261002/native-state-tests.log.txt)
+- [두 격리 변이 음성 대조](assets/desktop_update_ui_20261002/negative-controls.json) — 관측 당시 parent SHA와 별개로 제품·검사 파일 hash가 위 code SHA와 정확히 일치한다.
+- [테스트 묶음 정책 23개](assets/desktop_update_ui_20261002/manifest-policy-tests.log.txt), [고정 base 비교](assets/desktop_update_ui_20261002/manifest-check.log.txt)
+- [39개 사용자 파일 보존](assets/desktop_update_ui_20261002/primary-preservation.json)
+
+대표 PNG는 실제 DOM 영역 캡처다. 적용 PNG는 실제 불확정 애니메이션 시작 550ms 후 캡처했으며 수치·픽셀을 가공하지 않았다. 준비·다운로드·오류·dark·390px·저장 확인도 직접 판독했다.
+
+![준비 완료 카드](assets/desktop_update_ui_20261002/ready-card.png)
+
+![적용 중 카드](assets/desktop_update_ui_20261002/applying-card.png)
+
+실행에 사용한 negative probe 스크립트·고정 Cargo manifest/lock은 같은 assets에 `.txt`로 보존했다. 실행할 때는 원래 `output/desktop-update-ui/` 위치로 복원하며 기록된 로컬 공유 target 경로와 의존성 버전을 확인한다.

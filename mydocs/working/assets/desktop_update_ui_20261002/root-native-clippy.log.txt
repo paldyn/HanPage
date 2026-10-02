@@ -1,0 +1,6 @@
+   Compiling rhwp v0.8.6 (/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage)
+    Checking rhwp-password-crypto v0.1.0 (/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/crates/rhwp-password-crypto)
+    Checking rhwp-contracts v0.1.0 (/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/crates/rhwp-contracts)
+    Checking svg2pdf v0.13.0 (/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/vendor/svg2pdf)
+    Checking rhwp-ooxml-chart v0.1.0 (/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/crates/rhwp-ooxml-chart)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 31.91s
