@@ -91,7 +91,8 @@ function ensureCard(): HTMLElement {
     <span class="dialog-update-version"></span>
     <div class="dialog-update-progress" role="progressbar" aria-label="업데이트 진행 상태" aria-valuemin="0" aria-valuemax="100"><span></span></div>
     <p class="dialog-update-detail" role="status" aria-live="polite"></p>
-    <p class="dialog-update-return">나중에 하셔도 괜찮아요. 상태 표시줄의 ‘업데이트 확인’에서 다시 열 수 있어요.</p>
+    <p class="dialog-update-return">나중에 업데이트하셔도 됩니다.
+하단 업데이트 버튼에서 다시 열 수 있습니다.</p>
     <div class="dialog-update-actions"><button type="button" class="dialog-update-later">나중에</button><button type="button" class="dialog-update-primary">업데이트</button></div>`;
   card.querySelector('.dialog-update-close')!.addEventListener('click', hideCard);
   card.querySelector('.dialog-update-later')!.addEventListener('click', hideCard);
@@ -123,16 +124,16 @@ function render(): void {
   }
   if (!card) return;
   card.dataset.state = status.state;
-  let title = '새 버전을 확인하고 있어요';
-  let description = '확인이 끝나면 여기에서 결과를 알려드릴게요.';
+  let title = '새 버전을 확인하고 있습니다';
+  let description = '확인이 끝나면 결과를 알려드립니다.';
   let detail = '';
   let primary = '업데이트';
   let progress = false;
   let indeterminate = true;
   switch (status.state) {
     case 'downloading':
-      title = '새 버전을 받고 있어요';
-      description = '계속 작업하셔도 괜찮아요. 준비되면 알려드릴게요.';
+      title = '업데이트 다운로드 중';
+      description = '다운로드 중에도 계속 작업할 수 있습니다.\n준비되면 알려드립니다.';
       detail = status.total && status.total > 0
         ? `${percent}% · ${formatMb(status.downloaded)} / ${formatMb(status.total)}`
         : `${formatMb(status.downloaded)} 다운로드됨`;
@@ -140,31 +141,31 @@ function render(): void {
       indeterminate = percent === null;
       break;
     case 'verifying':
-      title = '다운로드가 끝났어요';
-      description = '업데이트 파일이 안전한지 확인하고 있어요.';
+      title = '다운로드가 완료되었습니다';
+      description = '업데이트 파일을 확인하고 있습니다.';
       detail = '업데이트 파일 확인 중';
       progress = true;
       break;
     case 'ready':
-      title = '더 좋아진 HanPage가 준비됐어요';
-      description = '새 버전 다운로드가 완료됐어요. 업데이트하면 앱이 다시 시작됩니다.';
-      if (isWindows()) description = '새 버전 다운로드가 완료됐어요. 업데이트를 누르면 설치 프로그램이 열립니다.';
+      title = '새 업데이트가 준비되었습니다';
+      description = '새 버전 다운로드가 완료되었습니다.\n업데이트하면 앱이 다시 시작됩니다.';
+      if (isWindows()) description = '새 버전 다운로드가 완료되었습니다.\n업데이트하면 설치 프로그램이 열립니다.';
       break;
     case 'applying':
-      title = '업데이트를 적용하고 있어요';
-      description = isWindows() ? '설치 프로그램을 준비하고 있어요. 잠시만 기다려 주세요.' : '완료되면 앱이 자동으로 다시 시작됩니다.';
+      title = '업데이트를 적용하고 있습니다';
+      description = isWindows() ? '설치 프로그램을 준비하고 있습니다.\n잠시만 기다려 주세요.' : '완료되면 앱이 자동으로 다시 시작됩니다.';
       detail = isWindows() ? '업데이트 적용 중' : '업데이트 적용 중 · 곧 다시 시작합니다';
       primary = '업데이트 중…';
       progress = true;
       break;
     case 'upToDate':
-      title = '최신 버전을 사용하고 있어요';
-      description = `HanPage ${status.version} · 지금은 새 업데이트가 없어요.`;
+      title = '최신 버전을 사용하고 있습니다';
+      description = `현재 버전: HanPage ${status.version}\n새 업데이트가 없습니다.`;
       primary = '다시 확인';
       break;
     case 'error':
-      title = '업데이트를 완료하지 못했어요';
-      description = status.retryable ? '받아둔 파일은 유지돼요. 다시 업데이트할 수 있습니다.' : '연결을 확인하고 다시 시도해 주세요.';
+      title = '업데이트를 완료하지 못했습니다';
+      description = status.retryable ? '받아둔 파일은 유지됩니다.\n다시 업데이트할 수 있습니다.' : '연결을 확인하고 다시 시도해 주세요.';
       detail = status.message;
       primary = status.retryable ? '다시 업데이트' : '다시 확인';
       break;
