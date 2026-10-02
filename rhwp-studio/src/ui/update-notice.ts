@@ -194,7 +194,8 @@ function render(): void {
   else bar.removeAttribute('aria-valuenow');
   (bar.firstElementChild as HTMLElement).style.width = indeterminate ? '' : `${percent}%`;
   card.querySelector('.dialog-update-detail')!.textContent = detail;
-  (card.querySelector('.dialog-update-return') as HTMLElement).hidden = busy();
+  (card.querySelector('.dialog-update-return') as HTMLElement).hidden = busy() || status.state === 'upToDate';
+  card.querySelector('.dialog-update-later')!.textContent = status.state === 'upToDate' ? '닫기' : '나중에';
   const action = card.querySelector('.dialog-update-primary') as HTMLButtonElement;
   action.textContent = primary;
   action.disabled = busy() || ['idle', 'checking', 'downloading', 'verifying'].includes(status.state);
