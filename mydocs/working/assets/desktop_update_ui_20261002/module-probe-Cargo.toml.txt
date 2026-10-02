@@ -1,0 +1,11 @@
+[package]
+name = "hanpage-update-module-probe"
+version = "0.0.0"
+edition = "2021"
+[workspace]
+[dependencies]
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+[[test]]
+name = "module_probe"
+path = "../native-state-harness.rs"

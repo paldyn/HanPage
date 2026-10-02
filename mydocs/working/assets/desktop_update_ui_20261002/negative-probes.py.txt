@@ -1,0 +1,239 @@
+#!/usr/bin/env python3
+"""격리된 제품 코드 변이로 Native 업데이트 회귀 검사의 검출력을 확인한다.
+
+기본 실행은 소스 사본·manifest·관측 계획만 만든다. 공유 Cargo target을 사용할 수
+있다는 루트 확인 뒤 --run을 명시해야 Cargo를 실행한다. 제품·테스트 원본은 변경하지
+않고, 컴파일 실패를 결함 검출 PASS로 계산하지 않는다.
+"""
+
+import argparse
+from datetime import datetime, timezone
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import uuid
+
+
+ROOT = Path(__file__).resolve().parents[2]
+OUTPUT = ROOT / "output/desktop-update-ui"
+PRODUCT = ROOT / "HanPage-Desktop/src-tauri/src/update_state.rs"
+TEST_SOURCE = ROOT / "tests/cases/hanpage_desktop_update_state.rs"
+BASE_PROBE = OUTPUT / "module-probe"
+SHARED_TARGET = Path(
+    "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review"
+)
+
+
+def sha256(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def write_json(path, value):
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def mutate_product(source, mutation):
+    if mutation == "missing-applying-state":
+        before = "        self.state = UpdateState::Applying { version };"
+        after = "        let _ = version; // 음성 대조: Applying 상태 기록을 제거한다."
+        if source.count(before) != 1:
+            raise RuntimeError("Applying 변이 지점을 정확히 한 곳 찾지 못했습니다.")
+        return source.replace(before, after, 1), {"removed": before, "replacement": after}
+    if mutation == "missing-ready-restore":
+        method = "    pub fn fail_apply(&mut self, ready: T, message: String) {\n"
+        before = method + "        self.ready = Some(ready);"
+        after = method + "        let _ = ready; // 음성 대조: 재시도용 바이트 복원을 제거한다."
+        if source.count(before) != 1:
+            raise RuntimeError("fail_apply 복원 변이 지점을 정확히 한 곳 찾지 못했습니다.")
+        return source.replace(before, after, 1), {"removed": before, "replacement": after}
+    if mutation == "positive-control":
+        return source, None
+    raise RuntimeError("알 수 없는 변이입니다.")
+
+
+def prepare(run_dir):
+    product_bytes = PRODUCT.read_bytes()
+    test_bytes = TEST_SOURCE.read_bytes()
+    manifest_bytes = (BASE_PROBE / "Cargo.toml").read_bytes()
+    lock_bytes = (BASE_PROBE / "Cargo.lock").read_bytes()
+    manifest = manifest_bytes.decode("utf-8")
+    if manifest.count("[[test]]") != 1:
+        raise RuntimeError("기준 module probe에 test target이 정확히 하나 있어야 합니다.")
+    if '=1.0.229' not in manifest or '=1.0.151' not in manifest:
+        raise RuntimeError("루트가 고정한 serde/serde_json 의존성과 일치하지 않습니다.")
+    manifest_prefix = manifest.split("[[test]]", 1)[0]
+    test_source = test_bytes.decode("utf-8")
+    source_attribute = '#[path = "../../HanPage-Desktop/src-tauri/src/update_state.rs"]'
+    if test_source.count(source_attribute) != 1:
+        raise RuntimeError("실제 회귀 검사의 제품 모듈 path를 정확히 한 곳 찾지 못했습니다.")
+
+    probes = []
+    for mutation, test_name, assertion in [
+        ("positive-control", None, None),
+        (
+            "missing-applying-state",
+            "deferred_download_is_reused_and_only_one_apply_can_take_it",
+            ["assertion `left == right` failed", 'left: Ready { version: "0.8.8" }',
+             'right: Applying { version: "0.8.8" }'],
+        ),
+        (
+            "missing-ready-restore",
+            "failed_apply_restores_the_same_bytes_and_allows_direct_retry",
+            ["적용 실패 뒤에는 이미 검증된 다운로드를 유지한다"],
+        ),
+    ]:
+        probe_dir = run_dir / mutation
+        probe_dir.mkdir()
+        # Cargo는 같은 package/target 이름을 shared target에서 재사용할 수 있다.
+        # 변이와 실행별로 target 이름을 고정하여 다른 사본의 binary를 재사용하지 않는다.
+        test_target = (
+            "negative_probe_" + mutation.replace("-", "_") + "_" + run_dir.name.rsplit("-", 1)[1]
+        )
+        manifest = manifest_prefix + (
+            '[[test]]\nname = "' + test_target + '"\npath = "test.rs"\n'
+        )
+        changed, details = mutate_product(product_bytes.decode("utf-8"), mutation)
+        mutant_path = probe_dir / "update_state.rs"
+        mutant_path.write_text(changed, encoding="utf-8")
+        wrapped_test = test_source.replace(
+            source_attribute,
+            "#[path = " + json.dumps(str(mutant_path), ensure_ascii=False) + "]",
+            1,
+        )
+        (probe_dir / "test.rs").write_text(wrapped_test, encoding="utf-8")
+        (probe_dir / "Cargo.toml").write_text(manifest, encoding="utf-8")
+        (probe_dir / "Cargo.lock").write_bytes(lock_bytes)
+        command = [
+            "cargo", "test", "--offline", "--locked", "--color", "never",
+            "--manifest-path", str(probe_dir / "Cargo.toml"),
+            "--target-dir", str(SHARED_TARGET), "--test", test_target,
+        ]
+        if test_name:
+            command += [test_name, "--", "--exact", "--nocapture"]
+        else:
+            command += ["--", "--nocapture"]
+        probes.append({
+            "mutation": mutation,
+            "unique_test_target": test_target,
+            "directory": str(probe_dir),
+            "product_copy_sha256": sha256(mutant_path.read_bytes()),
+            "test_copy_sha256": sha256((probe_dir / "test.rs").read_bytes()),
+            "manifest_sha256": sha256((probe_dir / "Cargo.toml").read_bytes()),
+            "lock_sha256": sha256(lock_bytes),
+            "edit": details,
+            "expected_failing_test": test_name,
+            "required_assertion_fragments": assertion,
+            "command": command,
+            "status": "prepared_not_executed",
+        })
+    return {
+        "prepared_at_utc": datetime.now(timezone.utc).isoformat(),
+        "source_root": str(ROOT),
+        "source_head": subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+        ).strip(),
+        "product_source_sha256": sha256(product_bytes),
+        "test_source_sha256": sha256(test_bytes),
+        "base_probe_manifest_sha256": sha256(manifest_bytes),
+        "base_probe_lock_sha256": sha256(lock_bytes),
+        "shared_target": str(SHARED_TARGET),
+        "run_directory": str(run_dir),
+        "scope": "실제 제품 상태모듈을 가져오는 동일 회귀 검사; Tauri 설치·GUI는 실행하지 않음",
+        "probes": probes,
+    }
+
+
+def execute(observations, observations_path):
+    all_valid = True
+    positive_passed = False
+    for probe in observations["probes"]:
+        if probe["mutation"] != "positive-control" and not positive_passed:
+            probe["status"] = "not_executed_positive_control_failed"
+            all_valid = False
+            continue
+        started = datetime.now(timezone.utc)
+        environment = dict(os.environ)
+        environment["CARGO_TARGET_DIR"] = str(SHARED_TARGET)
+        environment["CARGO_TERM_COLOR"] = "never"
+        completed = subprocess.run(
+            probe["command"], cwd=probe["directory"], env=environment,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+        log_path = Path(probe["directory"]) / "cargo-test.log"
+        log_path.write_text(completed.stdout, encoding="utf-8")
+        compiled = (
+            "Running test.rs (" in completed.stdout
+            and "could not compile" not in completed.stdout
+            and "error[E" not in completed.stdout
+        )
+        if probe["mutation"] == "positive-control":
+            validated = compiled and completed.returncode == 0 and (
+                "test result: ok. 7 passed; 0 failed" in completed.stdout
+            )
+            positive_passed = validated
+            probe["status"] = "positive_control_pass" if validated else "positive_control_failed"
+        else:
+            expected_test = probe["expected_failing_test"]
+            expected_test_failed = bool(re.search(
+                r"^test " + re.escape(expected_test) + r" \.\.\. FAILED$",
+                completed.stdout, re.MULTILINE,
+            ))
+            assertion_found = all(
+                fragment in completed.stdout for fragment in probe["required_assertion_fragments"]
+            )
+            validated = (
+                compiled and completed.returncode == 101 and expected_test_failed
+                and assertion_found and "1 failed" in completed.stdout
+            )
+            probe["expected_test_failed"] = expected_test_failed
+            probe["expected_assertion_observed"] = assertion_found
+            probe["status"] = (
+                "negative_control_detected" if validated
+                else "compile_failed_not_a_defect_reproduction" if not compiled
+                else "negative_control_not_detected_as_expected"
+            )
+        all_valid = all_valid and validated
+        probe.update({
+            "started_at_utc": started.isoformat(),
+            "finished_at_utc": datetime.now(timezone.utc).isoformat(),
+            "returncode": completed.returncode,
+            "compile_succeeded": compiled,
+            "log_path": str(log_path),
+            "log_sha256": sha256(log_path.read_bytes()),
+            "validation_passed": validated,
+        })
+        write_json(observations_path, observations)
+        print(json.dumps({"mutation": probe["mutation"], "status": probe["status"],
+                          "returncode": completed.returncode}, ensure_ascii=False), flush=True)
+    observations["all_controls_validated"] = all_valid
+    observations["product_original_unchanged"] = (
+        sha256(PRODUCT.read_bytes()) == observations["product_source_sha256"]
+        and sha256(TEST_SOURCE.read_bytes()) == observations["test_source_sha256"]
+    )
+    write_json(observations_path, observations)
+    return all_valid and observations["product_original_unchanged"]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--run", action="store_true", help="루트가 Cargo 순서를 허용한 뒤에만 실행")
+    args = parser.parse_args()
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
+    run_dir = OUTPUT / "negative-probes" / run_id
+    run_dir.mkdir(parents=True)
+    observations = prepare(run_dir)
+    observations_path = run_dir / "observations.json"
+    write_json(observations_path, observations)
+    print(json.dumps({"observations_path": str(observations_path), "executed": args.run},
+                     ensure_ascii=False), flush=True)
+    if args.run:
+        return 0 if execute(observations, observations_path) else 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

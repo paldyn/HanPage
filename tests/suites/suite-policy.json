@@ -29,6 +29,13 @@
   ],
   "moduleIntegrationOverrides": [
     {
+      "path": "tests/cases/hanpage_desktop_update_state.rs",
+      "allowBlockers": [
+        "path_attr",
+        "root_mod"
+      ]
+    },
+    {
       "path": "tests/cases/issue_6753_lazy_base_keeps_trimmed_spacing_before.rs",
       "allowBlockers": [
         "path_attr",

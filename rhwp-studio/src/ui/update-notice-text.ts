@@ -22,6 +22,10 @@ export function updateStatusMessage(status: DesktopUpdateStatus): string | null 
       return status.total
         ? `새 버전을 내려받고 있습니다… (${Math.floor((status.downloaded / status.total) * 100)}%)\n준비되면 알려드릴게요.`
         : `새 버전을 내려받고 있습니다… ${formatMb(status.downloaded)}\n준비되면 알려드릴게요.`;
+    case 'verifying':
+      return '다운로드가 끝났습니다. 업데이트 파일을 확인하고 있습니다…';
+    case 'applying':
+      return '업데이트를 적용하고 있습니다… 곧 앱을 다시 시작합니다.';
     case 'checking':
       return '새 버전을 확인하고 있습니다…';
     case 'upToDate':
@@ -42,4 +46,10 @@ export function updateReadyMessage(info: DesktopUpdateReady, windows: boolean): 
     ? '적용하면 설치 프로그램이 실행됩니다.'
     : '다시 시작하면 바로 적용됩니다.';
   return `${head}\n${tail}`;
+}
+
+/** Content-Length가 없으면 비율을 추측하지 않는다. */
+export function updateProgress(status: DesktopUpdateStatus): number | null {
+  if (status.state !== 'downloading' || !status.total || status.total <= 0) return null;
+  return Math.min(100, Math.max(0, Math.floor(status.downloaded / status.total * 100)));
 }

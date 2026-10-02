@@ -1,0 +1,458 @@
+{
+  "observedAt": "2026-10-02T04:51:49.448547+00:00",
+  "repository": "paldyn/HanPage",
+  "pr": 115,
+  "headSha": "096aab64db7f6578405b21d8612b8d4a02eadd04",
+  "baseSha": "71f327f2ffdbc20bc3b8926d136ead049caeeb68",
+  "testedMergeSha": "07051e9c5d42d53e02fc21e730a8bf6e03f0ca8f",
+  "localCompileSourceSha": "9d8d93cdcc8baba3c9ad47d25050df819b9feeca",
+  "trailingChangedPaths": [
+    "mydocs/pr/assets/desktop_v088_release/after-apply-error.png",
+    "mydocs/pr/assets/desktop_v088_release/after-applying.png",
+    "mydocs/pr/assets/desktop_v088_release/after-downloading-known.png",
+    "mydocs/pr/assets/desktop_v088_release/after-downloading-unknown.png",
+    "mydocs/pr/assets/desktop_v088_release/after-macos-ready-dark.png",
+    "mydocs/pr/assets/desktop_v088_release/after-macos-ready-light.png",
+    "mydocs/pr/assets/desktop_v088_release/after-ready-small-dark.png",
+    "mydocs/pr/assets/desktop_v088_release/after-unsaved-small.png",
+    "mydocs/pr/assets/desktop_v088_release/after-windows-ready-light.png",
+    "mydocs/pr/assets/desktop_v088_release/applying-card.png",
+    "mydocs/pr/assets/desktop_v088_release/before-v087-windows-ready.png",
+    "mydocs/pr/assets/desktop_v088_release/browser-results.json",
+    "mydocs/pr/assets/desktop_v088_release/local-bundle.json",
+    "mydocs/pr/assets/desktop_v088_release/local-validation.json",
+    "mydocs/pr/assets/desktop_v088_release/primary-preservation.json",
+    "mydocs/pr/assets/desktop_v088_release/ready-card.png",
+    "mydocs/working/desktop_release_v088_20261002.md"
+  ],
+  "trailingMyDocsOnly": true,
+  "fullExecution": {
+    "fastPass": false,
+    "reason": "no-green-build-candidate",
+    "rustRequired": true,
+    "frontendMode": "package",
+    "renderRequired": true,
+    "nativeSkiaRequired": true,
+    "codeqlLanguages": [
+      "javascript-typescript",
+      "python",
+      "rust"
+    ]
+  },
+  "workflowResults": [
+    {
+      "id": 36964899219,
+      "name": "Render Diff",
+      "event": "pull_request",
+      "head_sha": "096aab64db7f6578405b21d8612b8d4a02eadd04",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36964899219",
+      "pr_numbers": [
+        115
+      ]
+    },
+    {
+      "id": 36964899506,
+      "name": "CodeQL",
+      "event": "pull_request",
+      "head_sha": "096aab64db7f6578405b21d8612b8d4a02eadd04",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36964899506",
+      "pr_numbers": [
+        115
+      ]
+    },
+    {
+      "id": 36964899472,
+      "name": "Proptest roundtrip",
+      "event": "pull_request",
+      "head_sha": "096aab64db7f6578405b21d8612b8d4a02eadd04",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36964899472",
+      "pr_numbers": [
+        115
+      ]
+    },
+    {
+      "id": 36964899508,
+      "name": "Adapter inter-diff",
+      "event": "pull_request",
+      "head_sha": "096aab64db7f6578405b21d8612b8d4a02eadd04",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36964899508",
+      "pr_numbers": [
+        115
+      ]
+    },
+    {
+      "id": 36964899517,
+      "name": "CI",
+      "event": "pull_request",
+      "head_sha": "096aab64db7f6578405b21d8612b8d4a02eadd04",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36964899517",
+      "pr_numbers": [
+        115
+      ]
+    }
+  ],
+  "checkCount": 32,
+  "checkCounts": {
+    "success": 28,
+    "neutral": 1,
+    "skipped": 3
+  },
+  "pending": [],
+  "failed": [],
+  "defaultFeatureRegression": {
+    "expectedRunnable": 10090,
+    "shardTotal": 10090,
+    "allArchiveWorkersSuccess": true,
+    "aggregateJobId": 110710521283,
+    "aggregateUrl": "https://github.com/paldyn/HanPage/actions/runs/36964899517/job/110710521283"
+  },
+  "lintAndFrontendJobs": [
+    {
+      "id": 110706485634,
+      "name": "Frontend package gates",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Rust toolchain",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install wasm-pack",
+          "conclusion": "success"
+        },
+        {
+          "name": "Restore frontend WASM cargo cache",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build fresh WASM package for frontend gates",
+          "conclusion": "success"
+        },
+        {
+          "name": "Set up Node.js",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install frontend package dependencies",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify WASM bindings and editor embed contract",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run editor package tests when declared",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run shared and extension service worker tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run Chrome extension options UI tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run Studio unit tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install headless Chrome",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run undo depth measurement gate (#5769)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run Studio responsive toolbar gate (#6118,",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build Studio",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build browser extensions",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify extension distributions",
+          "conclusion": "success"
+        },
+        {
+          "name": "Compile VS Code extension",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify VS Code webview outline keyboard contract",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify font asset contracts",
+          "conclusion": "success"
+        },
+        {
+          "name": "Save frontend WASM cargo cache",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Set up Node.js",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 110706485666,
+      "name": "Native Skia tests",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Free disk space (remove unused pre-installed toolchains)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Rust toolchain",
+          "conclusion": "success"
+        },
+        {
+          "name": "Rust build cache",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install native Skia runtime packages",
+          "conclusion": "success"
+        },
+        {
+          "name": "Prepare derived Rust test suites",
+          "conclusion": "success"
+        },
+        {
+          "name": "Native Skia tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Rust build cache",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 110706485684,
+      "name": "Lint (fmt, clippy, WASM check)",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install Rust toolchain",
+          "conclusion": "success"
+        },
+        {
+          "name": "Rust build cache",
+          "conclusion": "success"
+        },
+        {
+          "name": "Prepare derived Rust test suites",
+          "conclusion": "success"
+        },
+        {
+          "name": "Format check",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate CI impact classifier",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate Rust test suite manifest",
+          "conclusion": "success"
+        },
+        {
+          "name": "Test internal Rust crates",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate LLM verifier tool contracts",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate Render Diff trigger policy",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate canvaskit-parity batch map",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate workflow contracts",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate adoption spine contract",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate planner templates",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate agent org contract",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate agent frame contract",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate external reality check contract",
+          "conclusion": "success"
+        },
+        {
+          "name": "Clippy",
+          "conclusion": "success"
+        },
+        {
+          "name": "Clippy (WASM32)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check workspace members (FFI bindings, tools)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Agent preflight (failure-path sweep + undeclared-command detection)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check WASM target",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Rust build cache",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ],
+  "codeScanningAnalyses": [
+    {
+      "id": 1879004868,
+      "createdAt": "2026-10-02T04:43:20Z",
+      "commitSha": "07051e9c5d42d53e02fc21e730a8bf6e03f0ca8f",
+      "category": ".github/workflows/codeql.yml:analyze/language:rust",
+      "error": "",
+      "warning": "",
+      "resultsCount": 0
+    },
+    {
+      "id": 1878981834,
+      "createdAt": "2026-10-02T04:35:40Z",
+      "commitSha": "07051e9c5d42d53e02fc21e730a8bf6e03f0ca8f",
+      "category": ".github/workflows/codeql.yml:analyze/language:python",
+      "error": "",
+      "warning": "",
+      "resultsCount": 0
+    },
+    {
+      "id": 1878981818,
+      "createdAt": "2026-10-02T04:35:40Z",
+      "commitSha": "07051e9c5d42d53e02fc21e730a8bf6e03f0ca8f",
+      "category": ".github/workflows/codeql.yml:analyze/language:javascript-typescript",
+      "error": "",
+      "warning": "",
+      "resultsCount": 0
+    }
+  ],
+  "ghasNeutralChecks": [
+    {
+      "id": 110707418471,
+      "name": "CodeQL",
+      "conclusion": "neutral",
+      "completedAt": "2026-10-02T04:35:41Z",
+      "output": {
+        "title": "1 configuration not found",
+        "summary": "**Warning**: Code scanning cannot determine the alerts introduced by this pull request, because 1 configuration present on `refs/heads/devel` was not found:\n\n### Actions workflow (`codeql.yml`)\n\n* :hourglass:&nbsp;&nbsp;`.github/workflows/codeql.yml:analyze/language:rust`\n\n\n[View all branch alerts](/paldyn/HanPage/security/code-scanning?query=pr%3A115+tool%3ACodeQL+is%3Aopen).",
+        "text": null,
+        "annotations_count": 0,
+        "annotations_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110707418471/annotations"
+      }
+    }
+  ],
+  "renderDiff": {
+    "canvasComparedPages": 3,
+    "canvasAllPassed": true,
+    "canvasLargestDifferencePercent": 0.01862,
+    "directPdfComparedPages": 3,
+    "directPdfFailedPages": 0,
+    "reportOnlyPdfPages": 4,
+    "reportOnlyPdfWarnings": 4,
+    "reportOnlyPdfErrors": 0
+  },
+  "adapterInterDiff": {
+    "passed": 7,
+    "failed": 0
+  },
+  "proptestRoundtrip": {
+    "passed": 63,
+    "failed": 0
+  },
+  "gitHubMutationPerformed": false,
+  "cargoRunPerformed": false
+}

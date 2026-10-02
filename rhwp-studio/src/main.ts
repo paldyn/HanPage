@@ -54,7 +54,7 @@ import { showDropConfirmDialog } from '@/ui/drop-confirm-dialog';
 import { showHwpPasswordDialog } from '@/ui/hwp-password-dialog';
 import { installAppDownloadButton } from '@/ui/app-download';
 import { initDesktopBridge, MENU_CHECK_UPDATE } from '@/core/desktop-bridge';
-import { handleManualUpdateCheck, installUpdateNotice } from '@/ui/update-notice';
+import { handleManualUpdateCheck, installUpdateNotice, isApplyingUpdate } from '@/ui/update-notice';
 import {
   EMBED_HIDDEN_EDIT_COMMAND_IDS,
   EMBED_HIDDEN_FILE_COMMAND_IDS,
@@ -801,6 +801,7 @@ async function initialize(): Promise<void> {
     setupGlobalShortcuts();
     const desktopReady = initDesktopBridge({
       async openDocument(bytes, fileName) {
+        if (isApplyingUpdate()) return;
         try {
           if (!await canReplaceCurrentDocument()) return;
           await loadBytes(bytes, fileName, null);
@@ -809,6 +810,7 @@ async function initialize(): Promise<void> {
         }
       },
       dispatchCommand(id) {
+        if (isApplyingUpdate()) return;
         if (id === MENU_CHECK_UPDATE) {
           void handleManualUpdateCheck();
           return;
@@ -816,7 +818,7 @@ async function initialize(): Promise<void> {
         dispatcher.dispatch(id);
       },
     });
-    installUpdateNotice();
+    installUpdateNotice({ beforeApply: () => canReplaceCurrentDocument() });
     // 시작 진입점은 순서를 지켜야 한다 — ?url= 로드와 자동저장 복구가 문서를 열 기회를
     // 먼저 갖고, 아무도 열지 않았을 때만 빈 문서를 연다.
     void (async () => {

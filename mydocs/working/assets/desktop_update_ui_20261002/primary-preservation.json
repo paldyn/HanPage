@@ -1,0 +1,202 @@
+{
+  "baseline": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+  "primary_head": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+  "files": [
+    {
+      "path": "HanPage-Desktop/README.md",
+      "same": true,
+      "sha256": "044684e908fa196ae78fffb53bdb07de836c54e12952e94bac301f91ac4afe3a"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/128x128.png",
+      "same": true,
+      "sha256": "50bf5565ac8b2bf07ee3c31ac50ed0d9515e8aa4b239b94938c54e676dace5f5"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/128x128@2x.png",
+      "same": true,
+      "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/32x32.png",
+      "same": true,
+      "sha256": "46ab1e3c89d97b104c5a07a041f085e2c51e28840ee407bc3af57b7827b6f5e1"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/64x64.png",
+      "same": true,
+      "sha256": "58baa46d3661a5f2fed11cebe9ec8b59ac14d48699ac4c9c2a68c013c99be453"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square107x107Logo.png",
+      "same": true,
+      "sha256": "319d0ed51deb2356ef143e40921216b774203e571eaec8fd2f0cde7fb9caa5b4"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square142x142Logo.png",
+      "same": true,
+      "sha256": "e86d18b080ccfe5d7200be9ee4fa8c7791780a381ad33658c1f256a229f0a35b"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square150x150Logo.png",
+      "same": true,
+      "sha256": "ed6afc50f89aac5a280a5c2bd9ec5b4d89e7b80852ce6fe8c1d1026a1c7352c1"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square284x284Logo.png",
+      "same": true,
+      "sha256": "2727211a105e8529992e594736aa8c2264a8fa1d731b72db843c2ed021a3cada"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square30x30Logo.png",
+      "same": true,
+      "sha256": "01393cc87d64288ccc26988de7e52d60db4841a831c9db29d499971dc7c092c4"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square310x310Logo.png",
+      "same": true,
+      "sha256": "587bf4907aafb53dd0a45afb977afaff3dd5f1f55e37c329fba0ddaf73804aaf"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square44x44Logo.png",
+      "same": true,
+      "sha256": "edc16dbb93ebec2ae79b1fca358ea404f17d4c3253740c959b0ca7786b4b4c91"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square71x71Logo.png",
+      "same": true,
+      "sha256": "25af0644c81a9a4325ee690926c4116b076b9eac6c13deb70e2b67c2a120ddcd"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square89x89Logo.png",
+      "same": true,
+      "sha256": "7cc2ef5b79b9f51aa6a1b8b7b5c70f9755eda70d42709042398f70aad2bdb958"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/StoreLogo.png",
+      "same": true,
+      "sha256": "e2af3eb802664593d0e7bd74a47f1194479d8271aa3c84608239558051a7392c"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/icon.icns",
+      "same": true,
+      "sha256": "8260b6100180a8c589c5b63943d77587fc575bbc74d591d3249557a6df8d70c4"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/icon.ico",
+      "same": true,
+      "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/icon.png",
+      "same": true,
+      "sha256": "085de50f10cd440364be542764b012331aedb706dd33085e503e4db7178ae11c"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/tauri.conf.json",
+      "same": true,
+      "sha256": "64ffbbe81b83504b6abdc6f3eac8b2ed663601d405f139b119d5f0d943abc7f2"
+    },
+    {
+      "path": "HanPage-Desktop/resources/branding/HanPage-previous-icons-20261001.zip",
+      "same": true,
+      "sha256": "18bf9ba7d22604b7eb0781bbf21cb1bd251982cea36fdc55a72788044593885a"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/16x16.png",
+      "same": true,
+      "sha256": "936e6758234af0cd3eec7e6456ce726fca2e9c481b8ec567664a2eb04e628f89"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/24x24.png",
+      "same": true,
+      "sha256": "908308ddb0cf0c62bec31465c87a4a8ebadfa65fbdd90cdabae17a59b529befb"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/256x256.png",
+      "same": true,
+      "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/48x48.png",
+      "same": true,
+      "sha256": "4d9f935ebb4bf1744dace16858a01166f42556f0f0f1b95471061436f654c41e"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/512x512.png",
+      "same": true,
+      "sha256": "5a3dd9f2596e8cdaf8ab398e015823b3d83f1bcac2453337aff7d36d8dc6c7fd"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage.icns",
+      "same": true,
+      "sha256": "8260b6100180a8c589c5b63943d77587fc575bbc74d591d3249557a6df8d70c4"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage.ico",
+      "same": true,
+      "sha256": "4f6f37dfc745ed28ebaaf0416eac4a486e3d2a5abb97ba70899efe7ff31967b9"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_1024.png",
+      "same": true,
+      "sha256": "085de50f10cd440364be542764b012331aedb706dd33085e503e4db7178ae11c"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_128.png",
+      "same": true,
+      "sha256": "50bf5565ac8b2bf07ee3c31ac50ed0d9515e8aa4b239b94938c54e676dace5f5"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_16.png",
+      "same": true,
+      "sha256": "936e6758234af0cd3eec7e6456ce726fca2e9c481b8ec567664a2eb04e628f89"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_24.png",
+      "same": true,
+      "sha256": "908308ddb0cf0c62bec31465c87a4a8ebadfa65fbdd90cdabae17a59b529befb"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_256.png",
+      "same": true,
+      "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_32.png",
+      "same": true,
+      "sha256": "46ab1e3c89d97b104c5a07a041f085e2c51e28840ee407bc3af57b7827b6f5e1"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_48.png",
+      "same": true,
+      "sha256": "4d9f935ebb4bf1744dace16858a01166f42556f0f0f1b95471061436f654c41e"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_512.png",
+      "same": true,
+      "sha256": "5a3dd9f2596e8cdaf8ab398e015823b3d83f1bcac2453337aff7d36d8dc6c7fd"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_64.png",
+      "same": true,
+      "sha256": "58baa46d3661a5f2fed11cebe9ec8b59ac14d48699ac4c9c2a68c013c99be453"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_symbol_blue_transparent_1024.png",
+      "same": true,
+      "sha256": "da132bd3351c84fe335a6976b48d01ea3bab76b02e5b61f5e585c948d787adec"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_symbol_white_transparent_1024.png",
+      "same": true,
+      "sha256": "7a34535979a69f03a62302c466720ad7c80d9fc4cee51ebb7c176d09045727a0"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/README.txt",
+      "same": true,
+      "sha256": "66ecaddc7531799696c37aa66418599447deff5c6fb9a9ed84b47f77ccc28256"
+    }
+  ],
+  "all_preserved": true
+}

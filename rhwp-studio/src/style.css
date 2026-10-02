@@ -5,6 +5,7 @@
 @import './styles/editor.css';
 @import './styles/status-bar.css';
 @import './styles/dialogs.css';
+@import './styles/update-notice.css';
 @import './styles/zoom-dialog.css';
 @import './styles/char-shape-dialog.css';
 @import './styles/table-selection.css';

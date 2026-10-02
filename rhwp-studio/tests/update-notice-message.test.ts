@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   formatMb,
+  updateProgress,
   updateReadyMessage,
   updateStatusMessage,
 } from '../src/ui/update-notice-text.ts';
@@ -54,4 +55,18 @@ test('updateReadyMessage — currentVersion 이 없으면 괄호를 생략한다
   const msg = updateReadyMessage({ version: '0.8.3', currentVersion: '', notes: null }, false);
   assert.ok(msg.includes('0.8.3'));
   assert.ok(!msg.includes('(현재'), msg);
+});
+
+
+test('다운로드 비율은 실제 용량만 사용하고 총 길이 미상은 불확정으로 남긴다', () => {
+  assert.equal(updateProgress({ state: 'downloading', downloaded: 41, total: 100 }), 41);
+  assert.equal(updateProgress({ state: 'downloading', downloaded: 200, total: 100 }), 100);
+  assert.equal(updateProgress({ state: 'downloading', downloaded: 50, total: null }), null);
+  assert.equal(updateProgress({ state: 'downloading', downloaded: 50, total: 0 }), null);
+  assert.equal(updateProgress({ state: 'applying', version: '0.8.8' }), null);
+});
+
+test('다운로드 완료 뒤 검증과 적용 상태를 구분한다', () => {
+  assert.match(updateStatusMessage({ state: 'verifying' }) ?? '', /파일을 확인/);
+  assert.match(updateStatusMessage({ state: 'applying', version: '0.8.8' }) ?? '', /적용.*다시 시작/);
 });

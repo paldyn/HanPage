@@ -76,7 +76,7 @@ Tauri가 Windows 창 아이콘으로 첫 프레임을 읽으므로 고해상도 
 
 앱 버전은 `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`,
 `src-tauri/Cargo.lock`의 앱 항목과 `src-tauri/tauri.conf.json`에서 함께 맞춘다.
-엔진·Studio 버전과 독립적으로 관리하며 현재 릴리스 후보는 0.8.7이다.
+엔진·Studio 버전과 독립적으로 관리하며 현재 릴리스 후보는 0.8.8이다.
 
 검증·병합된 commit에 `hanpage-desktop-v{버전}` 태그를 push하면
 `desktop-release.yml`이 macOS aarch64와 Windows x64를 빌드하여 **초안 릴리스**에
@@ -84,3 +84,5 @@ Tauri가 Windows 창 아이콘으로 첫 프레임을 읽으므로 고해상도 
 서명·공증을 확인한 후 릴리스를 공개한다. devel 병합만으로 설치된 앱이 갱신되지 않는다.
 
 변경 내용은 [변경 이력](CHANGELOG.md)을 참고한다.
+
+업데이트 카드는 다운로드 용량·진행률과 파일 확인·적용 중 상태를 표시한다. `나중에`로 닫은 뒤에도 하단 업데이트 버튼에서 다시 열 수 있으며, macOS의 `HanPage > 업데이트 확인` 메뉴도 사용할 수 있다. 적용 전 저장 확인을 거치고, 실제 적용 중에는 문서 입력을 보호한다.
