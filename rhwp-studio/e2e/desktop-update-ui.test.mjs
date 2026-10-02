@@ -294,6 +294,7 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
   const previousQuiet = await quietBaseline(browser);
   await installNativeMock(page);
   await loadApp(page);
+  await page.bringToFront();
   await page.waitForSelector('#desktop-update-entry[data-state="ready"]');
   await page.waitForFunction(() => window.__wasm.pageCount > 0);
 
