@@ -1,0 +1,31 @@
+{
+  "tag": "hanpage-desktop-v0.8.6",
+  "merge_commit": "d523c04493ddf8296bc5d56e2c90c38f4da4fe96",
+  "run_id": 36948944525,
+  "run_url": "https://github.com/paldyn/HanPage/actions/runs/36948944525",
+  "platform_conclusions": {
+    "macOS aarch64": "failure",
+    "Windows x64": "failure"
+  },
+  "stage": "Build WASM",
+  "installed_wasm_pack": "0.9.1",
+  "error": "Found argument '--no-opt' which wasn't expected, or isn't valid in this context",
+  "root_cause": "latest version request fallback selected0.9.1; Desktop workflow lacked an explicit supported tool version",
+  "draft": {
+    "assets": [],
+    "isDraft": true,
+    "publishedAt": null,
+    "tagName": "hanpage-desktop-v0.8.6",
+    "targetCommitish": "d523c04493ddf8296bc5d56e2c90c38f4da4fe96",
+    "url": "https://github.com/paldyn/HanPage/releases/tag/untagged-c1b369f8716717c3f53b"
+  },
+  "public_release_unchanged": {
+    "draft": false,
+    "html_url": "https://github.com/paldyn/HanPage/releases/tag/hanpage-desktop-v0.8.3",
+    "published_at": "2026-08-04T14:03:46Z",
+    "tag_name": "hanpage-desktop-v0.8.3"
+  },
+  "corrective_source_commit": "549411762fecb5a833de3e30d3e82d3aab8319f2",
+  "next_desktop_version": "0.8.7",
+  "old_tag_not_moved": true
+}

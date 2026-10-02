@@ -1,0 +1,46 @@
+{
+  "source_sha": "549411762fecb5a833de3e30d3e82d3aab8319f2",
+  "base_sha": "d523c04493ddf8296bc5d56e2c90c38f4da4fe96",
+  "wasm_pack": "0.13.1",
+  "node": "22.22.1",
+  "fresh_locked_no_opt_wasm": "PASS",
+  "native_desktop_release_compile": "PASS",
+  "unsigned_local_app_bundle": "PASS",
+  "existing_workflow_contracts": {
+    "passed": 9,
+    "failed": 0
+  },
+  "workflow_yaml": "PASS",
+  "bundle_version": "0.8.7",
+  "bundle_identifier": "com.paldyn.hanpage",
+  "icon_matches_source": true,
+  "icon_sha256": "8260b6100180a8c589c5b63943d77587fc575bbc74d591d3249557a6df8d70c4",
+  "wasm_sha256": "67639370d17680e583aa7b7af56437020d8fd7ab7a3ebb043e8459c2b755edfc",
+  "wasm_bytes": 13216113,
+  "dist_wasm_matches_fresh_output": true,
+  "desktop_service_worker_absent": true,
+  "lockfiles_unchanged_by_build": true,
+  "local_logs_owned_temporary": {
+    "desktop-v087-fresh-wasm.log": {
+      "bytes": 1030,
+      "sha256": "eee3a69f39d051e3d01044239e010b68d71c3ed71400486cc1e0187811e48f8c"
+    },
+    "desktop-v087-local-build.log": {
+      "bytes": 2655,
+      "sha256": "f1c55de287bec35220bde16d3c9b57f42910a866ce0b0fb7f01429185c110f76"
+    },
+    "desktop-v087-local-app-bundle.log": {
+      "bytes": 466,
+      "sha256": "d6c435ca5b79851345f1ff2c33ee66059b49eecb086668166421e963614cfb34"
+    },
+    "desktop-v087-workflow-contracts.log": {
+      "bytes": 107,
+      "sha256": "c848c97292da7f7e554f9ea9c2fa98937b012cb0648fa92542c4ab43eb2d77a1"
+    }
+  },
+  "scope_limits": [
+    "Local bundle is unsigned; no macOS notarization or installed updater claim.",
+    "Windows native wrapper is audited; actual Windows build remains a release gate.",
+    "Original39 primary files are unchanged."
+  ]
+}

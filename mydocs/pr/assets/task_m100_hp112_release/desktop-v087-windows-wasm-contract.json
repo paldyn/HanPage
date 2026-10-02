@@ -1,0 +1,93 @@
+{
+  "audited_at_utc": "2026-10-02T01:11:32.551814+00:00",
+  "repository": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage",
+  "source_sha": "549411762fecb5a833de3e30d3e82d3aab8319f2",
+  "mode": "read-only source and public upstream code audit",
+  "recommendation": {
+    "installer": "jetli/wasm-pack-action@v0.4.0 with version: v0.13.1",
+    "windows_shell": "pwsh",
+    "windows_command": ".\\scripts\\wasm-pack-locked.ps1 --target web --release --no-opt",
+    "macos_shell": "bash",
+    "macos_command": "scripts/wasm-pack-locked.sh --target web --release --no-opt",
+    "verify_cli": "Both workflow steps require exact wasm-pack 0.13.1 before building"
+  },
+  "contract_findings": [
+    "wasm-pack v0.13.1 BuildOptions declares --no-opt; extra options such as --locked are cargo-build-only.",
+    "CrateData::new calls cargo_metadata::MetadataCommand before the cargo build, without --locked itself.",
+    "POSIX shell wrapper supplies an extensionless shebang cargo shim; native Windows executable resolution searches cargo.exe and can bypass this shim.",
+    "Existing PowerShell wrapper compiles a native cargo.exe proxy and runs a sibling copy of wasm-pack.exe, matching Windows executable-directory search.",
+    "Proxy preserves OS-string arguments, adds --locked only to metadata when absent, delegates to resolved real Cargo, and propagates status.",
+    "PowerShell wrapper also appends --locked to wasm-pack build, restores PATH/custom environment in finally, and removes its temporary directory.",
+    "Source workflow has no CARGO override; parent confirmed failed job environment likewise had only CARGO_HOME, CARGO_INCREMENTAL and CARGO_TERM_COLOR.",
+    "Explicit CARGO environment is a potential proxy bypass edge; exact cargo_metadata 0.15.2 behavior was not fetched, so this remains an unverified non-CI caveat.",
+    "PowerShell wrapper does not synchronize Studio public files itself; Desktop build:frontend separately consumes root pkg through copy-wasm."
+  ],
+  "evidence": {
+    "local": [
+      {
+        "path": "scripts/wasm-pack-locked.ps1",
+        "lines": [
+          23,
+          25,
+          38,
+          41,
+          46,
+          50,
+          61,
+          64,
+          68,
+          70,
+          72,
+          74,
+          84
+        ]
+      },
+      {
+        "path": "scripts/wasm-pack-locked.sh",
+        "lines": [
+          41,
+          45,
+          51,
+          58,
+          60
+        ]
+      },
+      {
+        "path": "mydocs/manual/dev_environment_guide.md",
+        "line": 176
+      },
+      {
+        "path": ".github/workflows/desktop-release.yml",
+        "git_ref": "549411762fecb5a833de3e30d3e82d3aab8319f2"
+      }
+    ],
+    "public_primary": [
+      {
+        "url": "https://raw.githubusercontent.com/rustwasm/wasm-pack/v0.13.1/src/command/build.rs",
+        "purpose": "BuildOptions --no-opt and build extra_options"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/rustwasm/wasm-pack/v0.13.1/src/manifest/mod.rs",
+        "purpose": "CrateData::new metadata invocation, lines 373-375"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/rust-lang/rust/1.93.1/library/std/src/sys/process/windows.rs",
+        "purpose": "resolve_exe appends .exe; search_paths application directory before inherited PATH, lines 419-540"
+      }
+    ]
+  },
+  "validation_scope": {
+    "source_workflow_read": true,
+    "parent_reported_validation": "9 workflow contract tests and YAML parse passed; fresh local WASM compiling",
+    "windows_runtime_execution": "pending actual 0.8.7 release job",
+    "build_or_cargo_run_by_auditor": false,
+    "source_refs_remotes_secrets_mutated_by_auditor": false
+  },
+  "prior_failure": {
+    "tag": "hanpage-desktop-v0.8.6",
+    "run_id": 36948944525,
+    "windows_job_id": 110657324842,
+    "cause": "latest action resolution installed wasm-pack 0.9.1; CLI rejected --no-opt before compilation",
+    "failed_tag_and_draft": "retained; no retag or force push requested"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "base": "d523c04493ddf8296bc5d56e2c90c38f4da4fe96",
+  "source_head": "549411762fecb5a833de3e30d3e82d3aab8319f2",
+  "desktop_version": "0.8.7",
+  "engine_version": "0.8.6",
+  "version_file_checks": [
+    {
+      "path": "HanPage-Desktop/package.json",
+      "only_app_version_changed": true,
+      "sha256": "782ab58a2e2b038d54f685b77a9cf6ed5580c1c6ac80244d65187f389c874d21"
+    },
+    {
+      "path": "HanPage-Desktop/package-lock.json",
+      "only_app_version_changed": true,
+      "sha256": "38d16ffb2049d0ae38d4dac4ee0a6a05805444dd9f94ab59d98e86118fec8904"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/tauri.conf.json",
+      "only_app_version_changed": true,
+      "sha256": "9264a1c6cbb56f9eee7c1c3f07d00c17a39d7ac139c09e88416c3c574806f1b6"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/Cargo.toml",
+      "only_app_version_changed": true,
+      "sha256": "b15259ac602c53370a9a52838a8517ed53be31b321b1f3ce41175609dc7b74d6"
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/Cargo.lock",
+      "only_app_version_changed": true,
+      "sha256": "e46748eae4de834a5437901420e0543d41cc47f6510a641aebb1aaa1d2381daf"
+    }
+  ],
+  "original_logo_binary_files_byte_exact": 37,
+  "runtime_engine_and_studio_source_unchanged": true,
+  "changed_paths": [
+    ".github/workflows/desktop-release.yml",
+    "HanPage-Desktop/CHANGELOG.md",
+    "HanPage-Desktop/README.md",
+    "HanPage-Desktop/package-lock.json",
+    "HanPage-Desktop/package.json",
+    "HanPage-Desktop/src-tauri/Cargo.lock",
+    "HanPage-Desktop/src-tauri/Cargo.toml",
+    "HanPage-Desktop/src-tauri/tauri.conf.json",
+    "mydocs/plans/task_m100_hp112.md"
+  ]
+}

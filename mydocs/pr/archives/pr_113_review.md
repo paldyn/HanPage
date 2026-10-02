@@ -29,3 +29,11 @@ Desktop version/lock6필드, 새 로고·NSIS 설정, 재현 빌드·draft rollo
 ## 후속 처리
 
 본 PR이 review/impl·오늘할일을 포함한다. 병합 후 실제 merge SHA와 CI·릴리스 run·공개 검증은 운영 근거/최종 보고에 추가한다. contributor comment는 요청되지 않아 게시하지 않는다. 전용 작업트리는 앱 pin/workspace 보호가 있으면 사유를 남기고 유지한다. 사용자 primary의 원본은 hash 보존한다.
+
+## 실제 병합과 첫 배포 결과
+
+최종 head1afd7a501c4b5485e5e6fe96a327419d283be282/basec5b6022532371fd07a2f5e978fb21e4c3cc37758의32checks가28SUCCESS·4정상SKIPPED, 실패/대기0임을 root가 CLEAN/MERGEABLE과 함께 재확인했다. 관리자 우회 없이 d523c04493ddf8296bc5d56e2c90c38f4da4fe96으로 병합했다. merge parents 및 tree가 검증 후보와 동일하다. Rust 회귀10083PASS·50skip·0FAIL, Studio1830PASS·2skip, responsive2666PASS·0FAIL. [최종 CI 근거](../assets/task_m100_hp112_release/pr113-final-ci-summary.json).
+
+Desktop0.8.6 [첫 tag run](https://github.com/paldyn/HanPage/actions/runs/36948944525)은 양 플랫폼 모두 WASM 옵션 파싱에서 실패했다. action의 latest 조회 fallback이0.9.1을 설치했고 --no-opt를 지원하지 않았다. 컴파일/서명/자산 업로드 이전의 실패이며 초안 자산0·공개0.8.3 유지 상태를 확인했다. [실패 근거](../assets/task_m100_hp112_release/desktop-v086-failed-release.json). 원 태그는 옮기지 않고 후속 준비 PR에서 tool pin/Windows native wrapper 및 Desktop0.8.7을 검증한다.
+
+Duration metadata run36948892747는 success이나 original measured worker unavailable:b로 no-verified-pr-duration-measurements 갱신 보류를 확인했다. 병합 후 검증 CI를 다시 실행하지 않았다. 원 작업공간의39파일은 그대로 보존하며 stash/ff/drop 동기화는 자동 승인 검토의 원본 유실 위험 판단으로 실행되지 않았다. 댓글 게시 없음. Issue #112는 실제 앱 공개 완료까지 OPEN이다.
