@@ -19,6 +19,8 @@ const quietBaselineRef = process.argv.find(arg => arg.startsWith('--quiet-baseli
 const results = [];
 const screenshots = [];
 const layoutChecks = [];
+const cardLayoutChecks = [];
+const cardThemeChecks = [];
 const check = (condition, message) => {
   results.push({ pass: Boolean(condition), message });
   assert(condition, message);
@@ -143,6 +145,91 @@ async function captureStatusBar(page, name) {
   screenshots.push(entryFile);
 }
 
+/** 카드의 실제 배치 결과를 읽는다. 작은 높이에서는 세로 스크롤을 허용한다. */
+async function cardLayout(page) {
+  return page.$eval(visibleCard, el => {
+    const rect = el.getBoundingClientRect();
+    return {
+      viewport: { width: innerWidth, height: innerHeight },
+      left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom,
+      width: rect.width, height: rect.height,
+      centerX: rect.left + rect.width / 2, centerY: rect.top + rect.height / 2,
+      scrollWidth: el.scrollWidth, clientWidth: el.clientWidth,
+      scrollHeight: el.scrollHeight, clientHeight: el.clientHeight,
+    };
+  });
+}
+
+function centeredAndFits(layout) {
+  return layout.width > 0 && layout.height > 0
+    && Math.abs(layout.centerX - layout.viewport.width / 2) <= 1
+    && Math.abs(layout.centerY - layout.viewport.height / 2) <= 1
+    && layout.left >= -0.5 && layout.top >= -0.5
+    && layout.right <= layout.viewport.width + 0.5 && layout.bottom <= layout.viewport.height + 0.5
+    && layout.scrollWidth <= layout.clientWidth;
+}
+
+/** 실제 제품 테마 모듈을 통해 스킨을 읽고 바꾼다. DOM 속성을 직접 덮지 않는다. */
+async function themeSettings(page) {
+  return page.evaluate(async () => {
+    const theme = await import('/src/core/theme.ts');
+    return { mode: theme.getThemeMode(), skin: theme.getThemeSkin() };
+  });
+}
+
+async function setThemeSettings(page, settings) {
+  await page.evaluate(async value => {
+    const theme = await import('/src/core/theme.ts');
+    theme.setThemeSkin(value.skin);
+    theme.setThemeMode(value.mode);
+  }, settings);
+}
+
+/** CSS color(srgb ...)와 rgb(...)를 같은 실제 8비트 픽셀로 정규화한다. */
+async function cardColors(page) {
+  return page.$eval(visibleCard, async el => {
+    const theme = await import('/src/core/theme.ts');
+    const css = getComputedStyle(el);
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;width:1px;height:1px;background:var(--ui-surface)';
+    el.append(probe);
+    const raw = {
+      background: css.backgroundColor,
+      surface: getComputedStyle(probe).backgroundColor,
+      text: css.color,
+      description: getComputedStyle(el.querySelector('#desktop-update-description')).color,
+      return: getComputedStyle(el.querySelector('.dialog-update-return')).color,
+    };
+    probe.remove();
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('카드의 실제 CSS 색을 정규화할 Canvas2D가 없습니다.');
+    const rgba = Object.fromEntries(Object.entries(raw).map(([key, value]) => {
+      context.clearRect(0, 0, 1, 1);
+      context.fillStyle = value;
+      context.fillRect(0, 0, 1, 1);
+      return [key, Array.from(context.getImageData(0, 0, 1, 1).data)];
+    }));
+    const luminance = channels => {
+      const [r, g, b] = channels.slice(0, 3).map(channel => {
+        const value = channel / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const background = luminance(rgba.background);
+    const contrast = Object.fromEntries(['text', 'description', 'return'].map(key => {
+      const foreground = luminance(rgba[key]);
+      return [key, (Math.max(background, foreground) + 0.05) / (Math.min(background, foreground) + 0.05)];
+    }));
+    return {
+      mode: theme.getThemeMode(), skin: theme.getThemeSkin(), raw, rgba, contrast,
+      surfaceDifference: Math.max(...rgba.background.slice(0, 3).map((channel, index) => Math.abs(channel - rgba.surface[index]))),
+    };
+  });
+}
+
 async function clickFileMenu(page, command) {
   await page.bringToFront();
   console.log(`  Menu: ${command} (${page.url()})`);
@@ -170,6 +257,9 @@ async function snapshot(page) {
       state: card?.dataset.state,
       visible: Boolean(card && !card.hidden),
       primary: button?.textContent,
+      later: card?.querySelector('.dialog-update-later')?.textContent?.trim(),
+      returnHidden: card?.querySelector('.dialog-update-return')?.hidden,
+      returnVisible: Boolean(card?.querySelector('.dialog-update-return')?.getClientRects().length),
       disabled: button?.disabled,
       progressVisible: Boolean(bar && !bar.hidden),
       progressNow: bar?.getAttribute('aria-valuenow'),
@@ -382,9 +472,55 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
   let actual = await snapshot(page);
   check(actual.primary === '업데이트' && !actual.disabled, '주 동작은 활성화된 업데이트 버튼이다');
   check(actual.version === 'v0.8.7 → v0.8.8', '현재 버전과 적용할 버전을 표시한다');
+  check(actual.later === '나중에' && actual.returnVisible, '준비된 업데이트에는 나중에 버튼과 추후 업데이트 안내를 유지한다');
   check(await page.$eval(visibleCard, el => el.getAttribute('aria-modal') === 'false'), '수동으로 연 상세도 적용을 누르기 전에는 작업을 막지 않는다');
   await capture(page, 'after-macos-ready-light');
   await captureCard(page, 'ready-card');
+
+  setTestCase('업데이트 카드 중앙 · 최소 창 · 좁은 창 · 짧은 높이');
+  const initialViewport = page.viewport();
+  for (const [width, height] of [[1280, 900], [800, 600], [390, 740], [800, 320]]) {
+    await page.setViewport({ width, height });
+    const layout = await cardLayout(page);
+    cardLayoutChecks.push({ state: 'ready', ...layout });
+    check(centeredAndFits(layout), `${width}×${height}에서 업데이트 카드가 화면 중앙에 있고 뷰포트를 벗어나지 않는다`);
+  }
+  const shortActions = await page.$eval(visibleCard, el => {
+    const actions = Array.from(el.querySelectorAll('.dialog-update-actions button')).map(button => {
+      button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      const rect = button.getBoundingClientRect();
+      const top = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return { label: button.textContent.trim(), visible: rect.top >= 0 && rect.bottom <= innerHeight && (top === button || button.contains(top)) };
+    });
+    return { viewport: { width: innerWidth, height: innerHeight }, actions };
+  });
+  cardLayoutChecks.push({ state: 'ready', shortActions });
+  check(shortActions.actions.length === 2 && shortActions.actions.every(action => action.visible), '짧은 높이에서도 스크롤하여 나중에·업데이트 버튼에 실제로 접근할 수 있다');
+  await capture(page, 'after-ready-short-height');
+  await page.setViewport(initialViewport);
+  await page.$eval(visibleCard, el => { el.scrollTop = 0; });
+
+  setTestCase('모든 스킨의 밝기 · 은은한 표면 차이 · 본문 가독성');
+  const originalTheme = await themeSettings(page);
+  try {
+    for (const skin of ['default', 'flat', 'oldschool']) {
+      for (const mode of ['light', 'dark']) {
+        await setThemeSettings(page, { skin, mode });
+        const colors = await cardColors(page);
+        const layout = await cardLayout(page);
+        cardThemeChecks.push({ state: 'ready', ...colors, layout });
+        // 8비트 채널 변화는 32 이하로 제한하고, 본문·설명·작은 안내는 4.5:1 대비를 지킨다.
+        check(colors.rgba.background[3] === 255 && colors.surfaceDifference > 0 && colors.surfaceDifference <= 32
+          && Object.values(colors.contrast).every(value => value >= 4.5) && centeredAndFits(layout),
+        `${skin}/${mode}에서 중앙 카드가 기본 표면과 은은히 구별되고 본문·설명·안내를 읽을 수 있다`);
+      }
+    }
+  } finally {
+    await setThemeSettings(page, originalTheme);
+  }
+  const restoredTheme = await themeSettings(page);
+  check(restoredTheme.mode === originalTheme.mode && restoredTheme.skin === originalTheme.skin, '스킨 검증 뒤 사용자의 원래 밝기와 스킨을 복원한다');
+  setTestCase('수동 준비 완료 · 나중에 · 재진입 · 키보드');
   await page.click(`${visibleCard} .dialog-update-later`);
   check(!(await snapshot(page)).visible, '나중에를 누르면 카드가 닫힌다');
   check(await page.$eval('#desktop-update-entry', el => el.textContent.trim() === '업데이트 준비됨'), '나중에 이후에도 상태 표시줄 진입점이 남는다');
@@ -575,16 +711,37 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
   check((await snapshot(page)).progressVisible, '재확인 동안 불확정 진행 막대를 표시한다');
   await state(page, { state: 'upToDate', version: '0.8.7' });
   check((await snapshot(page)).primary === '다시 확인', '최신 버전 결과에서도 다시 확인할 수 있다');
+  actual = await snapshot(page);
+  check(actual.later === '닫기' && !actual.disabled, '최신 버전 화면의 보조 동작은 나중에 대신 닫기다');
+  check(actual.returnHidden && !actual.returnVisible, '최신 버전 화면에는 업데이트를 미루라는 하단 안내를 표시하지 않는다');
+  const latestTheme = await page.evaluate(() => window.__theme.getThemeMode());
+  for (const mode of ['light', 'dark']) {
+    await page.evaluate(value => window.__theme.setThemeMode(value), mode);
+    cardThemeChecks.push({ state: 'upToDate', ...(await cardColors(page)), layout: await cardLayout(page) });
+    await capture(page, `after-latest-${mode}`);
+    await captureCard(page, `latest-${mode}-card`);
+  }
+  check((await snapshot(page)).later === '닫기' && !(await snapshot(page)).returnVisible
+    && (await snapshot(page)).primary === '다시 확인', '최신 버전의 닫기·안내 숨김·다시 확인은 다크 테마에서도 유지된다');
+  await page.evaluate(value => window.__theme.setThemeMode(value), latestTheme);
+  const beforeRecheck = (await snapshot(page)).checkCount;
+  await page.click(primary);
+  await waitState(page, 'checking');
+  check((await snapshot(page)).checkCount === beforeRecheck + 1 && (await snapshot(page)).progressVisible, '최신 버전의 다시 확인 버튼도 실제 확인 IPC와 진행 표시를 실행한다');
+  await state(page, { state: 'upToDate', version: '0.8.7' });
+  await page.click(`${visibleCard} .dialog-update-later`);
+  await page.waitForFunction(() => document.getElementById('desktop-update-card').hidden);
+  check(!(await snapshot(page)).visible, '최신 버전의 닫기 버튼을 누르면 실제 카드가 닫힌다');
 
   setTestCase('다크 테마 · 작은 화면 · 악성 오류 텍스트');
   await page.evaluate(() => { window.__theme.setThemeMode('dark'); window.__updateMock.ready(); });
+  await page.click('#desktop-update-entry');
+  await page.waitForSelector(visibleCard);
   await waitState(page, 'ready');
-  const colors = await page.$eval(visibleCard, el => {
-    const css = getComputedStyle(el);
-    return { background: css.backgroundColor, color: css.color };
-  });
-  const rgb = colors.background.match(/\d+/g)?.map(Number);
-  check(rgb?.slice(0, 3).every(value => value < 150) && colors.background !== colors.color, '카드는 다크 테마 표면과 읽을 수 있는 글자 색을 따른다');
+  const colors = await cardColors(page);
+  check(colors.rgba.background.slice(0, 3).every(value => value < 150)
+    && colors.rgba.background.slice(0, 3).some((value, index) => value !== colors.rgba.text[index])
+    && colors.contrast.text >= 4.5, '카드는 다크 테마 표면과 읽을 수 있는 글자 색을 따른다');
   await capture(page, 'after-macos-ready-dark');
   await page.setViewport({ width: 390, height: 740 });
   const fits = await page.$eval(visibleCard, el => {
@@ -667,6 +824,6 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
     sourceFiles: Object.fromEntries(['src/main.ts', 'src/ui/update-notice.ts', 'src/core/desktop-bridge.ts', 'src/ui/update-notice-text.ts', 'src/styles/update-notice.css', 'src/ui/about-dialog.ts', 'src/i18n/locales/ko.ts', 'src/i18n/locales/en.ts', 'e2e/desktop-update-ui.test.mjs'].map(file => [file, createHash('sha256').update(readFileSync(file)).digest('hex')])),
     pass: results.filter(result => result.pass).length,
     fail: results.filter(result => !result.pass).length,
-    results, screenshots, layoutChecks, browserErrors: errors, browserDialogs,
+    results, screenshots, layoutChecks, cardLayoutChecks, cardThemeChecks, browserErrors: errors, browserDialogs,
   }, null, 2)}\n`);
 }, { skipLoadApp: true });
