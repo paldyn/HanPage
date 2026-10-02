@@ -1,0 +1,7 @@
+{
+  "baseline": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+  "files": 39,
+  "byteHashMatch": true,
+  "primaryHeadUnchanged": true,
+  "actions": "No primary checkout switch/reset/stash; local build output only in shared target/pr-review"
+}

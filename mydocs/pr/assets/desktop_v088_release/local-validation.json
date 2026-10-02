@@ -1,0 +1,109 @@
+{
+  "localCandidate": "9d8d93cdcc8baba3c9ad47d25050df819b9feeca",
+  "prBase": "71f327f2ffdbc20bc3b8926d136ead049caeeb68",
+  "scope": [
+    "HanPage-Desktop/CHANGELOG.md",
+    "HanPage-Desktop/README.md",
+    "HanPage-Desktop/package-lock.json",
+    "HanPage-Desktop/package.json",
+    "HanPage-Desktop/src-tauri/Cargo.lock",
+    "HanPage-Desktop/src-tauri/Cargo.toml",
+    "HanPage-Desktop/src-tauri/src/lib.rs",
+    "HanPage-Desktop/src-tauri/src/update_state.rs",
+    "HanPage-Desktop/src-tauri/tauri.conf.json",
+    "rhwp-studio/e2e/MANIFEST.md",
+    "rhwp-studio/e2e/desktop-update-ui.test.mjs",
+    "rhwp-studio/src/core/desktop-bridge.ts",
+    "rhwp-studio/src/main.ts",
+    "rhwp-studio/src/style.css",
+    "rhwp-studio/src/styles/update-notice.css",
+    "rhwp-studio/src/ui/update-notice-text.ts",
+    "rhwp-studio/src/ui/update-notice.ts",
+    "rhwp-studio/tests/desktop-bridge.test.ts",
+    "rhwp-studio/tests/update-notice-message.test.ts",
+    "tests/cases/hanpage_desktop_update_state.rs",
+    "tests/suites/suite-policy.json"
+  ],
+  "sourceSha256": {
+    "HanPage-Desktop/CHANGELOG.md": "87e0575fc381fccdf9ebc4dc8186ff3ea827cd1841abcb0c545f0e0890064352",
+    "HanPage-Desktop/README.md": "e8689e977da8d6a1fb3555988533898cda18aaf3667277085096a352c3ceeeb0",
+    "HanPage-Desktop/package-lock.json": "1041325a1cc5d9322e679748fe2c42268b0a3a9d956ce1bebb28fa876713fda8",
+    "HanPage-Desktop/package.json": "637240a22ab680608db92d5e90dd20e8e02f312d009ebb1577e7fdc1c628d578",
+    "HanPage-Desktop/src-tauri/Cargo.lock": "b82adb8393bc4452df5ae9d81d5c9e9ce34aaf537f32715b123a6397b7bf93bd",
+    "HanPage-Desktop/src-tauri/Cargo.toml": "b532a8f389cbb815bf2e2cd87e7dfcffc869c6a0a80af27dc8cde8cb1a6c52a3",
+    "HanPage-Desktop/src-tauri/src/lib.rs": "5421604600b4504970975752295a12376d9de2fb78dc4ee937605a16fc3288c5",
+    "HanPage-Desktop/src-tauri/src/update_state.rs": "254f3eddf64da97be527ce17a8f36e1974bff7f340e61fa6996b584800ec614d",
+    "HanPage-Desktop/src-tauri/tauri.conf.json": "c4572a16aa1f77ba2973690057c6f4da96982787be66554d4a48417ae40d64e3",
+    "rhwp-studio/e2e/MANIFEST.md": "2d437f8d44d0eb9cc92e2b7fc0012e3987d3f2af1cea43a25522c02f70f1a31e",
+    "rhwp-studio/e2e/desktop-update-ui.test.mjs": "f140e0284d6a19833c75301dd81f92a471c5a2aca0c97b9a5adfc4e49fc6af11",
+    "rhwp-studio/src/core/desktop-bridge.ts": "beef81d25c6009177638dd41e71d7b014882e45e8c3173e053bdaa4422efa55f",
+    "rhwp-studio/src/main.ts": "057a19bcc28ea0d49b1751f0fa8530cdb567013965332e50d2f22b502bfde4a8",
+    "rhwp-studio/src/style.css": "61ba7be5f693d79e49cdcfc04f87155af01461ae97458348ad84b1432c356952",
+    "rhwp-studio/src/styles/update-notice.css": "09c61c26b61aa368c591f6307d4b43b3d9a4b13573c1b4d4b29907bcad2f12d4",
+    "rhwp-studio/src/ui/update-notice-text.ts": "d824f9d5dff3c46904f0d3587f136294f9bcac8abae584a0c123040cc9e44ecd",
+    "rhwp-studio/src/ui/update-notice.ts": "8f38ad7cb772ca68728081e47875843557ace2313cd0bf6f092bdc7ca4b827f5",
+    "rhwp-studio/tests/desktop-bridge.test.ts": "930647adc9b894647a21b151e198a5c5fa0b0a85a269378b3d0bf6bf95fe21ed",
+    "rhwp-studio/tests/update-notice-message.test.ts": "ca8f5e69fe1b7b89f24257126b7320874330868d5dc8eb427f63286f34192343",
+    "tests/cases/hanpage_desktop_update_state.rs": "e7c9454868a357e2417ddc97dd3dada54c63ad121bccdba4d334fbf784443611",
+    "tests/suites/suite-policy.json": "4f9e6a091c67a0415dd5fe4f8674ca8bbf1dcdcbc1887062c8a4872a3ca19e1d"
+  },
+  "unitTests": {
+    "pass": 1834,
+    "skip": 2,
+    "fail": 0,
+    "reuse": "same Studio sources as final copy50f9; npm test already completed"
+  },
+  "browser": {
+    "pass": 55,
+    "fail": 0,
+    "exactSourceHead": "9d8d93cdcc8baba3c9ad47d25050df819b9feeca",
+    "tauri": "IPC/update events mocked; actual Studio/WASM/edit/save paths"
+  },
+  "nativeFocusedTests": {
+    "pass": 7,
+    "reuse": "Native Rust/state/case/policy source hashes identical to prior 1399 evidence"
+  },
+  "rootRustLintReuse": {
+    "code": "1399e07764bdf924c5ba4f6c77f9ad4f0fa40511",
+    "native": "PASS",
+    "wasm32": "PASS",
+    "workspace": "PASS",
+    "reason": "Root engine/test/policy Rust sources unchanged after passing lint bundle"
+  },
+  "desktopCandidateValidation": {
+    "fmt": "PASS",
+    "clippyAllTargets": "PASS",
+    "unsignedAppBundle": "PASS",
+    "version": "0.8.8",
+    "logs": "output/pr-review/desktop088/logs"
+  },
+  "notExecuted": [
+    "actual updater install/restart",
+    "Windows GUI",
+    "new release build or public publication (pending)"
+  ],
+  "primaryPreservation": {
+    "baseline": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+    "files": 39,
+    "byteHashMatch": true,
+    "primaryHeadUnchanged": true,
+    "actions": "No primary checkout switch/reset/stash; local build output only in shared target/pr-review"
+  },
+  "assetSha256": {
+    "after-apply-error.png": "d0fc3692c649847147b92d8464184110205a387824aa290785c39f394d16228a",
+    "after-applying.png": "c8800cbea415e4c54a5b07aeda3c850d346d60be8f87c053524944917cb57baf",
+    "after-downloading-known.png": "97f7f74b81fe45a9a60b846e416de74f8eb3d2c9f7d8e15207236e4b1d07a0b8",
+    "after-downloading-unknown.png": "38e920e84f1592ced99182193cd8c8ad4ce960b67d751023a5f4e3fd3ef76928",
+    "after-macos-ready-dark.png": "b72494dd2eda60f2a464fc41898dee0f3dfe26a2d1cb20ac8a3c83ebaf4b4bc0",
+    "after-macos-ready-light.png": "4ac4ac0af784d6b7c31cf651755873bfcfdc26ca84e2d721fcc305348415fc00",
+    "after-ready-small-dark.png": "01b4ecd9c416d6742bcdce6482ef7c2cd9f09c71cc8ca35cca661d2835225e72",
+    "after-unsaved-small.png": "b892334460e9f37c9cc62327bb6c531a8e96f07ffac98545ae60a522bbf83c5c",
+    "after-windows-ready-light.png": "5884fd6af2fc2812adf2571b3aa9bbf9e75a3b10c78cd8d6c03e4e57c35af2e5",
+    "applying-card.png": "6e5946da3a98d3830bdc286b7e5ff2208b9087410594919a9b89891be1cce47f",
+    "before-v087-windows-ready.png": "a8da00e66d681d642ecad0b02c7a5befb8ce63c4fbe6c710bc3935653b60f196",
+    "browser-results.json": "9cad71fc60068dab3cb1d65d7dd1e3ba3d673e64558893c5ed390cad3859ab74",
+    "local-bundle.json": "5967901d9dccb3b6b637cd58e1a2fb4acb69245a3d94ef75d8b633c756bdeb1c",
+    "primary-preservation.json": "53522733a694cf4c83311c53dac0dfd1c0f30abf2bea6a4298754f9ff431e14c",
+    "ready-card.png": "874249ab44791d2f2ea03ab2cb1865f56b025cb84ebeb0e2803c4d7fcc963ac7"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "version": "0.8.8",
+  "bundleVersion": "0.8.8",
+  "identifier": "com.paldyn.hanpage",
+  "app": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review/release/bundle/macos/HanPage.app",
+  "localSigning": "unsigned local bundle; updater artifacts disabled through CLI-only config",
+  "icnsSha256": "8260b6100180a8c589c5b63943d77587fc575bbc74d591d3249557a6df8d70c4",
+  "wasmSha256": "5c7a9a16c22cc6e0086d14d38df0386c5e63a1c75fe194a49848111c95011d12",
+  "serviceWorker": false
+}

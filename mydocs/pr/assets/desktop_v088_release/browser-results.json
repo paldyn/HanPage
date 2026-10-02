@@ -1,0 +1,275 @@
+{
+  "description": "실제 Studio DOM·문서·저장 경로, Tauri IPC와 전송 상태 이벤트만 통제 대역. 실제 설치·재시작은 미실행.",
+  "baseline": {
+    "ref": "71f327f2ffdbc20bc3b8926d136ead049caeeb68",
+    "before": {
+      "labels": [
+        "지금 설치",
+        "나중에"
+      ],
+      "persistentEntry": false
+    },
+    "beforeApply": {
+      "liveProgress": false,
+      "disabled": false
+    },
+    "expected": {
+      "updateButton": "FAIL",
+      "persistentEntry": "FAIL",
+      "applyingProgress": "FAIL"
+    }
+  },
+  "sourceHead": "9d8d93cdcc8baba3c9ad47d25050df819b9feeca",
+  "sourceFiles": {
+    "src/main.ts": "057a19bcc28ea0d49b1751f0fa8530cdb567013965332e50d2f22b502bfde4a8",
+    "src/ui/update-notice.ts": "8f38ad7cb772ca68728081e47875843557ace2313cd0bf6f092bdc7ca4b827f5",
+    "src/core/desktop-bridge.ts": "beef81d25c6009177638dd41e71d7b014882e45e8c3173e053bdaa4422efa55f",
+    "src/ui/update-notice-text.ts": "d824f9d5dff3c46904f0d3587f136294f9bcac8abae584a0c123040cc9e44ecd",
+    "src/styles/update-notice.css": "09c61c26b61aa368c591f6307d4b43b3d9a4b13573c1b4d4b29907bcad2f12d4"
+  },
+  "pass": 55,
+  "fail": 0,
+  "results": [
+    {
+      "pass": true,
+      "message": "이전 코드의 실제 DOM에서 설치 버튼 문구를 재현한다"
+    },
+    {
+      "pass": true,
+      "message": "이전 코드에서 요구한 업데이트 버튼 계약은 FAIL이다"
+    },
+    {
+      "pass": true,
+      "message": "이전 코드에서 Windows 상시 업데이트 재진입 계약은 FAIL이다"
+    },
+    {
+      "pass": true,
+      "message": "이전 코드에서 적용 중 진행·중복 방지 계약은 FAIL이다"
+    },
+    {
+      "pass": true,
+      "message": "주 동작은 활성화된 업데이트 버튼이다"
+    },
+    {
+      "pass": true,
+      "message": "현재 버전과 적용할 버전을 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "자동 알림은 작업을 막지 않는 카드다"
+    },
+    {
+      "pass": true,
+      "message": "나중에를 누르면 카드가 닫힌다"
+    },
+    {
+      "pass": true,
+      "message": "나중에 이후에도 상태 표시줄 진입점이 남는다"
+    },
+    {
+      "pass": true,
+      "message": "나중에는 업데이트 적용 IPC를 호출하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "받아둔 업데이트를 다시 열 때 다운로드 확인을 중복 실행하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "수동으로 연 카드로 키보드 포커스가 이동한다"
+    },
+    {
+      "pass": true,
+      "message": "카드의 나중에 버튼에 키보드로 접근할 수 있다"
+    },
+    {
+      "pass": true,
+      "message": "업데이트 버튼에 키보드로 접근할 수 있다"
+    },
+    {
+      "pass": true,
+      "message": "Escape로 준비 완료 알림을 닫을 수 있다"
+    },
+    {
+      "pass": true,
+      "message": "닫은 뒤 상시 진입점으로 포커스를 복원한다"
+    },
+    {
+      "pass": true,
+      "message": "macOS 네이티브 업데이트 확인 메뉴도 같은 카드를 다시 연다"
+    },
+    {
+      "pass": true,
+      "message": "실제 전송 이벤트의 진행률 41%를 진행 막대에 반영한다"
+    },
+    {
+      "pass": true,
+      "message": "받은 용량과 전체 용량을 함께 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "다운로드 중에는 적용 버튼을 비활성화한다"
+    },
+    {
+      "pass": true,
+      "message": "전체 길이를 모르면 가짜 퍼센트 대신 불확정 막대를 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "길이 미상에서는 받은 용량만 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "다운로드와 파일 확인 상태를 구분한다"
+    },
+    {
+      "pass": true,
+      "message": "적용 IPC를 기다리는 동안 즉시 막대와 비활성 버튼을 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "적용 중인 작업을 버튼과 상태 문구로 알린다"
+    },
+    {
+      "pass": true,
+      "message": "늦은 준비 완료·확인 이벤트가 적용 화면을 되돌리지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "적용 중 네이티브 메뉴·파일 연결 이벤트는 현재 문서를 교체하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "실제 적용 중에는 편집·Undo·새 문서 단축키가 저장된 문서를 바꾸지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "적용 중의 반복 클릭은 IPC를 추가 실행하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "적용 중에는 Escape로 진행 상태를 숨기지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "적용 중에는 나중에 버튼도 비활성화한다"
+    },
+    {
+      "pass": true,
+      "message": "적용 실패 원인과 받아둔 파일의 재시도 동작을 보여준다"
+    },
+    {
+      "pass": true,
+      "message": "적용 실패 후에는 편집 입력이 정상적으로 복구된다"
+    },
+    {
+      "pass": true,
+      "message": "적용 재시도는 다운로드를 다시 확인하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "실제 편집으로 미저장 문서를 만든다"
+    },
+    {
+      "pass": true,
+      "message": "저장 여부를 결정하기 전에는 업데이트 적용을 시작하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "미저장 확인 취소는 적용하지 않고 문서를 보존한다"
+    },
+    {
+      "pass": true,
+      "message": "네이티브 저장 취소도 적용을 막고 미저장 상태를 보존한다"
+    },
+    {
+      "pass": true,
+      "message": "저장 실패도 적용을 막고 미저장 상태를 보존한다"
+    },
+    {
+      "pass": true,
+      "message": "작은 화면에서도 저장 확인의 제목·본문·버튼을 업데이트 카드가 가리지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "기존 제품 저장 경로가 성공한 뒤에만 업데이트를 적용한다"
+    },
+    {
+      "pass": true,
+      "message": "저장 요청에는 실제 문서 직렬화 바이트가 전달된다"
+    },
+    {
+      "pass": true,
+      "message": "수동 확인 IPC 실패도 빈 화면 대신 원인을 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "재확인 동안 불확정 진행 막대를 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "최신 버전 결과에서도 다시 확인할 수 있다"
+    },
+    {
+      "pass": true,
+      "message": "카드는 다크 테마 표면과 읽을 수 있는 글자 색을 따른다"
+    },
+    {
+      "pass": true,
+      "message": "작은 화면에서도 카드와 버튼이 뷰포트 안에 들어온다"
+    },
+    {
+      "pass": true,
+      "message": "오류 문자열은 HTML로 실행되지 않고 텍스트로 표시된다"
+    },
+    {
+      "pass": true,
+      "message": "오류 본문은 스크립트를 실행하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "Windows도 설치 대신 업데이트 버튼을 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "Windows에서는 적용 후 설치 프로그램이 열리는 동작을 안내한다"
+    },
+    {
+      "pass": true,
+      "message": "Windows도 상태 표시줄에서 나중에 닫은 업데이트를 다시 연다"
+    },
+    {
+      "pass": true,
+      "message": "조회 중 도착한 최신 이벤트를 오래된 ready 응답이 덮어쓰지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "일반 웹에서는 업데이트 전용 UI와 네이티브 동작이 생기지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "실제 Studio 경로에서 처리되지 않은 브라우저 예외가 없다"
+    }
+  ],
+  "screenshots": [
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop088/e2e/before-v087-windows-ready.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop088/e2e/after-macos-ready-light.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop088/e2e/ready-card.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop088/e2e/after-downloading-known.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop088/e2e/after-downloading-unknown.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop088/e2e/applying-card.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop088/e2e/after-applying.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop088/e2e/after-apply-error.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop088/e2e/after-unsaved-small.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop088/e2e/after-macos-ready-dark.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop088/e2e/after-ready-small-dark.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop088/e2e/after-windows-ready-light.png"
+  ],
+  "browserErrors": [],
+  "browserDialogs": [
+    {
+      "type": "alert",
+      "message": "파일 저장에 실패했습니다:\n테스트 저장 실패"
+    }
+  ]
+}
