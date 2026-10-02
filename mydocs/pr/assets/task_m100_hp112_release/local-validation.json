@@ -38,27 +38,27 @@
       "sha256": "74141f7c6ad7162dd66ca860fde18b108213958a25f478ba969f96bae5ec3396"
     },
     {
-      "path": "desktop-local-build.log",
+      "path": "desktop-local-build.txt",
       "bytes": 1316,
       "sha256": "e7a8ef93633b99a3fb44f4428b6d85986c0d455e37f423d6ff74724c237f589b"
     },
     {
-      "path": "desktop-local-build-node22.log",
+      "path": "desktop-local-build-node22.txt",
       "bytes": 11822,
       "sha256": "a77566f3062d4c397d2b835275cc773ae804f11313f8d13268285c04ea5cea4b"
     },
     {
-      "path": "desktop-local-app-bundle.log",
+      "path": "desktop-local-app-bundle.txt",
       "bytes": 466,
       "sha256": "71e2bbfb369401d2b303e5b7ecf9d463dfccce4395b49268032be1067c0e0a8b"
     },
     {
-      "path": "workflow-contract-tests.log",
+      "path": "workflow-contract-tests.txt",
       "bytes": 870,
       "sha256": "7d803152a96b8228f979b175525019fb4b1b6025bc04244865dff286b9589cee"
     },
     {
-      "path": "workflow-contract-tests-python313.log",
+      "path": "workflow-contract-tests-python313.txt",
       "bytes": 107,
       "sha256": "8e6056c575b51b08b1fce113098592f021adde4e75a00c08383d916aba4b5a90"
     }
