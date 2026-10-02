@@ -142,3 +142,51 @@ test('등록 중 이벤트가 먼저 큐를 소비해도 startup과 다음 nativ
     else Reflect.deleteProperty(globalThis, 'window');
   }
 });
+
+
+test('업데이트 진행 구독을 완료한 뒤 상태를 읽고 실제 payload를 전달한다', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const handlers = new Map<string, (event: { payload: unknown }) => void>();
+  const events: string[] = [];
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: {
+    __TAURI_INTERNALS__: {},
+    __TAURI__: {
+      core: { async invoke(command: string) {
+        events.push(command);
+        return { state: 'downloading', downloaded: 41, total: 100 };
+      } },
+      event: { async listen(name: string, handler: (event: { payload: unknown }) => void) {
+        await new Promise<void>(resolve => setImmediate(resolve));
+        handlers.set(name, handler);
+        events.push(name);
+        return () => handlers.delete(name);
+      } },
+    },
+  } });
+  try {
+    const bridge = await freshBridge();
+    const received: unknown[] = [];
+    await bridge.onUpdateStatus(status => received.push(status));
+    assert.deepEqual(await bridge.getUpdateStatus(), { state: 'downloading', downloaded: 41, total: 100 });
+    handlers.get('hanpage://update-status')!({ payload: { state: 'applying', version: '0.8.8' } });
+    assert.deepEqual(received, [{ state: 'applying', version: '0.8.8' }]);
+    assert.deepEqual(events, ['hanpage://update-status', 'cmd_update_status']);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'window', previous);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
+});
+
+test('수동 업데이트 IPC 실패를 화면이 처리할 수 있도록 반환한다', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { __TAURI__: {
+    core: { async invoke() { throw new Error('연결 실패'); } },
+  } } });
+  try {
+    const bridge = await freshBridge();
+    assert.deepEqual(await bridge.checkUpdate(), { ok: false, message: '연결 실패' });
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'window', previous);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
+});

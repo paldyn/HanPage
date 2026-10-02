@@ -1,0 +1,51 @@
+/* Desktop 업데이트 전용 카드. 기존 밝기·스킨 토큰을 따른다. */
+.dialog-update-card {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 21000;
+  width: min(380px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 24px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 20px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  box-shadow: var(--shadow-dialog);
+  font: 13px/1.6 var(--font-family-ui);
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+}
+.dialog-update-blocker { z-index: 20999; background: var(--overlay-bg); }
+.dialog-update-awaiting-save { z-index: 9000; }
+.dialog-update-card[hidden], .dialog-update-card [hidden] { display: none; }
+.dialog-update-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.dialog-update-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: var(--ui-accent-bg-light); color: var(--accent-strong); }
+.dialog-update-icon svg { width: 24px; height: 24px; }
+.dialog-update-brand { font-weight: 700; font-size: 14px; line-height: 1.45; }
+.dialog-update-brand span { display: block; font-weight: 400; font-size: 11px; color: var(--ui-text-muted); }
+.dialog-update-close { margin-left: auto; align-self: flex-start; border: 0; background: none; color: var(--ui-text-muted); cursor: pointer; font: 22px/1 var(--font-family-ui); padding: 6px; border-radius: 8px; }
+.dialog-update-card h2 { margin: 0 0 10px; font-size: 20px; font-weight: 700; line-height: 1.4; letter-spacing: -.5px; }
+.dialog-update-card p { margin: 0; }
+#desktop-update-description { color: var(--ui-text-secondary); }
+.dialog-update-version { display: inline-block; margin-top: 16px; padding: 4px 10px; border-radius: 8px; color: var(--accent-strong); background: var(--ui-accent-bg-light); font-weight: 600; font-size: 12px; }
+.dialog-update-progress { height: 6px; border-radius: 6px; margin-top: 22px; overflow: hidden; background: var(--ui-surface-muted); }
+.dialog-update-progress span { display: block; height: 100%; border-radius: inherit; background: var(--accent-primary); transition: width .18s ease; }
+.dialog-update-indeterminate span { width: 35%; animation: dialog-update-moving 1.4s ease-in-out infinite; }
+.dialog-update-detail { color: var(--ui-text-muted); font-size: 12px; padding-top: 10px; overflow-wrap: anywhere; max-height: 90px; overflow: auto; }
+.dialog-update-card[data-state="error"] .dialog-update-detail { color: var(--ui-danger); }
+.dialog-update-card .dialog-update-return { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--ui-border-subtle); color: var(--ui-text-muted); font-size: 11px; }
+.dialog-update-actions { display: flex; gap: 10px; margin-top: 22px; }
+.dialog-update-actions button { flex: 1; min-height: 40px; border-radius: 10px; padding: 9px 14px; font: 600 13px var(--font-family-ui); cursor: pointer; }
+.dialog-update-later { border: 1px solid var(--ui-border-subtle); color: var(--ui-text-secondary); background: var(--ui-surface); }
+.dialog-update-primary { border: 1px solid var(--accent-primary); color: var(--ui-text-on-accent); background: var(--accent-primary); }
+.dialog-update-primary:hover:enabled { background: var(--accent-strong); border-color: var(--accent-strong); }
+.dialog-update-later:hover:enabled, .dialog-update-close:hover:enabled { background: var(--ui-hover); }
+.dialog-update-card button:disabled { opacity: .55; cursor: default; }
+.dialog-update-card button:focus-visible, .stb-update-button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.stb-update-button { border: 0; border-radius: 6px; background: transparent; color: var(--ui-text-secondary); cursor: pointer; font: 11px var(--font-family-ui); padding: 3px 8px; white-space: nowrap; }
+.stb-update-button[data-state="ready"] { background: var(--ui-accent-bg-light); color: var(--accent-strong); font-weight: 600; }
+.stb-update-button:hover { background: var(--ui-hover); }
+@keyframes dialog-update-moving { 0% { transform: translateX(-110%); } 100% { transform: translateX(390%); } }
+@media (max-width: 480px) { .dialog-update-card { top: 16px; right: 16px; padding: 20px; } .stb-update-button { font-size: 10px; padding-inline: 4px; } }
+@media (prefers-reduced-motion: reduce) { .dialog-update-progress span { animation: none; transition: none; } .dialog-update-indeterminate span { width: 100%; opacity: .5; } }

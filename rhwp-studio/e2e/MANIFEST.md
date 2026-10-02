@@ -38,6 +38,7 @@ e2e 스크립트의 **단일 권위 목록**이다. 파일 추가/변경/폐기 
 | `debug-pagination.mjs` | 진단 | active | E2E 디버그: 50줄 입력 후 페이지네이션 확인 | — | 수동 | 수동 디버그 |
 | `debug-table-pos.mjs` | 진단 | active | E2E 디버그: 표 삽입 후 텍스트 위치 확인 | — | 수동 | 수동 디버그 |
 | `debug-textbox.mjs` | 진단 | active | E2E 디버그: 글상자 삽입 후 텍스트 위치 확인 | — | 수동 | 수동 디버그 |
+| `desktop-update-ui.test.mjs` | 상시 | active | Desktop 업데이트 카드 재진입·실시간 진행·즉시 적용 표시·중복 방지·실패 재시도·미저장 문서 보호·다크/작은 화면 | 합성 새 문서 | 수동 | 실제 Studio DOM, Tauri IPC·이벤트 대역; 실제 설치·재시작 미실행, run-with-vite.mjs 경유 |
 | `dialog-theme.test.mjs` | 상시 | active | 다이얼로그 다크 테마 색상 정책 | — | 수동 |  |
 | `document-agent-command.test.mjs` | 상시 | active | HWP/HWPX exact command apply·strict render·revert·focus·native typing·일반 Ctrl+Z·modal 0회 | para-001.hwp, hwpx/para-001.hwpx | npm e2e:document-agent | fresh WASM 필수 |
 | `document-title-issue6566.test.mjs` | 상시 | active | #6566 문서 열기·실패·새 문서·다른 이름 저장·호스트 저장·보조 bridge 제목 | para-001.hwp | npm e2e:document-title | fresh WASM · OS 작업 표시줄 렌더링 제외 |

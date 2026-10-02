@@ -23,6 +23,16 @@
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 
+#[cfg(desktop)]
+use std::sync::Arc;
+#[cfg(desktop)]
+use std::time::Instant;
+
+#[cfg(desktop)]
+mod update_state;
+#[cfg(desktop)]
+use update_state::{should_emit_download_progress, UpdateSlot, UpdateState};
+
 use serde::Serialize;
 // 네이티브 메뉴는 macOS 시스템 메뉴바 전용(이슈 #7). 비-macOS 는 메뉴 미부착.
 #[cfg(target_os = "macos")]
@@ -40,6 +50,8 @@ const RECENT_MAX: usize = 10;
 const EVT_MENU: &str = "hanpage://menu"; // 메뉴 액션 → 스튜디오 커맨드 id
 const EVT_DOCS_READY: &str = "hanpage://documents-ready"; // 펜딩 문서 도착 신호
 const EVT_UPDATE_READY: &str = "hanpage://update-ready"; // 새 버전 내려받기 완료(적용 대기)
+#[cfg(desktop)]
+const EVT_UPDATE_STATUS: &str = "hanpage://update-status"; // 확인·다운로드·검증·적용 진행
 
 /// 열기 dialog/파일 연결로 읽은 문서. `data` 는 파일 바이트(JSON 배열 직렬화).
 #[derive(Serialize)]
@@ -65,38 +77,23 @@ enum SaveOutcome {
 /// `setup()` 의 `app.manage(..)` 보다 먼저 도착할 수 있다(실측: 웹뷰 생성 816ms 전).
 /// 예전 구현은 `try_state()` 가 `None` 이면 문서를 조용히 버려서, 더블클릭으로 연 문서가
 /// 영영 열리지 않았다. 전역 큐는 프로그램 시작 시점부터 존재하므로 순서와 무관하다.
-static PENDING_DOCUMENTS: LazyLock<Mutex<Vec<OpenedFile>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+static PENDING_DOCUMENTS: LazyLock<Mutex<Vec<OpenedFile>>> =
+    LazyLock::new(|| Mutex::new(Vec::new()));
 
 /// [#59] 백그라운드로 미리 내려받아 둔 업데이트(설치 대기).
 ///
 /// Claude 데스크톱 앱 방식: 새 버전을 발견하면 **묻지 않고 조용히 받아둔 뒤**, 완료 시점에
-/// 비침습 토스트로 한 번만 알린다. 사용자가 '지금 다시 시작'을 누르면 이미 받아둔 바이트로
-/// 즉시 설치하므로 기다림이 없다(기존 구현은 승인 후 40MB 를 받느라 수 초간 정지했다).
-/// '나중에'를 눌러도 바이트를 버리지 않아 다음 클릭도 즉시 적용된다.
+/// 준비 완료 안내로 한 번만 알린다. 사용자가 '업데이트'를 누르면 이미 받아둔 바이트를
+/// 적용한다. '나중에'를 눌러도 바이트를 버리지 않아 다음 클릭에도 재다운로드하지 않는다.
+/// 상태와 파일은 한 락으로 묶어 시작 시 확인·수동 확인·적용의 중복 실행을 막는다.
 #[cfg(desktop)]
-static READY_UPDATE: LazyLock<Mutex<Option<ReadyUpdate>>> = LazyLock::new(|| Mutex::new(None));
-
-/// 진행 상태(수동 확인 시 안내용). 다운로드는 평소 UI 를 띄우지 않는다.
-#[cfg(desktop)]
-static UPDATE_STATE: LazyLock<Mutex<UpdateState>> = LazyLock::new(|| Mutex::new(UpdateState::Idle));
+static UPDATE_SLOT: LazyLock<Mutex<UpdateSlot<Arc<ReadyUpdate>>>> =
+    LazyLock::new(|| Mutex::new(UpdateSlot::new()));
 
 #[cfg(desktop)]
 struct ReadyUpdate {
     update: tauri_plugin_updater::Update,
     bytes: Vec<u8>,
-}
-
-#[cfg(desktop)]
-#[derive(Clone, Serialize)]
-#[serde(tag = "state", rename_all = "camelCase")]
-enum UpdateState {
-    Idle,
-    Checking,
-    /// 조용한 백그라운드 다운로드 진행 중. total 은 Content-Length 부재 시 None(불확정).
-    Downloading { downloaded: u64, total: Option<u64> },
-    Ready { version: String },
-    UpToDate { version: String },
-    Error { message: String },
 }
 
 /// 최근 문서 메뉴 항목. 네이티브 메뉴(macOS) 표시 전용.
@@ -341,24 +338,24 @@ fn cmd_take_pending_documents() -> Vec<OpenedFile> {
 
 /// [Task #26 · #59] 업데이트 확인 → **조용한 백그라운드 다운로드** (desktop 전용).
 ///
-/// 사용자에게 묻지 않고 먼저 받아둔다. 완료 시 `EVT_UPDATE_READY` 를 emit 하면 웹뷰가
-/// 비침습 토스트로 알리고, '지금 다시 시작' 클릭 시 `cmd_update_apply` 가 즉시 설치한다.
-/// 최신·오류는 조용히 상태만 갱신한다(수동 확인 시 그 상태를 그대로 안내).
+/// 사용자에게 묻지 않고 먼저 받아둔다. 상태 변화는 웹뷰에 전달하며, 완료 시
+/// `EVT_UPDATE_READY` 로 준비 완료를 알린다. 적용은 사용자의 '업데이트' 선택 후 시작한다.
+/// 확인 작업의 시작은 `start_update_check` 가 원자적으로 결정한다.
 #[cfg(desktop)]
 async fn check_update(app: tauri::AppHandle) {
     use tauri_plugin_updater::UpdaterExt;
-
-    // 이미 받아둔 업데이트가 있으면 다시 받지 않는다('나중에' 이후 재확인 대비).
-    if READY_UPDATE.lock().map(|g| g.is_some()).unwrap_or(false) {
-        return;
-    }
-    set_update_state(UpdateState::Checking);
 
     let updater = match app.updater() {
         Ok(u) => u,
         Err(e) => {
             eprintln!("[updater] 초기화 실패: {e}");
-            set_update_state(UpdateState::Error { message: e.to_string() });
+            set_update_state(
+                &app,
+                UpdateState::Error {
+                    message: e.to_string(),
+                    retryable: false,
+                },
+            );
             return;
         }
     };
@@ -366,14 +363,23 @@ async fn check_update(app: tauri::AppHandle) {
     let update = match updater.check().await {
         Ok(Some(u)) => u,
         Ok(None) => {
-            set_update_state(UpdateState::UpToDate {
-                version: app.package_info().version.to_string(),
-            });
+            set_update_state(
+                &app,
+                UpdateState::UpToDate {
+                    version: app.package_info().version.to_string(),
+                },
+            );
             return;
         }
         Err(e) => {
             eprintln!("[updater] 확인 실패: {e}");
-            set_update_state(UpdateState::Error { message: e.to_string() });
+            set_update_state(
+                &app,
+                UpdateState::Error {
+                    message: e.to_string(),
+                    retryable: false,
+                },
+            );
             return;
         }
     };
@@ -382,38 +388,71 @@ async fn check_update(app: tauri::AppHandle) {
     let current_version = update.current_version.clone();
     let notes = update.body.clone();
 
-    // 진행률 콜백은 청크 단위(누적 아님)라 여기서 누산한다. 평소엔 UI 를 띄우지 않지만,
-    // 사용자가 메뉴로 확인할 때 "내려받는 중"을 정확히 답하기 위해 상태로 남긴다.
+    // 진행률 콜백은 청크 단위(누적 아님)라 여기서 누산한다. Content-Length가 없으면
+    // total=None을 그대로 전달하여 웹뷰가 임의의 퍼센트를 표시하지 않게 한다.
     let mut downloaded: u64 = 0;
-    set_update_state(UpdateState::Downloading { downloaded: 0, total: None });
+    let mut last_progress_emit = None;
+    set_update_state(
+        &app,
+        UpdateState::Downloading {
+            downloaded: 0,
+            total: None,
+        },
+    );
     let bytes = match update
         .download(
             |chunk, total| {
                 downloaded += chunk as u64;
-                set_update_state(UpdateState::Downloading { downloaded, total });
+                let next = UpdateState::Downloading { downloaded, total };
+                if should_emit_download_progress(&mut last_progress_emit, Instant::now()) {
+                    set_update_state(&app, next);
+                } else {
+                    // 바이트는 모든 청크에서 정확히 저장한다. 이벤트만 제한하여 큰 파일의
+                    // 다운로드가 웹뷰 IPC와 진행 화면 갱신을 과도하게 만들지 않게 한다.
+                    store_update_state(next);
+                }
             },
-            || {},
+            // SDK는 다운로드 완료 콜백 이후 서명을 검증한다. 검증 성공 전 Ready로
+            // 표시하지 않아, 받은 파일에 문제가 있으면 적용 버튼이 활성화되지 않는다.
+            || set_update_state(&app, UpdateState::Verifying),
         )
         .await
     {
         Ok(b) => b,
         Err(e) => {
             eprintln!("[updater] 다운로드 실패: {e}");
-            set_update_state(UpdateState::Error { message: e.to_string() });
+            set_update_state(
+                &app,
+                UpdateState::Error {
+                    message: e.to_string(),
+                    retryable: false,
+                },
+            );
             return;
         }
     };
 
-    if let Ok(mut slot) = READY_UPDATE.lock() {
-        *slot = Some(ReadyUpdate { update, bytes });
+    let ready_state = if let Ok(mut slot) = UPDATE_SLOT.lock() {
+        slot.finish_download(Arc::new(ReadyUpdate { update, bytes }), version.clone());
+        Some(slot.state.clone())
+    } else {
+        None
+    };
+    if let Some(state) = ready_state {
+        let _ = app.emit(EVT_UPDATE_STATUS, state);
+    } else {
+        return;
     }
-    set_update_state(UpdateState::Ready { version: version.clone() });
 
     // 웹뷰가 아직 없으면 emit 이 실패해도 무방하다 — 웹뷰는 초기화 시
     // `cmd_update_status` 로 현재 상태를 직접 조회한다(펜딩 문서와 동일한 유실 방지).
     let _ = app.emit(
         EVT_UPDATE_READY,
-        UpdateReadyPayload { version, current_version, notes },
+        UpdateReadyPayload {
+            version,
+            current_version,
+            notes,
+        },
     );
 }
 
@@ -428,19 +467,43 @@ struct UpdateReadyPayload {
 }
 
 #[cfg(desktop)]
-fn set_update_state(next: UpdateState) {
-    if let Ok(mut s) = UPDATE_STATE.lock() {
-        *s = next;
+fn store_update_state(next: UpdateState) -> bool {
+    if let Ok(mut slot) = UPDATE_SLOT.lock() {
+        slot.state = next;
+        true
+    } else {
+        false
     }
+}
+
+#[cfg(desktop)]
+fn set_update_state(app: &tauri::AppHandle, next: UpdateState) {
+    if store_update_state(next.clone()) {
+        // 락을 놓은 뒤 emit한다. 웹뷰의 상태 재조회가 같은 락을 기다리지 않게 한다.
+        let _ = app.emit(EVT_UPDATE_STATUS, next);
+    }
+}
+
+#[cfg(desktop)]
+fn start_update_check(app: tauri::AppHandle) {
+    let started = UPDATE_SLOT
+        .lock()
+        .map(|mut slot| slot.begin_check())
+        .unwrap_or(false);
+    if !started {
+        return;
+    }
+    let _ = app.emit(EVT_UPDATE_STATUS, UpdateState::Checking);
+    tauri::async_runtime::spawn(check_update(app));
 }
 
 /// 현재 업데이트 상태(웹뷰 초기화·수동 확인 시 조회).
 #[cfg(desktop)]
 #[tauri::command]
 fn cmd_update_status() -> UpdateState {
-    UPDATE_STATE
+    UPDATE_SLOT
         .lock()
-        .map(|s| s.clone())
+        .map(|slot| slot.state.clone())
         .unwrap_or(UpdateState::Idle)
 }
 
@@ -448,41 +511,55 @@ fn cmd_update_status() -> UpdateState {
 #[cfg(desktop)]
 #[tauri::command]
 fn cmd_update_check(app: tauri::AppHandle) {
-    let busy = matches!(
-        UPDATE_STATE.lock().map(|s| s.clone()).unwrap_or(UpdateState::Idle),
-        UpdateState::Checking | UpdateState::Downloading { .. }
-    );
-    if busy {
-        return; // 진행 중이면 중복 확인하지 않는다(상태는 프런트가 조회해 안내).
-    }
-    tauri::async_runtime::spawn(check_update(app));
+    start_update_check(app);
 }
 
-/// 받아둔 바이트로 즉시 설치한다. macOS 는 설치 후 재시작, Windows 는 설치 프로그램이
-/// 실행되며 현재 프로세스가 종료되므로 이 함수는 반환하지 않는다.
+/// 받아둔 바이트를 작업 스레드에서 적용한다. 압축 해제·파일 교체가 웹뷰를 막지 않게 하며
+/// macOS 권한 요청도 SDK가 메인 스레드로 전달할 수 있게 둔다. macOS는 적용 후 재시작,
+/// Windows는 설치 프로그램 실행 후 종료하므로 성공 응답은 대개 웹뷰에 도달하지 않는다.
 #[cfg(desktop)]
 #[tauri::command]
-fn cmd_update_apply(app: tauri::AppHandle) -> Result<(), String> {
-    let ready = READY_UPDATE
-        .lock()
-        .map_err(|e| e.to_string())?
-        .take()
-        .ok_or_else(|| "받아둔 업데이트가 없습니다.".to_string())?;
+async fn cmd_update_apply(app: tauri::AppHandle) -> Result<(), String> {
+    let (ready, applying_state) = {
+        let mut slot = UPDATE_SLOT.lock().map_err(|e| e.to_string())?;
+        let version = slot
+            .ready
+            .as_ref()
+            .map(|ready| ready.update.version.clone())
+            .unwrap_or_default();
+        let ready = slot.begin_apply(version)?;
+        (ready, slot.state.clone())
+    };
+    let _ = app.emit(EVT_UPDATE_STATUS, applying_state);
 
-    match ready.update.install(&ready.bytes) {
-        Ok(()) => {
+    // 파일은 복사하지 않고 공유한다. worker 자체가 실패하더라도 이 command의 Arc가
+    // 검증된 바이트를 보존하므로 사용자 재시도에 재다운로드가 필요하지 않다.
+    let installer = Arc::clone(&ready);
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        installer
+            .update
+            .install(&installer.bytes)
+            .map_err(|e| e.to_string())
+    })
+    .await;
+
+    let message = match result {
+        Ok(Ok(())) => {
             app.restart(); // macOS 경로. Windows 는 install 내부에서 프로세스가 종료된다.
         }
-        Err(e) => {
-            // 실패 시 바이트를 되돌려 재시도 가능하게 둔다.
-            if let Ok(mut slot) = READY_UPDATE.lock() {
-                *slot = Some(ready);
-            }
-            let msg = e.to_string();
-            set_update_state(UpdateState::Error { message: msg.clone() });
-            return Err(msg);
-        }
+        Ok(Err(message)) => message,
+        Err(error) => error.to_string(),
+    };
+    let failed_state = if let Ok(mut slot) = UPDATE_SLOT.lock() {
+        slot.fail_apply(ready, message.clone());
+        Some(slot.state.clone())
+    } else {
+        None
+    };
+    if let Some(state) = failed_state {
+        let _ = app.emit(EVT_UPDATE_STATUS, state);
     }
+    Err(message)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -524,7 +601,7 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 let h = app.handle().clone();
-                tauri::async_runtime::spawn(check_update(h));
+                start_update_check(h);
             }
             // 네이티브 메뉴는 macOS 시스템 메뉴바 전용. Win/Linux 는 창 내부에 그려져
             // 웹 UI 메뉴(#menu-bar)와 중복되므로 부착하지 않는다(이슈 #7).

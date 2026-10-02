@@ -27,6 +27,7 @@ interface TauriGlobal {
 const EVT_MENU = 'hanpage://menu';
 const EVT_DOCS_READY = 'hanpage://documents-ready';
 const EVT_UPDATE_READY = 'hanpage://update-ready';
+const EVT_UPDATE_STATUS = 'hanpage://update-status';
 
 /** [#59] 네이티브 메뉴의 "업데이트 확인" 항목 id. 스튜디오 커맨드가 아니라 브리지가 처리한다. */
 export const MENU_CHECK_UPDATE = 'app:check-update';
@@ -171,9 +172,11 @@ export type DesktopUpdateStatus =
   | { state: 'idle' }
   | { state: 'checking' }
   | { state: 'downloading'; downloaded: number; total: number | null }
+  | { state: 'verifying' }
+  | { state: 'applying'; version: string }
   | { state: 'ready'; version: string }
   | { state: 'upToDate'; version: string }
-  | { state: 'error'; message: string };
+  | { state: 'error'; message: string; retryable?: boolean };
 
 export interface DesktopUpdateReady {
   version: string;
@@ -193,13 +196,14 @@ export async function getUpdateStatus(): Promise<DesktopUpdateStatus | null> {
 }
 
 /** 수동 확인 시작(진행 중이면 네이티브가 무시). 브라우저에선 no-op. */
-export async function checkUpdate(): Promise<void> {
+export async function checkUpdate(): Promise<{ ok: boolean; message?: string }> {
   const invoke = tauriInvoke();
-  if (!invoke) return;
+  if (!invoke) return { ok: false, message: '데스크톱 앱에서만 사용할 수 있습니다.' };
   try {
     await invoke('cmd_update_check');
+    return { ok: true };
   } catch (e) {
-    console.warn('[desktop-bridge] 업데이트 확인 실패:', e);
+    return { ok: false, message: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -220,10 +224,17 @@ export async function applyUpdate(): Promise<{ ok: boolean; message?: string }> 
 }
 
 /** 업데이트 준비 완료 알림 구독. 브라우저에선 no-op. */
-export function onUpdateReady(cb: (info: DesktopUpdateReady) => void): void {
+export async function onUpdateReady(cb: (info: DesktopUpdateReady) => void): Promise<void> {
   const listen = tauriListen();
   if (!listen) return;
-  void listen<DesktopUpdateReady>(EVT_UPDATE_READY, (e) => cb(e.payload));
+  await listen<DesktopUpdateReady>(EVT_UPDATE_READY, (e) => cb(e.payload));
+}
+
+/** 실시간 진행 상태 구독. 등록 완료 후 현재 상태를 조회하면 초기 이벤트 유실을 막는다. */
+export async function onUpdateStatus(cb: (status: DesktopUpdateStatus) => void): Promise<void> {
+  const listen = tauriListen();
+  if (!listen) return;
+  await listen<DesktopUpdateStatus>(EVT_UPDATE_STATUS, (e) => cb(e.payload));
 }
 
 export function getDesktopOpenHandler(): DesktopOpenHandler | null {
