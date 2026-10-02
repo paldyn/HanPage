@@ -1,0 +1,60 @@
+{
+  "observedAt": "2026-10-02T04:59:20.837845+00:00",
+  "repository": "paldyn/HanPage",
+  "pr": 115,
+  "mergeSha": "27c0632e59241828f8b274998320b5aadc4ef743",
+  "mergedAt": "2026-10-02T04:56:49Z",
+  "mergeVerified": true,
+  "durationWorkflow": {
+    "runId": 36966764592,
+    "url": "https://github.com/paldyn/HanPage/actions/runs/36966764592",
+    "event": "push",
+    "headBranch": "devel",
+    "headSha": "27c0632e59241828f8b274998320b5aadc4ef743",
+    "status": "completed",
+    "conclusion": "success",
+    "measurementsReady": false,
+    "holdReason": "no-verified-pr-duration-measurements",
+    "dataBranchRefreshStep": "skipped",
+    "notices": [
+      "Duration candidate 36966591417 not used: postmerge-duration: unsuccessful latest worker:b",
+      "Duration candidate 36964899517 not used: postmerge-duration: original measured worker unavailable:b"
+    ]
+  },
+  "unexpectedDevelPushValidationRuns": [],
+  "observedMergeShaRuns": [
+    {
+      "id": 36966794272,
+      "name": "Desktop Release",
+      "event": "push",
+      "headBranch": "hanpage-desktop-v0.8.8",
+      "headSha": "27c0632e59241828f8b274998320b5aadc4ef743",
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36966794272"
+    },
+    {
+      "id": 36966764613,
+      "name": "Close Issues on devel Push",
+      "event": "push",
+      "headBranch": "devel",
+      "headSha": "27c0632e59241828f8b274998320b5aadc4ef743",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36966764613"
+    },
+    {
+      "id": 36966764592,
+      "name": "Refresh nextest target duration data",
+      "event": "push",
+      "headBranch": "devel",
+      "headSha": "27c0632e59241828f8b274998320b5aadc4ef743",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36966764592"
+    }
+  ],
+  "sourceValidationFallbackExecuted": false,
+  "gitHubMutationPerformed": false,
+  "cargoRunPerformed": false
+}

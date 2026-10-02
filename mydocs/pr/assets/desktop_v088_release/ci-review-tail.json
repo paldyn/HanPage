@@ -1,0 +1,118 @@
+{
+  "observedAt": "2026-10-02T04:56:48.826027+00:00",
+  "repository": "paldyn/HanPage",
+  "pr": 115,
+  "headSha": "17f4c8059dcb9b975a88369ef99d9a1b201a77fd",
+  "baseSha": "71f327f2ffdbc20bc3b8926d136ead049caeeb68",
+  "testedMergeSha": "8df726cb8a6f8b89d7e6fe1c81bd59fe8d48f0cc",
+  "candidateSha": "096aab64db7f6578405b21d8612b8d4a02eadd04",
+  "singleParentTrailingCommit": true,
+  "trailingChangedPaths": [
+    "mydocs/orders/20261002.md",
+    "mydocs/pr/archives/pr_115_review.md",
+    "mydocs/pr/assets/desktop_v088_release/ci-code-candidate.json"
+  ],
+  "allowedMyDocsOnly": true,
+  "mergeable": true,
+  "mergeableState": "clean",
+  "checkCount": 31,
+  "checkCounts": {
+    "skipped": 20,
+    "success": 11
+  },
+  "workflowResults": [
+    {
+      "id": 36966591341,
+      "name": "Adapter inter-diff",
+      "event": "pull_request",
+      "head_sha": "17f4c8059dcb9b975a88369ef99d9a1b201a77fd",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36966591341",
+      "pr_numbers": [
+        115
+      ]
+    },
+    {
+      "id": 36966591301,
+      "name": "Proptest roundtrip",
+      "event": "pull_request",
+      "head_sha": "17f4c8059dcb9b975a88369ef99d9a1b201a77fd",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36966591301",
+      "pr_numbers": [
+        115
+      ]
+    },
+    {
+      "id": 36966591406,
+      "name": "CodeQL",
+      "event": "pull_request",
+      "head_sha": "17f4c8059dcb9b975a88369ef99d9a1b201a77fd",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36966591406",
+      "pr_numbers": [
+        115
+      ]
+    },
+    {
+      "id": 36966591417,
+      "name": "CI",
+      "event": "pull_request",
+      "head_sha": "17f4c8059dcb9b975a88369ef99d9a1b201a77fd",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36966591417",
+      "pr_numbers": [
+        115
+      ]
+    },
+    {
+      "id": 36966591081,
+      "name": "Render Diff",
+      "event": "pull_request",
+      "head_sha": "17f4c8059dcb9b975a88369ef99d9a1b201a77fd",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36966591081",
+      "pr_numbers": [
+        115
+      ]
+    }
+  ],
+  "fastPassReuse": {
+    "CI": {
+      "jobId": 110711599211,
+      "candidateSha": "096aab64db7f6578405b21d8612b8d4a02eadd04"
+    },
+    "CodeQL": {
+      "jobId": 110711607614,
+      "candidateSha": "096aab64db7f6578405b21d8612b8d4a02eadd04"
+    },
+    "Render Diff": {
+      "jobId": 110711571997,
+      "candidateSha": "096aab64db7f6578405b21d8612b8d4a02eadd04"
+    },
+    "Adapter inter-diff": {
+      "jobId": 110711607179,
+      "candidateSha": "096aab64db7f6578405b21d8612b8d4a02eadd04"
+    },
+    "Proptest roundtrip": {
+      "jobId": 110711596936,
+      "candidateSha": "096aab64db7f6578405b21d8612b8d4a02eadd04"
+    }
+  },
+  "aggregate": {
+    "id": 110711671564,
+    "name": "Build & Test",
+    "status": "completed",
+    "conclusion": "success",
+    "url": "https://github.com/paldyn/HanPage/actions/runs/36966591417/job/110711671564"
+  },
+  "pending": [],
+  "failed": [],
+  "gitHubMutationPerformed": false,
+  "cargoRunPerformed": false
+}

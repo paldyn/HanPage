@@ -1,0 +1,50 @@
+{
+  "tag": "hanpage-desktop-v0.8.8",
+  "release_id": 401555774,
+  "draft": true,
+  "assets": [
+    {
+      "name": "HanPage_0.8.8_aarch64.dmg",
+      "bytes": 43450051,
+      "sha256": "a0d7eb021df13cf3ea07faca3452b96b6f8e72d56b4fb804ffe1c9628976bbcc",
+      "api_digest": "sha256:a0d7eb021df13cf3ea07faca3452b96b6f8e72d56b4fb804ffe1c9628976bbcc",
+      "size_matches_api": true
+    },
+    {
+      "name": "HanPage_0.8.8_x64-setup.exe",
+      "bytes": 39880469,
+      "sha256": "154bec29b32491a9066344ab6c6e894dcc6c3848b1220190cdb81afea2b3e3f2",
+      "api_digest": "sha256:154bec29b32491a9066344ab6c6e894dcc6c3848b1220190cdb81afea2b3e3f2",
+      "size_matches_api": true
+    },
+    {
+      "name": "HanPage_0.8.8_x64-setup.exe.sig",
+      "bytes": 416,
+      "sha256": "16551f69f7dfdacd0ab3d250ca3f4e72e1ed1d73355e4469d3ade40367fe5bb5",
+      "api_digest": "sha256:16551f69f7dfdacd0ab3d250ca3f4e72e1ed1d73355e4469d3ade40367fe5bb5",
+      "size_matches_api": true
+    },
+    {
+      "name": "HanPage_aarch64.app.tar.gz",
+      "bytes": 42698775,
+      "sha256": "996f12c19fda56e8a05f17ca491b85e850e2cebf0ffb0d83b552b3aecd57e669",
+      "api_digest": "sha256:996f12c19fda56e8a05f17ca491b85e850e2cebf0ffb0d83b552b3aecd57e669",
+      "size_matches_api": true
+    },
+    {
+      "name": "HanPage_aarch64.app.tar.gz.sig",
+      "bytes": 404,
+      "sha256": "00bdfed690600b2714fbbcec395f1b9885544b9416bd95e993daafcf30c08b28",
+      "api_digest": "sha256:00bdfed690600b2714fbbcec395f1b9885544b9416bd95e993daafcf30c08b28",
+      "size_matches_api": true
+    },
+    {
+      "name": "latest.json",
+      "bytes": 2437,
+      "sha256": "41529ae9d35dcb6c4bf4f7a4cb094eb2a785200a55d50197b424dbafd8c8d25f",
+      "api_digest": "sha256:41529ae9d35dcb6c4bf4f7a4cb094eb2a785200a55d50197b424dbafd8c8d25f",
+      "size_matches_api": true
+    }
+  ],
+  "all_assets_complete": true
+}

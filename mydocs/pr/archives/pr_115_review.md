@@ -2,7 +2,7 @@
 
 ## 최종 판정
 
-**승인.** 구현·로컬 검증·독립 경로 검토와 code candidate의 전체 CI를 대조했고, 배포를 막는 결함을 발견하지 않았다. 문서만 추가한 최신 trailing head의 CI 완료, 충돌 없음과 merge 직전 head 일치가 별도의 병합 조건이다. 사용자는 2026-10-02 “응 배포하자”로 PR·병합·Desktop 배포를 승인했다.
+**승인.** 구현·로컬 검증·독립 경로 검토와 code candidate의 전체 CI를 대조했고, 배포를 막는 결함을 발견하지 않았다. 최신 문서 trailing head `17f4c805`의 31 checks 완료(11 success / 20 skipped), Build & Test success, CLEAN과 exact head 일치를 확인한 뒤 정상 squash merge했다. 사용자는 2026-10-02 “응 배포하자”로 PR·병합·Desktop 배포를 승인했다.
 
 ## 접수 정보
 
@@ -75,3 +75,13 @@
 exact merge SHA에 `hanpage-desktop-v0.8.8` 태그를 생성한다. 양 플랫폼 성공·6개 자산·4개 플랫폼 manifest·기존 공개키의 두 updater 서명과 변조 거부·Mac codesign/Gatekeeper/stapler·로고·DMG 확인 후 초안을 공개한다. 공개 전 기존 0.8.7 latest를 유지한다. 실패 시 태그 이동·secret/권한 변경 없이 동일 source의 실패 job을 복구한다.
 
 실제 공개 endpoint와 검증된 manifest가 바이트 동일한지 확인한 뒤 완료를 보고한다. 사용자 primary 39개 변경·공유 `target/pr-review`·다른 작업 산출물을 보존한다. 소유 임시 branch/output은 안전 조건 확인 후 정리하며, managed worktree가 pinned task 보호로 archive 불가하면 우회하지 않고 유지 사유를 기록한다.
+
+
+## 병합·실제 배포 완료
+
+- 정상 병합 SHA `27c0632e59241828f8b274998320b5aadc4ef743`, merge 시각 2026-10-02 13:56:49 KST. [최신 trailing CI](../assets/desktop_v088_release/ci-review-tail.json)의 동일 PR·candidate 재사용과 [postmerge 감사](../assets/desktop_v088_release/ci-postmerge.json)를 확인했다. duration workflow는 success이나 검증된 측정 자료 부족으로 data branch 갱신을 보류했다. source CI 재실행 없음, 관련 Issue #59 CLOSED 유지.
+- [Desktop Release](https://github.com/paldyn/HanPage/actions/runs/36966794272) 양 플랫폼 success, exact merge SHA의 태그 `hanpage-desktop-v0.8.8`. [workflow·공증 근거](../assets/desktop_v088_release/desktop-v088-release-workflow.json)에서 Mac Accepted submission `4236279f-f7f6-43db-8c82-a64b934eed69`을 확인했다.
+- [초안 자산 6개](../assets/desktop_v088_release/desktop-v088-draft-inventory.json)의 실제 크기와 모든 API SHA-256 digest 일치. [두 updater 서명](../assets/desktop_v088_release/desktop-v088-updater-signatures.json)은 기존 공개키로 검증했고 각각 한 바이트 변조를 거부했다. 4개 플랫폼 manifest alias 정합.
+- [Mac app archive](../assets/desktop_v088_release/desktop-v088-macos-bundle.json)와 [DMG 내부 앱](../assets/desktop_v088_release/desktop-v088-dmg.json)의 두 버전 0.8.8·arm64·source ICNS·Developer ID 팀·엄격한 codesign·공증·stapler 통과. DMG 무결성·읽기 전용 마운트와 해제도 확인했다. [Windows outer PE 아이콘](../assets/desktop_v088_release/desktop-v088-windows-icon.json)의 전체 그룹·7개 source 프레임 일치, 오류 0.
+- [공개 Release](https://github.com/paldyn/HanPage/releases/tag/hanpage-desktop-v0.8.8), ID401555774, 공개 시각 2026-10-02 14:19:19 KST. [공개 확인](../assets/desktop_v088_release/desktop-v088-public-verification.json)에서 GitHub latest·6개 digest·source SHA·익명 앱 endpoint의 0.8.8 manifest가 검증 초안과 바이트 동일함을 확인했다.
+- 사용자 앱 설치·실행·재시작과 Windows GUI/내부 NSIS app·uninstaller 검사 미실행. 첫 0.8.7→0.8.8 안내는 기존 UI이며 새 UI는 설치 이후 적용된다. 사용자 primary의 기존 39개 변경과 공유 target을 보존한다.

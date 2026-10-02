@@ -1,0 +1,10 @@
+{
+  "checked_at_utc": "2026-10-02T05:20:05.369805+00:00",
+  "primary_head": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+  "primary_branch": "codex/upstream-sync-20261001",
+  "original_modified_file_count": 39,
+  "all_original_bytes_and_sha256_match": true,
+  "primary_checkout_switch_reset_stash_performed": false,
+  "user_app_installed_or_restarted": false,
+  "shared_target_pr_review_preserved": true
+}

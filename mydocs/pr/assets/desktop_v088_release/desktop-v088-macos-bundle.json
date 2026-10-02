@@ -1,0 +1,34 @@
+{
+  "version": "0.8.8",
+  "bundle_identifier": "com.paldyn.hanpage",
+  "architecture": "arm64",
+  "archive_bytes": 42698775,
+  "archive_sha256": "996f12c19fda56e8a05f17ca491b85e850e2cebf0ffb0d83b552b3aecd57e669",
+  "icon_sha256": "8260b6100180a8c589c5b63943d77587fc575bbc74d591d3249557a6df8d70c4",
+  "icon_matches_source": true,
+  "checks": [
+    {
+      "check": "codesign_verify",
+      "exit_code": 0
+    },
+    {
+      "check": "codesign_identity",
+      "exit_code": 0
+    },
+    {
+      "check": "gatekeeper",
+      "exit_code": 0
+    },
+    {
+      "check": "stapler",
+      "exit_code": 0
+    }
+  ],
+  "developer_id_identity_present": true,
+  "notarized_gatekeeper_source": true,
+  "all_checks_passed": true,
+  "developer_id_team": "8L78W6D8XF",
+  "expected_team_identity_passed": true,
+  "source_icon_verified_at_commit": "27c0632e59241828f8b274998320b5aadc4ef743",
+  "app_launched_or_installed": false
+}

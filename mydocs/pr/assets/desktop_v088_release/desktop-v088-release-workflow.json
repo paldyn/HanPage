@@ -1,0 +1,30 @@
+{
+  "run_id": 36966794272,
+  "url": "https://github.com/paldyn/HanPage/actions/runs/36966794272",
+  "tag": "hanpage-desktop-v0.8.8",
+  "source_sha": "27c0632e59241828f8b274998320b5aadc4ef743",
+  "event": "push",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "job_id": 110712183701,
+      "name": "Bundle macOS (aarch64)",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36966794272/job/110712183701"
+    },
+    {
+      "job_id": 110712183821,
+      "name": "Bundle Windows (x64)",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36966794272/job/110712183821"
+    }
+  ],
+  "notarization": {
+    "status": "Accepted",
+    "submission_id": "4236279f-f7f6-43db-8c82-a64b934eed69",
+    "source_sha": "27c0632e59241828f8b274998320b5aadc4ef743",
+    "job_id": 110712183701,
+    "log_sha256": "a36b93c1e8e0241c1ee902465173f4dec7fa364d199ada3bf5d75c839e077633"
+  },
+  "app_launched_or_installed": false
+}

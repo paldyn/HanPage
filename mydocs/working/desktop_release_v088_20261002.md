@@ -35,8 +35,17 @@
 
 카드의0.8.7→0.8.8은 상태 이벤트 대역의 검사 입력이다. 실제 설치된0.8.7에서 이번0.8.8을 받는 첫 알림은 기존 화면이며 새 UI는0.8.8 설치 이후부터 적용된다. 사용자 설치 앱을 실행·교체·재시작하거나 Windows GUI를 실행하지 않았다.
 
-## 다음 gate와 rollback
+## 배포 gate와 rollback
 
 완료된 후보를 devel PR로 게시한 뒤 최신 code/문서 trailing head의 CI와 mergeability를 확인한다. 정상 병합한 exact SHA에 `hanpage-desktop-v0.8.8`을 생성하고 양 플랫폼 초안 빌드를 진행한다. 총6asset·4platform manifest·기존 공개키 updater signature와 변조 거부·Mac codesign/Gatekeeper/stapler·실제 로고·DMG를 검증한 뒤 공개한다. 공개 endpoint는 완료 전 기존0.8.7을 유지한다.
 
 부분 실패는 동일 source/tag의 실패 job만 복구하며 기존 공개 버전을 유지한다. 태그를 이동하거나 secret/권한·main·CLI/npm/Pages를 변경하지 않는다. 공개 후 회귀가 확인되면 0.8.8의 latest 노출을 거두고 이전0.8.7 latest를 복구하거나 후속 patch를 검토한다. 실제 원격 조치는 사용자 배포 승인 범위에서 필요 시 수행한다.
+
+
+## 공개 완료
+
+PR [#115](https://github.com/paldyn/HanPage/pull/115)는 최신 trailing 검사 통과 뒤 `27c0632e59241828f8b274998320b5aadc4ef743`로 정상 병합했다. source tree는 검증한 head와 동일하다. Desktop Release36966794272의 Mac·Windows job 모두 성공했고, 태그와 Release source도 같은 SHA다.
+
+Mac app archive/DMG의 버전·arm64·source 로고·Developer ID 팀8L78W6D8XF·codesign·Gatekeeper·stapler, Windows 설치 EXE 외부 아이콘 전체 7프레임, 실제 6개 자산의 크기·API digest를 확인했다. 기존 공개키로 두 updater 서명과 변조 거부를 확인한 뒤 2026-10-02 14:19:19 KST에 0.8.8을 공개했다.
+
+[공개 Release](https://github.com/paldyn/HanPage/releases/tag/hanpage-desktop-v0.8.8)와 [공개 endpoint 검증](../pr/assets/desktop_v088_release/desktop-v088-public-verification.json)을 연결한다. 자세한 gate·한계·운영 후속은 [PR115 최종 검토](../pr/archives/pr_115_review.md)에 통합했다. 사용자 앱을 설치·재시작하지 않았다.
