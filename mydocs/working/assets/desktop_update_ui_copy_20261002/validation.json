@@ -1,0 +1,57 @@
+{
+  "sourceHead": "50f9de64ff1cbb929dbbd23214e5a4356871045d",
+  "scope": [
+    "rhwp-studio/src/ui/update-notice.ts",
+    "rhwp-studio/src/styles/update-notice.css"
+  ],
+  "unitTests": {
+    "pass": 1834,
+    "skip": 2,
+    "fail": 0
+  },
+  "desktopBuild": "PASS",
+  "browser": {
+    "pass": 55,
+    "fail": 0,
+    "screenshots": 12
+  },
+  "directVisualReview": [
+    "macOS light",
+    "macOS applying",
+    "macOS dark 390px",
+    "Windows copy on mocked Tauri platform"
+  ],
+  "actualInstallRestart": "NOT RUN",
+  "nativeRustSources": "UNCHANGED since 1399e07764bdf924c5ba4f6c77f9ad4f0fa40511; previous evidence referenced",
+  "logs": {
+    "studio-tests": {
+      "command": "npm test",
+      "rawSha256": "e0379b15cb514cd7bc88918d2a9f3192cb488371886a3e384f26eb6ffb552c63",
+      "gzip": "studio-tests.log.gz"
+    },
+    "studio-build": {
+      "command": "npm run build:desktop",
+      "rawSha256": "3ee15b450a8def23315595c54193a2c3f78e37dc49e79e9dc019645c6c695770",
+      "gzip": "studio-build.log.gz"
+    }
+  },
+  "assetSha256": {
+    "after-apply-error.png": "d0fc3692c649847147b92d8464184110205a387824aa290785c39f394d16228a",
+    "after-applying.png": "0190fa83acdeffe98d878795c2c7785ef8147e1889d6d7235e20c50c9aa2f09d",
+    "after-downloading-known.png": "f668e7008cf211feef08a3bb57f3ce20491665ba1f38d68697ad88addc4ac6d7",
+    "after-downloading-unknown.png": "38e920e84f1592ced99182193cd8c8ad4ce960b67d751023a5f4e3fd3ef76928",
+    "after-macos-ready-dark.png": "b72494dd2eda60f2a464fc41898dee0f3dfe26a2d1cb20ac8a3c83ebaf4b4bc0",
+    "after-macos-ready-light.png": "4ac4ac0af784d6b7c31cf651755873bfcfdc26ca84e2d721fcc305348415fc00",
+    "after-ready-small-dark.png": "01b4ecd9c416d6742bcdce6482ef7c2cd9f09c71cc8ca35cca661d2835225e72",
+    "after-unsaved-small.png": "fee6810ec9d899cd8f154f245b7ceb34101137b190ba48f04d8abff282fe0173",
+    "after-windows-ready-light.png": "5884fd6af2fc2812adf2571b3aa9bbf9e75a3b10c78cd8d6c03e4e57c35af2e5",
+    "applying-card.png": "6e5946da3a98d3830bdc286b7e5ff2208b9087410594919a9b89891be1cce47f",
+    "before-v087-windows-ready.png": "8a6f8e4be4b33b5ae907f855e4095f7c35565398c2d1c02938775f4e041f3b78",
+    "browser-results.json": "be4f0e58d9b46ec86ddcdd81c2870907d06e14e3749b0ea9030fa0e612841755",
+    "ready-card.png": "874249ab44791d2f2ea03ab2cb1865f56b025cb84ebeb0e2803c4d7fcc963ac7",
+    "studio-build.log.gz": "69f23b137e1825dcbd65820f534fec93e3d3e6fdbf77bf4c3441845b078a4143",
+    "studio-build.log.txt": "a29bf5ac5cfa088d3aa71ea0285cf6aea479c2f94ca6c510af8bda86b243d4aa",
+    "studio-tests.log.gz": "d34c413084f041be86045c6883bb40c3e3925b7afcf0bf24051c0eb4f0cf14ea",
+    "studio-tests.summary.txt": "10a08f2c8505ff97eef140c576c21c952219be596721e9a7ddf7bb07e09537bd"
+  }
+}

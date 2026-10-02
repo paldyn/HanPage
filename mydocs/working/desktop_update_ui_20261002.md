@@ -1,5 +1,7 @@
 # Desktop 업데이트 UI 개선 로컬 검증
 
+후속 문구·줄바꿈 수정과 최종 UI 캡처는 [후속 검증 기록](desktop_update_ui_copy_20261002.md)을 따른다. 아래 Native·초기 UI 증적은 원래 검증 SHA를 유지한다.
+
 - 요청: 앱에 맞는 알림 디자인, `업데이트` 버튼, 나중에 이후 재진입, 다운로드·적용 진행 표시.
 - 선행 Issue: [#59](https://github.com/paldyn/HanPage/issues/59). 같은 증상 선행 검색과 열린 PR 확인을 수행했다. 새 공개 이슈 생성·담당자 지정은 자동 승인 검토가 명시적 외부 게시 승인이 없다는 이유로 거절했다. 새 이슈·댓글·push·PR·release는 수행하지 않았다. 이 기록은 이슈 번호를 임의로 부여하지 않은 로컬 후속 작업이다.
 - 브랜치: `codex/desktop-update-ui-20261002`, 실제 fork 대상 base `origin/devel` = `71f327f2ffdbc20bc3b8926d136ead049caeeb68`.
