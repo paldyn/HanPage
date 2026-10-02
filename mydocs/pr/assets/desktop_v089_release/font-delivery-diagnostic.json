@@ -1,0 +1,13 @@
+{
+  "source": "fd1034984020684e5238c25599fc647f051b1f50",
+  "ordinary_attempts": 2,
+  "ordinary_result": "setup canvas selector timeout; not 107 assertion failures",
+  "diagnostic_observation": "CDN FontFace timeout5000ms -> initDoc4 canvasView.loadDocument -> canvas2d0canvas; document.fonts.ready consumption waits underlying font download. Network error type unconfirmed",
+  "mitigation": "Same two actual CDN downloaded WOFF bytes delivered using request interception in owned wrapper; product and 107 assertions unchanged",
+  "font_sha256": {
+    "HCRDotum.woff": "49bf312aec309ba88c3eb612c591c2d8e28b765c156c808691850137431bb1bf",
+    "HANBatang.woff": "b3192018e3bd4da76b29b0530f71c79fb6f465a2b7cd41308bc38f9a4ae09a6c"
+  },
+  "wrapper_sha256": "9a558ae5e14c04c17c8c5632bb94afd2533fb34fd8e039e99ae23397fbd2f909",
+  "limits": "CDN latency/fallback not validated; no product font-loader/engine changes. Cached-font run is separate from prior normal107PASS."
+}
