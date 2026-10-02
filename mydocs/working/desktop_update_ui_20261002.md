@@ -42,9 +42,7 @@
 
 - [최종 검증·source hash](assets/desktop_update_ui_20261002/validation.json)
 - [55개 실제 화면 검사](assets/desktop_update_ui_20261002/browser-results.json)
-- [Native 실제 회귀 7개](assets/desktop_update_ui_20261002/native-state-tests.log.txt)
 - [두 격리 변이 음성 대조](assets/desktop_update_ui_20261002/negative-controls.json) — 관측 당시 parent SHA와 별개로 제품·검사 파일 hash가 위 code SHA와 정확히 일치한다.
-- [테스트 묶음 정책 23개](assets/desktop_update_ui_20261002/manifest-policy-tests.log.txt), [고정 base 비교](assets/desktop_update_ui_20261002/manifest-check.log.txt)
 - [39개 사용자 파일 보존](assets/desktop_update_ui_20261002/primary-preservation.json)
 
 대표 PNG는 실제 DOM 영역 캡처다. 적용 PNG는 실제 불확정 애니메이션 시작 550ms 후 캡처했으며 수치·픽셀을 가공하지 않았다. 준비·다운로드·오류·dark·390px·저장 확인도 직접 판독했다.
@@ -54,3 +52,5 @@
 ![적용 중 카드](assets/desktop_update_ui_20261002/applying-card.png)
 
 실행에 사용한 negative probe 스크립트·고정 Cargo manifest/lock은 같은 assets에 `.txt`로 보존했다. 실행할 때는 원래 `output/desktop-update-ui/` 위치로 복원하며 기록된 로컬 공유 target 경로와 의존성 버전을 확인한다.
+
+제출 전 원문·압축 실행 로그는 `local_validation.md`에 따라 ignored `output/pr-review/desktop088/logs/desktop_update_ui_20261002/`에 바이트 동일 사본으로 보존하고 추적 asset에서 제외했다. 로그 SHA·실행 결과는 위 `validation.json`에 유지한다. PNG·브라우저 결과·상태 계약 증적은 추적 경로에 그대로 있다.

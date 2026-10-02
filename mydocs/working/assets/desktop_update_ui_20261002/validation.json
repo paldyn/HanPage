@@ -174,5 +174,203 @@
       "raw_archive": "manifest-check.log.gz"
     }
   },
-  "log_format": "읽기용 txt의 줄 끝 공백만 정리; 원래 bytes는 같은 이름의 .log.gz에 보존"
+  "log_format": "읽기용 txt의 줄 끝 공백만 정리; 원래 bytes는 같은 이름의 .log.gz에 보존",
+  "logStorage": {
+    "policy": "mydocs/manual/pr_review/local_validation.md: raw logs kept in ignored output",
+    "directory": "output/pr-review/desktop088/logs/desktop_update_ui_20261002",
+    "files": [
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/desktop-build.log.gz",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/desktop-build.log.gz",
+        "sha256": "51680e6925ec20bc871adffb7578741121651737e22ba2a7b3c072ee7b309be3",
+        "bytes": 2014
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/desktop-build.log.txt",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/desktop-build.log.txt",
+        "sha256": "bec339c1d600c9baf263d6909919bf777c42796f1ad5424eca855dfb248d2b54",
+        "bytes": 6857
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/desktop-clippy.log.gz",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/desktop-clippy.log.gz",
+        "sha256": "8bac5533387f894f0d10643ddaede9823845560b8c3ff389c572118d5355eec3",
+        "bytes": 183
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/desktop-clippy.log.txt",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/desktop-clippy.log.txt",
+        "sha256": "ad1f806604437fba7315206b45a8ba8d930b42851f386a5a57b0f445a4809094",
+        "bytes": 198
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/manifest-check.log.gz",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/manifest-check.log.gz",
+        "sha256": "b1ff4f64efdbe560dccb55aafdfd929900800bc658ea2d5cb81fa1a076001216",
+        "bytes": 177
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/manifest-check.log.txt",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/manifest-check.log.txt",
+        "sha256": "fbeeb139a51559c9b4a7c40c3463eaf2eb8f0f78d6d95a96718f3f0d6dff159e",
+        "bytes": 179
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/manifest-policy-tests.log.gz",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/manifest-policy-tests.log.gz",
+        "sha256": "eec30b0717cec70f56bf59fbf8999b6fc77c49459def623cd3c4ce70425602c4",
+        "bytes": 1589
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/manifest-policy-tests.log.txt",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/manifest-policy-tests.log.txt",
+        "sha256": "e8257f77ac606419d6756f773c650fdaefb406f88474ed80302c38e4ff70292c",
+        "bytes": 5615
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/manifest-prepare.log.gz",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/manifest-prepare.log.gz",
+        "sha256": "d7f6e068f71a8e96e4b759f840e58e43fb011480a9dc6d4b79ba6cd54ee9d6d3",
+        "bytes": 20099
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/manifest-prepare.log.txt",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/manifest-prepare.log.txt",
+        "sha256": "d0712190b3d0a530119c6f0ee8a58c338ac04469d2fae6078a3fac618098f0c3",
+        "bytes": 142190
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/module-probe.log.gz",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/module-probe.log.gz",
+        "sha256": "215a08cf285bac4a855d799f2a65b8d8e5d3d8f5b23448e565358dee573232a0",
+        "bytes": 727
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/module-probe.log.txt",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/module-probe.log.txt",
+        "sha256": "5b70324911133d561892ce2373155d09fcda65155ee25b2a77e821be37d9ede3",
+        "bytes": 1448
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/native-state-tests.log.gz",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/native-state-tests.log.gz",
+        "sha256": "f83497a38490bddccf7083d9dab8f164d74f5903fbd7eb0449c8d3970b4ecba0",
+        "bytes": 672
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/native-state-tests.log.txt",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/native-state-tests.log.txt",
+        "sha256": "830b9316e7a1a16df0550591314858b9e5a773eba2435646de488bbab32a7561",
+        "bytes": 1718
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/negative-missing-applying-state.log.gz",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/negative-missing-applying-state.log.gz",
+        "sha256": "fa14532f0e045089909e0641a1f990c11f124fdf796b23c7fc603722a510735e",
+        "bytes": 627
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/negative-missing-applying-state.log.txt",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/negative-missing-applying-state.log.txt",
+        "sha256": "2cf4295af3ee215f6ff8488c479b39a2f496c34591ed17b0167197f35397d44a",
+        "bytes": 1110
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/negative-missing-ready-restore.log.gz",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/negative-missing-ready-restore.log.gz",
+        "sha256": "c2266d2caebe59ef28db7f16b10830a180a01927ee85e5c00218787508d23b94",
+        "bytes": 663
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/negative-missing-ready-restore.log.txt",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/negative-missing-ready-restore.log.txt",
+        "sha256": "3c1246b7f9f04990252b6b4c6871d63358dfd722d119eb3674ef998961d562ab",
+        "bytes": 1078
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/negative-positive-control.log.gz",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/negative-positive-control.log.gz",
+        "sha256": "684f71df9d9b023786bf5e2c39d6d192ea18cbcaa17c27e689a24b4557f0dfdd",
+        "bytes": 625
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/negative-positive-control.log.txt",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/negative-positive-control.log.txt",
+        "sha256": "139b0d7fa558f0e8ee132bd1e1a1628171015712ae09f41567d747d23b02497b",
+        "bytes": 1100
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/root-native-clippy.log.gz",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/root-native-clippy.log.gz",
+        "sha256": "863a8262deea2c0c1c70112149d19bc5b370ca00dd8ef31b65d76446c73e2f17",
+        "bytes": 251
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/root-native-clippy.log.txt",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/root-native-clippy.log.txt",
+        "sha256": "ad5aca0d2ebc2f030a8a6463cbcdc243ab47f1cd6919b0ec2e95d5d31a3d955a",
+        "bytes": 664
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/root-wasm-clippy.log.gz",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/root-wasm-clippy.log.gz",
+        "sha256": "e433f3d56da6d3abdd52ad817cec685b49d7d50a311f9f18f174055c9ccfc60b",
+        "bytes": 230
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/root-wasm-clippy.log.txt",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/root-wasm-clippy.log.txt",
+        "sha256": "04a501022f14f62d7bb86fb6528ccb9ff001407d788f5983845ae16a0b163359",
+        "bytes": 553
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/root-workspace-build.log.gz",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/root-workspace-build.log.gz",
+        "sha256": "25b3369eed0653ce3d77bab58c895a2409fc689371ffcc4e857ee2720f023915",
+        "bytes": 367
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/root-workspace-build.log.txt",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/root-workspace-build.log.txt",
+        "sha256": "b4c780dc741cbf014368b4d5ec40ad00fae35da4bfeae760d29d64aef0e77441",
+        "bytes": 1472
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/root-workspace-clippy.log.gz",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/root-workspace-clippy.log.gz",
+        "sha256": "7495f282e4739d78cfe17d1be3c4b5205cae692742b26db23c3ddcf172727abd",
+        "bytes": 375
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/root-workspace-clippy.log.txt",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/root-workspace-clippy.log.txt",
+        "sha256": "3efdda984e8f29af68deeec9f6afc362fa03a37987f9866122f87a0fd3b21d3b",
+        "bytes": 1472
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/studio-build.log.gz",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/studio-build.log.gz",
+        "sha256": "555bc5ec63710a492e2cab849d6e41c34051d448572bebc2b682f5a22fa8b269",
+        "bytes": 835
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/studio-build.log.txt",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/studio-build.log.txt",
+        "sha256": "64e2f3d6acb4a47a57d6ab42506b35c6eeed4e1483398d93dad943b1cf65e381",
+        "bytes": 1850
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/studio-tests.log.gz",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/studio-tests.log.gz",
+        "sha256": "a8eb3fdbdd34e7eca8ef3681e3f71b6220c7601567ab53e6ecc1e112c5beb49d",
+        "bytes": 84182
+      },
+      {
+        "previousPath": "mydocs/working/assets/desktop_update_ui_20261002/studio-tests.log.txt",
+        "ignoredPath": "output/pr-review/desktop088/logs/desktop_update_ui_20261002/studio-tests.log.txt",
+        "sha256": "c32c1d649743f2cb6691fc6f274284de4cc6147c63c218c5156c2a51f7cf5732",
+        "bytes": 428350
+      }
+    ]
+  }
 }

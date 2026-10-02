@@ -29,11 +29,11 @@
 
 - [최종 SHA·파일 hash·로그 hash](assets/desktop_update_ui_copy_20261002/validation.json)
 - [55개 브라우저 검사](assets/desktop_update_ui_copy_20261002/browser-results.json)
-- [Studio 검사 요약](assets/desktop_update_ui_copy_20261002/studio-tests.summary.txt), [원문 압축 로그](assets/desktop_update_ui_copy_20261002/studio-tests.log.gz)
-- [Desktop 빌드 로그](assets/desktop_update_ui_copy_20261002/studio-build.log.txt), [원문 압축 로그](assets/desktop_update_ui_copy_20261002/studio-build.log.gz)
 
 ![문장별 줄바꿈을 적용한 준비 카드](assets/desktop_update_ui_copy_20261002/ready-card.png)
 
 ![390px 다크 카드](assets/desktop_update_ui_copy_20261002/after-ready-small-dark.png)
 
 로컬 변경과 검증을 완료했다. 새 push·PR·릴리스·앱 설치는 수행하지 않았으며, 새 UI는 이 변경을 포함한 앱 버전 설치 후 적용된다. 화면의 0.8.8은 검사에서 설정한 다음 버전 예시이며 실제 릴리스가 아니다. 이후 증적 커밋은 코드·테스트를 변경하지 않는다.
+
+제출 전 원문·압축 실행 로그는 `local_validation.md`에 따라 ignored `output/pr-review/desktop088/logs/desktop_update_ui_copy_20261002/`에 바이트 동일 사본으로 보존하고 추적 asset에서 제외했다. 로그 SHA·실행 결과는 위 `validation.json`에 유지한다. PNG·브라우저 결과·상태 계약 증적은 추적 경로에 그대로 있다.
