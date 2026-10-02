@@ -1,0 +1,4834 @@
+{
+  "observedAt": "2026-10-02T06:36:37.219167+00:00",
+  "expectedSourceHead": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+  "prIdentity": {
+    "baseRefName": "devel",
+    "baseRefOid": "52aeb4be36728109758c56b749c7946122f04d29",
+    "headRefName": "codex/desktop-update-quiet-20261002",
+    "headRefOid": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+    "mergeStateStatus": "CLEAN",
+    "mergeable": "MERGEABLE",
+    "number": 116,
+    "state": "OPEN",
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:16:13Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737059/job/110729962116",
+        "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+        "startedAt": "2026-10-02T06:16:09Z",
+        "status": "COMPLETED",
+        "workflowName": "Adapter inter-diff"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:16:16Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110729963957",
+        "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+        "startedAt": "2026-10-02T06:16:10Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:16:15Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110729962026",
+        "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+        "startedAt": "2026-10-02T06:16:09Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:16:16Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737100/job/110729963182",
+        "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+        "startedAt": "2026-10-02T06:16:10Z",
+        "status": "COMPLETED",
+        "workflowName": "Proptest roundtrip"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:16:21Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972736747/job/110729961312",
+        "name": "Render Diff preflight",
+        "startedAt": "2026-10-02T06:16:10Z",
+        "status": "COMPLETED",
+        "workflowName": "Render Diff"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:16:07Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110729965073",
+        "name": "WASM Build",
+        "startedAt": "2026-10-02T06:16:08Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:16:19Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737059/job/110729985028",
+        "name": "adapter inter-diff preflight",
+        "startedAt": "2026-10-02T06:16:15Z",
+        "status": "COMPLETED",
+        "workflowName": "Adapter inter-diff"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:16:34Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110729993161",
+        "name": "CodeQL preflight",
+        "startedAt": "2026-10-02T06:16:17Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:16:23Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737100/job/110730000217",
+        "name": "Proptest preflight",
+        "startedAt": "2026-10-02T06:16:18Z",
+        "status": "COMPLETED",
+        "workflowName": "Proptest roundtrip"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:22:44Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972736747/job/110730015901",
+        "name": "Canvas visual diff",
+        "startedAt": "2026-10-02T06:16:23Z",
+        "status": "COMPLETED",
+        "workflowName": "Render Diff"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:20:22Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737059/job/110730008450",
+        "name": "adapter inter-diff",
+        "startedAt": "2026-10-02T06:16:21Z",
+        "status": "COMPLETED",
+        "workflowName": "Adapter inter-diff"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:16:38Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110729999952",
+        "name": "CI preflight",
+        "startedAt": "2026-10-02T06:16:19Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:21:44Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110730065332",
+        "name": "Analyze (javascript-typescript)",
+        "startedAt": "2026-10-02T06:16:36Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:21:09Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737100/job/110730023310",
+        "name": "prop roundtrip",
+        "startedAt": "2026-10-02T06:16:25Z",
+        "status": "COMPLETED",
+        "workflowName": "Proptest roundtrip"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:20:09Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110730065399",
+        "name": "Analyze (python)",
+        "startedAt": "2026-10-02T06:16:36Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:31:44Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110730065348",
+        "name": "Analyze (rust)",
+        "startedAt": "2026-10-02T06:16:36Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:16:44Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082306",
+        "name": "Resolve nextest target duration policy",
+        "startedAt": "2026-10-02T06:16:40Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:23:49Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082408",
+        "name": "build-test-archive-a / Build test archive (a)",
+        "startedAt": "2026-10-02T06:16:40Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:26:40Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082227",
+        "name": "Lint (fmt, clippy, WASM check)",
+        "startedAt": "2026-10-02T06:16:40Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:27:15Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082244",
+        "name": "Native Skia tests",
+        "startedAt": "2026-10-02T06:16:40Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:16:38Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730083442",
+        "name": "Frontend unit gates",
+        "startedAt": "2026-10-02T06:16:38Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:25:56Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082204",
+        "name": "Frontend package gates",
+        "startedAt": "2026-10-02T06:16:40Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:16:38Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730083406",
+        "name": "Workflow promotion preflight",
+        "startedAt": "2026-10-02T06:16:38Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:26:11Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730108717",
+        "name": "build-test-archive-b / Build test archive (b)",
+        "startedAt": "2026-10-02T06:16:46Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:26:13Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730108648",
+        "name": "build-test-archive-c / Build test archive (c)",
+        "startedAt": "2026-10-02T06:16:48Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:26:18Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730108713",
+        "name": "build-test-archive-d / Build test archive (d)",
+        "startedAt": "2026-10-02T06:16:47Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:27:48Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110731797877",
+        "name": "test-archive-a-shard-1 / Default-feature tests (Archive A)",
+        "startedAt": "2026-10-02T06:23:52Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:34:17Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110732372078",
+        "name": "test-archive-b-shard-1 / Default-feature tests (Archive B)",
+        "startedAt": "2026-10-02T06:26:13Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:31:50Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110732383285",
+        "name": "test-archive-c-shard-1 / Default-feature tests (Archive C)",
+        "startedAt": "2026-10-02T06:26:16Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:36:02Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110732400922",
+        "name": "test-archive-d-shard-1 / Default-feature tests (Archive D)",
+        "startedAt": "2026-10-02T06:26:21Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:36:12Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110734769241",
+        "name": "Build & Test",
+        "startedAt": "2026-10-02T06:36:04Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-02T06:20:02Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/runs/110730870286",
+        "name": "CodeQL",
+        "startedAt": "2026-10-02T06:20:00Z",
+        "status": "COMPLETED",
+        "workflowName": ""
+      }
+    ],
+    "url": "https://github.com/paldyn/HanPage/pull/116"
+  },
+  "headMatches": true,
+  "checks": {
+    "total": 32,
+    "completed": 32,
+    "success": 29,
+    "skipped": 3,
+    "neutral": 0,
+    "pending": 0,
+    "failure": 0
+  },
+  "workflows": [
+    {
+      "name": "CI",
+      "id": 36972737552,
+      "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+      "head_branch": "codex/desktop-update-quiet-20261002",
+      "event": "pull_request",
+      "run_attempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36972737552",
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/paldyn/HanPage/pulls/116",
+          "id": 4713335017,
+          "number": 116,
+          "head": {
+            "ref": "codex/desktop-update-quiet-20261002",
+            "sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+            "repo": {
+              "id": 1253161898,
+              "url": "https://api.github.com/repos/paldyn/HanPage",
+              "name": "HanPage"
+            }
+          },
+          "base": {
+            "ref": "devel",
+            "sha": "52aeb4be36728109758c56b749c7946122f04d29",
+            "repo": {
+              "id": 1253161898,
+              "url": "https://api.github.com/repos/paldyn/HanPage",
+              "name": "HanPage"
+            }
+          }
+        }
+      ],
+      "jobs": [
+        {
+          "id": 110729963957,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAUptQ",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729963957",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110729963957",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:08Z",
+          "started_at": "2026-10-02T06:16:10Z",
+          "completed_at": "2026-10-02T06:16:16Z",
+          "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:11Z",
+              "completed_at": "2026-10-02T06:16:12Z"
+            },
+            {
+              "name": "Default to full verification",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:12Z",
+              "completed_at": "2026-10-02T06:16:12Z"
+            },
+            {
+              "name": "Capture PR merge-tree evidence",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:12Z",
+              "completed_at": "2026-10-02T06:16:13Z"
+            },
+            {
+              "name": "Upload PR merge-tree evidence",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:16:13Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            },
+            {
+              "name": "Resolve trusted source base parent",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 5,
+              "started_at": "2026-10-02T06:16:14Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            },
+            {
+              "name": "Checkout trusted verifier",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 6,
+              "started_at": "2026-10-02T06:16:14Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            },
+            {
+              "name": "Evaluate exact PR workflow evidence",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 7,
+              "started_at": "2026-10-02T06:16:14Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            },
+            {
+              "name": "Publish validated Archive B duration measurement",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 8,
+              "started_at": "2026-10-02T06:16:14Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            },
+            {
+              "name": "Publish validated Archive C duration measurement",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 9,
+              "started_at": "2026-10-02T06:16:14Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            },
+            {
+              "name": "Publish validated Archive D duration measurement",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 10,
+              "started_at": "2026-10-02T06:16:14Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            },
+            {
+              "name": "Finalize reuse after validated evidence publication",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11,
+              "started_at": "2026-10-02T06:16:14Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 12,
+              "started_at": "2026-10-02T06:16:14Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729963957",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005521,
+          "runner_name": "GitHub Actions 1000005521",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110729965073,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAUuEQ",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729965073",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110729965073",
+          "status": "completed",
+          "conclusion": "skipped",
+          "created_at": "2026-10-02T06:16:08Z",
+          "started_at": "2026-10-02T06:16:08Z",
+          "completed_at": "2026-10-02T06:16:07Z",
+          "name": "WASM Build",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729965073",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": null,
+          "runner_name": null,
+          "runner_group_id": null,
+          "runner_group_name": null
+        },
+        {
+          "id": 110729999952,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAW2UA",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729999952",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110729999952",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:17Z",
+          "started_at": "2026-10-02T06:16:19Z",
+          "completed_at": "2026-10-02T06:16:38Z",
+          "name": "CI preflight",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:20Z",
+              "completed_at": "2026-10-02T06:16:21Z"
+            },
+            {
+              "name": "Select test profile policy",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:21Z",
+              "completed_at": "2026-10-02T06:16:21Z"
+            },
+            {
+              "name": "Detect review-only fast pass",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:21Z",
+              "completed_at": "2026-10-02T06:16:32Z"
+            },
+            {
+              "name": "Check out current-base merge tree inputs",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 4,
+              "started_at": "2026-10-02T06:16:32Z",
+              "completed_at": "2026-10-02T06:16:32Z"
+            },
+            {
+              "name": "Verify current-base merge tree",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 5,
+              "started_at": "2026-10-02T06:16:32Z",
+              "completed_at": "2026-10-02T06:16:32Z"
+            },
+            {
+              "name": "Finalize review-only fast pass",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:16:32Z",
+              "completed_at": "2026-10-02T06:16:32Z"
+            },
+            {
+              "name": "Check out trusted CI impact classifier",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:16:32Z",
+              "completed_at": "2026-10-02T06:16:34Z"
+            },
+            {
+              "name": "Collect CI impact input",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8,
+              "started_at": "2026-10-02T06:16:34Z",
+              "completed_at": "2026-10-02T06:16:35Z"
+            },
+            {
+              "name": "Classify CI impact",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9,
+              "started_at": "2026-10-02T06:16:35Z",
+              "completed_at": "2026-10-02T06:16:35Z"
+            },
+            {
+              "name": "Summarize CI impact classification",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10,
+              "started_at": "2026-10-02T06:16:35Z",
+              "completed_at": "2026-10-02T06:16:35Z"
+            },
+            {
+              "name": "Post Check out trusted CI impact classifier",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 20,
+              "started_at": "2026-10-02T06:16:35Z",
+              "completed_at": "2026-10-02T06:16:35Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 21,
+              "started_at": "2026-10-02T06:16:35Z",
+              "completed_at": "2026-10-02T06:16:35Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729999952",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005525,
+          "runner_name": "GitHub Actions 1000005525",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110730082204,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAb3nA",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730082204",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082204",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:38Z",
+          "started_at": "2026-10-02T06:16:40Z",
+          "completed_at": "2026-10-02T06:25:56Z",
+          "name": "Frontend package gates",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:41Z",
+              "completed_at": "2026-10-02T06:16:41Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:41Z",
+              "completed_at": "2026-10-02T06:18:13Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:18:13Z",
+              "completed_at": "2026-10-02T06:18:24Z"
+            },
+            {
+              "name": "Install wasm-pack",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:18:24Z",
+              "completed_at": "2026-10-02T06:18:24Z"
+            },
+            {
+              "name": "Restore frontend WASM cargo cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:18:24Z",
+              "completed_at": "2026-10-02T06:18:30Z"
+            },
+            {
+              "name": "Build fresh WASM package for frontend gates",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:18:30Z",
+              "completed_at": "2026-10-02T06:20:16Z"
+            },
+            {
+              "name": "Set up Node.js",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:20:16Z",
+              "completed_at": "2026-10-02T06:20:20Z"
+            },
+            {
+              "name": "Install frontend package dependencies",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8,
+              "started_at": "2026-10-02T06:20:20Z",
+              "completed_at": "2026-10-02T06:20:37Z"
+            },
+            {
+              "name": "Verify WASM bindings and editor embed contract",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9,
+              "started_at": "2026-10-02T06:20:37Z",
+              "completed_at": "2026-10-02T06:20:37Z"
+            },
+            {
+              "name": "Run editor package tests when declared",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10,
+              "started_at": "2026-10-02T06:20:37Z",
+              "completed_at": "2026-10-02T06:20:37Z"
+            },
+            {
+              "name": "Run shared and extension service worker tests",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11,
+              "started_at": "2026-10-02T06:20:37Z",
+              "completed_at": "2026-10-02T06:20:38Z"
+            },
+            {
+              "name": "Run Chrome extension options UI tests",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 12,
+              "started_at": "2026-10-02T06:20:38Z",
+              "completed_at": "2026-10-02T06:20:38Z"
+            },
+            {
+              "name": "Run Studio unit tests",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 13,
+              "started_at": "2026-10-02T06:20:38Z",
+              "completed_at": "2026-10-02T06:21:13Z"
+            },
+            {
+              "name": "Install headless Chrome",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 14,
+              "started_at": "2026-10-02T06:21:13Z",
+              "completed_at": "2026-10-02T06:21:13Z"
+            },
+            {
+              "name": "Run undo depth measurement gate (#5769)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 15,
+              "started_at": "2026-10-02T06:21:13Z",
+              "completed_at": "2026-10-02T06:23:10Z"
+            },
+            {
+              "name": "Run Studio responsive toolbar gate (#6118,",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 16,
+              "started_at": "2026-10-02T06:23:10Z",
+              "completed_at": "2026-10-02T06:25:30Z"
+            },
+            {
+              "name": "Build Studio",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 17,
+              "started_at": "2026-10-02T06:25:30Z",
+              "completed_at": "2026-10-02T06:25:35Z"
+            },
+            {
+              "name": "Build browser extensions",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 18,
+              "started_at": "2026-10-02T06:25:35Z",
+              "completed_at": "2026-10-02T06:25:38Z"
+            },
+            {
+              "name": "Verify extension distributions",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19,
+              "started_at": "2026-10-02T06:25:38Z",
+              "completed_at": "2026-10-02T06:25:39Z"
+            },
+            {
+              "name": "Compile VS Code extension",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 20,
+              "started_at": "2026-10-02T06:25:39Z",
+              "completed_at": "2026-10-02T06:25:53Z"
+            },
+            {
+              "name": "Verify VS Code webview outline keyboard contract",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 21,
+              "started_at": "2026-10-02T06:25:53Z",
+              "completed_at": "2026-10-02T06:25:53Z"
+            },
+            {
+              "name": "Verify font asset contracts",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 22,
+              "started_at": "2026-10-02T06:25:53Z",
+              "completed_at": "2026-10-02T06:25:53Z"
+            },
+            {
+              "name": "Save frontend WASM cargo cache",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 23,
+              "started_at": "2026-10-02T06:25:53Z",
+              "completed_at": "2026-10-02T06:25:53Z"
+            },
+            {
+              "name": "Post Set up Node.js",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 45,
+              "started_at": "2026-10-02T06:25:53Z",
+              "completed_at": "2026-10-02T06:25:55Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 46,
+              "started_at": "2026-10-02T06:25:55Z",
+              "completed_at": "2026-10-02T06:25:55Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 47,
+              "started_at": "2026-10-02T06:25:55Z",
+              "completed_at": "2026-10-02T06:25:55Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730082204",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005534,
+          "runner_name": "GitHub Actions 1000005534",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110730082227,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAb3sw",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730082227",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082227",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:38Z",
+          "started_at": "2026-10-02T06:16:40Z",
+          "completed_at": "2026-10-02T06:26:40Z",
+          "name": "Lint (fmt, clippy, WASM check)",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:41Z",
+              "completed_at": "2026-10-02T06:16:42Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:42Z",
+              "completed_at": "2026-10-02T06:17:48Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:17:48Z",
+              "completed_at": "2026-10-02T06:17:58Z"
+            },
+            {
+              "name": "Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:17:58Z",
+              "completed_at": "2026-10-02T06:18:01Z"
+            },
+            {
+              "name": "Prepare derived Rust test suites",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:18:01Z",
+              "completed_at": "2026-10-02T06:18:03Z"
+            },
+            {
+              "name": "Format check",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:18:03Z",
+              "completed_at": "2026-10-02T06:18:14Z"
+            },
+            {
+              "name": "Validate CI impact classifier",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:18:14Z",
+              "completed_at": "2026-10-02T06:18:26Z"
+            },
+            {
+              "name": "Validate Rust test suite manifest",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8,
+              "started_at": "2026-10-02T06:18:26Z",
+              "completed_at": "2026-10-02T06:18:38Z"
+            },
+            {
+              "name": "Test internal Rust crates",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9,
+              "started_at": "2026-10-02T06:18:38Z",
+              "completed_at": "2026-10-02T06:18:50Z"
+            },
+            {
+              "name": "Validate LLM verifier tool contracts",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10,
+              "started_at": "2026-10-02T06:18:50Z",
+              "completed_at": "2026-10-02T06:19:18Z"
+            },
+            {
+              "name": "Validate Render Diff trigger policy",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11,
+              "started_at": "2026-10-02T06:19:18Z",
+              "completed_at": "2026-10-02T06:19:18Z"
+            },
+            {
+              "name": "Validate canvaskit-parity batch map",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 12,
+              "started_at": "2026-10-02T06:19:18Z",
+              "completed_at": "2026-10-02T06:19:18Z"
+            },
+            {
+              "name": "Validate workflow contracts",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 13,
+              "started_at": "2026-10-02T06:19:18Z",
+              "completed_at": "2026-10-02T06:19:36Z"
+            },
+            {
+              "name": "Validate adoption spine contract",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 14,
+              "started_at": "2026-10-02T06:19:36Z",
+              "completed_at": "2026-10-02T06:19:36Z"
+            },
+            {
+              "name": "Validate planner templates",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 15,
+              "started_at": "2026-10-02T06:19:36Z",
+              "completed_at": "2026-10-02T06:19:36Z"
+            },
+            {
+              "name": "Validate agent org contract",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 16,
+              "started_at": "2026-10-02T06:19:36Z",
+              "completed_at": "2026-10-02T06:19:36Z"
+            },
+            {
+              "name": "Validate agent frame contract",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 17,
+              "started_at": "2026-10-02T06:19:36Z",
+              "completed_at": "2026-10-02T06:19:36Z"
+            },
+            {
+              "name": "Validate external reality check contract",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 18,
+              "started_at": "2026-10-02T06:19:36Z",
+              "completed_at": "2026-10-02T06:19:36Z"
+            },
+            {
+              "name": "Clippy",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19,
+              "started_at": "2026-10-02T06:19:36Z",
+              "completed_at": "2026-10-02T06:20:55Z"
+            },
+            {
+              "name": "Clippy (WASM32)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 20,
+              "started_at": "2026-10-02T06:20:55Z",
+              "completed_at": "2026-10-02T06:22:14Z"
+            },
+            {
+              "name": "Check workspace members (FFI bindings, tools)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 21,
+              "started_at": "2026-10-02T06:22:14Z",
+              "completed_at": "2026-10-02T06:26:05Z"
+            },
+            {
+              "name": "Agent preflight (failure-path sweep + undeclared-command detection)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 22,
+              "started_at": "2026-10-02T06:26:05Z",
+              "completed_at": "2026-10-02T06:26:08Z"
+            },
+            {
+              "name": "Check WASM target",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 23,
+              "started_at": "2026-10-02T06:26:08Z",
+              "completed_at": "2026-10-02T06:26:38Z"
+            },
+            {
+              "name": "Post Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 45,
+              "started_at": "2026-10-02T06:26:38Z",
+              "completed_at": "2026-10-02T06:26:39Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 46,
+              "started_at": "2026-10-02T06:26:39Z",
+              "completed_at": "2026-10-02T06:26:39Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 47,
+              "started_at": "2026-10-02T06:26:39Z",
+              "completed_at": "2026-10-02T06:26:39Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730082227",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005536,
+          "runner_name": "GitHub Actions 1000005536",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110730082244,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAb3xA",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730082244",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082244",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:38Z",
+          "started_at": "2026-10-02T06:16:40Z",
+          "completed_at": "2026-10-02T06:27:15Z",
+          "name": "Native Skia tests",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:41Z",
+              "completed_at": "2026-10-02T06:16:42Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:42Z",
+              "completed_at": "2026-10-02T06:19:20Z"
+            },
+            {
+              "name": "Free disk space (remove unused pre-installed toolchains)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:19:20Z",
+              "completed_at": "2026-10-02T06:19:21Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:19:21Z",
+              "completed_at": "2026-10-02T06:19:30Z"
+            },
+            {
+              "name": "Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:19:30Z",
+              "completed_at": "2026-10-02T06:19:34Z"
+            },
+            {
+              "name": "Install native Skia runtime packages",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:19:34Z",
+              "completed_at": "2026-10-02T06:19:46Z"
+            },
+            {
+              "name": "Prepare derived Rust test suites",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:19:46Z",
+              "completed_at": "2026-10-02T06:19:47Z"
+            },
+            {
+              "name": "Native Skia tests",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8,
+              "started_at": "2026-10-02T06:19:47Z",
+              "completed_at": "2026-10-02T06:27:12Z"
+            },
+            {
+              "name": "Post Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 15,
+              "started_at": "2026-10-02T06:27:12Z",
+              "completed_at": "2026-10-02T06:27:12Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 16,
+              "started_at": "2026-10-02T06:27:12Z",
+              "completed_at": "2026-10-02T06:27:12Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 17,
+              "started_at": "2026-10-02T06:27:12Z",
+              "completed_at": "2026-10-02T06:27:12Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730082244",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005533,
+          "runner_name": "GitHub Actions 1000005533",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110730082306,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAb4Ag",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730082306",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082306",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:38Z",
+          "started_at": "2026-10-02T06:16:40Z",
+          "completed_at": "2026-10-02T06:16:44Z",
+          "name": "Resolve nextest target duration policy",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:41Z",
+              "completed_at": "2026-10-02T06:16:41Z"
+            },
+            {
+              "name": "Run set -euo pipefail",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:41Z",
+              "completed_at": "2026-10-02T06:16:42Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:42Z",
+              "completed_at": "2026-10-02T06:16:42Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730082306",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005535,
+          "runner_name": "GitHub Actions 1000005535",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110730082408,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAb4aA",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730082408",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082408",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:38Z",
+          "started_at": "2026-10-02T06:16:40Z",
+          "completed_at": "2026-10-02T06:23:49Z",
+          "name": "build-test-archive-a / Build test archive (a)",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:41Z",
+              "completed_at": "2026-10-02T06:16:42Z"
+            },
+            {
+              "name": "Validate test archive policy",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:42Z",
+              "completed_at": "2026-10-02T06:16:42Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:42Z",
+              "completed_at": "2026-10-02T06:18:16Z"
+            },
+            {
+              "name": "Free disk space (remove unused pre-installed toolchains)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:18:16Z",
+              "completed_at": "2026-10-02T06:18:16Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:18:16Z",
+              "completed_at": "2026-10-02T06:18:24Z"
+            },
+            {
+              "name": "Install cargo-nextest",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:18:24Z",
+              "completed_at": "2026-10-02T06:18:24Z"
+            },
+            {
+              "name": "Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:18:24Z",
+              "completed_at": "2026-10-02T06:18:30Z"
+            },
+            {
+              "name": "Inspect disk space after Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8,
+              "started_at": "2026-10-02T06:18:30Z",
+              "completed_at": "2026-10-02T06:18:30Z"
+            },
+            {
+              "name": "Summarize test archive policy",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9,
+              "started_at": "2026-10-02T06:18:30Z",
+              "completed_at": "2026-10-02T06:18:30Z"
+            },
+            {
+              "name": "Build default-feature test archive",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10,
+              "started_at": "2026-10-02T06:18:30Z",
+              "completed_at": "2026-10-02T06:23:46Z"
+            },
+            {
+              "name": "Upload test archive",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11,
+              "started_at": "2026-10-02T06:23:46Z",
+              "completed_at": "2026-10-02T06:23:47Z"
+            },
+            {
+              "name": "Upload archive expected count",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 12,
+              "started_at": "2026-10-02T06:23:47Z",
+              "completed_at": "2026-10-02T06:23:47Z"
+            },
+            {
+              "name": "Post Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 23,
+              "started_at": "2026-10-02T06:23:47Z",
+              "completed_at": "2026-10-02T06:23:48Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 24,
+              "started_at": "2026-10-02T06:23:48Z",
+              "completed_at": "2026-10-02T06:23:48Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 25,
+              "started_at": "2026-10-02T06:23:48Z",
+              "completed_at": "2026-10-02T06:23:48Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730082408",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005537,
+          "runner_name": "GitHub Actions 1000005537",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110730083406,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAb8Tg",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730083406",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730083406",
+          "status": "completed",
+          "conclusion": "skipped",
+          "created_at": "2026-10-02T06:16:38Z",
+          "started_at": "2026-10-02T06:16:38Z",
+          "completed_at": "2026-10-02T06:16:38Z",
+          "name": "Workflow promotion preflight",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730083406",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": null,
+          "runner_name": null,
+          "runner_group_id": null,
+          "runner_group_name": null
+        },
+        {
+          "id": 110730083442,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAb8cg",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730083442",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730083442",
+          "status": "completed",
+          "conclusion": "skipped",
+          "created_at": "2026-10-02T06:16:38Z",
+          "started_at": "2026-10-02T06:16:38Z",
+          "completed_at": "2026-10-02T06:16:38Z",
+          "name": "Frontend unit gates",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730083442",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": null,
+          "runner_name": null,
+          "runner_group_id": null,
+          "runner_group_name": null
+        },
+        {
+          "id": 110730108648,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAde6A",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730108648",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730108648",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:45Z",
+          "started_at": "2026-10-02T06:16:48Z",
+          "completed_at": "2026-10-02T06:26:13Z",
+          "name": "build-test-archive-c / Build test archive (c)",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:49Z",
+              "completed_at": "2026-10-02T06:16:51Z"
+            },
+            {
+              "name": "Validate test archive policy",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:51Z",
+              "completed_at": "2026-10-02T06:16:51Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:51Z",
+              "completed_at": "2026-10-02T06:18:42Z"
+            },
+            {
+              "name": "Free disk space (remove unused pre-installed toolchains)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:18:42Z",
+              "completed_at": "2026-10-02T06:18:42Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:18:42Z",
+              "completed_at": "2026-10-02T06:18:50Z"
+            },
+            {
+              "name": "Install cargo-nextest",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:18:50Z",
+              "completed_at": "2026-10-02T06:18:51Z"
+            },
+            {
+              "name": "Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:18:51Z",
+              "completed_at": "2026-10-02T06:18:57Z"
+            },
+            {
+              "name": "Inspect disk space after Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8,
+              "started_at": "2026-10-02T06:18:57Z",
+              "completed_at": "2026-10-02T06:18:57Z"
+            },
+            {
+              "name": "Summarize test archive policy",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9,
+              "started_at": "2026-10-02T06:18:57Z",
+              "completed_at": "2026-10-02T06:18:57Z"
+            },
+            {
+              "name": "Build default-feature test archive",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10,
+              "started_at": "2026-10-02T06:18:57Z",
+              "completed_at": "2026-10-02T06:26:05Z"
+            },
+            {
+              "name": "Upload test archive",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11,
+              "started_at": "2026-10-02T06:26:05Z",
+              "completed_at": "2026-10-02T06:26:09Z"
+            },
+            {
+              "name": "Upload archive expected count",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 12,
+              "started_at": "2026-10-02T06:26:09Z",
+              "completed_at": "2026-10-02T06:26:11Z"
+            },
+            {
+              "name": "Post Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 23,
+              "started_at": "2026-10-02T06:26:11Z",
+              "completed_at": "2026-10-02T06:26:11Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 24,
+              "started_at": "2026-10-02T06:26:11Z",
+              "completed_at": "2026-10-02T06:26:11Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 25,
+              "started_at": "2026-10-02T06:26:11Z",
+              "completed_at": "2026-10-02T06:26:11Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730108648",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005538,
+          "runner_name": "GitHub Actions 1000005538",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110730108713,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAdfKQ",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730108713",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730108713",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:45Z",
+          "started_at": "2026-10-02T06:16:47Z",
+          "completed_at": "2026-10-02T06:26:18Z",
+          "name": "build-test-archive-d / Build test archive (d)",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:48Z",
+              "completed_at": "2026-10-02T06:16:50Z"
+            },
+            {
+              "name": "Validate test archive policy",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:50Z",
+              "completed_at": "2026-10-02T06:16:50Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:50Z",
+              "completed_at": "2026-10-02T06:18:28Z"
+            },
+            {
+              "name": "Free disk space (remove unused pre-installed toolchains)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:18:28Z",
+              "completed_at": "2026-10-02T06:18:28Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:18:28Z",
+              "completed_at": "2026-10-02T06:18:37Z"
+            },
+            {
+              "name": "Install cargo-nextest",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:18:37Z",
+              "completed_at": "2026-10-02T06:18:37Z"
+            },
+            {
+              "name": "Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:18:37Z",
+              "completed_at": "2026-10-02T06:18:43Z"
+            },
+            {
+              "name": "Inspect disk space after Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8,
+              "started_at": "2026-10-02T06:18:43Z",
+              "completed_at": "2026-10-02T06:18:43Z"
+            },
+            {
+              "name": "Summarize test archive policy",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9,
+              "started_at": "2026-10-02T06:18:43Z",
+              "completed_at": "2026-10-02T06:18:43Z"
+            },
+            {
+              "name": "Build default-feature test archive",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10,
+              "started_at": "2026-10-02T06:18:43Z",
+              "completed_at": "2026-10-02T06:26:12Z"
+            },
+            {
+              "name": "Upload test archive",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11,
+              "started_at": "2026-10-02T06:26:12Z",
+              "completed_at": "2026-10-02T06:26:15Z"
+            },
+            {
+              "name": "Upload archive expected count",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 12,
+              "started_at": "2026-10-02T06:26:15Z",
+              "completed_at": "2026-10-02T06:26:16Z"
+            },
+            {
+              "name": "Post Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 23,
+              "started_at": "2026-10-02T06:26:16Z",
+              "completed_at": "2026-10-02T06:26:16Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 24,
+              "started_at": "2026-10-02T06:26:16Z",
+              "completed_at": "2026-10-02T06:26:16Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 25,
+              "started_at": "2026-10-02T06:26:16Z",
+              "completed_at": "2026-10-02T06:26:16Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730108713",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005539,
+          "runner_name": "GitHub Actions 1000005539",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110730108717,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAdfLQ",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730108717",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730108717",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:45Z",
+          "started_at": "2026-10-02T06:16:46Z",
+          "completed_at": "2026-10-02T06:26:11Z",
+          "name": "build-test-archive-b / Build test archive (b)",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:47Z",
+              "completed_at": "2026-10-02T06:16:48Z"
+            },
+            {
+              "name": "Validate test archive policy",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:48Z",
+              "completed_at": "2026-10-02T06:16:48Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:48Z",
+              "completed_at": "2026-10-02T06:18:23Z"
+            },
+            {
+              "name": "Free disk space (remove unused pre-installed toolchains)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:18:23Z",
+              "completed_at": "2026-10-02T06:18:23Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:18:23Z",
+              "completed_at": "2026-10-02T06:18:31Z"
+            },
+            {
+              "name": "Install cargo-nextest",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:18:31Z",
+              "completed_at": "2026-10-02T06:18:32Z"
+            },
+            {
+              "name": "Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:18:32Z",
+              "completed_at": "2026-10-02T06:18:37Z"
+            },
+            {
+              "name": "Inspect disk space after Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8,
+              "started_at": "2026-10-02T06:18:37Z",
+              "completed_at": "2026-10-02T06:18:37Z"
+            },
+            {
+              "name": "Summarize test archive policy",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9,
+              "started_at": "2026-10-02T06:18:37Z",
+              "completed_at": "2026-10-02T06:18:37Z"
+            },
+            {
+              "name": "Build default-feature test archive",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10,
+              "started_at": "2026-10-02T06:18:37Z",
+              "completed_at": "2026-10-02T06:26:06Z"
+            },
+            {
+              "name": "Upload test archive",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11,
+              "started_at": "2026-10-02T06:26:06Z",
+              "completed_at": "2026-10-02T06:26:08Z"
+            },
+            {
+              "name": "Upload archive expected count",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 12,
+              "started_at": "2026-10-02T06:26:08Z",
+              "completed_at": "2026-10-02T06:26:09Z"
+            },
+            {
+              "name": "Post Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 23,
+              "started_at": "2026-10-02T06:26:09Z",
+              "completed_at": "2026-10-02T06:26:09Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 24,
+              "started_at": "2026-10-02T06:26:09Z",
+              "completed_at": "2026-10-02T06:26:09Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 25,
+              "started_at": "2026-10-02T06:26:09Z",
+              "completed_at": "2026-10-02T06:26:10Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730108717",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005540,
+          "runner_name": "GitHub Actions 1000005540",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110731797877,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyCEldQ",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110731797877",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110731797877",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:23:50Z",
+          "started_at": "2026-10-02T06:23:52Z",
+          "completed_at": "2026-10-02T06:27:48Z",
+          "name": "test-archive-a-shard-1 / Default-feature tests (Archive A)",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:23:52Z",
+              "completed_at": "2026-10-02T06:23:54Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:23:54Z",
+              "completed_at": "2026-10-02T06:25:32Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:25:32Z",
+              "completed_at": "2026-10-02T06:25:40Z"
+            },
+            {
+              "name": "Install cargo-nextest",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:25:40Z",
+              "completed_at": "2026-10-02T06:25:41Z"
+            },
+            {
+              "name": "Download shared test archive",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:25:41Z",
+              "completed_at": "2026-10-02T06:25:42Z"
+            },
+            {
+              "name": "Run Archive A",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:25:42Z",
+              "completed_at": "2026-10-02T06:27:45Z"
+            },
+            {
+              "name": "Upload Archive A count",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:27:45Z",
+              "completed_at": "2026-10-02T06:27:46Z"
+            },
+            {
+              "name": "Upload upstream PR B/C/D target durations",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 8,
+              "started_at": "2026-10-02T06:27:46Z",
+              "completed_at": "2026-10-02T06:27:46Z"
+            },
+            {
+              "name": "Upload devel B/C/D target durations",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 9,
+              "started_at": "2026-10-02T06:27:46Z",
+              "completed_at": "2026-10-02T06:27:46Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 18,
+              "started_at": "2026-10-02T06:27:46Z",
+              "completed_at": "2026-10-02T06:27:46Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19,
+              "started_at": "2026-10-02T06:27:46Z",
+              "completed_at": "2026-10-02T06:27:46Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110731797877",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005544,
+          "runner_name": "GitHub Actions 1000005544",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110732372078,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyCnobg",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110732372078",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110732372078",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:26:11Z",
+          "started_at": "2026-10-02T06:26:13Z",
+          "completed_at": "2026-10-02T06:34:17Z",
+          "name": "test-archive-b-shard-1 / Default-feature tests (Archive B)",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:26:14Z",
+              "completed_at": "2026-10-02T06:26:15Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:26:15Z",
+              "completed_at": "2026-10-02T06:27:53Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:27:53Z",
+              "completed_at": "2026-10-02T06:28:02Z"
+            },
+            {
+              "name": "Install cargo-nextest",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:28:02Z",
+              "completed_at": "2026-10-02T06:28:02Z"
+            },
+            {
+              "name": "Download shared test archive",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:28:02Z",
+              "completed_at": "2026-10-02T06:28:08Z"
+            },
+            {
+              "name": "Run Archive B",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:28:08Z",
+              "completed_at": "2026-10-02T06:34:14Z"
+            },
+            {
+              "name": "Upload Archive B count",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:34:14Z",
+              "completed_at": "2026-10-02T06:34:15Z"
+            },
+            {
+              "name": "Upload upstream PR B/C/D target durations",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 8,
+              "started_at": "2026-10-02T06:34:15Z",
+              "completed_at": "2026-10-02T06:34:15Z"
+            },
+            {
+              "name": "Upload devel B/C/D target durations",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 9,
+              "started_at": "2026-10-02T06:34:15Z",
+              "completed_at": "2026-10-02T06:34:15Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 18,
+              "started_at": "2026-10-02T06:34:15Z",
+              "completed_at": "2026-10-02T06:34:15Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19,
+              "started_at": "2026-10-02T06:34:15Z",
+              "completed_at": "2026-10-02T06:34:15Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110732372078",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005545,
+          "runner_name": "GitHub Actions 1000005545",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110732383285,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyCoUNQ",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110732383285",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110732383285",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:26:14Z",
+          "started_at": "2026-10-02T06:26:16Z",
+          "completed_at": "2026-10-02T06:31:50Z",
+          "name": "test-archive-c-shard-1 / Default-feature tests (Archive C)",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:26:16Z",
+              "completed_at": "2026-10-02T06:26:18Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:26:18Z",
+              "completed_at": "2026-10-02T06:27:52Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:27:52Z",
+              "completed_at": "2026-10-02T06:28:00Z"
+            },
+            {
+              "name": "Install cargo-nextest",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:28:00Z",
+              "completed_at": "2026-10-02T06:28:01Z"
+            },
+            {
+              "name": "Download shared test archive",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:28:01Z",
+              "completed_at": "2026-10-02T06:28:05Z"
+            },
+            {
+              "name": "Run Archive C",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:28:05Z",
+              "completed_at": "2026-10-02T06:31:47Z"
+            },
+            {
+              "name": "Upload Archive C count",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:31:47Z",
+              "completed_at": "2026-10-02T06:31:48Z"
+            },
+            {
+              "name": "Upload upstream PR B/C/D target durations",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 8,
+              "started_at": "2026-10-02T06:31:48Z",
+              "completed_at": "2026-10-02T06:31:48Z"
+            },
+            {
+              "name": "Upload devel B/C/D target durations",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 9,
+              "started_at": "2026-10-02T06:31:48Z",
+              "completed_at": "2026-10-02T06:31:48Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 18,
+              "started_at": "2026-10-02T06:31:48Z",
+              "completed_at": "2026-10-02T06:31:48Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19,
+              "started_at": "2026-10-02T06:31:48Z",
+              "completed_at": "2026-10-02T06:31:49Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110732383285",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005546,
+          "runner_name": "GitHub Actions 1000005546",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110732400922,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyCpZGg",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110732400922",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110732400922",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:26:18Z",
+          "started_at": "2026-10-02T06:26:21Z",
+          "completed_at": "2026-10-02T06:36:02Z",
+          "name": "test-archive-d-shard-1 / Default-feature tests (Archive D)",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:26:23Z",
+              "completed_at": "2026-10-02T06:26:24Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:26:24Z",
+              "completed_at": "2026-10-02T06:28:00Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:28:00Z",
+              "completed_at": "2026-10-02T06:28:11Z"
+            },
+            {
+              "name": "Install cargo-nextest",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:28:11Z",
+              "completed_at": "2026-10-02T06:28:11Z"
+            },
+            {
+              "name": "Download shared test archive",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:28:11Z",
+              "completed_at": "2026-10-02T06:28:22Z"
+            },
+            {
+              "name": "Run Archive D",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:28:22Z",
+              "completed_at": "2026-10-02T06:35:58Z"
+            },
+            {
+              "name": "Upload Archive D count",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:35:58Z",
+              "completed_at": "2026-10-02T06:36:00Z"
+            },
+            {
+              "name": "Upload upstream PR B/C/D target durations",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 8,
+              "started_at": "2026-10-02T06:36:00Z",
+              "completed_at": "2026-10-02T06:36:00Z"
+            },
+            {
+              "name": "Upload devel B/C/D target durations",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 9,
+              "started_at": "2026-10-02T06:36:00Z",
+              "completed_at": "2026-10-02T06:36:00Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 18,
+              "started_at": "2026-10-02T06:36:00Z",
+              "completed_at": "2026-10-02T06:36:00Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19,
+              "started_at": "2026-10-02T06:36:00Z",
+              "completed_at": "2026-10-02T06:36:00Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110732400922",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005547,
+          "runner_name": "GitHub Actions 1000005547",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110734769241,
+          "run_id": 36972737552,
+          "workflow_name": "CI",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyE58WQ",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110734769241",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110734769241",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:36:03Z",
+          "started_at": "2026-10-02T06:36:04Z",
+          "completed_at": "2026-10-02T06:36:12Z",
+          "name": "Build & Test",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:36:05Z",
+              "completed_at": "2026-10-02T06:36:06Z"
+            },
+            {
+              "name": "Download archive A expected count",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:36:06Z",
+              "completed_at": "2026-10-02T06:36:07Z"
+            },
+            {
+              "name": "Download archive B expected count",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:36:07Z",
+              "completed_at": "2026-10-02T06:36:08Z"
+            },
+            {
+              "name": "Download archive C expected count",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:36:08Z",
+              "completed_at": "2026-10-02T06:36:08Z"
+            },
+            {
+              "name": "Download archive D expected count",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:36:08Z",
+              "completed_at": "2026-10-02T06:36:09Z"
+            },
+            {
+              "name": "Download shard counts",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:36:09Z",
+              "completed_at": "2026-10-02T06:36:10Z"
+            },
+            {
+              "name": "Verify archive shard totals",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:36:10Z",
+              "completed_at": "2026-10-02T06:36:10Z"
+            },
+            {
+              "name": "Check Build & Test worker results",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8,
+              "started_at": "2026-10-02T06:36:10Z",
+              "completed_at": "2026-10-02T06:36:10Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9,
+              "started_at": "2026-10-02T06:36:10Z",
+              "completed_at": "2026-10-02T06:36:10Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110734769241",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005551,
+          "runner_name": "GitHub Actions 1000005551",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        }
+      ]
+    },
+    {
+      "name": "CodeQL",
+      "id": 36972737024,
+      "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+      "head_branch": "codex/desktop-update-quiet-20261002",
+      "event": "pull_request",
+      "run_attempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36972737024",
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/paldyn/HanPage/pulls/116",
+          "id": 4713335017,
+          "number": 116,
+          "head": {
+            "ref": "codex/desktop-update-quiet-20261002",
+            "sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+            "repo": {
+              "id": 1253161898,
+              "url": "https://api.github.com/repos/paldyn/HanPage",
+              "name": "HanPage"
+            }
+          },
+          "base": {
+            "ref": "devel",
+            "sha": "52aeb4be36728109758c56b749c7946122f04d29",
+            "repo": {
+              "id": 1253161898,
+              "url": "https://api.github.com/repos/paldyn/HanPage",
+              "name": "HanPage"
+            }
+          }
+        }
+      ],
+      "jobs": [
+        {
+          "id": 110729962026,
+          "run_id": 36972737024,
+          "workflow_name": "CodeQL",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737024",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAUiKg",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729962026",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110729962026",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:07Z",
+          "started_at": "2026-10-02T06:16:09Z",
+          "completed_at": "2026-10-02T06:16:15Z",
+          "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:10Z",
+              "completed_at": "2026-10-02T06:16:11Z"
+            },
+            {
+              "name": "Default to full verification",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:11Z",
+              "completed_at": "2026-10-02T06:16:11Z"
+            },
+            {
+              "name": "Capture PR merge-tree evidence",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:11Z",
+              "completed_at": "2026-10-02T06:16:12Z"
+            },
+            {
+              "name": "Upload PR merge-tree evidence",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:16:12Z",
+              "completed_at": "2026-10-02T06:16:13Z"
+            },
+            {
+              "name": "Resolve trusted source base parent",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 5,
+              "started_at": "2026-10-02T06:16:13Z",
+              "completed_at": "2026-10-02T06:16:13Z"
+            },
+            {
+              "name": "Checkout trusted verifier",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 6,
+              "started_at": "2026-10-02T06:16:13Z",
+              "completed_at": "2026-10-02T06:16:13Z"
+            },
+            {
+              "name": "Evaluate exact PR workflow evidence",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 7,
+              "started_at": "2026-10-02T06:16:13Z",
+              "completed_at": "2026-10-02T06:16:13Z"
+            },
+            {
+              "name": "Publish validated Archive B duration measurement",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 8,
+              "started_at": "2026-10-02T06:16:13Z",
+              "completed_at": "2026-10-02T06:16:13Z"
+            },
+            {
+              "name": "Publish validated Archive C duration measurement",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 9,
+              "started_at": "2026-10-02T06:16:13Z",
+              "completed_at": "2026-10-02T06:16:13Z"
+            },
+            {
+              "name": "Publish validated Archive D duration measurement",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 10,
+              "started_at": "2026-10-02T06:16:13Z",
+              "completed_at": "2026-10-02T06:16:13Z"
+            },
+            {
+              "name": "Finalize reuse after validated evidence publication",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11,
+              "started_at": "2026-10-02T06:16:13Z",
+              "completed_at": "2026-10-02T06:16:13Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 12,
+              "started_at": "2026-10-02T06:16:13Z",
+              "completed_at": "2026-10-02T06:16:13Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729962026",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005520,
+          "runner_name": "GitHub Actions 1000005520",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110729993161,
+          "run_id": 36972737024,
+          "workflow_name": "CodeQL",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737024",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAWbyQ",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729993161",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110729993161",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:15Z",
+          "started_at": "2026-10-02T06:16:17Z",
+          "completed_at": "2026-10-02T06:16:34Z",
+          "name": "CodeQL preflight",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:18Z",
+              "completed_at": "2026-10-02T06:16:18Z"
+            },
+            {
+              "name": "Detect review-only fast pass",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:18Z",
+              "completed_at": "2026-10-02T06:16:29Z"
+            },
+            {
+              "name": "Check out current-base merge tree inputs",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:29Z",
+              "completed_at": "2026-10-02T06:16:29Z"
+            },
+            {
+              "name": "Verify current-base merge tree",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 4,
+              "started_at": "2026-10-02T06:16:29Z",
+              "completed_at": "2026-10-02T06:16:29Z"
+            },
+            {
+              "name": "Finalize review-only fast pass",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:16:29Z",
+              "completed_at": "2026-10-02T06:16:30Z"
+            },
+            {
+              "name": "Check out trusted CodeQL impact classifier",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:16:30Z",
+              "completed_at": "2026-10-02T06:16:31Z"
+            },
+            {
+              "name": "Collect CodeQL impact input",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:16:31Z",
+              "completed_at": "2026-10-02T06:16:32Z"
+            },
+            {
+              "name": "Classify CodeQL impact",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8,
+              "started_at": "2026-10-02T06:16:32Z",
+              "completed_at": "2026-10-02T06:16:32Z"
+            },
+            {
+              "name": "Finalize CodeQL language selection",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9,
+              "started_at": "2026-10-02T06:16:32Z",
+              "completed_at": "2026-10-02T06:16:32Z"
+            },
+            {
+              "name": "Summarize CodeQL impact classification",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10,
+              "started_at": "2026-10-02T06:16:32Z",
+              "completed_at": "2026-10-02T06:16:32Z"
+            },
+            {
+              "name": "Post Check out trusted CodeQL impact classifier",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 20,
+              "started_at": "2026-10-02T06:16:32Z",
+              "completed_at": "2026-10-02T06:16:32Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 21,
+              "started_at": "2026-10-02T06:16:32Z",
+              "completed_at": "2026-10-02T06:16:32Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729993161",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005524,
+          "runner_name": "GitHub Actions 1000005524",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110730065332,
+          "run_id": 36972737024,
+          "workflow_name": "CodeQL",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737024",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAa1tA",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730065332",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110730065332",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:34Z",
+          "started_at": "2026-10-02T06:16:36Z",
+          "completed_at": "2026-10-02T06:21:44Z",
+          "name": "Analyze (javascript-typescript)",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:37Z",
+              "completed_at": "2026-10-02T06:16:39Z"
+            },
+            {
+              "name": "Skip unselected language",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:39Z",
+              "completed_at": "2026-10-02T06:16:39Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:39Z",
+              "completed_at": "2026-10-02T06:19:04Z"
+            },
+            {
+              "name": "Initialize CodeQL (non-Rust)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:19:04Z",
+              "completed_at": "2026-10-02T06:19:22Z"
+            },
+            {
+              "name": "Initialize CodeQL (Rust)",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 5,
+              "started_at": "2026-10-02T06:19:22Z",
+              "completed_at": "2026-10-02T06:19:22Z"
+            },
+            {
+              "name": "Initialize CodeQL (Rust post-merge)",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 6,
+              "started_at": "2026-10-02T06:19:22Z",
+              "completed_at": "2026-10-02T06:19:22Z"
+            },
+            {
+              "name": "Initialize CodeQL (Rust full scan)",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 7,
+              "started_at": "2026-10-02T06:19:22Z",
+              "completed_at": "2026-10-02T06:19:22Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 8,
+              "started_at": "2026-10-02T06:19:22Z",
+              "completed_at": "2026-10-02T06:19:22Z"
+            },
+            {
+              "name": "Perform CodeQL Analysis",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9,
+              "started_at": "2026-10-02T06:19:22Z",
+              "completed_at": "2026-10-02T06:21:39Z"
+            },
+            {
+              "name": "Post Perform CodeQL Analysis",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 16,
+              "started_at": "2026-10-02T06:21:39Z",
+              "completed_at": "2026-10-02T06:21:39Z"
+            },
+            {
+              "name": "Post Initialize CodeQL (non-Rust)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 17,
+              "started_at": "2026-10-02T06:21:39Z",
+              "completed_at": "2026-10-02T06:21:40Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 18,
+              "started_at": "2026-10-02T06:21:40Z",
+              "completed_at": "2026-10-02T06:21:40Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19,
+              "started_at": "2026-10-02T06:21:40Z",
+              "completed_at": "2026-10-02T06:21:40Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730065332",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005532,
+          "runner_name": "GitHub Actions 1000005532",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110730065348,
+          "run_id": 36972737024,
+          "workflow_name": "CodeQL",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737024",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAa1xA",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730065348",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110730065348",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:34Z",
+          "started_at": "2026-10-02T06:16:36Z",
+          "completed_at": "2026-10-02T06:31:44Z",
+          "name": "Analyze (rust)",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:37Z",
+              "completed_at": "2026-10-02T06:16:39Z"
+            },
+            {
+              "name": "Skip unselected language",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:39Z",
+              "completed_at": "2026-10-02T06:16:39Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:39Z",
+              "completed_at": "2026-10-02T06:18:36Z"
+            },
+            {
+              "name": "Initialize CodeQL (non-Rust)",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 4,
+              "started_at": "2026-10-02T06:18:36Z",
+              "completed_at": "2026-10-02T06:18:36Z"
+            },
+            {
+              "name": "Initialize CodeQL (Rust)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:18:36Z",
+              "completed_at": "2026-10-02T06:18:51Z"
+            },
+            {
+              "name": "Initialize CodeQL (Rust post-merge)",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 6,
+              "started_at": "2026-10-02T06:18:51Z",
+              "completed_at": "2026-10-02T06:18:51Z"
+            },
+            {
+              "name": "Initialize CodeQL (Rust full scan)",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 7,
+              "started_at": "2026-10-02T06:18:51Z",
+              "completed_at": "2026-10-02T06:18:51Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8,
+              "started_at": "2026-10-02T06:18:51Z",
+              "completed_at": "2026-10-02T06:18:59Z"
+            },
+            {
+              "name": "Perform CodeQL Analysis",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9,
+              "started_at": "2026-10-02T06:18:59Z",
+              "completed_at": "2026-10-02T06:31:40Z"
+            },
+            {
+              "name": "Post Perform CodeQL Analysis",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 16,
+              "started_at": "2026-10-02T06:31:40Z",
+              "completed_at": "2026-10-02T06:31:40Z"
+            },
+            {
+              "name": "Post Initialize CodeQL (Rust)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 17,
+              "started_at": "2026-10-02T06:31:40Z",
+              "completed_at": "2026-10-02T06:31:41Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 18,
+              "started_at": "2026-10-02T06:31:41Z",
+              "completed_at": "2026-10-02T06:31:41Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19,
+              "started_at": "2026-10-02T06:31:41Z",
+              "completed_at": "2026-10-02T06:31:41Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730065348",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005530,
+          "runner_name": "GitHub Actions 1000005530",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110730065399,
+          "run_id": 36972737024,
+          "workflow_name": "CodeQL",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737024",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAa19w",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730065399",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110730065399",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:34Z",
+          "started_at": "2026-10-02T06:16:36Z",
+          "completed_at": "2026-10-02T06:20:09Z",
+          "name": "Analyze (python)",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:36Z",
+              "completed_at": "2026-10-02T06:16:38Z"
+            },
+            {
+              "name": "Skip unselected language",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:38Z",
+              "completed_at": "2026-10-02T06:16:38Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:38Z",
+              "completed_at": "2026-10-02T06:18:19Z"
+            },
+            {
+              "name": "Initialize CodeQL (non-Rust)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:18:19Z",
+              "completed_at": "2026-10-02T06:18:33Z"
+            },
+            {
+              "name": "Initialize CodeQL (Rust)",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 5,
+              "started_at": "2026-10-02T06:18:33Z",
+              "completed_at": "2026-10-02T06:18:33Z"
+            },
+            {
+              "name": "Initialize CodeQL (Rust post-merge)",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 6,
+              "started_at": "2026-10-02T06:18:33Z",
+              "completed_at": "2026-10-02T06:18:33Z"
+            },
+            {
+              "name": "Initialize CodeQL (Rust full scan)",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 7,
+              "started_at": "2026-10-02T06:18:33Z",
+              "completed_at": "2026-10-02T06:18:33Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 8,
+              "started_at": "2026-10-02T06:18:33Z",
+              "completed_at": "2026-10-02T06:18:33Z"
+            },
+            {
+              "name": "Perform CodeQL Analysis",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9,
+              "started_at": "2026-10-02T06:18:33Z",
+              "completed_at": "2026-10-02T06:20:06Z"
+            },
+            {
+              "name": "Post Perform CodeQL Analysis",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 16,
+              "started_at": "2026-10-02T06:20:06Z",
+              "completed_at": "2026-10-02T06:20:06Z"
+            },
+            {
+              "name": "Post Initialize CodeQL (non-Rust)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 17,
+              "started_at": "2026-10-02T06:20:06Z",
+              "completed_at": "2026-10-02T06:20:07Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 18,
+              "started_at": "2026-10-02T06:20:07Z",
+              "completed_at": "2026-10-02T06:20:07Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19,
+              "started_at": "2026-10-02T06:20:07Z",
+              "completed_at": "2026-10-02T06:20:07Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730065399",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005531,
+          "runner_name": "GitHub Actions 1000005531",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        }
+      ]
+    },
+    {
+      "name": "Render Diff",
+      "id": 36972736747,
+      "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+      "head_branch": "codex/desktop-update-quiet-20261002",
+      "event": "pull_request",
+      "run_attempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36972736747",
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/paldyn/HanPage/pulls/116",
+          "id": 4713335017,
+          "number": 116,
+          "head": {
+            "ref": "codex/desktop-update-quiet-20261002",
+            "sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+            "repo": {
+              "id": 1253161898,
+              "url": "https://api.github.com/repos/paldyn/HanPage",
+              "name": "HanPage"
+            }
+          },
+          "base": {
+            "ref": "devel",
+            "sha": "52aeb4be36728109758c56b749c7946122f04d29",
+            "repo": {
+              "id": 1253161898,
+              "url": "https://api.github.com/repos/paldyn/HanPage",
+              "name": "HanPage"
+            }
+          }
+        }
+      ],
+      "jobs": [
+        {
+          "id": 110729961312,
+          "run_id": 36972736747,
+          "workflow_name": "Render Diff",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972736747",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAUfYA",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729961312",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972736747/job/110729961312",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:07Z",
+          "started_at": "2026-10-02T06:16:10Z",
+          "completed_at": "2026-10-02T06:16:21Z",
+          "name": "Render Diff preflight",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:11Z",
+              "completed_at": "2026-10-02T06:16:12Z"
+            },
+            {
+              "name": "Detect review-only fast pass",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:12Z",
+              "completed_at": "2026-10-02T06:16:15Z"
+            },
+            {
+              "name": "Check out current-base merge tree inputs",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:15Z",
+              "completed_at": "2026-10-02T06:16:15Z"
+            },
+            {
+              "name": "Verify current-base merge tree",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 4,
+              "started_at": "2026-10-02T06:16:15Z",
+              "completed_at": "2026-10-02T06:16:15Z"
+            },
+            {
+              "name": "Finalize review-only fast pass",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:16:15Z",
+              "completed_at": "2026-10-02T06:16:15Z"
+            },
+            {
+              "name": "Check out trusted CI impact classifier",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:16:15Z",
+              "completed_at": "2026-10-02T06:16:17Z"
+            },
+            {
+              "name": "Collect Render Diff impact input",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:16:17Z",
+              "completed_at": "2026-10-02T06:16:17Z"
+            },
+            {
+              "name": "Classify Render Diff impact",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8,
+              "started_at": "2026-10-02T06:16:17Z",
+              "completed_at": "2026-10-02T06:16:18Z"
+            },
+            {
+              "name": "Summarize Render Diff impact",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9,
+              "started_at": "2026-10-02T06:16:18Z",
+              "completed_at": "2026-10-02T06:16:18Z"
+            },
+            {
+              "name": "Post Check out trusted CI impact classifier",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 18,
+              "started_at": "2026-10-02T06:16:18Z",
+              "completed_at": "2026-10-02T06:16:18Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19,
+              "started_at": "2026-10-02T06:16:18Z",
+              "completed_at": "2026-10-02T06:16:18Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729961312",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005518,
+          "runner_name": "GitHub Actions 1000005518",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110730015901,
+          "run_id": 36972736747,
+          "workflow_name": "Render Diff",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972736747",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAX0nQ",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730015901",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972736747/job/110730015901",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:21Z",
+          "started_at": "2026-10-02T06:16:23Z",
+          "completed_at": "2026-10-02T06:22:44Z",
+          "name": "Canvas visual diff",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:23Z",
+              "completed_at": "2026-10-02T06:16:24Z"
+            },
+            {
+              "name": "Render Diff identity PR #116 base 52aeb4be36728109758c56b749c7946122f04d29",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:24Z",
+              "completed_at": "2026-10-02T06:16:24Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:24Z",
+              "completed_at": "2026-10-02T06:17:57Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:17:57Z",
+              "completed_at": "2026-10-02T06:18:07Z"
+            },
+            {
+              "name": "Install PDF raster tools",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:18:07Z",
+              "completed_at": "2026-10-02T06:18:20Z"
+            },
+            {
+              "name": "Install wasm-pack",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:18:20Z",
+              "completed_at": "2026-10-02T06:18:20Z"
+            },
+            {
+              "name": "Restore cargo registry & build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:18:20Z",
+              "completed_at": "2026-10-02T06:18:22Z"
+            },
+            {
+              "name": "Build WASM package",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8,
+              "started_at": "2026-10-02T06:18:22Z",
+              "completed_at": "2026-10-02T06:19:39Z"
+            },
+            {
+              "name": "Build native CLI for PDF report",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9,
+              "started_at": "2026-10-02T06:19:39Z",
+              "completed_at": "2026-10-02T06:20:55Z"
+            },
+            {
+              "name": "Save cargo registry & build cache",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 10,
+              "started_at": "2026-10-02T06:20:55Z",
+              "completed_at": "2026-10-02T06:20:55Z"
+            },
+            {
+              "name": "Setup Node.js",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11,
+              "started_at": "2026-10-02T06:20:55Z",
+              "completed_at": "2026-10-02T06:20:56Z"
+            },
+            {
+              "name": "Install Studio dependencies",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 12,
+              "started_at": "2026-10-02T06:20:56Z",
+              "completed_at": "2026-10-02T06:20:59Z"
+            },
+            {
+              "name": "Install Chromium",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 13,
+              "started_at": "2026-10-02T06:20:59Z",
+              "completed_at": "2026-10-02T06:21:04Z"
+            },
+            {
+              "name": "Check render diff script syntax",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 14,
+              "started_at": "2026-10-02T06:21:04Z",
+              "completed_at": "2026-10-02T06:21:06Z"
+            },
+            {
+              "name": "Run canvas visual diff and PDF report",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 15,
+              "started_at": "2026-10-02T06:21:06Z",
+              "completed_at": "2026-10-02T06:21:41Z"
+            },
+            {
+              "name": "Run selected CanvasKit readiness gate",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 16,
+              "started_at": "2026-10-02T06:21:41Z",
+              "completed_at": "2026-10-02T06:22:39Z"
+            },
+            {
+              "name": "Add render diff summary",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 17,
+              "started_at": "2026-10-02T06:22:39Z",
+              "completed_at": "2026-10-02T06:22:39Z"
+            },
+            {
+              "name": "Upload render diff artifacts",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 18,
+              "started_at": "2026-10-02T06:22:39Z",
+              "completed_at": "2026-10-02T06:22:41Z"
+            },
+            {
+              "name": "Post Setup Node.js",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 35,
+              "started_at": "2026-10-02T06:22:41Z",
+              "completed_at": "2026-10-02T06:22:41Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 36,
+              "started_at": "2026-10-02T06:22:41Z",
+              "completed_at": "2026-10-02T06:22:41Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 37,
+              "started_at": "2026-10-02T06:22:41Z",
+              "completed_at": "2026-10-02T06:22:41Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730015901",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005528,
+          "runner_name": "GitHub Actions 1000005528",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        }
+      ]
+    },
+    {
+      "name": "Adapter inter-diff",
+      "id": 36972737059,
+      "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+      "head_branch": "codex/desktop-update-quiet-20261002",
+      "event": "pull_request",
+      "run_attempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36972737059",
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/paldyn/HanPage/pulls/116",
+          "id": 4713335017,
+          "number": 116,
+          "head": {
+            "ref": "codex/desktop-update-quiet-20261002",
+            "sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+            "repo": {
+              "id": 1253161898,
+              "url": "https://api.github.com/repos/paldyn/HanPage",
+              "name": "HanPage"
+            }
+          },
+          "base": {
+            "ref": "devel",
+            "sha": "52aeb4be36728109758c56b749c7946122f04d29",
+            "repo": {
+              "id": 1253161898,
+              "url": "https://api.github.com/repos/paldyn/HanPage",
+              "name": "HanPage"
+            }
+          }
+        }
+      ],
+      "jobs": [
+        {
+          "id": 110729962116,
+          "run_id": 36972737059,
+          "workflow_name": "Adapter inter-diff",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737059",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAUihA",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729962116",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737059/job/110729962116",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:07Z",
+          "started_at": "2026-10-02T06:16:09Z",
+          "completed_at": "2026-10-02T06:16:13Z",
+          "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:09Z",
+              "completed_at": "2026-10-02T06:16:10Z"
+            },
+            {
+              "name": "Default to full verification",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:10Z",
+              "completed_at": "2026-10-02T06:16:10Z"
+            },
+            {
+              "name": "Capture PR merge-tree evidence",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:10Z",
+              "completed_at": "2026-10-02T06:16:11Z"
+            },
+            {
+              "name": "Upload PR merge-tree evidence",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:16:11Z",
+              "completed_at": "2026-10-02T06:16:12Z"
+            },
+            {
+              "name": "Resolve trusted source base parent",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 5,
+              "started_at": "2026-10-02T06:16:12Z",
+              "completed_at": "2026-10-02T06:16:12Z"
+            },
+            {
+              "name": "Checkout trusted verifier",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 6,
+              "started_at": "2026-10-02T06:16:12Z",
+              "completed_at": "2026-10-02T06:16:12Z"
+            },
+            {
+              "name": "Evaluate exact PR workflow evidence",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 7,
+              "started_at": "2026-10-02T06:16:12Z",
+              "completed_at": "2026-10-02T06:16:12Z"
+            },
+            {
+              "name": "Publish validated Archive B duration measurement",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 8,
+              "started_at": "2026-10-02T06:16:12Z",
+              "completed_at": "2026-10-02T06:16:12Z"
+            },
+            {
+              "name": "Publish validated Archive C duration measurement",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 9,
+              "started_at": "2026-10-02T06:16:12Z",
+              "completed_at": "2026-10-02T06:16:12Z"
+            },
+            {
+              "name": "Publish validated Archive D duration measurement",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 10,
+              "started_at": "2026-10-02T06:16:12Z",
+              "completed_at": "2026-10-02T06:16:12Z"
+            },
+            {
+              "name": "Finalize reuse after validated evidence publication",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11,
+              "started_at": "2026-10-02T06:16:12Z",
+              "completed_at": "2026-10-02T06:16:12Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 12,
+              "started_at": "2026-10-02T06:16:12Z",
+              "completed_at": "2026-10-02T06:16:12Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729962116",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005519,
+          "runner_name": "GitHub Actions 1000005519",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110729985028,
+          "run_id": 36972737059,
+          "workflow_name": "Adapter inter-diff",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737059",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAV8BA",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729985028",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737059/job/110729985028",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:13Z",
+          "started_at": "2026-10-02T06:16:15Z",
+          "completed_at": "2026-10-02T06:16:19Z",
+          "name": "adapter inter-diff preflight",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:15Z",
+              "completed_at": "2026-10-02T06:16:16Z"
+            },
+            {
+              "name": "Classify review-only or trusted trailing review tail",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:16Z",
+              "completed_at": "2026-10-02T06:16:18Z"
+            },
+            {
+              "name": "Check out current-base merge tree inputs",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:18Z",
+              "completed_at": "2026-10-02T06:16:18Z"
+            },
+            {
+              "name": "Verify current-base merge tree",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 4,
+              "started_at": "2026-10-02T06:16:18Z",
+              "completed_at": "2026-10-02T06:16:18Z"
+            },
+            {
+              "name": "Finalize adapter impact",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:16:18Z",
+              "completed_at": "2026-10-02T06:16:18Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:16:18Z",
+              "completed_at": "2026-10-02T06:16:18Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729985028",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005523,
+          "runner_name": "GitHub Actions 1000005523",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110730008450,
+          "run_id": 36972737059,
+          "workflow_name": "Adapter inter-diff",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737059",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAXXgg",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730008450",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737059/job/110730008450",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:19Z",
+          "started_at": "2026-10-02T06:16:21Z",
+          "completed_at": "2026-10-02T06:20:22Z",
+          "name": "adapter inter-diff",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:22Z",
+              "completed_at": "2026-10-02T06:16:23Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:23Z",
+              "completed_at": "2026-10-02T06:18:01Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:18:01Z",
+              "completed_at": "2026-10-02T06:18:10Z"
+            },
+            {
+              "name": "Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:18:10Z",
+              "completed_at": "2026-10-02T06:18:16Z"
+            },
+            {
+              "name": "Check adapter-diff runner contract",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:18:16Z",
+              "completed_at": "2026-10-02T06:18:16Z"
+            },
+            {
+              "name": "Check adapter-diff harness",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:18:16Z",
+              "completed_at": "2026-10-02T06:18:17Z"
+            },
+            {
+              "name": "Discover adapters (honest skip)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:18:17Z",
+              "completed_at": "2026-10-02T06:18:17Z"
+            },
+            {
+              "name": "Prepare derived Rust test suites",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8,
+              "started_at": "2026-10-02T06:18:17Z",
+              "completed_at": "2026-10-02T06:18:18Z"
+            },
+            {
+              "name": "Run adapter inter-diff case",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9,
+              "started_at": "2026-10-02T06:18:18Z",
+              "completed_at": "2026-10-02T06:20:16Z"
+            },
+            {
+              "name": "Post Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 17,
+              "started_at": "2026-10-02T06:20:16Z",
+              "completed_at": "2026-10-02T06:20:20Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 18,
+              "started_at": "2026-10-02T06:20:20Z",
+              "completed_at": "2026-10-02T06:20:20Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19,
+              "started_at": "2026-10-02T06:20:20Z",
+              "completed_at": "2026-10-02T06:20:21Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730008450",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005527,
+          "runner_name": "GitHub Actions 1000005527",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        }
+      ]
+    },
+    {
+      "name": "Proptest roundtrip",
+      "id": 36972737100,
+      "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+      "head_branch": "codex/desktop-update-quiet-20261002",
+      "event": "pull_request",
+      "run_attempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36972737100",
+      "pull_requests": [
+        {
+          "url": "https://api.github.com/repos/paldyn/HanPage/pulls/116",
+          "id": 4713335017,
+          "number": 116,
+          "head": {
+            "ref": "codex/desktop-update-quiet-20261002",
+            "sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+            "repo": {
+              "id": 1253161898,
+              "url": "https://api.github.com/repos/paldyn/HanPage",
+              "name": "HanPage"
+            }
+          },
+          "base": {
+            "ref": "devel",
+            "sha": "52aeb4be36728109758c56b749c7946122f04d29",
+            "repo": {
+              "id": 1253161898,
+              "url": "https://api.github.com/repos/paldyn/HanPage",
+              "name": "HanPage"
+            }
+          }
+        }
+      ],
+      "jobs": [
+        {
+          "id": 110729963182,
+          "run_id": 36972737100,
+          "workflow_name": "Proptest roundtrip",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737100",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAUmrg",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729963182",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737100/job/110729963182",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:07Z",
+          "started_at": "2026-10-02T06:16:10Z",
+          "completed_at": "2026-10-02T06:16:16Z",
+          "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:11Z",
+              "completed_at": "2026-10-02T06:16:12Z"
+            },
+            {
+              "name": "Default to full verification",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:12Z",
+              "completed_at": "2026-10-02T06:16:12Z"
+            },
+            {
+              "name": "Capture PR merge-tree evidence",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:12Z",
+              "completed_at": "2026-10-02T06:16:13Z"
+            },
+            {
+              "name": "Upload PR merge-tree evidence",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:16:13Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            },
+            {
+              "name": "Resolve trusted source base parent",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 5,
+              "started_at": "2026-10-02T06:16:14Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            },
+            {
+              "name": "Checkout trusted verifier",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 6,
+              "started_at": "2026-10-02T06:16:14Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            },
+            {
+              "name": "Evaluate exact PR workflow evidence",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 7,
+              "started_at": "2026-10-02T06:16:14Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            },
+            {
+              "name": "Publish validated Archive B duration measurement",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 8,
+              "started_at": "2026-10-02T06:16:14Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            },
+            {
+              "name": "Publish validated Archive C duration measurement",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 9,
+              "started_at": "2026-10-02T06:16:14Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            },
+            {
+              "name": "Publish validated Archive D duration measurement",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 10,
+              "started_at": "2026-10-02T06:16:14Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            },
+            {
+              "name": "Finalize reuse after validated evidence publication",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11,
+              "started_at": "2026-10-02T06:16:14Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 12,
+              "started_at": "2026-10-02T06:16:14Z",
+              "completed_at": "2026-10-02T06:16:14Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729963182",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005522,
+          "runner_name": "GitHub Actions 1000005522",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110730000217,
+          "run_id": 36972737100,
+          "workflow_name": "Proptest roundtrip",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737100",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAW3WQ",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730000217",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737100/job/110730000217",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:17Z",
+          "started_at": "2026-10-02T06:16:18Z",
+          "completed_at": "2026-10-02T06:16:23Z",
+          "name": "Proptest preflight",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:19Z",
+              "completed_at": "2026-10-02T06:16:20Z"
+            },
+            {
+              "name": "Detect review-only or trusted trailing review tail",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:20Z",
+              "completed_at": "2026-10-02T06:16:22Z"
+            },
+            {
+              "name": "Check out current-base merge tree inputs",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 3,
+              "started_at": "2026-10-02T06:16:22Z",
+              "completed_at": "2026-10-02T06:16:22Z"
+            },
+            {
+              "name": "Verify current-base merge tree",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 4,
+              "started_at": "2026-10-02T06:16:22Z",
+              "completed_at": "2026-10-02T06:16:22Z"
+            },
+            {
+              "name": "Finalize fast pass",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:16:22Z",
+              "completed_at": "2026-10-02T06:16:22Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:16:22Z",
+              "completed_at": "2026-10-02T06:16:22Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730000217",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005526,
+          "runner_name": "GitHub Actions 1000005526",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        },
+        {
+          "id": 110730023310,
+          "run_id": 36972737100,
+          "workflow_name": "Proptest roundtrip",
+          "head_branch": "codex/desktop-update-quiet-20261002",
+          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737100",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOSrG7qs8AAAAZyAYRjg",
+          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730023310",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737100/job/110730023310",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-02T06:16:23Z",
+          "started_at": "2026-10-02T06:16:25Z",
+          "completed_at": "2026-10-02T06:21:09Z",
+          "name": "prop roundtrip",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1,
+              "started_at": "2026-10-02T06:16:26Z",
+              "completed_at": "2026-10-02T06:16:27Z"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2,
+              "started_at": "2026-10-02T06:16:27Z",
+              "completed_at": "2026-10-02T06:18:01Z"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3,
+              "started_at": "2026-10-02T06:18:01Z",
+              "completed_at": "2026-10-02T06:18:09Z"
+            },
+            {
+              "name": "Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4,
+              "started_at": "2026-10-02T06:18:09Z",
+              "completed_at": "2026-10-02T06:18:14Z"
+            },
+            {
+              "name": "Check property runner contract",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5,
+              "started_at": "2026-10-02T06:18:14Z",
+              "completed_at": "2026-10-02T06:18:15Z"
+            },
+            {
+              "name": "Prepare derived Rust test suites",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6,
+              "started_at": "2026-10-02T06:18:15Z",
+              "completed_at": "2026-10-02T06:18:16Z"
+            },
+            {
+              "name": "Run property roundtrip cases",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7,
+              "started_at": "2026-10-02T06:18:16Z",
+              "completed_at": "2026-10-02T06:21:07Z"
+            },
+            {
+              "name": "Post Rust build cache",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 13,
+              "started_at": "2026-10-02T06:21:07Z",
+              "completed_at": "2026-10-02T06:21:07Z"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 14,
+              "started_at": "2026-10-02T06:21:07Z",
+              "completed_at": "2026-10-02T06:21:08Z"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 15,
+              "started_at": "2026-10-02T06:21:08Z",
+              "completed_at": "2026-10-02T06:21:08Z"
+            }
+          ],
+          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730023310",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 1000005529,
+          "runner_name": "GitHub Actions 1000005529",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions"
+        }
+      ]
+    }
+  ],
+  "allWorkflowsComplete": true,
+  "allWorkflowsSuccess": true,
+  "preflightEvidence": {
+    "CI": {
+      "jobId": 110729999952,
+      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-preflight-110729999952.log",
+      "sha256": "e6ae2779832273dee3df15bd6e2e0500d207532e460e6d3800520af33341bb54",
+      "bytes": 44059,
+      "fast_pass": false,
+      "reason": "no-green-build-candidate",
+      "impact": {
+        "rust_required": "true",
+        "frontend_mode": "package",
+        "render_required": "true",
+        "native_skia_required": "true",
+        "codeql_languages": "javascript-typescript,python,rust",
+        "classification_status": "full",
+        "impact_reason": "fail-closed:unclassified-path"
+      }
+    },
+    "CodeQL": {
+      "jobId": 110729993161,
+      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-preflight-110729993161.log",
+      "sha256": "2568b2a7aaff293cbe8b0c0f834a9b023424276326c6735abbd4f9645d9b9143",
+      "bytes": 42606,
+      "fast_pass": false,
+      "reason": "no-green-codeql-candidate",
+      "impact": {
+        "codeql_languages": "javascript-typescript,python,rust",
+        "classification_status": "full",
+        "impact_reason": "fail-closed:unclassified-path"
+      }
+    },
+    "Render Diff": {
+      "jobId": 110729961312,
+      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-preflight-110729961312.log",
+      "sha256": "76a88a0c2334e74d85b0988a8cb61d3f06d29013e604fd9a23636ad100f0d462",
+      "bytes": 36221,
+      "fast_pass": false,
+      "reason": "no-green-render-candidate",
+      "impact": {
+        "render_required": "true",
+        "impact_reason": "fail-closed:unclassified-path"
+      }
+    },
+    "Adapter inter-diff": {
+      "jobId": 110729985028,
+      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-preflight-110729985028.log",
+      "sha256": "73a9d9a55135ef093cda8e96925f88172e8cc65fa9efd62515affd7aefc7af18",
+      "bytes": 12587,
+      "adapter_required": true,
+      "reason": "review-tail-candidate-run-unavailable"
+    },
+    "Proptest roundtrip": {
+      "jobId": 110730000217,
+      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-preflight-110730000217.log",
+      "sha256": "fc949152146f34757566310b3776541b2db40ac8c64da38b04ce81c0cec70658",
+      "bytes": 12537,
+      "fast_pass": false,
+      "reason": "review-tail-candidate-run-unavailable"
+    }
+  },
+  "resultEvidence": {
+    "Adapter inter-diff": {
+      "jobId": 110730008450,
+      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110730008450.log",
+      "logSha256": "1bb40702057874101e9d86ddb707ee356cc057a143476e4dd39af3952e3a346f",
+      "logBytes": 266159,
+      "testGroups": [
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "passed": 7,
+      "failed": 0,
+      "checkoutAbbreviations": [
+        "e913577b"
+      ]
+    },
+    "Proptest roundtrip": {
+      "jobId": 110730023310,
+      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110730023310.log",
+      "logSha256": "fdcbf70e15562c8a9dc13a7c446617f722fb5a762004a71593b1bd514a905bcf",
+      "logBytes": 273233,
+      "testGroups": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "passed": 63,
+      "failed": 0,
+      "checkoutAbbreviations": [
+        "e913577b"
+      ]
+    },
+    "Render Diff": {
+      "jobId": 110730015901,
+      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110730015901.log",
+      "logSha256": "18513b0d2a6711f087529c16df7cb531d028bcb5531179212166aea403642376",
+      "logBytes": 107075,
+      "reportOnlyPdf": true,
+      "artifacts": [
+        {
+          "id": 11212625428,
+          "node_id": "MDg6QXJ0aWZhY3QxMTIxMjYyNTQyOA==",
+          "name": "render-diff-artifacts",
+          "size_in_bytes": 2759681,
+          "url": "https://api.github.com/repos/paldyn/HanPage/actions/artifacts/11212625428",
+          "archive_download_url": "https://api.github.com/repos/paldyn/HanPage/actions/artifacts/11212625428/zip",
+          "expired": false,
+          "digest": "sha256:1002a9f1e35ac338c90df470c34a07506cebeeaa73c0ee2b07fd71ab1042e594",
+          "created_at": "2026-10-02T06:22:41Z",
+          "updated_at": "2026-10-02T06:22:41Z",
+          "expires_at": "2026-10-16T06:22:40Z",
+          "workflow_run": {
+            "id": 36972736747,
+            "repository_id": 1253161898,
+            "head_repository_id": 1253161898,
+            "head_branch": "codex/desktop-update-quiet-20261002",
+            "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5"
+          }
+        }
+      ],
+      "canvas": {
+        "pages": [
+          {
+            "input": "basic/KTX.hwp",
+            "page": 1,
+            "differentPixels": 166,
+            "totalPixels": 891662,
+            "differencePercent": 0.01862,
+            "maxChannelDelta": 123,
+            "width": 1123,
+            "height": 794,
+            "conclusion": "pass"
+          },
+          {
+            "input": "biz_plan.hwp",
+            "page": 1,
+            "differentPixels": 0,
+            "totalPixels": 891662,
+            "differencePercent": 0.0,
+            "maxChannelDelta": 0,
+            "width": 794,
+            "height": 1123,
+            "conclusion": "pass"
+          },
+          {
+            "input": "tac-case-001.hwp",
+            "page": 1,
+            "differentPixels": 0,
+            "totalPixels": 891662,
+            "differencePercent": 0.0,
+            "maxChannelDelta": 0,
+            "width": 794,
+            "height": 1123,
+            "conclusion": "pass"
+          }
+        ],
+        "pass": 3,
+        "failure": 0,
+        "maxDifferencePercent": 0.01862
+      },
+      "pdfReportOnly": {
+        "pages": 4,
+        "warnings": 4,
+        "errors": 0,
+        "completeVisualMatchProven": false
+      },
+      "directPdfGate": {
+        "passed": 3,
+        "compared": 3,
+        "failures": 0,
+        "maxRatio": 0.02,
+        "rasterDpi": 144
+      }
+    },
+    "Frontend package gates": {
+      "jobId": 110730082204,
+      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110730082204.log",
+      "logSha256": "a84a1e210e46a8b4382a7a4f20ba7fc33155b26ed7fbbfbc097ed11a9e72363a",
+      "logBytes": 1139849,
+      "unitSummaries": [
+        {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        {
+          "tests": 32,
+          "pass": 32,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        {
+          "tests": 196,
+          "pass": 196,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        {
+          "tests": 4,
+          "pass": 4,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        {
+          "tests": 1836,
+          "pass": 1834,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 2,
+          "todo": 0
+        },
+        {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        {
+          "tests": 6,
+          "pass": 6,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
+      ],
+      "completedGateSteps": [
+        {
+          "name": "Build fresh WASM package for frontend gates",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run Studio unit tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run undo depth measurement gate (#5769)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run Studio responsive toolbar gate (#6118,",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build Studio",
+          "conclusion": "success"
+        }
+      ],
+      "studioUnitTests": {
+        "tests": 1836,
+        "pass": 1834,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 2,
+        "todo": 0
+      },
+      "responsiveToolbar": {
+        "passed": 2666,
+        "failed": 0
+      }
+    },
+    "Lint": {
+      "jobId": 110730082227,
+      "completedLintSteps": [
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        },
+        {
+          "name": "Format check",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate LLM verifier tool contracts",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate Render Diff trigger policy",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate workflow contracts",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate adoption spine contract",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate agent org contract",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate agent frame contract",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate external reality check contract",
+          "conclusion": "success"
+        },
+        {
+          "name": "Clippy",
+          "conclusion": "success"
+        },
+        {
+          "name": "Clippy (WASM32)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check workspace members (FFI bindings, tools)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Check WASM target",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "conclusion": "success"
+        }
+      ]
+    },
+    "Native Skia": {
+      "jobId": 110730082244,
+      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110730082244.log",
+      "logSha256": "519b418ab6b2c6d2ddc033908d1a625335bf1bdd31877696a11f7b863d0957c1",
+      "logBytes": 1174604,
+      "testGroups": [
+        {
+          "passed": 58,
+          "failed": 0,
+          "ignored": 0,
+          "filteredOut": 3885
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filteredOut": 15
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filteredOut": 165
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filteredOut": 2
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filteredOut": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filteredOut": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filteredOut": 228
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "filteredOut": 226
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filteredOut": 222
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filteredOut": 221
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filteredOut": 220
+        }
+      ],
+      "passed": 69,
+      "failed": 0,
+      "ignored": 0
+    },
+    "Build & Test": {
+      "jobId": 110734769241,
+      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110734769241.log",
+      "logSha256": "8a576ad54cf156616e044eef8034fb3de1b2ef541e86c0bfee9c9780168f2435",
+      "logBytes": 23170
+    }
+  },
+  "testedMerge": {
+    "sha": "e913577b93fb9770c0f29e3253a33c90e0db06eb",
+    "parents": [
+      "52aeb4be36728109758c56b749c7946122f04d29",
+      "4561a2a0b2603eaae74a4b848f6621451cf19bf5"
+    ],
+    "baseParentMatches": true,
+    "sourceParentMatches": true,
+    "proofSource": "Completed Adapter and Proptest checkout logs plus GitHub commit parents",
+    "url": "https://github.com/paldyn/HanPage/commit/e913577b93fb9770c0f29e3253a33c90e0db06eb",
+    "observedAt": "2026-10-02T06:25:55.726411+00:00"
+  },
+  "codeqlIntermediateCheck": {
+    "id": 110730870286,
+    "name": "CodeQL",
+    "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+    "status": "completed",
+    "conclusion": "neutral",
+    "started_at": "2026-10-02T06:20:00Z",
+    "completed_at": "2026-10-02T06:20:02Z",
+    "html_url": "https://github.com/paldyn/HanPage/runs/110730870286",
+    "output": {
+      "title": "1 configuration not found",
+      "summary": "**Warning**: Code scanning cannot determine the alerts introduced by this pull request, because 1 configuration present on `refs/heads/devel` was not found:\n\n### Actions workflow (`codeql.yml`)\n\n* :hourglass:&nbsp;&nbsp;`.github/workflows/codeql.yml:analyze/language:rust`\n\n\n[View all branch alerts](/paldyn/HanPage/security/code-scanning?query=pr%3A116+tool%3ACodeQL+is%3Aopen).",
+      "annotations_count": 0
+    }
+  },
+  "codeqlFinalCheck": {
+    "id": 110730870286,
+    "name": "CodeQL",
+    "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
+    "status": "completed",
+    "conclusion": "success",
+    "started_at": "2026-10-02T06:20:00Z",
+    "completed_at": "2026-10-02T06:20:02Z",
+    "html_url": "https://github.com/paldyn/HanPage/runs/110730870286",
+    "output": {
+      "title": "No new alerts in code changed by this pull request",
+      "summary": "[View all branch alerts](/paldyn/HanPage/security/code-scanning?query=pr%3A116+tool%3ACodeQL+is%3Aopen).",
+      "annotations_count": 0
+    }
+  },
+  "codeqlAnalyses": {
+    "observedAt": "2026-10-02T06:32:56.883960+00:00",
+    "testedMergeSha": "e913577b93fb9770c0f29e3253a33c90e0db06eb",
+    "exactMergeAnalysisCount": 3,
+    "analyses": [
+      {
+        "id": 1879331493,
+        "ref": "refs/pull/116/merge",
+        "commit_sha": "e913577b93fb9770c0f29e3253a33c90e0db06eb",
+        "analysis_key": ".github/workflows/codeql.yml:analyze",
+        "category": ".github/workflows/codeql.yml:analyze/language:rust",
+        "created_at": "2026-10-02T06:31:35Z",
+        "results_count": 0,
+        "rules_count": 23,
+        "error": "",
+        "warning": "",
+        "url": "https://api.github.com/repos/paldyn/HanPage/code-scanning/analyses/1879331493",
+        "sarif_id": "e9b6630c-be2a-11f1-88f6-765f42c0d209",
+        "tool": {
+          "name": "CodeQL",
+          "guid": null,
+          "version": "2.27.1"
+        }
+      },
+      {
+        "id": 1879297028,
+        "ref": "refs/pull/116/merge",
+        "commit_sha": "e913577b93fb9770c0f29e3253a33c90e0db06eb",
+        "analysis_key": ".github/workflows/codeql.yml:analyze",
+        "category": ".github/workflows/codeql.yml:analyze/language:javascript-typescript",
+        "created_at": "2026-10-02T06:21:34Z",
+        "results_count": 0,
+        "rules_count": 87,
+        "error": "",
+        "warning": "",
+        "url": "https://api.github.com/repos/paldyn/HanPage/code-scanning/analyses/1879297028",
+        "sarif_id": "837a3cb8-be29-11f1-9c94-00d21dda7b7a",
+        "tool": {
+          "name": "CodeQL",
+          "guid": null,
+          "version": "2.27.1"
+        }
+      },
+      {
+        "id": 1879292332,
+        "ref": "refs/pull/116/merge",
+        "commit_sha": "e913577b93fb9770c0f29e3253a33c90e0db06eb",
+        "analysis_key": ".github/workflows/codeql.yml:analyze",
+        "category": ".github/workflows/codeql.yml:analyze/language:python",
+        "created_at": "2026-10-02T06:20:01Z",
+        "results_count": 0,
+        "rules_count": 43,
+        "error": "",
+        "warning": "",
+        "url": "https://api.github.com/repos/paldyn/HanPage/code-scanning/analyses/1879292332",
+        "sarif_id": "4bdfea3c-be29-11f1-9e5a-e1d3d2d1075b",
+        "tool": {
+          "name": "CodeQL",
+          "guid": null,
+          "version": "2.27.1"
+        }
+      }
+    ],
+    "allErrorsEmpty": true,
+    "allWarningsEmpty": true,
+    "totalResults": 0,
+    "rawApiFile": "output/pr-review/desktop089/logs/candidate-codeql-analyses-api.json"
+  }
+}

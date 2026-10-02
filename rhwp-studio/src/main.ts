@@ -53,7 +53,7 @@ import { addRecentDoc, listRecentDocs } from '@/recent/recent-store';
 import { showDropConfirmDialog } from '@/ui/drop-confirm-dialog';
 import { showHwpPasswordDialog } from '@/ui/hwp-password-dialog';
 import { installAppDownloadButton } from '@/ui/app-download';
-import { initDesktopBridge, MENU_CHECK_UPDATE } from '@/core/desktop-bridge';
+import { initDesktopBridge, isDesktopRuntime, MENU_CHECK_UPDATE } from '@/core/desktop-bridge';
 import { handleManualUpdateCheck, installUpdateNotice, isApplyingUpdate } from '@/ui/update-notice';
 import {
   EMBED_HIDDEN_EDIT_COMMAND_IDS,
@@ -353,6 +353,15 @@ registry.registerAll(insertCommands);
 registry.registerAll(tableCommands);
 registry.registerAll(pageCommands);
 registry.registerAll(toolCommands);
+if (isDesktopRuntime()) {
+  registry.register({
+    id: MENU_CHECK_UPDATE,
+    label: t('command.app.checkUpdate.label'),
+    opensDialog: true,
+    canExecute: () => !isApplyingUpdate(),
+    execute: () => { void handleManualUpdateCheck(); },
+  });
+}
 
 /**
  * embed 프로파일의 메뉴·도구막대 정리 — index.html은 그대로 두고 부트 시 런타임에

@@ -1,0 +1,801 @@
+{
+  "scope": "중앙 업데이트 팝업·테마 표면 차이·최신 버전 닫기, 로컬 완료·미배포",
+  "baseSha": "7c95facd87078328889646164efbad52a998e976",
+  "productCodeSha": "f51dc6f41866fdaf9257b508aecb7cb71cb7fbc8",
+  "browserHead": "8894e98f6cc9220e8d4dfa697d3f98b70efc92b7",
+  "productHashes": {
+    "rhwp-studio/src/ui/update-notice.ts": "93f3fbf8740a18cc396683357af2f3e4bd1fc6583ab8e199f3dfe2050cf819ad",
+    "rhwp-studio/src/styles/update-notice.css": "f02593562905962cdd3359be6fa04a4b8a7cf5b385461bca6697724f98e7f8e4"
+  },
+  "productChangedAfterBuild": false,
+  "commands": {
+    "frontendTests": "npm test (rhwp-studio, Node 22.22.1)",
+    "desktopFrontendBuild": "npm run build:frontend (HanPage-Desktop, TypeScript 포함)",
+    "browser": "CHROME_PATH=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome VITE_PORT=7781 DESKTOP_UPDATE_OUTPUT=../output/pr-review/desktop-update-dialog-style/e2e node e2e/run-with-vite.mjs -- node e2e/desktop-update-ui.test.mjs --mode=headless --quiet-baseline=52aeb4be36728109758c56b749c7946122f04d29"
+  },
+  "results": {
+    "frontendPass": 1834,
+    "frontendSkip": 2,
+    "frontendFail": 0,
+    "typescript": "PASS",
+    "desktopFrontendBuild": "PASS",
+    "browserPass": 107,
+    "browserFail": 0,
+    "browserErrors": [],
+    "screenshots": 25
+  },
+  "cardLayoutChecks": [
+    {
+      "state": "ready",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "left": 450,
+      "right": 830,
+      "top": 257.515625,
+      "bottom": 642.484375,
+      "width": 380,
+      "height": 384.96875,
+      "centerX": 640,
+      "centerY": 450,
+      "scrollWidth": 378,
+      "clientWidth": 378,
+      "scrollHeight": 383,
+      "clientHeight": 383
+    },
+    {
+      "state": "ready",
+      "viewport": {
+        "width": 800,
+        "height": 600
+      },
+      "left": 210,
+      "right": 590,
+      "top": 107.515625,
+      "bottom": 492.484375,
+      "width": 380,
+      "height": 384.96875,
+      "centerX": 400,
+      "centerY": 300,
+      "scrollWidth": 378,
+      "clientWidth": 378,
+      "scrollHeight": 383,
+      "clientHeight": 383
+    },
+    {
+      "state": "ready",
+      "viewport": {
+        "width": 390,
+        "height": 740
+      },
+      "left": 16,
+      "right": 374,
+      "top": 181.515625,
+      "bottom": 558.484375,
+      "width": 358,
+      "height": 376.96875,
+      "centerX": 195,
+      "centerY": 370,
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 375,
+      "clientHeight": 375
+    },
+    {
+      "state": "ready",
+      "viewport": {
+        "width": 800,
+        "height": 320
+      },
+      "left": 210,
+      "right": 590,
+      "top": 16,
+      "bottom": 304,
+      "width": 380,
+      "height": 288,
+      "centerX": 400,
+      "centerY": 160,
+      "scrollWidth": 378,
+      "clientWidth": 378,
+      "scrollHeight": 383,
+      "clientHeight": 286
+    },
+    {
+      "state": "ready",
+      "shortActions": {
+        "viewport": {
+          "width": 800,
+          "height": 320
+        },
+        "actions": [
+          {
+            "label": "나중에",
+            "visible": true
+          },
+          {
+            "label": "업데이트",
+            "visible": true
+          }
+        ]
+      }
+    }
+  ],
+  "cardThemeChecks": [
+    {
+      "state": "ready",
+      "mode": "light",
+      "skin": "default",
+      "raw": {
+        "background": "color(srgb 0.938039 0.95098 0.983922)",
+        "surface": "rgb(255, 255, 255)",
+        "text": "rgb(51, 51, 51)",
+        "description": "rgb(85, 85, 85)",
+        "return": "rgb(102, 102, 102)"
+      },
+      "rgba": {
+        "background": [
+          239,
+          242,
+          251,
+          255
+        ],
+        "surface": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "text": [
+          51,
+          51,
+          51,
+          255
+        ],
+        "description": [
+          85,
+          85,
+          85,
+          255
+        ],
+        "return": [
+          102,
+          102,
+          102,
+          255
+        ]
+      },
+      "contrast": {
+        "text": 11.289366703018862,
+        "description": 6.6613801884709885,
+        "return": 5.130468615972907
+      },
+      "surfaceDifference": 16,
+      "layout": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "left": 450,
+        "right": 830,
+        "top": 257.515625,
+        "bottom": 642.484375,
+        "width": 380,
+        "height": 384.96875,
+        "centerX": 640,
+        "centerY": 450,
+        "scrollWidth": 378,
+        "clientWidth": 378,
+        "scrollHeight": 383,
+        "clientHeight": 383
+      }
+    },
+    {
+      "state": "ready",
+      "mode": "dark",
+      "skin": "default",
+      "raw": {
+        "background": "color(srgb 0.215686 0.249412 0.311765)",
+        "surface": "rgb(47, 52, 60)",
+        "text": "rgb(238, 241, 245)",
+        "description": "rgb(213, 219, 227)",
+        "return": "rgb(182, 192, 204)"
+      },
+      "rgba": {
+        "background": [
+          55,
+          64,
+          80,
+          255
+        ],
+        "surface": [
+          47,
+          52,
+          60,
+          255
+        ],
+        "text": [
+          238,
+          241,
+          245,
+          255
+        ],
+        "description": [
+          213,
+          219,
+          227,
+          255
+        ],
+        "return": [
+          182,
+          192,
+          204,
+          255
+        ]
+      },
+      "contrast": {
+        "text": 9.214399673330698,
+        "description": 7.49191637267839,
+        "return": 5.6674126265767155
+      },
+      "surfaceDifference": 20,
+      "layout": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "left": 450,
+        "right": 830,
+        "top": 257.515625,
+        "bottom": 642.484375,
+        "width": 380,
+        "height": 384.96875,
+        "centerX": 640,
+        "centerY": 450,
+        "scrollWidth": 378,
+        "clientWidth": 378,
+        "scrollHeight": 383,
+        "clientHeight": 383
+      }
+    },
+    {
+      "state": "ready",
+      "mode": "light",
+      "skin": "flat",
+      "raw": {
+        "background": "color(srgb 0.916863 0.94902 0.991373)",
+        "surface": "rgb(255, 255, 255)",
+        "text": "rgb(51, 51, 51)",
+        "description": "rgb(85, 85, 85)",
+        "return": "rgb(102, 102, 102)"
+      },
+      "rgba": {
+        "background": [
+          234,
+          242,
+          253,
+          255
+        ],
+        "surface": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "text": [
+          51,
+          51,
+          51,
+          255
+        ],
+        "description": [
+          85,
+          85,
+          85,
+          255
+        ],
+        "return": [
+          102,
+          102,
+          102,
+          255
+        ]
+      },
+      "contrast": {
+        "text": 11.20134732866225,
+        "description": 6.60944365988042,
+        "return": 5.09046808719095
+      },
+      "surfaceDifference": 21,
+      "layout": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "left": 450,
+        "right": 830,
+        "top": 257.515625,
+        "bottom": 642.484375,
+        "width": 380,
+        "height": 384.96875,
+        "centerX": 640,
+        "centerY": 450,
+        "scrollWidth": 378,
+        "clientWidth": 378,
+        "scrollHeight": 383,
+        "clientHeight": 383
+      }
+    },
+    {
+      "state": "ready",
+      "mode": "dark",
+      "skin": "flat",
+      "raw": {
+        "background": "color(srgb 0.215686 0.249412 0.311765)",
+        "surface": "rgb(47, 52, 60)",
+        "text": "rgb(238, 241, 245)",
+        "description": "rgb(213, 219, 227)",
+        "return": "rgb(182, 192, 204)"
+      },
+      "rgba": {
+        "background": [
+          55,
+          64,
+          80,
+          255
+        ],
+        "surface": [
+          47,
+          52,
+          60,
+          255
+        ],
+        "text": [
+          238,
+          241,
+          245,
+          255
+        ],
+        "description": [
+          213,
+          219,
+          227,
+          255
+        ],
+        "return": [
+          182,
+          192,
+          204,
+          255
+        ]
+      },
+      "contrast": {
+        "text": 9.214399673330698,
+        "description": 7.49191637267839,
+        "return": 5.6674126265767155
+      },
+      "surfaceDifference": 20,
+      "layout": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "left": 450,
+        "right": 830,
+        "top": 257.515625,
+        "bottom": 642.484375,
+        "width": 380,
+        "height": 384.96875,
+        "centerX": 640,
+        "centerY": 450,
+        "scrollWidth": 378,
+        "clientWidth": 378,
+        "scrollHeight": 383,
+        "clientHeight": 383
+      }
+    },
+    {
+      "state": "ready",
+      "mode": "light",
+      "skin": "oldschool",
+      "raw": {
+        "background": "color(srgb 0.9 0.9 0.950196)",
+        "surface": "rgb(255, 255, 255)",
+        "text": "rgb(51, 51, 51)",
+        "description": "rgb(85, 85, 85)",
+        "return": "rgb(102, 102, 102)"
+      },
+      "rgba": {
+        "background": [
+          230,
+          230,
+          242,
+          255
+        ],
+        "surface": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "text": [
+          51,
+          51,
+          51,
+          255
+        ],
+        "description": [
+          85,
+          85,
+          85,
+          255
+        ],
+        "return": [
+          102,
+          102,
+          102,
+          255
+        ]
+      },
+      "contrast": {
+        "text": 10.207287898801185,
+        "description": 6.022891024428465,
+        "return": 4.638716377686259
+      },
+      "surfaceDifference": 25,
+      "layout": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "left": 450,
+        "right": 830,
+        "top": 257.515625,
+        "bottom": 642.484375,
+        "width": 380,
+        "height": 384.96875,
+        "centerX": 640,
+        "centerY": 450,
+        "scrollWidth": 378,
+        "clientWidth": 378,
+        "scrollHeight": 383,
+        "clientHeight": 383
+      }
+    },
+    {
+      "state": "ready",
+      "mode": "dark",
+      "skin": "oldschool",
+      "raw": {
+        "background": "color(srgb 0.215686 0.249412 0.311765)",
+        "surface": "rgb(47, 52, 60)",
+        "text": "rgb(238, 241, 245)",
+        "description": "rgb(213, 219, 227)",
+        "return": "rgb(182, 192, 204)"
+      },
+      "rgba": {
+        "background": [
+          55,
+          64,
+          80,
+          255
+        ],
+        "surface": [
+          47,
+          52,
+          60,
+          255
+        ],
+        "text": [
+          238,
+          241,
+          245,
+          255
+        ],
+        "description": [
+          213,
+          219,
+          227,
+          255
+        ],
+        "return": [
+          182,
+          192,
+          204,
+          255
+        ]
+      },
+      "contrast": {
+        "text": 9.214399673330698,
+        "description": 7.49191637267839,
+        "return": 5.6674126265767155
+      },
+      "surfaceDifference": 20,
+      "layout": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "left": 450,
+        "right": 830,
+        "top": 257.515625,
+        "bottom": 642.484375,
+        "width": 380,
+        "height": 384.96875,
+        "centerX": 640,
+        "centerY": 450,
+        "scrollWidth": 378,
+        "clientWidth": 378,
+        "scrollHeight": 383,
+        "clientHeight": 383
+      }
+    },
+    {
+      "state": "upToDate",
+      "mode": "light",
+      "skin": "default",
+      "raw": {
+        "background": "color(srgb 0.938039 0.95098 0.983922)",
+        "surface": "rgb(255, 255, 255)",
+        "text": "rgb(51, 51, 51)",
+        "description": "rgb(85, 85, 85)",
+        "return": "rgb(102, 102, 102)"
+      },
+      "rgba": {
+        "background": [
+          239,
+          242,
+          251,
+          255
+        ],
+        "surface": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "text": [
+          51,
+          51,
+          51,
+          255
+        ],
+        "description": [
+          85,
+          85,
+          85,
+          255
+        ],
+        "return": [
+          102,
+          102,
+          102,
+          255
+        ]
+      },
+      "contrast": {
+        "text": 11.289366703018862,
+        "description": 6.6613801884709885,
+        "return": 5.130468615972907
+      },
+      "surfaceDifference": 16,
+      "layout": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "left": 450,
+        "right": 830,
+        "top": 315.203125,
+        "bottom": 584.796875,
+        "width": 380,
+        "height": 269.59375,
+        "centerX": 640,
+        "centerY": 450,
+        "scrollWidth": 378,
+        "clientWidth": 378,
+        "scrollHeight": 268,
+        "clientHeight": 268
+      }
+    },
+    {
+      "state": "upToDate",
+      "mode": "dark",
+      "skin": "default",
+      "raw": {
+        "background": "color(srgb 0.215686 0.249412 0.311765)",
+        "surface": "rgb(47, 52, 60)",
+        "text": "rgb(238, 241, 245)",
+        "description": "rgb(213, 219, 227)",
+        "return": "rgb(182, 192, 204)"
+      },
+      "rgba": {
+        "background": [
+          55,
+          64,
+          80,
+          255
+        ],
+        "surface": [
+          47,
+          52,
+          60,
+          255
+        ],
+        "text": [
+          238,
+          241,
+          245,
+          255
+        ],
+        "description": [
+          213,
+          219,
+          227,
+          255
+        ],
+        "return": [
+          182,
+          192,
+          204,
+          255
+        ]
+      },
+      "contrast": {
+        "text": 9.214399673330698,
+        "description": 7.49191637267839,
+        "return": 5.6674126265767155
+      },
+      "surfaceDifference": 20,
+      "layout": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "left": 450,
+        "right": 830,
+        "top": 315.203125,
+        "bottom": 584.796875,
+        "width": 380,
+        "height": 269.59375,
+        "centerX": 640,
+        "centerY": 450,
+        "scrollWidth": 378,
+        "clientWidth": 378,
+        "scrollHeight": 268,
+        "clientHeight": 268
+      }
+    }
+  ],
+  "images": {
+    "before-v088-ready-auto-card.png": {
+      "sha256": "8b0a87c49f4e27513964d0dac46e3cd059d54813c6baa644a74824a6dea9978e",
+      "bytes": 65605
+    },
+    "after-quiet-ready-light.png": {
+      "sha256": "1fb1cb41527ee27f20116a2b49e415fc33532f292325a3e856f0119cd813ee36",
+      "bytes": 56355
+    },
+    "after-quiet-statusbar-light.png": {
+      "sha256": "3488184aa24a31bd95b9e853c4ca8e167e6f179b1893b8b2fbf44464836b9266",
+      "bytes": 6535
+    },
+    "after-quiet-statusbar-light-entry.png": {
+      "sha256": "c2db4e5a5b8ee05ad3adfe0957baeeed0dec21dea9d7f2b60ae22130e0eb2de4",
+      "bytes": 2082
+    },
+    "after-quiet-ready-dark.png": {
+      "sha256": "ed9ff5977b61037a2937c82e709023d5448e9869490f5d605ef65c890bd91a6d",
+      "bytes": 62629
+    },
+    "after-quiet-statusbar-dark.png": {
+      "sha256": "d0d4d6c7e487af89be3a64a8081e1df043f17a0a5478403b92c31ad4b96edaf8",
+      "bytes": 6953
+    },
+    "after-quiet-statusbar-dark-entry.png": {
+      "sha256": "8068fee7fad261f726ed0736f39c67e611416305f222683b1e0048210022320a",
+      "bytes": 2115
+    },
+    "after-macos-ready-light.png": {
+      "sha256": "b43c122433c530edaccd32185b821df82b742de266ed0429f8c811b721a239d4",
+      "bytes": 80854
+    },
+    "ready-card.png": {
+      "sha256": "839670d8b2fd56ad16845255a4d50be842726229a3ec05408557afb2bcc2320d",
+      "bytes": 25785
+    },
+    "after-ready-short-height.png": {
+      "sha256": "91557a5db9dca0478db9fb187e8a8fa514257e6288c13756d2dfde0e68bbca45",
+      "bytes": 47130
+    },
+    "after-downloading-known.png": {
+      "sha256": "2ae460894592360ad428c66495e7d8b9c1af9bca32f5901e34439d66c5ce5749",
+      "bytes": 79249
+    },
+    "after-downloading-unknown.png": {
+      "sha256": "51617c07688f015b522d19eb07ec9eee774a15c4351bd60c52370b4315ded90a",
+      "bytes": 78887
+    },
+    "applying-card.png": {
+      "sha256": "6f4dcf8ee7854e929172ed9718814fe847a4212f78382cb712eceee90452d661",
+      "bytes": 22479
+    },
+    "after-applying.png": {
+      "sha256": "bd421a5b2dd9cc122ecd21f2091bd0f1bde30b0a2a8492420fa7b125e95a4900",
+      "bytes": 75492
+    },
+    "after-apply-error.png": {
+      "sha256": "b4ad9a2a09596c191a7640452a82009de611333d2c14af998e728178b8ede2cd",
+      "bytes": 81744
+    },
+    "after-unsaved-small.png": {
+      "sha256": "296c235bb8b495ffc399d2cd93e747be3fc80b569c183a8f7f84deda0ca4354f",
+      "bytes": 49531
+    },
+    "after-latest-light.png": {
+      "sha256": "a1cd6ecbda121dff9785c49b0c63e062217f352cc038cbc0339bd9829f6b1075",
+      "bytes": 73732
+    },
+    "latest-light-card.png": {
+      "sha256": "ca7ec135644c7635cc67210a1eaf836c1579c171d563f998917a30a890a00a59",
+      "bytes": 17448
+    },
+    "after-latest-dark.png": {
+      "sha256": "7fa47470e7222d1a098bdcd3c01679b4792a1a1df6aa2181163c33f84943d9a7",
+      "bytes": 81843
+    },
+    "latest-dark-card.png": {
+      "sha256": "9a4fa2747e5857d1b18f7f20f055b30aa1277584ed12645c18f37a5528719b34",
+      "bytes": 18410
+    },
+    "after-macos-ready-dark.png": {
+      "sha256": "7cc858a3597a8f7e079ceb50f4a1ff1aec7b6caab72c6233d7bd9c3ab1f6d8cb",
+      "bytes": 89819
+    },
+    "after-ready-small-dark.png": {
+      "sha256": "d32c4d2453d28b77ecee7e8f22724ac29ff284e9f2bd15b8ca1d507854cb5684",
+      "bytes": 56946
+    },
+    "after-windows-ready-light.png": {
+      "sha256": "ee1b603d1dd9a25f6b871eedb25bceb849f5c7c8465ccd6398321841de36bbcf",
+      "bytes": 78713
+    },
+    "after-about-ko-paldyn.png": {
+      "sha256": "6a3c499320503168f51972cbae500bcbe671b435eeae62e0844e660a201b20de",
+      "bytes": 122461
+    },
+    "after-about-en-paldyn.png": {
+      "sha256": "39d0cfca9e5815274927ea46740422f389c20d40a81596f0aa62771d8aee1db0",
+      "bytes": 127053
+    }
+  },
+  "logs": {
+    "output/pr-review/desktop-update-dialog-style/logs/browser.log": {
+      "sha256": "03536133f73c9bb74e9ad82c5efe6f53e90c37b3297df3bf89d87e1c53894d5a",
+      "bytes": 13836
+    },
+    "output/pr-review/desktop-update-dialog-style/logs/desktop-frontend-build.log": {
+      "sha256": "2c4c25053581fd53d17de646d045b6345c60dfa4648cbfc3b24c1e9138b7517b",
+      "bytes": 2130
+    },
+    "output/pr-review/desktop-update-dialog-style/logs/frontend-tests.log": {
+      "sha256": "7d5239db5576c9899f662504e5396e331b36b6fe96aac3978205bbbf91c80c6f",
+      "bytes": 428270
+    }
+  },
+  "primaryPreservation": {
+    "userDirtyFiles": 39,
+    "changedFiles": []
+  },
+  "limits": [
+    "실제 macOS/Windows 설치·업데이트·재시작 미실행",
+    "구형 WebView의 color-mix 미지원 fallback 실제 실행 미검증",
+    "스크린리더 실제 음성 미검증"
+  ],
+  "remoteActions": {
+    "pushed": false,
+    "prCreated": false,
+    "releaseCreated": false,
+    "installedAppChanged": false
+  }
+}

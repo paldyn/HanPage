@@ -1,0 +1,1415 @@
+{
+  "description": "실제 Studio DOM·문서·저장 경로, Tauri IPC와 전송 상태 이벤트만 통제 대역. 실제 설치·재시작은 미실행.",
+  "baseline": null,
+  "quietBaseline": {
+    "ref": "52aeb4be36728109758c56b749c7946122f04d29",
+    "initial": {
+      "state": "ready",
+      "visible": true,
+      "primary": "업데이트",
+      "later": "나중에",
+      "returnHidden": false,
+      "returnVisible": true,
+      "disabled": false,
+      "progressVisible": false,
+      "progressNow": null,
+      "progressText": "",
+      "indeterminate": true,
+      "detail": "",
+      "version": "v0.8.8",
+      "entryState": "ready",
+      "entryLabel": "업데이트 준비됨",
+      "applyCount": 0,
+      "checkCount": 0,
+      "dirty": false
+    },
+    "nextVersion": {
+      "state": "ready",
+      "visible": true,
+      "primary": "업데이트",
+      "later": "나중에",
+      "returnHidden": false,
+      "returnVisible": true,
+      "disabled": false,
+      "progressVisible": false,
+      "progressNow": null,
+      "progressText": "",
+      "indeterminate": true,
+      "detail": "",
+      "version": "v0.8.7 → v0.8.9",
+      "entryState": "ready",
+      "entryLabel": "업데이트 준비됨",
+      "applyCount": 0,
+      "checkCount": 0,
+      "dirty": false
+    },
+    "browserErrors": [],
+    "expected": {
+      "initialReadyAutoPopup": "FAIL",
+      "nextVersionReadyAutoPopup": "FAIL"
+    }
+  },
+  "quietDocumentBefore": {
+    "text": "QUIET_BACKGROUND_SEED",
+    "dirty": true,
+    "fileName": "새 문서.hwp",
+    "focusPreserved": true,
+    "visibleCard": false,
+    "modal": false
+  },
+  "sourceHead": "8894e98f6cc9220e8d4dfa697d3f98b70efc92b7",
+  "sourceFiles": {
+    "src/main.ts": "c4cc982257bfb8fb1ab7ba7937264b295a1bd324ced9c330dbfb0beb73bc017c",
+    "src/ui/update-notice.ts": "93f3fbf8740a18cc396683357af2f3e4bd1fc6583ab8e199f3dfe2050cf819ad",
+    "src/core/desktop-bridge.ts": "beef81d25c6009177638dd41e71d7b014882e45e8c3173e053bdaa4422efa55f",
+    "src/ui/update-notice-text.ts": "d824f9d5dff3c46904f0d3587f136294f9bcac8abae584a0c123040cc9e44ecd",
+    "src/styles/update-notice.css": "f02593562905962cdd3359be6fa04a4b8a7cf5b385461bca6697724f98e7f8e4",
+    "src/ui/about-dialog.ts": "0a70d59533dac9054e043b37872f609161e481af6e486bf7e6b0f82a5c47d11d",
+    "src/i18n/locales/ko.ts": "f05e2ee5eb3d652b3d277b5486fe8c158c6aa524506cd6b3496fa7e5b02d20a3",
+    "src/i18n/locales/en.ts": "d7d053deea4197fc7ba491cd016532884f1655a0500b4a117eba644974488321",
+    "e2e/desktop-update-ui.test.mjs": "8a4a15d71b99fe07f21c9cce67aa2c9799b56b5f059f750f051d39223580de85"
+  },
+  "pass": 107,
+  "fail": 0,
+  "results": [
+    {
+      "pass": true,
+      "message": "이전 코드의 정상 실행에서 초기 ready 조회의 자동 팝업 계약은 FAIL이다"
+    },
+    {
+      "pass": true,
+      "message": "이전 코드의 다른 버전 ready 이벤트에서도 자동 팝업 계약은 FAIL이다"
+    },
+    {
+      "pass": true,
+      "message": "초기 ready 조회는 큰 알림 없이 하단의 업데이트 준비 상태만 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "자동 업데이트 경계의 실제 미저장 편집 내용을 준비한다"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 idle 상태를 하단에 정확히 표시한다 (업데이트 확인)"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 idle 변화는 팝업·포커스·편집 내용을 바꾸지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 checking 상태를 하단에 정확히 표시한다 (업데이트 확인 중)"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 checking 변화는 팝업·포커스·편집 내용을 바꾸지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 downloading 상태를 하단에 정확히 표시한다 (업데이트 받는 중 41%)"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 downloading 변화는 팝업·포커스·편집 내용을 바꾸지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 downloading 상태를 하단에 정확히 표시한다 (업데이트 받는 중)"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 downloading 변화는 팝업·포커스·편집 내용을 바꾸지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 verifying 상태를 하단에 정확히 표시한다 (업데이트 파일 확인 중)"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 verifying 변화는 팝업·포커스·편집 내용을 바꾸지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 error 상태를 하단에 정확히 표시한다 (업데이트 실패)"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 error 변화는 팝업·포커스·편집 내용을 바꾸지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 error 상태를 하단에 정확히 표시한다 (다시 업데이트)"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 error 변화는 팝업·포커스·편집 내용을 바꾸지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 upToDate 상태를 하단에 정확히 표시한다 (업데이트 확인)"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 upToDate 변화는 팝업·포커스·편집 내용을 바꾸지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 ready 상태를 하단에 정확히 표시한다 (업데이트 준비됨)"
+    },
+    {
+      "pass": true,
+      "message": "백그라운드 ready 변화는 팝업·포커스·편집 내용을 바꾸지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "늦은 ready·다른 버전·중복 이벤트도 조용히 준비 상태만 갱신한다 (0.8.8)"
+    },
+    {
+      "pass": true,
+      "message": "늦은 ready·다른 버전·중복 이벤트도 조용히 준비 상태만 갱신한다 (0.8.9)"
+    },
+    {
+      "pass": true,
+      "message": "늦은 ready·다른 버전·중복 이벤트도 조용히 준비 상태만 갱신한다 (0.8.9)"
+    },
+    {
+      "pass": true,
+      "message": "800×600에서 하단 업데이트 문구가 잘리거나 상태·확대 제어와 겹치지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "1280×900에서 하단 업데이트 문구가 잘리거나 상태·확대 제어와 겹치지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "다크 테마에서도 백그라운드 준비 완료가 큰 알림을 열지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "주 동작은 활성화된 업데이트 버튼이다"
+    },
+    {
+      "pass": true,
+      "message": "현재 버전과 적용할 버전을 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "준비된 업데이트에는 나중에 버튼과 추후 업데이트 안내를 유지한다"
+    },
+    {
+      "pass": true,
+      "message": "수동으로 연 상세도 적용을 누르기 전에는 작업을 막지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "1280×900에서 업데이트 카드가 화면 중앙에 있고 뷰포트를 벗어나지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "800×600에서 업데이트 카드가 화면 중앙에 있고 뷰포트를 벗어나지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "390×740에서 업데이트 카드가 화면 중앙에 있고 뷰포트를 벗어나지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "800×320에서 업데이트 카드가 화면 중앙에 있고 뷰포트를 벗어나지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "짧은 높이에서도 스크롤하여 나중에·업데이트 버튼에 실제로 접근할 수 있다"
+    },
+    {
+      "pass": true,
+      "message": "default/light에서 중앙 카드가 기본 표면과 은은히 구별되고 본문·설명·안내를 읽을 수 있다"
+    },
+    {
+      "pass": true,
+      "message": "default/dark에서 중앙 카드가 기본 표면과 은은히 구별되고 본문·설명·안내를 읽을 수 있다"
+    },
+    {
+      "pass": true,
+      "message": "flat/light에서 중앙 카드가 기본 표면과 은은히 구별되고 본문·설명·안내를 읽을 수 있다"
+    },
+    {
+      "pass": true,
+      "message": "flat/dark에서 중앙 카드가 기본 표면과 은은히 구별되고 본문·설명·안내를 읽을 수 있다"
+    },
+    {
+      "pass": true,
+      "message": "oldschool/light에서 중앙 카드가 기본 표면과 은은히 구별되고 본문·설명·안내를 읽을 수 있다"
+    },
+    {
+      "pass": true,
+      "message": "oldschool/dark에서 중앙 카드가 기본 표면과 은은히 구별되고 본문·설명·안내를 읽을 수 있다"
+    },
+    {
+      "pass": true,
+      "message": "스킨 검증 뒤 사용자의 원래 밝기와 스킨을 복원한다"
+    },
+    {
+      "pass": true,
+      "message": "나중에를 누르면 카드가 닫힌다"
+    },
+    {
+      "pass": true,
+      "message": "나중에 이후에도 상태 표시줄 진입점이 남는다"
+    },
+    {
+      "pass": true,
+      "message": "나중에는 업데이트 적용 IPC를 호출하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "받아둔 업데이트를 다시 열 때 다운로드 확인을 중복 실행하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "수동으로 연 카드로 키보드 포커스가 이동한다"
+    },
+    {
+      "pass": true,
+      "message": "카드의 나중에 버튼에 키보드로 접근할 수 있다"
+    },
+    {
+      "pass": true,
+      "message": "업데이트 버튼에 키보드로 접근할 수 있다"
+    },
+    {
+      "pass": true,
+      "message": "Escape로 준비 완료 알림을 닫을 수 있다"
+    },
+    {
+      "pass": true,
+      "message": "닫은 뒤 상시 진입점으로 포커스를 복원한다"
+    },
+    {
+      "pass": true,
+      "message": "macOS 네이티브 업데이트 확인 메뉴도 같은 카드를 다시 연다"
+    },
+    {
+      "pass": true,
+      "message": "나중에 닫은 뒤 다른 버전이 준비돼도 재팝업 없이 미저장 작업을 유지한다"
+    },
+    {
+      "pass": true,
+      "message": "Desktop 파일 메뉴는 준비된 상세를 재다운로드 없이 명시적으로 연다"
+    },
+    {
+      "pass": true,
+      "message": "실제 전송 이벤트의 진행률 41%를 진행 막대에 반영한다"
+    },
+    {
+      "pass": true,
+      "message": "받은 용량과 전체 용량을 함께 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "다운로드 중에는 적용 버튼을 비활성화한다"
+    },
+    {
+      "pass": true,
+      "message": "전체 길이를 모르면 가짜 퍼센트 대신 불확정 막대를 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "길이 미상에서는 받은 용량만 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "다운로드와 파일 확인 상태를 구분한다"
+    },
+    {
+      "pass": true,
+      "message": "적용 IPC를 기다리는 동안 즉시 막대와 비활성 버튼을 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "적용 중인 작업을 버튼과 상태 문구로 알린다"
+    },
+    {
+      "pass": true,
+      "message": "늦은 준비 완료·확인 이벤트가 적용 화면을 되돌리지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "적용 중 네이티브 메뉴·파일 연결 이벤트는 현재 문서를 교체하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "실제 적용 중에는 편집·Undo·새 문서 단축키가 저장된 문서를 바꾸지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "적용 중의 반복 클릭은 IPC를 추가 실행하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "적용 중에는 Escape로 진행 상태를 숨기지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "적용 중에는 나중에 버튼도 비활성화한다"
+    },
+    {
+      "pass": true,
+      "message": "적용 실패 원인과 받아둔 파일의 재시도 동작을 보여준다"
+    },
+    {
+      "pass": true,
+      "message": "적용 실패 후에는 편집 입력이 정상적으로 복구된다"
+    },
+    {
+      "pass": true,
+      "message": "적용 재시도는 다운로드를 다시 확인하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "실제 편집으로 미저장 문서를 만든다"
+    },
+    {
+      "pass": true,
+      "message": "저장 여부를 결정하기 전에는 업데이트 적용을 시작하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "미저장 확인 취소는 적용하지 않고 문서를 보존한다"
+    },
+    {
+      "pass": true,
+      "message": "네이티브 저장 취소도 적용을 막고 미저장 상태를 보존한다"
+    },
+    {
+      "pass": true,
+      "message": "저장 실패도 적용을 막고 미저장 상태를 보존한다"
+    },
+    {
+      "pass": true,
+      "message": "작은 화면에서도 저장 확인의 제목·본문·버튼을 업데이트 카드가 가리지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "기존 제품 저장 경로가 성공한 뒤에만 업데이트를 적용한다"
+    },
+    {
+      "pass": true,
+      "message": "저장 요청에는 실제 문서 직렬화 바이트가 전달된다"
+    },
+    {
+      "pass": true,
+      "message": "수동 확인 IPC 실패도 빈 화면 대신 원인을 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "재확인 동안 불확정 진행 막대를 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "최신 버전 결과에서도 다시 확인할 수 있다"
+    },
+    {
+      "pass": true,
+      "message": "최신 버전 화면의 보조 동작은 나중에 대신 닫기다"
+    },
+    {
+      "pass": true,
+      "message": "최신 버전 화면에는 업데이트를 미루라는 하단 안내를 표시하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "최신 버전의 닫기·안내 숨김·다시 확인은 다크 테마에서도 유지된다"
+    },
+    {
+      "pass": true,
+      "message": "최신 버전의 다시 확인 버튼도 실제 확인 IPC와 진행 표시를 실행한다"
+    },
+    {
+      "pass": true,
+      "message": "최신 버전의 닫기 버튼을 누르면 실제 카드가 닫힌다"
+    },
+    {
+      "pass": true,
+      "message": "카드는 다크 테마 표면과 읽을 수 있는 글자 색을 따른다"
+    },
+    {
+      "pass": true,
+      "message": "작은 화면에서도 카드와 버튼이 뷰포트 안에 들어온다"
+    },
+    {
+      "pass": true,
+      "message": "오류 문자열은 HTML로 실행되지 않고 텍스트로 표시된다"
+    },
+    {
+      "pass": true,
+      "message": "오류 본문은 스크립트를 실행하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "Windows 초기 준비 완료도 큰 알림을 자동으로 표시하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "Windows도 설치 대신 업데이트 버튼을 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "Windows에서는 적용 후 설치 프로그램이 열리는 동작을 안내한다"
+    },
+    {
+      "pass": true,
+      "message": "Windows도 상태 표시줄에서 나중에 닫은 업데이트를 다시 연다"
+    },
+    {
+      "pass": true,
+      "message": "상태 표시줄 숨김 설정은 자동 업데이트가 임의로 변경하지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "Windows에서도 숨긴 상태 표시줄 대신 파일 메뉴로 준비된 업데이트를 다시 연다"
+    },
+    {
+      "pass": true,
+      "message": "초기 조회 경합 중 최신 다운로드 이벤트도 자동 팝업을 만들지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "조회 중 도착한 최신 이벤트를 오래된 ready 응답이 덮어쓰지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "일반 웹에서는 업데이트 카드·상태 버튼·파일 메뉴가 모두 생기지 않는다"
+    },
+    {
+      "pass": true,
+      "message": "ko 실제 제품 정보는 HanPage 재배포자를 PALDYN으로 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "ko 실제 제품 정보는 기반 rhwp의 MIT·Edward Kim 저작권을 보존한다"
+    },
+    {
+      "pass": true,
+      "message": "en 실제 제품 정보는 HanPage 재배포자를 PALDYN으로 표시한다"
+    },
+    {
+      "pass": true,
+      "message": "en 실제 제품 정보는 기반 rhwp의 MIT·Edward Kim 저작권을 보존한다"
+    },
+    {
+      "pass": true,
+      "message": "실제 Studio 경로에서 처리되지 않은 브라우저 예외가 없다"
+    }
+  ],
+  "screenshots": [
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/before-v088-ready-auto-card.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-quiet-ready-light.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-quiet-statusbar-light.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-quiet-statusbar-light-entry.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-quiet-ready-dark.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-quiet-statusbar-dark.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-quiet-statusbar-dark-entry.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-macos-ready-light.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/ready-card.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-ready-short-height.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-downloading-known.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-downloading-unknown.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/applying-card.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-applying.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-apply-error.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-unsaved-small.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-latest-light.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/latest-light-card.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-latest-dark.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/latest-dark-card.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-macos-ready-dark.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-ready-small-dark.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-windows-ready-light.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-about-ko-paldyn.png",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-about-en-paldyn.png"
+  ],
+  "layoutChecks": [
+    {
+      "viewport": {
+        "width": 800,
+        "height": 600
+      },
+      "footer": {
+        "left": 0,
+        "right": 800,
+        "top": 578,
+        "bottom": 600,
+        "width": 800,
+        "height": 22
+      },
+      "entry": {
+        "left": 327.875,
+        "right": 454,
+        "top": 580.5,
+        "bottom": 598.5,
+        "width": 126.125,
+        "height": 18
+      },
+      "label": {
+        "left": 351.875,
+        "right": 447,
+        "top": 582.5,
+        "bottom": 596.5,
+        "width": 95.125,
+        "height": 14
+      },
+      "zoom": {
+        "left": 454,
+        "right": 790,
+        "top": 577.5,
+        "bottom": 601.5,
+        "width": 336,
+        "height": 24
+      },
+      "left": [
+        {
+          "left": 10,
+          "right": 43.984375,
+          "top": 583,
+          "bottom": 596,
+          "width": 33.984375,
+          "height": 13
+        },
+        {
+          "left": 63.984375,
+          "right": 110.53125,
+          "top": 578.5,
+          "bottom": 600.5,
+          "width": 46.546875,
+          "height": 22
+        },
+        {
+          "left": 130.53125,
+          "right": 149.5625,
+          "top": 578.5,
+          "bottom": 600.5,
+          "width": 19.03125,
+          "height": 22
+        }
+      ],
+      "zoomControls": [
+        {
+          "left": 454,
+          "right": 478,
+          "top": 577.5,
+          "bottom": 601.5,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "left": 478,
+          "right": 502,
+          "top": 577.5,
+          "bottom": 601.5,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "left": 510,
+          "right": 534,
+          "top": 577.5,
+          "bottom": 601.5,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "left": 537,
+          "right": 687,
+          "top": 579.5,
+          "bottom": 599.5,
+          "width": 150,
+          "height": 20
+        },
+        {
+          "left": 690,
+          "right": 714,
+          "top": 577.5,
+          "bottom": 601.5,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "left": 722,
+          "right": 790,
+          "top": 579.5,
+          "bottom": 599.5,
+          "width": 68,
+          "height": 20
+        }
+      ],
+      "entryScrollWidth": 126,
+      "entryClientWidth": 126
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "footer": {
+        "left": 0,
+        "right": 1280,
+        "top": 878,
+        "bottom": 900,
+        "width": 1280,
+        "height": 22
+      },
+      "entry": {
+        "left": 807.875,
+        "right": 934,
+        "top": 880.5,
+        "bottom": 898.5,
+        "width": 126.125,
+        "height": 18
+      },
+      "label": {
+        "left": 831.875,
+        "right": 927,
+        "top": 882.5,
+        "bottom": 896.5,
+        "width": 95.125,
+        "height": 14
+      },
+      "zoom": {
+        "left": 934,
+        "right": 1270,
+        "top": 877.5,
+        "bottom": 901.5,
+        "width": 336,
+        "height": 24
+      },
+      "left": [
+        {
+          "left": 10,
+          "right": 43.984375,
+          "top": 883,
+          "bottom": 896,
+          "width": 33.984375,
+          "height": 13
+        },
+        {
+          "left": 63.984375,
+          "right": 110.53125,
+          "top": 878.5,
+          "bottom": 900.5,
+          "width": 46.546875,
+          "height": 22
+        },
+        {
+          "left": 130.53125,
+          "right": 149.5625,
+          "top": 878.5,
+          "bottom": 900.5,
+          "width": 19.03125,
+          "height": 22
+        }
+      ],
+      "zoomControls": [
+        {
+          "left": 934,
+          "right": 958,
+          "top": 877.5,
+          "bottom": 901.5,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "left": 958,
+          "right": 982,
+          "top": 877.5,
+          "bottom": 901.5,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "left": 990,
+          "right": 1014,
+          "top": 877.5,
+          "bottom": 901.5,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "left": 1017,
+          "right": 1167,
+          "top": 879.5,
+          "bottom": 899.5,
+          "width": 150,
+          "height": 20
+        },
+        {
+          "left": 1170,
+          "right": 1194,
+          "top": 877.5,
+          "bottom": 901.5,
+          "width": 24,
+          "height": 24
+        },
+        {
+          "left": 1202,
+          "right": 1270,
+          "top": 879.5,
+          "bottom": 899.5,
+          "width": 68,
+          "height": 20
+        }
+      ],
+      "entryScrollWidth": 126,
+      "entryClientWidth": 126
+    }
+  ],
+  "cardLayoutChecks": [
+    {
+      "state": "ready",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "left": 450,
+      "right": 830,
+      "top": 257.515625,
+      "bottom": 642.484375,
+      "width": 380,
+      "height": 384.96875,
+      "centerX": 640,
+      "centerY": 450,
+      "scrollWidth": 378,
+      "clientWidth": 378,
+      "scrollHeight": 383,
+      "clientHeight": 383
+    },
+    {
+      "state": "ready",
+      "viewport": {
+        "width": 800,
+        "height": 600
+      },
+      "left": 210,
+      "right": 590,
+      "top": 107.515625,
+      "bottom": 492.484375,
+      "width": 380,
+      "height": 384.96875,
+      "centerX": 400,
+      "centerY": 300,
+      "scrollWidth": 378,
+      "clientWidth": 378,
+      "scrollHeight": 383,
+      "clientHeight": 383
+    },
+    {
+      "state": "ready",
+      "viewport": {
+        "width": 390,
+        "height": 740
+      },
+      "left": 16,
+      "right": 374,
+      "top": 181.515625,
+      "bottom": 558.484375,
+      "width": 358,
+      "height": 376.96875,
+      "centerX": 195,
+      "centerY": 370,
+      "scrollWidth": 356,
+      "clientWidth": 356,
+      "scrollHeight": 375,
+      "clientHeight": 375
+    },
+    {
+      "state": "ready",
+      "viewport": {
+        "width": 800,
+        "height": 320
+      },
+      "left": 210,
+      "right": 590,
+      "top": 16,
+      "bottom": 304,
+      "width": 380,
+      "height": 288,
+      "centerX": 400,
+      "centerY": 160,
+      "scrollWidth": 378,
+      "clientWidth": 378,
+      "scrollHeight": 383,
+      "clientHeight": 286
+    },
+    {
+      "state": "ready",
+      "shortActions": {
+        "viewport": {
+          "width": 800,
+          "height": 320
+        },
+        "actions": [
+          {
+            "label": "나중에",
+            "visible": true
+          },
+          {
+            "label": "업데이트",
+            "visible": true
+          }
+        ]
+      }
+    }
+  ],
+  "cardThemeChecks": [
+    {
+      "state": "ready",
+      "mode": "light",
+      "skin": "default",
+      "raw": {
+        "background": "color(srgb 0.938039 0.95098 0.983922)",
+        "surface": "rgb(255, 255, 255)",
+        "text": "rgb(51, 51, 51)",
+        "description": "rgb(85, 85, 85)",
+        "return": "rgb(102, 102, 102)"
+      },
+      "rgba": {
+        "background": [
+          239,
+          242,
+          251,
+          255
+        ],
+        "surface": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "text": [
+          51,
+          51,
+          51,
+          255
+        ],
+        "description": [
+          85,
+          85,
+          85,
+          255
+        ],
+        "return": [
+          102,
+          102,
+          102,
+          255
+        ]
+      },
+      "contrast": {
+        "text": 11.289366703018862,
+        "description": 6.6613801884709885,
+        "return": 5.130468615972907
+      },
+      "surfaceDifference": 16,
+      "layout": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "left": 450,
+        "right": 830,
+        "top": 257.515625,
+        "bottom": 642.484375,
+        "width": 380,
+        "height": 384.96875,
+        "centerX": 640,
+        "centerY": 450,
+        "scrollWidth": 378,
+        "clientWidth": 378,
+        "scrollHeight": 383,
+        "clientHeight": 383
+      }
+    },
+    {
+      "state": "ready",
+      "mode": "dark",
+      "skin": "default",
+      "raw": {
+        "background": "color(srgb 0.215686 0.249412 0.311765)",
+        "surface": "rgb(47, 52, 60)",
+        "text": "rgb(238, 241, 245)",
+        "description": "rgb(213, 219, 227)",
+        "return": "rgb(182, 192, 204)"
+      },
+      "rgba": {
+        "background": [
+          55,
+          64,
+          80,
+          255
+        ],
+        "surface": [
+          47,
+          52,
+          60,
+          255
+        ],
+        "text": [
+          238,
+          241,
+          245,
+          255
+        ],
+        "description": [
+          213,
+          219,
+          227,
+          255
+        ],
+        "return": [
+          182,
+          192,
+          204,
+          255
+        ]
+      },
+      "contrast": {
+        "text": 9.214399673330698,
+        "description": 7.49191637267839,
+        "return": 5.6674126265767155
+      },
+      "surfaceDifference": 20,
+      "layout": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "left": 450,
+        "right": 830,
+        "top": 257.515625,
+        "bottom": 642.484375,
+        "width": 380,
+        "height": 384.96875,
+        "centerX": 640,
+        "centerY": 450,
+        "scrollWidth": 378,
+        "clientWidth": 378,
+        "scrollHeight": 383,
+        "clientHeight": 383
+      }
+    },
+    {
+      "state": "ready",
+      "mode": "light",
+      "skin": "flat",
+      "raw": {
+        "background": "color(srgb 0.916863 0.94902 0.991373)",
+        "surface": "rgb(255, 255, 255)",
+        "text": "rgb(51, 51, 51)",
+        "description": "rgb(85, 85, 85)",
+        "return": "rgb(102, 102, 102)"
+      },
+      "rgba": {
+        "background": [
+          234,
+          242,
+          253,
+          255
+        ],
+        "surface": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "text": [
+          51,
+          51,
+          51,
+          255
+        ],
+        "description": [
+          85,
+          85,
+          85,
+          255
+        ],
+        "return": [
+          102,
+          102,
+          102,
+          255
+        ]
+      },
+      "contrast": {
+        "text": 11.20134732866225,
+        "description": 6.60944365988042,
+        "return": 5.09046808719095
+      },
+      "surfaceDifference": 21,
+      "layout": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "left": 450,
+        "right": 830,
+        "top": 257.515625,
+        "bottom": 642.484375,
+        "width": 380,
+        "height": 384.96875,
+        "centerX": 640,
+        "centerY": 450,
+        "scrollWidth": 378,
+        "clientWidth": 378,
+        "scrollHeight": 383,
+        "clientHeight": 383
+      }
+    },
+    {
+      "state": "ready",
+      "mode": "dark",
+      "skin": "flat",
+      "raw": {
+        "background": "color(srgb 0.215686 0.249412 0.311765)",
+        "surface": "rgb(47, 52, 60)",
+        "text": "rgb(238, 241, 245)",
+        "description": "rgb(213, 219, 227)",
+        "return": "rgb(182, 192, 204)"
+      },
+      "rgba": {
+        "background": [
+          55,
+          64,
+          80,
+          255
+        ],
+        "surface": [
+          47,
+          52,
+          60,
+          255
+        ],
+        "text": [
+          238,
+          241,
+          245,
+          255
+        ],
+        "description": [
+          213,
+          219,
+          227,
+          255
+        ],
+        "return": [
+          182,
+          192,
+          204,
+          255
+        ]
+      },
+      "contrast": {
+        "text": 9.214399673330698,
+        "description": 7.49191637267839,
+        "return": 5.6674126265767155
+      },
+      "surfaceDifference": 20,
+      "layout": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "left": 450,
+        "right": 830,
+        "top": 257.515625,
+        "bottom": 642.484375,
+        "width": 380,
+        "height": 384.96875,
+        "centerX": 640,
+        "centerY": 450,
+        "scrollWidth": 378,
+        "clientWidth": 378,
+        "scrollHeight": 383,
+        "clientHeight": 383
+      }
+    },
+    {
+      "state": "ready",
+      "mode": "light",
+      "skin": "oldschool",
+      "raw": {
+        "background": "color(srgb 0.9 0.9 0.950196)",
+        "surface": "rgb(255, 255, 255)",
+        "text": "rgb(51, 51, 51)",
+        "description": "rgb(85, 85, 85)",
+        "return": "rgb(102, 102, 102)"
+      },
+      "rgba": {
+        "background": [
+          230,
+          230,
+          242,
+          255
+        ],
+        "surface": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "text": [
+          51,
+          51,
+          51,
+          255
+        ],
+        "description": [
+          85,
+          85,
+          85,
+          255
+        ],
+        "return": [
+          102,
+          102,
+          102,
+          255
+        ]
+      },
+      "contrast": {
+        "text": 10.207287898801185,
+        "description": 6.022891024428465,
+        "return": 4.638716377686259
+      },
+      "surfaceDifference": 25,
+      "layout": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "left": 450,
+        "right": 830,
+        "top": 257.515625,
+        "bottom": 642.484375,
+        "width": 380,
+        "height": 384.96875,
+        "centerX": 640,
+        "centerY": 450,
+        "scrollWidth": 378,
+        "clientWidth": 378,
+        "scrollHeight": 383,
+        "clientHeight": 383
+      }
+    },
+    {
+      "state": "ready",
+      "mode": "dark",
+      "skin": "oldschool",
+      "raw": {
+        "background": "color(srgb 0.215686 0.249412 0.311765)",
+        "surface": "rgb(47, 52, 60)",
+        "text": "rgb(238, 241, 245)",
+        "description": "rgb(213, 219, 227)",
+        "return": "rgb(182, 192, 204)"
+      },
+      "rgba": {
+        "background": [
+          55,
+          64,
+          80,
+          255
+        ],
+        "surface": [
+          47,
+          52,
+          60,
+          255
+        ],
+        "text": [
+          238,
+          241,
+          245,
+          255
+        ],
+        "description": [
+          213,
+          219,
+          227,
+          255
+        ],
+        "return": [
+          182,
+          192,
+          204,
+          255
+        ]
+      },
+      "contrast": {
+        "text": 9.214399673330698,
+        "description": 7.49191637267839,
+        "return": 5.6674126265767155
+      },
+      "surfaceDifference": 20,
+      "layout": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "left": 450,
+        "right": 830,
+        "top": 257.515625,
+        "bottom": 642.484375,
+        "width": 380,
+        "height": 384.96875,
+        "centerX": 640,
+        "centerY": 450,
+        "scrollWidth": 378,
+        "clientWidth": 378,
+        "scrollHeight": 383,
+        "clientHeight": 383
+      }
+    },
+    {
+      "state": "upToDate",
+      "mode": "light",
+      "skin": "default",
+      "raw": {
+        "background": "color(srgb 0.938039 0.95098 0.983922)",
+        "surface": "rgb(255, 255, 255)",
+        "text": "rgb(51, 51, 51)",
+        "description": "rgb(85, 85, 85)",
+        "return": "rgb(102, 102, 102)"
+      },
+      "rgba": {
+        "background": [
+          239,
+          242,
+          251,
+          255
+        ],
+        "surface": [
+          255,
+          255,
+          255,
+          255
+        ],
+        "text": [
+          51,
+          51,
+          51,
+          255
+        ],
+        "description": [
+          85,
+          85,
+          85,
+          255
+        ],
+        "return": [
+          102,
+          102,
+          102,
+          255
+        ]
+      },
+      "contrast": {
+        "text": 11.289366703018862,
+        "description": 6.6613801884709885,
+        "return": 5.130468615972907
+      },
+      "surfaceDifference": 16,
+      "layout": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "left": 450,
+        "right": 830,
+        "top": 315.203125,
+        "bottom": 584.796875,
+        "width": 380,
+        "height": 269.59375,
+        "centerX": 640,
+        "centerY": 450,
+        "scrollWidth": 378,
+        "clientWidth": 378,
+        "scrollHeight": 268,
+        "clientHeight": 268
+      }
+    },
+    {
+      "state": "upToDate",
+      "mode": "dark",
+      "skin": "default",
+      "raw": {
+        "background": "color(srgb 0.215686 0.249412 0.311765)",
+        "surface": "rgb(47, 52, 60)",
+        "text": "rgb(238, 241, 245)",
+        "description": "rgb(213, 219, 227)",
+        "return": "rgb(182, 192, 204)"
+      },
+      "rgba": {
+        "background": [
+          55,
+          64,
+          80,
+          255
+        ],
+        "surface": [
+          47,
+          52,
+          60,
+          255
+        ],
+        "text": [
+          238,
+          241,
+          245,
+          255
+        ],
+        "description": [
+          213,
+          219,
+          227,
+          255
+        ],
+        "return": [
+          182,
+          192,
+          204,
+          255
+        ]
+      },
+      "contrast": {
+        "text": 9.214399673330698,
+        "description": 7.49191637267839,
+        "return": 5.6674126265767155
+      },
+      "surfaceDifference": 20,
+      "layout": {
+        "viewport": {
+          "width": 1280,
+          "height": 900
+        },
+        "left": 450,
+        "right": 830,
+        "top": 315.203125,
+        "bottom": 584.796875,
+        "width": 380,
+        "height": 269.59375,
+        "centerX": 640,
+        "centerY": 450,
+        "scrollWidth": 378,
+        "clientWidth": 378,
+        "scrollHeight": 268,
+        "clientHeight": 268
+      }
+    }
+  ],
+  "browserErrors": [],
+  "browserDialogs": [
+    {
+      "type": "alert",
+      "message": "파일 저장에 실패했습니다:\n테스트 저장 실패"
+    }
+  ]
+}

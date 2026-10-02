@@ -1,0 +1,211 @@
+{
+  "scope": "PALDYN 표기와 실행 중 조용한 Desktop 업데이트 안내, 로컬 완료·미배포",
+  "baseSha": "52aeb4be36728109758c56b749c7946122f04d29",
+  "testedHead": "6087b3505d8cd5f3eeba249aec01f1ccebc2ad93",
+  "productValidationHead": "be7637ea9e369eb1d9e0677b07033b9adde59148",
+  "productHashes": {
+    "rhwp-studio/src/main.ts": "c4cc982257bfb8fb1ab7ba7937264b295a1bd324ced9c330dbfb0beb73bc017c",
+    "rhwp-studio/src/ui/update-notice.ts": "611960c7ba4d763131eda3e736dfae834b122ccb4b0d91e93673bff237cf5eb0",
+    "rhwp-studio/src/styles/update-notice.css": "fbe252e82977cd30faa39989c38d66132d634b60e4e56000fbddb6f973d2a510",
+    "rhwp-studio/src/i18n/locales/ko.ts": "f05e2ee5eb3d652b3d277b5486fe8c158c6aa524506cd6b3496fa7e5b02d20a3",
+    "rhwp-studio/src/i18n/locales/en.ts": "d7d053deea4197fc7ba491cd016532884f1655a0500b4a117eba644974488321",
+    "HanPage-Desktop/src-tauri/Cargo.toml": "2aff09d58361d724779d2283bf98e7f91828a6edc99f310476029686e51f47c5",
+    "HanPage-Desktop/src-tauri/tauri.conf.json": "3a415ab0932d9c092a8dad9b5264dcef473669fd33c17d252fe8738d5b98bbc4"
+  },
+  "productChangesAfterBuild": [],
+  "commands": {
+    "typeCheck": "PATH=/Users/lwm/.nvm/versions/node/v22.22.1/bin:$PATH npx tsc --noEmit",
+    "frontendTests": "PATH=/Users/lwm/.nvm/versions/node/v22.22.1/bin:$PATH npm test",
+    "desktopFrontendBuild": "PATH=/Users/lwm/.nvm/versions/node/v22.22.1/bin:$PATH npm run build:frontend",
+    "browser": "CHROME_PATH=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome VITE_PORT=7781 DESKTOP_UPDATE_OUTPUT=../output/pr-review/desktop-update-quiet/e2e node e2e/run-with-vite.mjs -- node e2e/desktop-update-ui.test.mjs --mode=headless --quiet-baseline=52aeb4be36728109758c56b749c7946122f04d29"
+  },
+  "results": {
+    "typescript": "PASS",
+    "frontendPass": 1834,
+    "frontendSkip": 2,
+    "frontendFail": 0,
+    "desktopFrontendBuild": "PASS",
+    "browserPass": 89,
+    "browserFail": 0,
+    "browserErrors": [],
+    "screenshots": 20,
+    "tauriConfigSchema": "PASS",
+    "cargoMetadata": "PASS"
+  },
+  "previousRuns": [
+    {
+      "log": "browser-first.log",
+      "result": "Runtime.callFunctionOn timeout으로 미완료. About selector는 정확하며 검증 탭을 순서대로 생성하고 전면화한 뒤 재실행했다. 제품 회귀 완료 판정에 사용하지 않는다."
+    },
+    {
+      "log": "browser-second.log",
+      "result": "87 PASS / 2 FAIL: 시작 문서의 편집 활성화보다 먼저 seed 입력을 시도해 미저장 문서 준비 전제가 성립하지 않았다."
+    },
+    {
+      "log": "browser-third.log",
+      "result": "87 PASS / 2 FAIL: 탭 전면화만으로 시작 문서의 비동기 초기화를 보장하지 못해 같은 준비 전제가 성립하지 않았다."
+    },
+    {
+      "log": "browser.log",
+      "result": "정식 새 문서 생성과 실제 키보드 입력으로 seed text/dirty를 검사한 뒤 89 PASS / 0 FAIL."
+    }
+  ],
+  "logs": {
+    "output/pr-review/desktop-update-quiet/logs/browser-first.log": {
+      "sha256": "78a35338ad3e6b1ccfa68070daf1d85f46fc831279f9e95f6ffd77af131d5bdc",
+      "bytes": 10224
+    },
+    "output/pr-review/desktop-update-quiet/logs/browser-second-results.json": {
+      "sha256": "f37704bc89575929030bf4391c636d9b2785ce69507f4e6e5ecc628b68368e7e",
+      "bytes": 21698
+    },
+    "output/pr-review/desktop-update-quiet/logs/browser-second.log": {
+      "sha256": "6eeac9ea7c83eff86273cae80d27199d55f34b70dba38962c4e1fea6e1f47f5e",
+      "bytes": 10998
+    },
+    "output/pr-review/desktop-update-quiet/logs/browser-third-results.json": {
+      "sha256": "2708377cec34b3ab1b79e9ecc6d30133383cbe7a418523f90e33abb8a4735e6c",
+      "bytes": 21698
+    },
+    "output/pr-review/desktop-update-quiet/logs/browser-third.log": {
+      "sha256": "1a317bcc6c6b20e042fd608a1f869b2bca7c0b460e7f2251196853d7c06a784e",
+      "bytes": 10998
+    },
+    "output/pr-review/desktop-update-quiet/logs/browser.log": {
+      "sha256": "72509c5521294580174c4e5fff8371efe6da677cb995722896f0ffd63258c2f8",
+      "bytes": 10998
+    },
+    "output/pr-review/desktop-update-quiet/logs/desktop-frontend-build-final.log": {
+      "sha256": "98d8bbc5026919fff1eaa5cb04387a3c2c1d63d27932f6b5ea614629adaae710",
+      "bytes": 2130
+    },
+    "output/pr-review/desktop-update-quiet/logs/desktop-frontend-build.log": {
+      "sha256": "25b6d4733e9da56d368c560018f6ca90cb8faf896b2ad327a62a8e45af570fdb",
+      "bytes": 2130
+    },
+    "output/pr-review/desktop-update-quiet/logs/frontend-tests-final.log": {
+      "sha256": "0c5854d9d550d8baf55b66750588989091a72f9c09834c9f8def1e8d90ff87ee",
+      "bytes": 428226
+    },
+    "output/pr-review/desktop-update-quiet/logs/frontend-tests.log": {
+      "sha256": "e1a3f8d0e0814a323f4e5191e2531bb8312d9d2aa0c2c25db52654506fc34b19",
+      "bytes": 428264
+    },
+    "output/pr-review/desktop-update-quiet/logs/metadata-validation.json": {
+      "sha256": "032fc0452dd27936e00a0cde20ea9ab0065c774a3690bd1efac587e30055606a",
+      "bytes": 118
+    },
+    "output/pr-review/desktop-update-quiet/logs/typescript.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  },
+  "images": {
+    "before-v088-ready-auto-card.png": {
+      "sha256": "8069f32bdda43b1db4384aab12dee6ada0aedfd9331ef3ee89a985a82db3f1e7",
+      "bytes": 58638
+    },
+    "after-quiet-ready-light.png": {
+      "sha256": "1fb1cb41527ee27f20116a2b49e415fc33532f292325a3e856f0119cd813ee36",
+      "bytes": 56355
+    },
+    "after-quiet-statusbar-light.png": {
+      "sha256": "3488184aa24a31bd95b9e853c4ca8e167e6f179b1893b8b2fbf44464836b9266",
+      "bytes": 6535
+    },
+    "after-quiet-statusbar-light-entry.png": {
+      "sha256": "c2db4e5a5b8ee05ad3adfe0957baeeed0dec21dea9d7f2b60ae22130e0eb2de4",
+      "bytes": 2082
+    },
+    "after-quiet-ready-dark.png": {
+      "sha256": "ed9ff5977b61037a2937c82e709023d5448e9869490f5d605ef65c890bd91a6d",
+      "bytes": 62629
+    },
+    "after-quiet-statusbar-dark.png": {
+      "sha256": "d0d4d6c7e487af89be3a64a8081e1df043f17a0a5478403b92c31ad4b96edaf8",
+      "bytes": 6953
+    },
+    "after-quiet-statusbar-dark-entry.png": {
+      "sha256": "8068fee7fad261f726ed0736f39c67e611416305f222683b1e0048210022320a",
+      "bytes": 2115
+    },
+    "after-macos-ready-light.png": {
+      "sha256": "f7c29cb6f959a8e95630fb6b3367d4a527ffb77cf99da334bc85ba7de5224478",
+      "bytes": 74464
+    },
+    "ready-card.png": {
+      "sha256": "874249ab44791d2f2ea03ab2cb1865f56b025cb84ebeb0e2803c4d7fcc963ac7",
+      "bytes": 24405
+    },
+    "after-downloading-known.png": {
+      "sha256": "a9f3bc1c907e730809daac01ab8108324a0ea1528a14c7ca2972fb1176e07591",
+      "bytes": 72490
+    },
+    "after-downloading-unknown.png": {
+      "sha256": "87e14a3447d0ced46448a6faaf4a60b0bb65a26bd8b1411b1a6cb9476820a9bb",
+      "bytes": 72085
+    },
+    "applying-card.png": {
+      "sha256": "6e5946da3a98d3830bdc286b7e5ff2208b9087410594919a9b89891be1cce47f",
+      "bytes": 21533
+    },
+    "after-applying.png": {
+      "sha256": "5d3c902df450862aca7f79aae4b057be0d3fca15567aa1c65603c3922e9cc9ee",
+      "bytes": 68143
+    },
+    "after-apply-error.png": {
+      "sha256": "6a1e6dc12724a421bfcc1e1234763bd992d809e9f6e013f277a27af4d02abb57",
+      "bytes": 74531
+    },
+    "after-unsaved-small.png": {
+      "sha256": "cc6cc560ac9202d3e5ee70e15a14a06e8bc04d04ab1ad8a0ca7a1a1bcc096006",
+      "bytes": 36529
+    },
+    "after-macos-ready-dark.png": {
+      "sha256": "c93bf7450fe9ae4a38776ac9348b6cb37373e8c29f00b29412e125a446da4099",
+      "bytes": 85711
+    },
+    "after-ready-small-dark.png": {
+      "sha256": "e7b5ee1b1ede3db6b89de0a36dee43e308cfb423fe86d97e4f2cc3c98d525d0d",
+      "bytes": 42448
+    },
+    "after-windows-ready-light.png": {
+      "sha256": "95b8a7d07d0ffbefe1c9c7a1302881c23bfdaebd935fe9d677b7f010409860ec",
+      "bytes": 70930
+    },
+    "after-about-ko-paldyn.png": {
+      "sha256": "6a3c499320503168f51972cbae500bcbe671b435eeae62e0844e660a201b20de",
+      "bytes": 122461
+    },
+    "after-about-en-paldyn.png": {
+      "sha256": "39d0cfca9e5815274927ea46740422f389c20d40a81596f0aa62771d8aee1db0",
+      "bytes": 127053
+    }
+  },
+  "wasmReuse": {
+    "engineChanged": false,
+    "source": "Desktop 0.8.8에서 검증한 동일 엔진 산출물을 해시 일치 확인 후 재사용",
+    "hashes": {
+      "rhwp.js": "2b7e7bb01cbbff0cb0d3c9a3222c6cb187f9d9710045013bcfb077d7abef4133",
+      "rhwp_bg.wasm": "5c7a9a16c22cc6e0086d14d38df0386c5e63a1c75fe194a49848111c95011d12"
+    }
+  },
+  "preservation": {
+    "primaryHead": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+    "baseline": "/private/tmp/hanpage_primary39_preservation_cleanup_20261002.json",
+    "userDirtyFiles": 39,
+    "changedFiles": []
+  },
+  "unverified": [
+    "실제 macOS/Windows 업데이트 설치와 재시작",
+    "실제 Windows 설치 프로그램의 publisher 표시",
+    "스크린리더 실제 음성"
+  ],
+  "remote": {
+    "pushed": false,
+    "prCreated": false,
+    "releaseCreated": false,
+    "existingDesktopVersion": "0.8.8",
+    "installedAppChanged": false
+  }
+}
