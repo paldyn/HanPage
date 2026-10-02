@@ -6,4 +6,3 @@
         Warn Skipping signing due to --no-sign flag.
     Finished 1 bundle at:
         /Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review/release/bundle/macos/HanPage.app
-

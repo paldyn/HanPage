@@ -32,7 +32,7 @@ dist/assets/canvaskit-renderer-KMI3_qtI.js     246.73 kB │ gzip:    74.45 kB
 dist/assets/index-DV8QiIdp.js                2,118.80 kB │ gzip:   439.17 kB
 
 ✓ built in 533ms
-[plugin builtin:vite-reporter] 
+[plugin builtin:vite-reporter]
 (!) Some chunks are larger than 500 kB after minification. Consider:
 - Using dynamic import() to code-split the application
 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting

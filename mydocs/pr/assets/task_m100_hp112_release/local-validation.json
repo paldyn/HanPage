@@ -40,27 +40,42 @@
     {
       "path": "desktop-local-build.txt",
       "bytes": 1316,
-      "sha256": "e7a8ef93633b99a3fb44f4428b6d85986c0d455e37f423d6ff74724c237f589b"
+      "sha256": "e7a8ef93633b99a3fb44f4428b6d85986c0d455e37f423d6ff74724c237f589b",
+      "original_stdout_bytes": 1316,
+      "original_stdout_sha256": "e7a8ef93633b99a3fb44f4428b6d85986c0d455e37f423d6ff74724c237f589b",
+      "normalization": "trim trailing whitespace and trailing empty lines; retain command output content"
     },
     {
       "path": "desktop-local-build-node22.txt",
-      "bytes": 11822,
-      "sha256": "a77566f3062d4c397d2b835275cc773ae804f11313f8d13268285c04ea5cea4b"
+      "bytes": 11821,
+      "sha256": "8dfd9d3b5be3216fac79682973065a0ab029df3b305dacd2a56da9d441c08c32",
+      "original_stdout_bytes": 11822,
+      "original_stdout_sha256": "a77566f3062d4c397d2b835275cc773ae804f11313f8d13268285c04ea5cea4b",
+      "normalization": "trim trailing whitespace and trailing empty lines; retain command output content"
     },
     {
       "path": "desktop-local-app-bundle.txt",
-      "bytes": 466,
-      "sha256": "71e2bbfb369401d2b303e5b7ecf9d463dfccce4395b49268032be1067c0e0a8b"
+      "bytes": 465,
+      "sha256": "361e9fcfffdd1b96b75e23e8d95acc88e9a85b722eb0c74971ca79fb3d4d71de",
+      "original_stdout_bytes": 466,
+      "original_stdout_sha256": "71e2bbfb369401d2b303e5b7ecf9d463dfccce4395b49268032be1067c0e0a8b",
+      "normalization": "trim trailing whitespace and trailing empty lines; retain command output content"
     },
     {
       "path": "workflow-contract-tests.txt",
       "bytes": 870,
-      "sha256": "7d803152a96b8228f979b175525019fb4b1b6025bc04244865dff286b9589cee"
+      "sha256": "7d803152a96b8228f979b175525019fb4b1b6025bc04244865dff286b9589cee",
+      "original_stdout_bytes": 870,
+      "original_stdout_sha256": "7d803152a96b8228f979b175525019fb4b1b6025bc04244865dff286b9589cee",
+      "normalization": "trim trailing whitespace and trailing empty lines; retain command output content"
     },
     {
       "path": "workflow-contract-tests-python313.txt",
       "bytes": 107,
-      "sha256": "8e6056c575b51b08b1fce113098592f021adde4e75a00c08383d916aba4b5a90"
+      "sha256": "8e6056c575b51b08b1fce113098592f021adde4e75a00c08383d916aba4b5a90",
+      "original_stdout_bytes": 107,
+      "original_stdout_sha256": "8e6056c575b51b08b1fce113098592f021adde4e75a00c08383d916aba4b5a90",
+      "normalization": "trim trailing whitespace and trailing empty lines; retain command output content"
     }
   ]
 }
