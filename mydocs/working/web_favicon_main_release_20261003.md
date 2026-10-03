@@ -14,7 +14,7 @@ main과 실제 공개 source `cc8d04812e44ce4746f6855b88db201b6a7baba3`의 차�
 
 [배포 가이드](../manual/publish_guide.md)의 기본은 검증된 devel 전체를 main으로 promotion하는 경로다. 현재 fork는 main이 devel의 ancestor가 아니고 workflow24개 inventory에16개 위반이 있으며, promotion policy가 upstream repository/actor에 고정돼 있다. [읽기 전용 감사](assets/web_favicon_main_20261003/release-scope.json). 전체 promotion에는 브랜치 관계와 fork workflow 정책의 별도 정비가 필요하며, favicon13파일에28,383개 차이와 운영 변경을 섞지 않는다.
 
-이 후보는 승인된 로고13파일 공개를 위한 main 기반 release PR의 구체적 준비 결과다. 일반 source 수정은 최신 devel기반 PR117에서 통합한 뒤 같은13파일만 기존main문맥에 반영한다. 사용자의 웹 파비콘 PR·배포 승인은 이 동일한제품범위의 정상releasePR과 자동Pages게시를 포함하므로 같은요청의 승인을 반복하지 않는다. 이는 전체devel→main workflow승격이 아니며 기존promotion차단을 통과로 보고하거나 policy·검증·권한·requiredcheck를 바꾸지 않는다. main PR의 기존 Full CI·CodeQL·Render와 MERGEABLE/CLEAN·exact latest head를 확인하고 관리자 우회 없이 정상 병합한다.
+이 후보는 승인된 로고13파일 공개를 위한 main 기반 release PR의 구체적 준비 결과다. 일반 source 수정은 최신 devel기반 PR117에서 통합한다. 같은13파일을 기존main문맥에 적용한 독립release후보는 별도PR에서 병렬검증하되 main병합은 PR117의 정상통합 뒤에 진행한다. 사용자의 웹 파비콘 PR·배포 승인은 이 동일한제품범위의 정상releasePR과 자동Pages게시를 포함하므로 같은요청의 승인을 반복하지 않는다. 이는 전체devel→main workflow승격이 아니며 기존promotion차단을 통과로 보고하거나 policy·검증·권한·requiredcheck를 바꾸지 않는다. main PR의 기존 Full CI·CodeQL·Render와 MERGEABLE/CLEAN·exact latest head를 확인하고 관리자 우회 없이 정상 병합한다.
 
 ## 검증과 공개 확인
 
