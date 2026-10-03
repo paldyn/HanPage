@@ -1,0 +1,120 @@
+{
+  "updatedAt": "2026-10-03T05:11:32.497486+00:00",
+  "repository": "paldyn/HanPage",
+  "baseMainSha": "f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+  "baselineDevelSha": "133f5d31b88a87b46c483af883efbe1ca0298d70",
+  "mainIsAncestorOfDevel": false,
+  "mergeBase": "cecaf1bbfec9a10778484d30ebb747280e7a02af",
+  "workflowInventorySummary": {
+    "entries": 24,
+    "executable": 24,
+    "commentOnly": 0,
+    "policyViolations": 16,
+    "missingWorkflowPolicyPaths": [
+      ".github/workflows/build-nextest-archives.yml",
+      ".github/workflows/cache-generation-sweep.yml",
+      ".github/workflows/cancel-stale-pr-runs.yml",
+      ".github/workflows/ci-impact-policy.yml",
+      ".github/workflows/desktop-release.yml",
+      ".github/workflows/fuzz-smoke.yml",
+      ".github/workflows/issue-form-labels.yml",
+      ".github/workflows/layout-anomaly-advisory.yml",
+      ".github/workflows/node-binding.yml",
+      ".github/workflows/python-binding.yml",
+      ".github/workflows/refresh-nextest-duration.yml",
+      ".github/workflows/run-nextest-archives.yml",
+      ".github/workflows/skill-router-gate.yml",
+      ".github/workflows/trusted-postmerge-ci-reuse.yml"
+    ],
+    "candidateWorkflowPathsNotRegistered": [
+      ".github/workflows/ci-impact-policy.yml",
+      ".github/workflows/fuzz-smoke.yml",
+      ".github/workflows/gym-release-gate.yml",
+      ".github/workflows/issue-form-labels.yml",
+      ".github/workflows/layout-anomaly-advisory.yml",
+      ".github/workflows/oracle-public-advisory.yml",
+      ".github/workflows/trusted-postmerge-ci-reuse.yml"
+    ]
+  },
+  "forkPolicyBinding": {
+    "policyRepository": "edwardkim/rhwp",
+    "allowedActors": [
+      "edwardkim"
+    ],
+    "currentOperator": "enxec",
+    "ciTrustedMaintainer": "edwardkim",
+    "collectorRepositorySource": "inventory.repository, derived from policy.repository",
+    "consequence": "Current policy collects from upstream edwardkim/rhwp and rejects enxec runs; correct fork binding required through ordinary devel PR."
+  },
+  "mainVsDevelChangedPathCountDefaultRenameDetection": 28383,
+  "sourceSpecificDeploymentContracts": {
+    "develPreparedFaviconHead": {
+      "path": ".github/workflows/deploy-pages.yml",
+      "mainPush": "Build then Deploy, gh-pages branch publication",
+      "workflowDispatch": "Build artifact only; Deploy skipped",
+      "publicDomain": "hanpage.paldyn.com",
+      "faviconCopy": "assets/logo/favicon.ico -> rhwp-studio/public/favicon.ico",
+      "mainPromotionTriggersWebBuild": true,
+      "noDesktopTagTriggeredWebDeployment": true
+    },
+    "mainFaviconOnlyOption": {
+      "baseSha": "f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+      "status": "read-only comparison; candidate branch/build/PR not created by this auditor",
+      "liveSource": "cc8d04812e44ce4746f6855b88db201b6a7baba3",
+      "mainVsLiveSourceChanges": [
+        {
+          "status": "modified",
+          "path": "mydocs/orders/20260804.md"
+        },
+        {
+          "status": "added",
+          "path": "mydocs/report/task_m100_hp59_report.md"
+        }
+      ],
+      "productSourceMatchesCurrentLiveSource": true,
+      "engineStudioVersion": "0.8.2",
+      "desktopSourceVersion": "0.8.3",
+      "intendedChangedSourcePathCount": 13,
+      "scope": "favicon source ICO, public fallback ICO, source hashed ICO, four PWA named PNGs, four legacy PNG aliases, HTML favicon link, five Vite PWA manifest icon src values",
+      "applicationNote": "Apply favicon-link and manifest-icon edits against main in context; do not replace full devel HTML/config files, which contain unrelated evolution.",
+      "retainedMainRuntime": "All web behavior source, engine source/lockfile, Desktop source/version, workflows stay byte-identical to main; root must verify actual candidate diff.",
+      "develFeaturesNotPromoted": "Recent 0.8.6 engine/Studio changes and PALDYN/new updater UI present only in devel are not added to public web by this restricted option. Installed Desktop 0.8.9 remains separate.",
+      "pagesWorkflow": "main exact existing workflow has one Build & Push to gh-pages job; both main push and workflow_dispatch publish.",
+      "importantNoDryRunDispatch": "Do not invoke old main deploy-pages.yml workflow_dispatch for prepublication validation; it mutates gh-pages. Validate candidate locally and via its ordinary PR CI, then main PR merge triggers normal Pages publication.",
+      "pagesBuildSettings": {
+        "nodeVersion": "20",
+        "dependencies": "npm install",
+        "wasmBuild": "wasm-pack build --target web --release",
+        "wasmPackCompositeVersion": "0.15.0",
+        "productToolchainFile": "1.93.1",
+        "faviconCopy": "assets/logo/favicon.ico -> rhwp-studio/public/favicon.ico",
+        "deployAction": "peaceiris/actions-gh-pages@v4"
+      },
+      "mainOriginalClassifierProbe": {
+        "sourceSha": "f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+        "classifierVersion": "1",
+        "inputSourceDiff": "133f5d31b88a87b46c483af883efbe1ca0298d70..a4ddf332745998970b1d28f690e610a1e92c340a",
+        "inputPathCount": 13,
+        "mode": "source loaded into Node Module in memory; no policy/source edits",
+        "classification": {
+          "rust_required": "true",
+          "frontend_mode": "package",
+          "render_required": "true",
+          "native_skia_required": "true",
+          "codeql_languages": "javascript-typescript,python,rust",
+          "classification_status": "full",
+          "classifier_version": "1",
+          "reason": "fail-closed:unclassified-path"
+        }
+      },
+      "mainOriginalCiSemantics": "Older Stage3 impact routing only activates frontend_mode/render_required; Rust/Native Skia/CodeQL full validation remains required. Original PR CI, CodeQL and Render workflows trigger for Studio paths.",
+      "requiredValidation": "Local exact main-candidate TypeScript/PWA build, branding URL decode/hash/manifest/offline SW checks, existing Studio tests, then actual latest main PR CI/CodeQL/Render full checks. Do not reuse prior devel-based tests as exact main-candidate proof.",
+      "branchProtectionReadOnlyResult": "GitHub branch protection API 404 Branch not protected; normal review/check requirements remain applicable.",
+      "promotionInventoryApplicability": "A real main-based logo-only PR with no workflow changes is distinct from devel->main accumulated workflow promotion; this audit makes no authorization decision. Root proposes user-visible concrete path selection before posting that extra PR."
+    }
+  },
+  "gateObservationClassification": "static preflight blockers, not a claimed failed GitHub promotion run",
+  "full_audit_sha256": "55fa457802c5ea146840dafd297fd618eefa56907baeaa46cfd69dca3e66fd41",
+  "full_audit_record": "devel PR117 mydocs/pr/assets/web_favicon_20261003/release-scope.json",
+  "authorizationDecision": "Existing user approval for favicon PR and web deployment covers the same13file logo-only release. Normal devel source PR first, then main-based release PR with original Full CI and automatic Pages, without workflow promotion or policy/gate alteration."
+}

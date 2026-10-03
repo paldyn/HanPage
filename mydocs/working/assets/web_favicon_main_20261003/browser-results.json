@@ -1,0 +1,94 @@
+{
+  "source_sha": "fd7dd1d22113930e371fe71aeef75664691693e7",
+  "base": "http://127.0.0.1:7719",
+  "checks": [
+    {
+      "name": "Actual built HTML requests fingerprinted new favicon",
+      "pass": true,
+      "url": "http://127.0.0.1:7719/assets/hanpage-favicon-DGxGu2KG.ico",
+      "source_sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09"
+    },
+    {
+      "name": "Browser decodes current PWA and Apple touch icons at declared sizes",
+      "pass": true,
+      "pwa": [
+        {
+          "url": "http://127.0.0.1:7719/icons/hanpage-04-128.png",
+          "declared": "128x128",
+          "actual": "128x128"
+        },
+        {
+          "url": "http://127.0.0.1:7719/icons/hanpage-04-192.png",
+          "declared": "192x192",
+          "actual": "192x192"
+        },
+        {
+          "url": "http://127.0.0.1:7719/icons/hanpage-04-256.png",
+          "declared": "256x256",
+          "actual": "256x256"
+        },
+        {
+          "url": "http://127.0.0.1:7719/icons/hanpage-04-512.png",
+          "declared": "512x512",
+          "actual": "512x512"
+        },
+        {
+          "url": "http://127.0.0.1:7719/icons/hanpage-04-512.png",
+          "declared": "512x512",
+          "actual": "512x512"
+        }
+      ],
+      "touch": {
+        "url": "http://127.0.0.1:7719/icons/icon-256.png",
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "name": "Actual service worker supplies all six branding URLs offline",
+      "pass": true,
+      "assets": [
+        {
+          "url": "http://127.0.0.1:7719/assets/hanpage-favicon-DGxGu2KG.ico",
+          "status": 200,
+          "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+          "bytes": 100921
+        },
+        {
+          "url": "http://127.0.0.1:7719/icons/icon-256.png",
+          "status": 200,
+          "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3",
+          "bytes": 63171
+        },
+        {
+          "url": "http://127.0.0.1:7719/icons/hanpage-04-128.png",
+          "status": 200,
+          "sha256": "50bf5565ac8b2bf07ee3c31ac50ed0d9515e8aa4b239b94938c54e676dace5f5",
+          "bytes": 18862
+        },
+        {
+          "url": "http://127.0.0.1:7719/icons/hanpage-04-192.png",
+          "status": 200,
+          "sha256": "89d3e2cd23b2d5a50a7f68105cd5117ae0ddb6c9b957982845a1579bb0c36f26",
+          "bytes": 50596
+        },
+        {
+          "url": "http://127.0.0.1:7719/icons/hanpage-04-256.png",
+          "status": 200,
+          "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3",
+          "bytes": 63171
+        },
+        {
+          "url": "http://127.0.0.1:7719/icons/hanpage-04-512.png",
+          "status": 200,
+          "sha256": "5a3dd9f2596e8cdaf8ab398e015823b3d83f1bcac2453337aff7d36d8dc6c7fd",
+          "bytes": 174447
+        }
+      ]
+    }
+  ],
+  "page_exceptions": [],
+  "scope": "Actual built web app favicon, Apple touch, PWA URLs and offline service worker cache. App document editing and installed PWA/browser toolbar UI were not tested.",
+  "service_worker": "http://127.0.0.1:7719/sw.js",
+  "status": "PASS"
+}

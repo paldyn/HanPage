@@ -1,0 +1,97 @@
+{
+  "status": "PASS",
+  "source_sha": "fd7dd1d22113930e371fe71aeef75664691693e7",
+  "base_sha": "f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+  "recorded_at": "2026-10-03T05:19:57.244813+00:00",
+  "workflow_pin": {
+    "workflow": ".github/workflows/deploy-pages.yml",
+    "wasm_pack_source": ".github/actions/install-wasm-pack/action.yml",
+    "wasm_pack_pin": "0.15.0",
+    "node_major": 20,
+    "main_wrapper_script_exists": false,
+    "local_build_equivalence": "same main Rust source, pinned wasm-pack, fresh release web package copied to public, Node20 npm install then npm run build (tsc + vite; Pages uses vite --base=/)",
+    "workflow_dispatch_run": false
+  },
+  "local_runtime": {
+    "build_node": "20.20.2",
+    "test_and_probe_node": "22.22.1",
+    "npm": "10.9.4",
+    "cargo": "1.93.1",
+    "wasm_pack": "0.15.0",
+    "wasm_bindgen": "0.2.125",
+    "browser": "Installed Google Chrome in owned temporary headless profile"
+  },
+  "checks": [
+    {
+      "command": "npm ci --no-audit --no-fund",
+      "pass": true,
+      "node": "22.22.1",
+      "log": "logs/npm-ci.log"
+    },
+    {
+      "command": "npm install --no-audit --no-fund",
+      "pass": true,
+      "node": "20.20.2",
+      "lockfile_sha256_unchanged": "d9c46d0f0572bec5b27f18d1c593c9de278b0b44d15240ada74e62feb3d4a4d9",
+      "log": "logs/node20-npm-install.log",
+      "warnings": "Existing Puppeteer dev dependencies require Node>=22.12.0; Vite build succeeded on Node20."
+    },
+    {
+      "command": "CARGO_TARGET_DIR=existing_shared_target wasm-pack0.15.0 build --target web --release --out-dir pkg --locked",
+      "pass": true,
+      "log": "logs/wasm-build-015.log",
+      "evidence": "fresh-wasm.json"
+    },
+    {
+      "command": "npm run build",
+      "pass": true,
+      "node": "20.20.2",
+      "log": "logs/node20-web-build-015.log",
+      "precache_entries": 66,
+      "existing_large_chunk_warning": true
+    },
+    {
+      "command": "npm test",
+      "pass": true,
+      "node": "22.22.1",
+      "tests": 765,
+      "passed": 765,
+      "failed": 0,
+      "skipped": 0,
+      "log": "logs/npm-test.log",
+      "rerun_after_pin_change": "Not necessary: same source/assets/JS; only optimized WASM changed by12 bytes, rebuilt browser/SW verification repeated."
+    },
+    {
+      "command": "owned headless Chrome browser probe",
+      "pass": true,
+      "evidence": "browser-results.json",
+      "favicon_hash_url": true,
+      "pwa_entries": 5,
+      "apple_touch_dimensions": "256x256",
+      "offline_asset_urls": 6,
+      "page_exceptions": 0
+    },
+    {
+      "command": "git diff --check",
+      "pass": true
+    }
+  ],
+  "preservation": {
+    "primary_dirty_files": 39,
+    "primary_head": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+    "primary_unchanged": true,
+    "shared_target": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review",
+    "shared_target_removed": false,
+    "tracked_public_js_exact_original_blob": true,
+    "cargo_and_npm_lockfiles_unchanged": true,
+    "source_git_or_remote_mutation_by_agent": false,
+    "global_cli_replaced": false,
+    "user_browser_cache_or_installed_app_modified": false
+  },
+  "limits": [
+    "Local macOS validation; Linux Pages CI must still pass.",
+    "App editing, installed PWA migration and browser toolbar UI were not tested.",
+    "Clippy and renderer Visual Sweep not applicable: no Rust/renderer source changes.",
+    "No remote workflow dispatch or publication performed by this validation agent."
+  ]
+}
