@@ -25,11 +25,11 @@
 - Chrome/Firefox의 실제 Vite config를 격리 output으로 각각 빌드해 새 hashed ICO 파일/참조를 확인했다. 기존 packaging의 Apple touch copy 규칙을 대조하고 동일 copy만 실행했다. 전체 확장 package/install은 미실행이다.
 - primary 원래39파일은 status·bytes·SHA256와 HEAD가 동일하며 사용자 설치앱·브라우저 cache·shared target/pr-review를 바꾸지 않았다. 설치된 PWA의 icon 재수집과 사용자 browser toolbar의 시각 표시는 미검증이다. 원문 로그는 ignored `output/pr-review/web-favicon-20261003/logs`에 보관한다.
 
-## 게시·배포 대기
+## 승인된 게시·배포 진행
 
 2026-10-03 작업지시자가 웹 파비콘 수정의 PR·웹 배포 요청에 “응”으로 승인했다. 이 승인을 받은 뒤 일반 devel PR을 게시하고 정확한 최신 head CI와 정상 merge를 진행한다. source 구현과 로컬 검증은 완료했으며, 공개 웹 갱신은 아직 미실행이다. [내부 task 승인 규칙](../manual/codex/docs_and_git_workflow.md#internal-task-pr-approval)의 push/PR 경계를 따른다.
 
-현재 main과 devel은 파일28,383개 차이이며 최근 engine/Studio 통합·Desktop 작업 등 미공개 변경을 포함한다. 이 favicon 후보의13파일과 별도로 전체 devel→main 웹 promotion 범위를 검토해야 한다. 승인 시 일반 devel PR의 최신 CI와 정상 병합을 먼저 처리하고, main release 후보의 정확한 차이·promotion gate를 확인한 뒤 웹 공개 파일/hashed URL·manifest·SW를 다시 검증한다. 공개 웹에서 새 로고 확인 전에는 배포 완료로 보고하지 않는다.
+현재 main과 devel은 파일28,383개 차이이며 최근 engine/Studio 통합·Desktop 작업 등 미공개 변경을 포함한다. [PR117](https://github.com/paldyn/HanPage/pull/117)을 devel 대상으로 게시했다. [전체promotion 감사](../pr/assets/web_favicon_20261003/release-scope.json)는 main ancestry·fork policy·workflow16위반을 확인했으므로 전체promotion은 별도정비가 필요하다. favicon13파일만 main기반으로 적용한 독립 후보를 준비·검증하며 사용자가 승인한 웹로고13파일 범위에서 별도mainreleasePR의 최신CI·정상merge·자동Pages로 공개한다. 이는 전체workflowpromotion을 통과로 보고하는 예외나 gate우회가 아니며, 해당차단과 기존policy/검증/권한을유지한다. 공개웹에서 새로고 확인전에는 배포완료로 기록하지 않는다.
 
 ## PR 본문 초안
 
