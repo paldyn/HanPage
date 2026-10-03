@@ -1,0 +1,133 @@
+{
+  "observedAt": "2026-10-02T06:42:39.816103+00:00",
+  "expectedMergeSha": "7aeee23482b20a637fcf4acf6ff9a00046b5b313",
+  "prIdentity": {
+    "baseRefOid": "52aeb4be36728109758c56b749c7946122f04d29",
+    "headRefOid": "79c898194038ad6674af9497a04af793b40e45e5",
+    "mergeCommit": {
+      "oid": "7aeee23482b20a637fcf4acf6ff9a00046b5b313"
+    },
+    "mergedAt": "2026-10-02T06:39:54Z",
+    "number": 116,
+    "state": "MERGED",
+    "url": "https://github.com/paldyn/HanPage/pull/116"
+  },
+  "mergeMatches": true,
+  "refreshWorkflow": {
+    "id": 36974645020,
+    "name": "Refresh nextest target duration data",
+    "head_sha": "7aeee23482b20a637fcf4acf6ff9a00046b5b313",
+    "head_branch": "devel",
+    "event": "push",
+    "run_attempt": 1,
+    "status": "completed",
+    "conclusion": "success",
+    "html_url": "https://github.com/paldyn/HanPage/actions/runs/36974645020",
+    "created_at": "2026-10-02T06:39:56Z",
+    "updated_at": "2026-10-02T06:41:49Z",
+    "jobs": [
+      {
+        "id": 110735727000,
+        "run_id": 36974645020,
+        "workflow_name": "Refresh nextest target duration data",
+        "head_branch": "devel",
+        "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36974645020",
+        "run_attempt": 1,
+        "node_id": "CR_kwDOSrG7qs8AAAAZyF0ZmA",
+        "head_sha": "7aeee23482b20a637fcf4acf6ff9a00046b5b313",
+        "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110735727000",
+        "html_url": "https://github.com/paldyn/HanPage/actions/runs/36974645020/job/110735727000",
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-10-02T06:39:57Z",
+        "started_at": "2026-10-02T06:39:58Z",
+        "completed_at": "2026-10-02T06:41:48Z",
+        "name": "Refresh nextest target duration data",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1,
+            "started_at": "2026-10-02T06:39:59Z",
+            "completed_at": "2026-10-02T06:40:00Z"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2,
+            "started_at": "2026-10-02T06:40:00Z",
+            "completed_at": "2026-10-02T06:41:43Z"
+          },
+          {
+            "name": "Collect verified PR duration measurements",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 3,
+            "started_at": "2026-10-02T06:41:43Z",
+            "completed_at": "2026-10-02T06:41:46Z"
+          },
+          {
+            "name": "Refresh duration policy data branch",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 4,
+            "started_at": "2026-10-02T06:41:46Z",
+            "completed_at": "2026-10-02T06:41:46Z"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 8,
+            "started_at": "2026-10-02T06:41:46Z",
+            "completed_at": "2026-10-02T06:41:46Z"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9,
+            "started_at": "2026-10-02T06:41:46Z",
+            "completed_at": "2026-10-02T06:41:46Z"
+          }
+        ],
+        "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110735727000",
+        "labels": [
+          "ubuntu-latest"
+        ],
+        "runner_id": 1000005564,
+        "runner_name": "GitHub Actions 1000005564",
+        "runner_group_id": 0,
+        "runner_group_name": "GitHub Actions"
+      }
+    ]
+  },
+  "otherDevelPushWorkflows": [
+    {
+      "id": 36974645108,
+      "name": "Close Issues on devel Push",
+      "head_sha": "7aeee23482b20a637fcf4acf6ff9a00046b5b313",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/36974645108"
+    }
+  ],
+  "unexpectedSourceValidationWorkflows": [],
+  "refreshHeadMatches": true,
+  "refreshEvidence": {
+    "jobId": 110735727000,
+    "logFile": "output/pr-review/desktop089/logs/postmerge-refresh-110735727000.log",
+    "logSha256": "021b08d354a5745f9000f1bd08db118868754a615a2f69e92ec0c4df29f85f76",
+    "logBytes": 21624,
+    "workflowConclusion": "success",
+    "durationRefreshStep": "skipped",
+    "operationalResult": "deferred",
+    "reason": "no-verified-pr-duration-measurements",
+    "measurementsReady": false
+  },
+  "auditCompletedAt": "2026-10-02T06:43:02.969218+00:00",
+  "allObservedWorkflowsComplete": true,
+  "noUnexpectedSourceValidation": true
+}

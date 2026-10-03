@@ -1,0 +1,17 @@
+{
+  "version": "0.8.9",
+  "bundle_identifier": "com.paldyn.hanpage",
+  "architecture": "arm64",
+  "icon_sha256": "8260b6100180a8c589c5b63943d77587fc575bbc74d591d3249557a6df8d70c4",
+  "icon_matches_source": true,
+  "source_sha": "7aeee23482b20a637fcf4acf6ff9a00046b5b313",
+  "codesign_strict": true,
+  "developer_id_team": "8L78W6D8XF",
+  "gatekeeper_notarized": true,
+  "stapler_valid": true,
+  "app_launched_or_installed": false,
+  "dmg_sha256": "3216b6755aa185ef14f246fdd5469b7cbca2e73f2e5a64ff14b15173f4e12880",
+  "dmg_integrity": true,
+  "mounted_readonly": true,
+  "mounted_volume_detached": true
+}

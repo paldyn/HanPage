@@ -1,0 +1,66 @@
+{
+  "release_id": 401599024,
+  "url": "https://github.com/paldyn/HanPage/releases/tag/hanpage-desktop-v0.8.9",
+  "tag": "hanpage-desktop-v0.8.9",
+  "published_at": "2026-10-03T04:15:04Z",
+  "source_sha": "7aeee23482b20a637fcf4acf6ff9a00046b5b313",
+  "is_draft": false,
+  "is_prerelease": false,
+  "latest_release_http": {
+    "status": 200,
+    "requested_url": "https://api.github.com/repos/paldyn/HanPage/releases/latest",
+    "resolved_url_without_query": "https://api.github.com/repos/paldyn/HanPage/releases/latest",
+    "temporary_download_query_omitted": false
+  },
+  "manifest_version": "0.8.9",
+  "manifest_sha256": "184f3700b8929d8a32478ddede5dcf59af5bd8b8ff3f376544ad8c0d68e7a5ef",
+  "manifest_byte_identical_to_verified_draft": true,
+  "platforms": [
+    "darwin-aarch64",
+    "darwin-aarch64-app",
+    "windows-x86_64",
+    "windows-x86_64-nsis"
+  ],
+  "endpoint_http": {
+    "status": 200,
+    "requested_url": "https://github.com/paldyn/HanPage/releases/latest/download/latest.json",
+    "resolved_url_without_query": "https://release-assets.githubusercontent.com/github-production-release-asset/1253161898/60e73fa0-fd0b-418f-b523-d2ffc2c9f411",
+    "temporary_download_query_omitted": true
+  },
+  "anonymous_requests": true,
+  "six_assets_identical_to_verified_draft": true,
+  "six_asset_public_urls_match_tag": true,
+  "release_notes_exact_utf8_verified": true,
+  "six_assets": [
+    [
+      "HanPage_0.8.9_aarch64.dmg",
+      43441555,
+      "sha256:3216b6755aa185ef14f246fdd5469b7cbca2e73f2e5a64ff14b15173f4e12880"
+    ],
+    [
+      "HanPage_0.8.9_x64-setup.exe",
+      39874694,
+      "sha256:651c0ebc631a801f32dcfd053e35239d2ca8e26252f8d116c85f3b22d1b72f82"
+    ],
+    [
+      "HanPage_0.8.9_x64-setup.exe.sig",
+      416,
+      "sha256:9b535bd85d27b313ae8692fe3c855f60a89f85d2807d536aeabd5efdc24ee247"
+    ],
+    [
+      "HanPage_aarch64.app.tar.gz",
+      42691689,
+      "sha256:25834324cd45668cc5d98e0e8022cfb49d6baa9439e14f9c7bbfab9a22c7177b"
+    ],
+    [
+      "HanPage_aarch64.app.tar.gz.sig",
+      404,
+      "sha256:f39b70de5df309f8584f4dd18064179aaf9d6b63f42542629ed91fd26e63d58b"
+    ],
+    [
+      "latest.json",
+      2437,
+      "sha256:184f3700b8929d8a32478ddede5dcf59af5bd8b8ff3f376544ad8c0d68e7a5ef"
+    ]
+  ]
+}

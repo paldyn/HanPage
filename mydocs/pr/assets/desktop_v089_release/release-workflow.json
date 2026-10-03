@@ -1,0 +1,451 @@
+{
+  "schema": "hanpage.desktop-release-workflow-monitor.v1",
+  "checked_at_utc": "2026-10-03T04:14:27.360109+00:00",
+  "run_id": 36974672989,
+  "url": "https://github.com/paldyn/HanPage/actions/runs/36974672989",
+  "tag": "hanpage-desktop-v0.8.9",
+  "source_sha": "7aeee23482b20a637fcf4acf6ff9a00046b5b313",
+  "annotated_tag_object": "d9dd880ff5cb8b7b777c196666378624984fec85",
+  "event": "push",
+  "workflow_name": "Desktop Release",
+  "status": "completed",
+  "conclusion": "success",
+  "created_at": "2026-10-02T06:40:16Z",
+  "updated_at": "2026-10-02T07:00:09Z",
+  "exact_source_ref_event_matches": true,
+  "jobs": [
+    {
+      "job_id": 110735809824,
+      "name": "Bundle macOS (aarch64)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36974672989/job/110735809824",
+      "started_at": "2026-10-02T06:40:24Z",
+      "completed_at": "2026-10-02T06:58:35Z",
+      "active_step": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "number": 1,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:40:25Z",
+          "completed_at": "2026-10-02T06:40:27Z"
+        },
+        {
+          "name": "Checkout",
+          "number": 2,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:40:28Z",
+          "completed_at": "2026-10-02T06:43:23Z"
+        },
+        {
+          "name": "Install Rust toolchain",
+          "number": 3,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:43:23Z",
+          "completed_at": "2026-10-02T06:43:35Z"
+        },
+        {
+          "name": "Cache Rust build",
+          "number": 4,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:43:35Z",
+          "completed_at": "2026-10-02T06:43:40Z"
+        },
+        {
+          "name": "Install wasm-pack",
+          "number": 5,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:43:40Z",
+          "completed_at": "2026-10-02T06:43:40Z"
+        },
+        {
+          "name": "Build WASM (macOS)",
+          "number": 6,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:43:40Z",
+          "completed_at": "2026-10-02T06:52:27Z"
+        },
+        {
+          "name": "Build WASM (Windows)",
+          "number": 7,
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-02T06:52:27Z",
+          "completed_at": "2026-10-02T06:52:27Z"
+        },
+        {
+          "name": "Setup Node.js",
+          "number": 8,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:52:27Z",
+          "completed_at": "2026-10-02T06:52:34Z"
+        },
+        {
+          "name": "Install studio deps",
+          "number": 9,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:52:34Z",
+          "completed_at": "2026-10-02T06:52:41Z"
+        },
+        {
+          "name": "Install desktop deps",
+          "number": 10,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:52:41Z",
+          "completed_at": "2026-10-02T06:52:42Z"
+        },
+        {
+          "name": "Compute release name",
+          "number": 11,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:52:42Z",
+          "completed_at": "2026-10-02T06:52:42Z"
+        },
+        {
+          "name": "Prepare notarization API key (macOS)",
+          "number": 12,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:52:42Z",
+          "completed_at": "2026-10-02T06:52:42Z"
+        },
+        {
+          "name": "Build & bundle (tauri-action)",
+          "number": 13,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:52:42Z",
+          "completed_at": "2026-10-02T06:57:54Z"
+        },
+        {
+          "name": "Upload bundle (dispatch test)",
+          "number": 14,
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-02T06:57:54Z",
+          "completed_at": "2026-10-02T06:57:54Z"
+        },
+        {
+          "name": "Post Setup Node.js",
+          "number": 26,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:57:54Z",
+          "completed_at": "2026-10-02T06:57:54Z"
+        },
+        {
+          "name": "Post Cache Rust build",
+          "number": 27,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:57:54Z",
+          "completed_at": "2026-10-02T06:58:29Z"
+        },
+        {
+          "name": "Post Checkout",
+          "number": 28,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:58:29Z",
+          "completed_at": "2026-10-02T06:58:30Z"
+        },
+        {
+          "name": "Complete job",
+          "number": 29,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:58:30Z",
+          "completed_at": "2026-10-02T06:58:32Z"
+        }
+      ]
+    },
+    {
+      "job_id": 110735809889,
+      "name": "Bundle Windows (x64)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/36974672989/job/110735809889",
+      "started_at": "2026-10-02T06:40:18Z",
+      "completed_at": "2026-10-02T07:00:08Z",
+      "active_step": null,
+      "steps": [
+        {
+          "name": "Set up job",
+          "number": 1,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:40:19Z",
+          "completed_at": "2026-10-02T06:40:21Z"
+        },
+        {
+          "name": "Checkout",
+          "number": 2,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:40:21Z",
+          "completed_at": "2026-10-02T06:42:18Z"
+        },
+        {
+          "name": "Install Rust toolchain",
+          "number": 3,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:42:18Z",
+          "completed_at": "2026-10-02T06:42:31Z"
+        },
+        {
+          "name": "Cache Rust build",
+          "number": 4,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:42:31Z",
+          "completed_at": "2026-10-02T06:42:42Z"
+        },
+        {
+          "name": "Install wasm-pack",
+          "number": 5,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:42:42Z",
+          "completed_at": "2026-10-02T06:42:42Z"
+        },
+        {
+          "name": "Build WASM (macOS)",
+          "number": 6,
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-02T06:42:42Z",
+          "completed_at": "2026-10-02T06:42:42Z"
+        },
+        {
+          "name": "Build WASM (Windows)",
+          "number": 7,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:42:42Z",
+          "completed_at": "2026-10-02T06:51:44Z"
+        },
+        {
+          "name": "Setup Node.js",
+          "number": 8,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:51:44Z",
+          "completed_at": "2026-10-02T06:51:54Z"
+        },
+        {
+          "name": "Install studio deps",
+          "number": 9,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:51:54Z",
+          "completed_at": "2026-10-02T06:52:07Z"
+        },
+        {
+          "name": "Install desktop deps",
+          "number": 10,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:52:07Z",
+          "completed_at": "2026-10-02T06:52:09Z"
+        },
+        {
+          "name": "Compute release name",
+          "number": 11,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:52:09Z",
+          "completed_at": "2026-10-02T06:52:09Z"
+        },
+        {
+          "name": "Prepare notarization API key (macOS)",
+          "number": 12,
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-02T06:52:09Z",
+          "completed_at": "2026-10-02T06:52:09Z"
+        },
+        {
+          "name": "Build & bundle (tauri-action)",
+          "number": 13,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:52:09Z",
+          "completed_at": "2026-10-02T06:59:00Z"
+        },
+        {
+          "name": "Upload bundle (dispatch test)",
+          "number": 14,
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-02T06:59:00Z",
+          "completed_at": "2026-10-02T06:59:00Z"
+        },
+        {
+          "name": "Post Setup Node.js",
+          "number": 26,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:59:00Z",
+          "completed_at": "2026-10-02T06:59:00Z"
+        },
+        {
+          "name": "Post Cache Rust build",
+          "number": 27,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T06:59:00Z",
+          "completed_at": "2026-10-02T07:00:05Z"
+        },
+        {
+          "name": "Post Checkout",
+          "number": 28,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T07:00:05Z",
+          "completed_at": "2026-10-02T07:00:07Z"
+        },
+        {
+          "name": "Complete job",
+          "number": 29,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-02T07:00:07Z",
+          "completed_at": "2026-10-02T07:00:07Z"
+        }
+      ]
+    }
+  ],
+  "two_expected_platform_jobs_present": true,
+  "job_logs": [
+    {
+      "job_id": 110735809824,
+      "job_name": "Bundle macOS (aarch64)",
+      "log_relative_path": "output/pr-review/desktop089/logs/run-36974672989-job-110735809824.log",
+      "log_bytes": 191686,
+      "log_sha256": "6bfca380349046deb1ffe4680fbdcbf08e8219794597d234f8c0756b4c80fb06",
+      "mac_signing_command_observed": true,
+      "notarization_submissions": [
+        {
+          "status": "Accepted",
+          "submission_id": "324930f6-6817-4b7c-b875-f43370068e81",
+          "observed_at_utc": "2026-10-02T06:57:20.6142270Z"
+        }
+      ],
+      "release_profile_durations": [
+        {
+          "step": "Build WASM (macOS)",
+          "duration": "8m 35s"
+        },
+        {
+          "step": "Build & bundle (tauri-action)",
+          "duration": "4m 03s"
+        }
+      ],
+      "uploaded_assets": [
+        "HanPage_0.8.9_aarch64.dmg",
+        "HanPage_aarch64.app.tar.gz",
+        "HanPage_aarch64.app.tar.gz.sig",
+        "latest.json"
+      ],
+      "source_checkout_full_sha_observed": true,
+      "github_log_byte_recheck_matches": true,
+      "log_origin": "Timestamped GitHub Actions job log via gh run view --job --log"
+    },
+    {
+      "job_id": 110735809889,
+      "job_name": "Bundle Windows (x64)",
+      "log_relative_path": "output/pr-review/desktop089/logs/run-36974672989-job-110735809889.log",
+      "log_bytes": 176437,
+      "log_sha256": "4f204d701a8aef6cf501e0b8bb77d2928c1d7ad6b48185534f2ed2e62bf0510b",
+      "mac_signing_command_observed": null,
+      "notarization_submissions": [],
+      "release_profile_durations": [
+        {
+          "step": "Build WASM (Windows)",
+          "duration": "8m 36s"
+        },
+        {
+          "step": "Build & bundle (tauri-action)",
+          "duration": "6m 16s"
+        }
+      ],
+      "uploaded_assets": [
+        "HanPage_0.8.9_x64-setup.exe",
+        "HanPage_0.8.9_x64-setup.exe.sig",
+        "latest.json"
+      ],
+      "source_checkout_full_sha_observed": true,
+      "github_log_byte_recheck_matches": true,
+      "log_origin": "Timestamped GitHub Actions job log via gh run view --job --log"
+    }
+  ],
+  "notarization": {
+    "status": "Accepted",
+    "submission_id": "324930f6-6817-4b7c-b875-f43370068e81",
+    "observed_at_utc": "2026-10-02T06:57:20.6142270Z",
+    "source_sha": "7aeee23482b20a637fcf4acf6ff9a00046b5b313",
+    "job_id": 110735809824,
+    "log_sha256": "6bfca380349046deb1ffe4680fbdcbf08e8219794597d234f8c0756b4c80fb06"
+  },
+  "all_jobs_succeeded": true,
+  "app_launched_or_installed": false,
+  "scope_limits": [
+    "Actions command/log observation only; artifact signatures and Mac codesign/Gatekeeper/stapler/DMG are separately verified by the coordinating agent.",
+    "No release/tag/source mutation, retry, installation, or app launch was performed by this monitor."
+  ],
+  "final_audit": {
+    "checked_at_utc": "2026-10-03T04:14:27.360109+00:00",
+    "repository": "paldyn/HanPage",
+    "head_repository": "paldyn/HanPage",
+    "workflow_path": ".github/workflows/desktop-release.yml",
+    "workflow_id": 285981737,
+    "run_attempt": 1,
+    "exact_identity_matches": true,
+    "remote_and_local_annotated_tag_and_commit_match": true,
+    "final_api_jobs": [
+      {
+        "job_id": 110735809824,
+        "name": "Bundle macOS (aarch64)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-02T06:40:24Z",
+        "completed_at": "2026-10-02T06:58:35Z",
+        "log_sha256": "6bfca380349046deb1ffe4680fbdcbf08e8219794597d234f8c0756b4c80fb06",
+        "source_checkout_full_sha_observed": true,
+        "github_log_byte_recheck_matches": true
+      },
+      {
+        "job_id": 110735809889,
+        "name": "Bundle Windows (x64)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-02T06:40:18Z",
+        "completed_at": "2026-10-02T07:00:08Z",
+        "log_sha256": "4f204d701a8aef6cf501e0b8bb77d2928c1d7ad6b48185534f2ed2e62bf0510b",
+        "source_checkout_full_sha_observed": true,
+        "github_log_byte_recheck_matches": true
+      }
+    ],
+    "all_stored_logs_match_fresh_github_logs": true,
+    "actual_mac_notarization_accepted_observed": true,
+    "operations": [
+      "Read GitHub run/jobs/tag APIs",
+      "Read and byte-compare completed GitHub job logs",
+      "Read local tag identity",
+      "Update owned ignored JSON evidence only"
+    ],
+    "release_source_tag_retry_build_publish_install_launch_mutated": false
+  }
+}

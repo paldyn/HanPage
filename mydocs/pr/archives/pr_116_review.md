@@ -2,7 +2,7 @@
 
 ## 최종 판정
 
-**승인.** 후보 구현·동일 source의107개 실제 UI 검사·0.8.9 로컬 bundle과 독립 호출경로 검토에서 배포 차단 결함을 발견하지 않았다. code candidate의 실제 전체 CI 성공은 아래 semantic 감사에 연결한다. merge 전 조건은 최신 문서 trailing head CI·MERGEABLE/CLEAN·exact head 재확인이다. 사용자는2026-10-02 “응 배포하자”로 PR·정상 병합·배포를 승인했다.
+**승인.** 후보 구현·동일 source의107개 실제 UI 검사·0.8.9 로컬 bundle과 독립 호출경로 검토에서 배포 차단 결함을 발견하지 않았다. code candidate의 실제 전체 CI 성공은 아래 semantic 감사에 연결한다. 최신 문서 trailing head CI·MERGEABLE/CLEAN·exact head를 확인한 뒤 정상 병합했고, 아래 실제 배포 gate와 공개 endpoint 확인을 완료했다. 사용자는2026-10-02 “응 배포하자”로 PR·정상 병합·배포를 승인했다.
 
 ## 접수 정보
 
@@ -48,3 +48,16 @@ PR본문대표2PNG는 finalhead repository/SHA로고정해 실제Markdownimage�
 exactmergeSHA의hanpage-desktop-v0.8.9tag로 Mac/Windows 초안을빌드한다.6asset/API digest·4platform manifest·기존공개키payload/globalsignature/변조거부·Mac strictcodesign/Team8L78W6D8XF/Gatekeeper/stapler/DMG·sourceicons확인뒤 공개한다. 공개전0.8.8latest유지, 실패job은동일source에서복구하고tag/key/secrets를바꾸지 않는다. 이증거와공개시각은배포뒤mydocs만 운영기록으로보완한다.
 
 protectedworktree의actualarchive결과를 확인하고보호면유지사유를 기록한다. contributorforkbranch·dirtyprimary·사용자/다른도구소유branch·sharedtarget/pr-review는자동삭제대상이 아니다. 소유output·링크·임시bundle은증거보존과사용중프로세스확인뒤 정리한다.
+
+## 최종 병합·공개 결과
+
+- 최신 PR head `79c898194038ad6674af9497a04af793b40e45e5`의 31 checks(11 SUCCESS /20 SKIPPED /0 pending·neutral·fail), 실제 5 preflight의 후보 재사용을 확인하고, 2026-10-02 06:39:54 UTC에 `7aeee23482b20a637fcf4acf6ff9a00046b5b313`로 정상 squash merge했다. 최종 head와 merge의 전체 tree는 동일하다. [trailing CI](../assets/desktop_v089_release/ci-review-tail.json).
+- 전체 code candidate는 32 checks(29 SUCCESS /3 SKIPPED), 실제 nextest 10,090건·Studio 1,834 PASS /2 SKIP·responsive 2,666 PASS·Native Skia 69 PASS·Adapter 7 PASS·Proptest 63 PASS를 확인했다. CodeQL 최종 3언어 성공, 중간 neutral은 최종 SUCCESS로 대체됐다. PDF report-only 4페이지·4 warnings·0 errors는 남은 차이이며 완전 시각 일치로 세지 않는다. [최종 semantic CI](../assets/desktop_v089_release/ci-code-candidate.json).
+- 병합 뒤 duration refresh 36974645020은 SUCCESS지만 `no-verified-pr-duration-measurements`로 실제 갱신을 보류했다. 검증 workflow를 재실행하지 않았다. [후속 운영 감사](../assets/desktop_v089_release/ci-postmerge.json). Issue59 CLOSED를 확인했고 새 issue close·추가 댓글은 없었다.
+- 새 annotated tag `hanpage-desktop-v0.8.9`(object `d9dd880ff5cb8b7b777c196666378624984fec85`)는 정확한 merge SHA를 가리킨다. [Release workflow](https://github.com/paldyn/HanPage/actions/runs/36974672989)는 Mac/Windows 두 job SUCCESS, 실제 Checkout full SHA·원 로그 checksum·Apple 공증 Accepted UUID `324930f6-6817-4b7c-b875-f43370068e81`을 확인했다. [감사](../assets/desktop_v089_release/release-workflow.json).
+- 실제 6개 초안 자산의 API size/SHA256, 4 updater alias의 최종 tag URL, 기존 키 `835d6b3831e133aa`로 양 플랫폼의 payload/global 서명과 1 byte 변조 거부를 검사했다. GitHub 초안의 `untagged-…` URL은 API의 실제 초안 identity로 검증했고, 공개 후 6개 URL은 최종 tag로 바뀌며 자산 ID/size/digest가 동일함을 다시 확인했다. [자산·서명 감사](../assets/desktop_v089_release/artifact-audit.json), [실행 helper hash](../assets/desktop_v089_release/audit-helper-hashes.json).
+- 실제 Mac TAR/DMG의 plist0.8.9·arm64·ICNS source 일치·strict codesign·Developer ID Team `8L78W6D8XF`·Gatekeeper Notarized Developer ID·stapler를 확인했고, DMG integrity·읽기 전용 mount·detach까지 완료했다. [Mac TAR](../assets/desktop_v089_release/macos-bundle.json), [DMG](../assets/desktop_v089_release/dmg.json).
+- Windows outer PE는 새 로고의 7 frame encoded/RGBA와 FileVersion/ProductVersion `0.8.9`(fixed info `0.8.9.0`)가 일치했다. **outer PE CompanyName 필드는 없어서 미검증**이다. source Tauri publisher/Cargo authors는 PALDYN이며 압축 app/uninstaller·실제 Windows 설치 GUI·publisher 화면은 실행하지 않았다. 이를 설치 회사 표기 실검증으로 보고하지 않는다.
+- **2026-10-03 13:15:04 KST에 [Desktop 0.8.9 공개](https://github.com/paldyn/HanPage/releases/tag/hanpage-desktop-v0.8.9)**했다. 익명 latest API/앱의 latest.json endpoint는 HTTP200, 버전0.8.9, 검증한 초안 manifest와 byte 동일(SHA256 `184f3700b8929d8a32478ddede5dcf59af5bd8b8ff3f376544ad8c0d68e7a5ef`), 6 asset/public URL·한국어 release notes UTF-8 동일을 확인했다. [공개 확인](../assets/desktop_v089_release/public-verification.json).
+
+제품 source/test/workflow/baseline을 다시 바꾸지 않고 관리자 운영 기록 범위의 archive·assets·오늘할일만 직접 반영한다. 실제 앱 설치·실행·재시작은 하지 않았으며 새 UI는 0.8.9 설치 후 적용된다. 사용자 primary39파일·HEAD와 공유 target/pr-review 보존 및 소유 임시 자료의 실제 정리 결과는 cleanup 기록으로 연결한다.

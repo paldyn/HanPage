@@ -1,0 +1,2557 @@
+{
+  "observed_at_utc": "2026-10-03T04:16:17.954699+00:00",
+  "scope": "Read-only cleanup preparation; this agent removed no file, branch, process, mount or worktree. Single output JSON is the only write. Snapshot may change while root audits release.",
+  "primary": {
+    "path": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage",
+    "head": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+    "branch": "codex/upstream-sync-20261001",
+    "baseline_head": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+    "expected_file_count": 39,
+    "actual_file_count": 39,
+    "changes": [],
+    "unexpected": [],
+    "preserved": true,
+    "raw_porcelain_preserved": true,
+    "verified_at_utc": "2026-10-03T04:16:38.566730+00:00"
+  },
+  "managed": {
+    "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage",
+    "head": "79c898194038ad6674af9497a04af793b40e45e5",
+    "branch": "codex/desktop-update-quiet-20261002",
+    "git_status": ""
+  },
+  "required_preservation": [
+    {
+      "path": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review",
+      "reason": "Shared native/WASM cache; never delete or initialize"
+    },
+    {
+      "path": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage",
+      "reason": "Primary user checkout and 39 original dirty files"
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/public/rhwp.js",
+      "reason": "Tracked repository file; SHA256 equals HEAD blob 2b7e7bb01cbbff0cb0d3c9a3222c6cb187f9d9710045013bcfb077d7abef4133"
+    },
+    {
+      "path": "/private/tmp/hanpage_primary39_preservation_cleanup_20261002.json",
+      "reason": "Prior preservation baseline; retain to prove final primary state"
+    },
+    {
+      "path": "/Applications/HanPage.app",
+      "reason": "User installed app; do not launch/install/replace for deployment"
+    }
+  ],
+  "processes_using_task_paths": [],
+  "task_dmg_mounts": [],
+  "outputs": [
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089",
+      "exists": true,
+      "is_symlink": false,
+      "file_count": 95,
+      "bytes": 208115171,
+      "files": [
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/HANBatang.woff",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 11613312,
+          "sha256": "b3192018e3bd4da76b29b0530f71c79fb6f465a2b7cd41308bc38f9a4ae09a6c",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/HCRDotum.woff",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 9751840,
+          "sha256": "49bf312aec309ba88c3eb612c591c2d8e28b765c156c808691850137431bb1bf",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/artifact-audit.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 24264,
+          "sha256": "712597bb5aab8ee91170ad49bca2518b222b3a4a8f0734e453c6eb779917b9ef",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/ci-code-candidate.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 154929,
+          "sha256": "747b175e6eceeb7acf05ffc0889107d4aa7f6e721d846c4905b8fed7b07db6e8",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/ci-postmerge.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 4861,
+          "sha256": "60e6fead7777034389574d53b1927c41c6a8f0dae75d683374ce14fbc7877658",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/ci-review-tail.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 87005,
+          "sha256": "f812da346df8c79d554005eeafdc3526ac077d7b83e0580df343af92d0e35574",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/diagnostic/before-v088-ready-auto-card.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 65605,
+          "sha256": "8b0a87c49f4e27513964d0dac46e3cd059d54813c6baa644a74824a6dea9978e",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/before-v088-ready-auto-card.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/dmg.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 604,
+          "sha256": "6f3c50c0b1abe8eb56d8eab81f634ec87a6cd48282aa800532b67c9333a0f46b",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/draft-release.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 11797,
+          "sha256": "14ddf73f5acd61a58505d48f4ced4559a84f82c0683a9496dcd692847d8057d3",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e/before-v088-ready-auto-card.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 65605,
+          "sha256": "8b0a87c49f4e27513964d0dac46e3cd059d54813c6baa644a74824a6dea9978e",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/before-v088-ready-auto-card.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-about-en-paldyn.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 127053,
+          "sha256": "39d0cfca9e5815274927ea46740422f389c20d40a81596f0aa62771d8aee1db0",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-about-en-paldyn.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-about-en-paldyn.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-about-ko-paldyn.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 122461,
+          "sha256": "6a3c499320503168f51972cbae500bcbe671b435eeae62e0844e660a201b20de",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-about-ko-paldyn.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-about-ko-paldyn.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-apply-error.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 81744,
+          "sha256": "b4ad9a2a09596c191a7640452a82009de611333d2c14af998e728178b8ede2cd",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-apply-error.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-applying.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 75466,
+          "sha256": "37f2063ac94f7a23a9a2a7791931b5bf519d2afb8838f183bec9025316694996",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-downloading-known.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 78990,
+          "sha256": "17e6a6d1e432e1932b1f38034a5a6273f3a0e5ff46bb44f7d4e880c079ff6a57",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-downloading-unknown.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 78638,
+          "sha256": "0ed6a618fe2a893da8e33a0207b36204fc837bf1e0fe3ffa48cdcd61e4fc3bfd",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-latest-dark.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 81843,
+          "sha256": "7fa47470e7222d1a098bdcd3c01679b4792a1a1df6aa2181163c33f84943d9a7",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-latest-dark.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-latest-light.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 73732,
+          "sha256": "a1cd6ecbda121dff9785c49b0c63e062217f352cc038cbc0339bd9829f6b1075",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-latest-light.png",
+            "mydocs/pr/assets/desktop_v089_release/after-latest-light.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-macos-ready-dark.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 89819,
+          "sha256": "7cc858a3597a8f7e079ceb50f4a1ff1aec7b6caab72c6233d7bd9c3ab1f6d8cb",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-macos-ready-dark.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-macos-ready-light.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 80854,
+          "sha256": "b43c122433c530edaccd32185b821df82b742de266ed0429f8c811b721a239d4",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-macos-ready-light.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-quiet-ready-dark.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 62629,
+          "sha256": "ed9ff5977b61037a2937c82e709023d5448e9869490f5d605ef65c890bd91a6d",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-ready-dark.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-ready-dark.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-quiet-ready-light.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 56355,
+          "sha256": "1fb1cb41527ee27f20116a2b49e415fc33532f292325a3e856f0119cd813ee36",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-ready-light.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-ready-light.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-quiet-statusbar-dark-entry.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 2115,
+          "sha256": "8068fee7fad261f726ed0736f39c67e611416305f222683b1e0048210022320a",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-statusbar-dark-entry.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-statusbar-dark-entry.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-quiet-statusbar-dark.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 6953,
+          "sha256": "d0d4d6c7e487af89be3a64a8081e1df043f17a0a5478403b92c31ad4b96edaf8",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-statusbar-dark.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-statusbar-dark.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-quiet-statusbar-light-entry.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 2082,
+          "sha256": "c2db4e5a5b8ee05ad3adfe0957baeeed0dec21dea9d7f2b60ae22130e0eb2de4",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-statusbar-light-entry.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-statusbar-light-entry.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-quiet-statusbar-light.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 6535,
+          "sha256": "3488184aa24a31bd95b9e853c4ca8e167e6f179b1893b8b2fbf44464836b9266",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-statusbar-light.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-statusbar-light.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-ready-short-height.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 47417,
+          "sha256": "e8153fb30bb65a287a5ebb089ffde5dbaab8cf2e24f3d0ee01609bb65b16b2c4",
+          "tracked_same_bytes": [
+            "mydocs/pr/assets/desktop_v089_release/after-ready-short-height.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-ready-small-dark.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 56946,
+          "sha256": "d32c4d2453d28b77ecee7e8f22724ac29ff284e9f2bd15b8ca1d507854cb5684",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-ready-small-dark.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-unsaved-small.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 49571,
+          "sha256": "0e7bcc5d8c4bad2321f3f26049dcc3a56469f8026cff67c188ba11446712d528",
+          "tracked_same_bytes": [
+            "mydocs/pr/assets/desktop_v089_release/after-unsaved-small.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/after-windows-ready-light.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 78713,
+          "sha256": "ee1b603d1dd9a25f6b871eedb25bceb849f5c7c8465ccd6398321841de36bbcf",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-windows-ready-light.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/applying-card.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 22479,
+          "sha256": "6f4dcf8ee7854e929172ed9718814fe847a4212f78382cb712eceee90452d661",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/applying-card.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/before-v088-ready-auto-card.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 78060,
+          "sha256": "6d5b6cdf6095218cbbe9e4144bda72041741ef54e9dda07b0327a8ef776b5f7b",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/latest-dark-card.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 18410,
+          "sha256": "9a4fa2747e5857d1b18f7f20f055b30aa1277584ed12645c18f37a5528719b34",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/latest-dark-card.png",
+            "mydocs/pr/assets/desktop_v089_release/latest-dark-card.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/latest-light-card.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 17448,
+          "sha256": "ca7ec135644c7635cc67210a1eaf836c1579c171d563f998917a30a890a00a59",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/latest-light-card.png",
+            "mydocs/pr/assets/desktop_v089_release/latest-light-card.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/ready-card.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 25785,
+          "sha256": "839670d8b2fd56ad16845255a4d50be842726229a3ec05408557afb2bcc2320d",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/ready-card.png",
+            "mydocs/pr/assets/desktop_v089_release/ready-card.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/e2e-cached-font/results.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 38883,
+          "sha256": "fa2bba411545d8935104dbca06268ab24fb87b6ca517d57e627c0f35be8f5804",
+          "tracked_same_bytes": [
+            "mydocs/pr/assets/desktop_v089_release/browser-results.json"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/local-bundle.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 896,
+          "sha256": "5afbc2450463b382c5f84f7b1610199dd4d8c4187e08705ca3d503d9b89b8e39",
+          "tracked_same_bytes": [
+            "mydocs/pr/assets/desktop_v089_release/local-bundle.json"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/archive-arch.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 172,
+          "sha256": "d464df40d4b8943807d658a015640fb9c65e1045085bfe35825b342287b7a23e",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/archive-codesign-identity.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 1182,
+          "sha256": "376bcbee7dde38c17ce697c537895de552657eb221d3f71c4032fcde10a29762",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/archive-codesign-verify.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 287,
+          "sha256": "a61c882244116c130a62f2819166553fa740fc8ca485f09e8862174de50db841",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/archive-gatekeeper.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 157,
+          "sha256": "4f711bedbb097f11e439babfd3b92a62edec3596ee416a237e5abeb33b7a3735",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/archive-stapler.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 157,
+          "sha256": "26b38193d672ba2e3ed0b1b80bea36d9ca727e38c8505c67583ac20e947b1381",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/browser-cached-font.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 13726,
+          "sha256": "ea7f9c485437088fa6820a74f8e9222adfc3574e0e139237b7a9207578200caa",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/browser-concurrent-initialization.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 769,
+          "sha256": "0a5280c5bf35091ba99ac1380965daa4358c153b10b57fa603f96eee27a3ca67",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/browser.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 769,
+          "sha256": "0a5280c5bf35091ba99ac1380965daa4358c153b10b57fa603f96eee27a3ca67",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-codeql-analyses-api.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 2108,
+          "sha256": "431b8c3036b3b44fd6e39974a37b48626a1e93687b922c07a2d5de00c6b9b2a7",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-final-metadata.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 182020,
+          "sha256": "1f995c11749ce09c8b99e8d5ad620fdc1de7de7e93226a6a4646e63a3d535728",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-preflight-110729961312.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 36221,
+          "sha256": "76a88a0c2334e74d85b0988a8cb61d3f06d29013e604fd9a23636ad100f0d462",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-preflight-110729985028.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 12587,
+          "sha256": "73a9d9a55135ef093cda8e96925f88172e8cc65fa9efd62515affd7aefc7af18",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-preflight-110729993161.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 42606,
+          "sha256": "2568b2a7aaff293cbe8b0c0f834a9b023424276326c6735abbd4f9645d9b9143",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-preflight-110729999952.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 44059,
+          "sha256": "e6ae2779832273dee3df15bd6e2e0500d207532e460e6d3800520af33341bb54",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-preflight-110730000217.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 12537,
+          "sha256": "fc949152146f34757566310b3776541b2db40ac8c64da38b04ce81c0cec70658",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110730008450.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 266159,
+          "sha256": "1bb40702057874101e9d86ddb707ee356cc057a143476e4dd39af3952e3a346f",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110730015901.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 107075,
+          "sha256": "18513b0d2a6711f087529c16df7cb531d028bcb5531179212166aea403642376",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110730023310.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 273233,
+          "sha256": "fdcbf70e15562c8a9dc13a7c446617f722fb5a762004a71593b1bd514a905bcf",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110730082204.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 1139849,
+          "sha256": "a84a1e210e46a8b4382a7a4f20ba7fc33155b26ed7fbbfbc097ed11a9e72363a",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110730082244.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 1174604,
+          "sha256": "519b418ab6b2c6d2ddc033908d1a625335bf1bdd31877696a11f7b863d0957c1",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110734769241.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 23170,
+          "sha256": "8a576ad54cf156616e044eef8034fb3de1b2ef541e86c0bfee9c9780168f2435",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/desktop-clippy.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 198,
+          "sha256": "f4b3c4239c027592e6fbcfa2b346bd69278199c89e36da8cd8dbd6fd63f9a9cf",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/diagnostic.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 8767,
+          "sha256": "2beaf267389c9b06d3948a58db848236333e917585bdbc30b081525d48506f41",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/dmg-app-arch.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 170,
+          "sha256": "dccb8ec309268a9037c6f56cb29968eb34efff2d37ceed018956fbf3e288bd8c",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/dmg-app-codesign-identity.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 1180,
+          "sha256": "f8ccd74bb678ded80f100efe2c79818f259c3a5f726d19a6e7c739229920d19b",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/dmg-app-codesign-verify.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 283,
+          "sha256": "f8836f1effe79376d1b22524abd382a8b4a15044a99372dd1109d42a258975ca",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/dmg-app-gatekeeper.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 155,
+          "sha256": "0ddf1f362bd5098d1381b23268360f381df4e4a2b7f7b3657c9519b697a585cc",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/dmg-app-stapler.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 155,
+          "sha256": "9bd83968d884f6a4f2db5bec1510e6bf680794e3e9b216f8cead7195a72c5d9a",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/dmg-attach.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 238,
+          "sha256": "1c97897d972f6d64ff2b5240934a003e02210d9c38b779c1030f2a38b518dcb1",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/dmg-detach.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 18,
+          "sha256": "694203031a4fe3f139f9473dcf242732ed8cf819acf7754410a637c503c50329",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/dmg-integrity.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 1156,
+          "sha256": "e4ed814f5a8e3882eb087e1443d6ad01c14ce5d0f391e1a742711def25bf94f5",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/hdiutil-info.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 9628,
+          "sha256": "d87735ea6e7581e133755e6328954644d44ef56f42e278c32f8e57b5bce966fe",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/local-bundle.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 3103,
+          "sha256": "a9617ca96b4a772f9311b773a624615198a491976c6faf901cb6f71b91ea67e6",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/postmerge-refresh-110735727000.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 21624,
+          "sha256": "021b08d354a5745f9000f1bd08db118868754a615a2f69e92ec0c4df29f85f76",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/run-36974672989-job-110735809824.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 191686,
+          "sha256": "6bfca380349046deb1ffe4680fbdcbf08e8219794597d234f8c0756b4c80fb06",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/run-36974672989-job-110735809889.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 176437,
+          "sha256": "4f204d701a8aef6cf501e0b8bb77d2928c1d7ad6b48185534f2ed2e62bf0510b",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/tail-preflight-110735229255.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 19902,
+          "sha256": "71d937fb043a3f1f8457bb729f63dc9ab55b7a76da47a9f468f5beaa8365e4f1",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/tail-preflight-110735257523.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 25619,
+          "sha256": "a2c34a85d0d2d3f4c8302290719b3a4a97f008a735edc71187137670c0828e2d",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/tail-preflight-110735261490.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 12548,
+          "sha256": "683b24aecc71ccdfdbd090bc553bea5c8667cee5a2804a7e7cf70710f907db1e",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/tail-preflight-110735262779.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 22677,
+          "sha256": "f6dbfc3bcc2e5ba023ff978e365c10b510679980a6ec3dd3aa5aee0cee442c9e",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/tail-preflight-110735270522.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 12484,
+          "sha256": "04b7766164bfada4c1ed5d9e49b7cc365809c3bc8cf79ab065fcaaacd1a97f88",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/mac-archive/HanPage.app/Contents/CodeResources",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 1653,
+          "sha256": "fda592e6a3fcbf2f66b9249b6c97af1dbb6a138aff4c810e8f08f202db7822d5",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/mac-archive/HanPage.app/Contents/Info.plist",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 1669,
+          "sha256": "ce891d03b25adf2d34f73df77dbdf6b2e06cbbea9e347d5f79e80dceebd8bb7e",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/mac-archive/HanPage.app/Contents/MacOS/HanPage",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 54105216,
+          "sha256": "4cf4a3972b295cbcee685e6e62eb6d37f28a96d3afc21a1b01c89300b5020e3a",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/mac-archive/HanPage.app/Contents/Resources/icon.icns",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 874644,
+          "sha256": "8260b6100180a8c589c5b63943d77587fc575bbc74d591d3249557a6df8d70c4",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/mac-archive/HanPage.app/Contents/_CodeSignature/CodeResources",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 2440,
+          "sha256": "9e768f15935f8e308a21cde13552099b80603ad5d594b38c0956295fb9eaffb7",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/macos-bundle.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 549,
+          "sha256": "9bfaab68692d0f3e6c6a355693a45a40a446b291fe35f09615acbd4397bfd37e",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/primary-preservation.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 78,
+          "sha256": "ecc4898d6411a622ccc58f5e30574ae2191a5805385908c8945b637768ca23e5",
+          "tracked_same_bytes": [
+            "mydocs/pr/assets/desktop_v089_release/primary-preservation.json"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/public-audit-result.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 2252,
+          "sha256": "aa60f42de1cdbe3bdd1a76282714e3179c30c1cc8a92fc635a63fde086c97259",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/public-release.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 15124,
+          "sha256": "355a8504466d6bfd360f6f9e3c0e38610ba86ed886fcfc1815e59116a33298b8",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/public-verification.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 2252,
+          "sha256": "aa60f42de1cdbe3bdd1a76282714e3179c30c1cc8a92fc635a63fde086c97259",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/release/HanPage_0.8.9_aarch64.dmg",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 43441555,
+          "sha256": "3216b6755aa185ef14f246fdd5469b7cbca2e73f2e5a64ff14b15173f4e12880",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/release/HanPage_0.8.9_x64-setup.exe",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 39874694,
+          "sha256": "651c0ebc631a801f32dcfd053e35239d2ca8e26252f8d116c85f3b22d1b72f82",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/release/HanPage_0.8.9_x64-setup.exe.sig",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 416,
+          "sha256": "9b535bd85d27b313ae8692fe3c855f60a89f85d2807d536aeabd5efdc24ee247",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/release/HanPage_aarch64.app.tar.gz",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 42691689,
+          "sha256": "25834324cd45668cc5d98e0e8022cfb49d6baa9439e14f9c7bbfab9a22c7177b",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/release/HanPage_aarch64.app.tar.gz.sig",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 404,
+          "sha256": "f39b70de5df309f8584f4dd18064179aaf9d6b63f42542629ed91fd26e63d58b",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/release/latest.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 2437,
+          "sha256": "184f3700b8929d8a32478ddede5dcf59af5bd8b8ff3f376544ad8c0d68e7a5ef",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/release-workflow.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 14925,
+          "sha256": "b21a6171b61397dacfd5826ad98039a79b5d5522c679f463db8946774934328b",
+          "tracked_same_bytes": []
+        }
+      ],
+      "classification": "defer_until_release_gates_and_required_evidence_persisted",
+      "ownership": "Root task explicitly identified this exact review output as task-owned; never generalize to parent output directory"
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet",
+      "exists": true,
+      "is_symlink": false,
+      "file_count": 33,
+      "bytes": 2057569,
+      "files": [
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-about-en-paldyn.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 127053,
+          "sha256": "39d0cfca9e5815274927ea46740422f389c20d40a81596f0aa62771d8aee1db0",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-about-en-paldyn.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-about-en-paldyn.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-about-ko-paldyn.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 122461,
+          "sha256": "6a3c499320503168f51972cbae500bcbe671b435eeae62e0844e660a201b20de",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-about-ko-paldyn.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-about-ko-paldyn.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-apply-error.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 74531,
+          "sha256": "6a1e6dc12724a421bfcc1e1234763bd992d809e9f6e013f277a27af4d02abb57",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-apply-error.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-applying.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 68143,
+          "sha256": "5d3c902df450862aca7f79aae4b057be0d3fca15567aa1c65603c3922e9cc9ee",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-applying.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-downloading-known.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 72490,
+          "sha256": "a9f3bc1c907e730809daac01ab8108324a0ea1528a14c7ca2972fb1176e07591",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-downloading-known.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-downloading-unknown.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 72085,
+          "sha256": "87e14a3447d0ced46448a6faaf4a60b0bb65a26bd8b1411b1a6cb9476820a9bb",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-downloading-unknown.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-macos-ready-dark.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 85711,
+          "sha256": "c93bf7450fe9ae4a38776ac9348b6cb37373e8c29f00b29412e125a446da4099",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-macos-ready-dark.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-macos-ready-light.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 74464,
+          "sha256": "f7c29cb6f959a8e95630fb6b3367d4a527ffb77cf99da334bc85ba7de5224478",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-macos-ready-light.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-quiet-ready-dark.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 62629,
+          "sha256": "ed9ff5977b61037a2937c82e709023d5448e9869490f5d605ef65c890bd91a6d",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-ready-dark.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-ready-dark.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-quiet-ready-light.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 56355,
+          "sha256": "1fb1cb41527ee27f20116a2b49e415fc33532f292325a3e856f0119cd813ee36",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-ready-light.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-ready-light.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-quiet-statusbar-dark-entry.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 2115,
+          "sha256": "8068fee7fad261f726ed0736f39c67e611416305f222683b1e0048210022320a",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-statusbar-dark-entry.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-statusbar-dark-entry.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-quiet-statusbar-dark.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 6953,
+          "sha256": "d0d4d6c7e487af89be3a64a8081e1df043f17a0a5478403b92c31ad4b96edaf8",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-statusbar-dark.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-statusbar-dark.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-quiet-statusbar-light-entry.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 2082,
+          "sha256": "c2db4e5a5b8ee05ad3adfe0957baeeed0dec21dea9d7f2b60ae22130e0eb2de4",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-statusbar-light-entry.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-statusbar-light-entry.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-quiet-statusbar-light.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 6535,
+          "sha256": "3488184aa24a31bd95b9e853c4ca8e167e6f179b1893b8b2fbf44464836b9266",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-statusbar-light.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-statusbar-light.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-ready-small-dark.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 42448,
+          "sha256": "e7b5ee1b1ede3db6b89de0a36dee43e308cfb423fe86d97e4f2cc3c98d525d0d",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-ready-small-dark.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-unsaved-small.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 36529,
+          "sha256": "cc6cc560ac9202d3e5ee70e15a14a06e8bc04d04ab1ad8a0ca7a1a1bcc096006",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-unsaved-small.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/after-windows-ready-light.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 70930,
+          "sha256": "95b8a7d07d0ffbefe1c9c7a1302881c23bfdaebd935fe9d677b7f010409860ec",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-windows-ready-light.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/applying-card.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 21533,
+          "sha256": "6e5946da3a98d3830bdc286b7e5ff2208b9087410594919a9b89891be1cce47f",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/applying-card.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/before-v088-ready-auto-card.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 58638,
+          "sha256": "8069f32bdda43b1db4384aab12dee6ada0aedfd9331ef3ee89a985a82db3f1e7",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/before-v088-ready-auto-card.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/ready-card.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 24405,
+          "sha256": "874249ab44791d2f2ea03ab2cb1865f56b025cb84ebeb0e2803c4d7fcc963ac7",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/ready-card.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/e2e/results.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 21997,
+          "sha256": "806ad839d47d4462224db6d79deff163c5c8be7da76c6814ae1c2eeae0dae637",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/browser-results.json"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/logs/browser-first.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 10224,
+          "sha256": "78a35338ad3e6b1ccfa68070daf1d85f46fc831279f9e95f6ffd77af131d5bdc",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/logs/browser-second-results.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 21698,
+          "sha256": "f37704bc89575929030bf4391c636d9b2785ce69507f4e6e5ecc628b68368e7e",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/logs/browser-second.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 10998,
+          "sha256": "6eeac9ea7c83eff86273cae80d27199d55f34b70dba38962c4e1fea6e1f47f5e",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/logs/browser-third-results.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 21698,
+          "sha256": "2708377cec34b3ab1b79e9ecc6d30133383cbe7a418523f90e33abb8a4735e6c",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/logs/browser-third.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 10998,
+          "sha256": "1a317bcc6c6b20e042fd608a1f869b2bca7c0b460e7f2251196853d7c06a784e",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/logs/browser.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 10998,
+          "sha256": "72509c5521294580174c4e5fff8371efe6da677cb995722896f0ffd63258c2f8",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/logs/desktop-frontend-build-final.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 2130,
+          "sha256": "98d8bbc5026919fff1eaa5cb04387a3c2c1d63d27932f6b5ea614629adaae710",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/logs/desktop-frontend-build.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 2130,
+          "sha256": "25b6d4733e9da56d368c560018f6ca90cb8faf896b2ad327a62a8e45af570fdb",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/logs/frontend-tests-final.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 428226,
+          "sha256": "0c5854d9d550d8baf55b66750588989091a72f9c09834c9f8def1e8d90ff87ee",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/logs/frontend-tests.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 428264,
+          "sha256": "e1a3f8d0e0814a323f4e5191e2531bb8312d9d2aa0c2c25db52654506fc34b19",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/logs/metadata-validation.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 118,
+          "sha256": "032fc0452dd27936e00a0cde20ea9ab0065c774a3690bd1efac587e30055606a",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet/logs/typescript.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "tracked_same_bytes": []
+        }
+      ],
+      "classification": "defer_until_release_gates_and_required_evidence_persisted",
+      "ownership": "Root task explicitly identified this exact review output as task-owned; never generalize to parent output directory"
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style",
+      "exists": true,
+      "is_symlink": false,
+      "file_count": 29,
+      "bytes": 1893032,
+      "files": [
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-about-en-paldyn.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 127053,
+          "sha256": "39d0cfca9e5815274927ea46740422f389c20d40a81596f0aa62771d8aee1db0",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-about-en-paldyn.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-about-en-paldyn.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-about-ko-paldyn.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 122461,
+          "sha256": "6a3c499320503168f51972cbae500bcbe671b435eeae62e0844e660a201b20de",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-about-ko-paldyn.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-about-ko-paldyn.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-apply-error.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 81744,
+          "sha256": "b4ad9a2a09596c191a7640452a82009de611333d2c14af998e728178b8ede2cd",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-apply-error.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-applying.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 75492,
+          "sha256": "bd421a5b2dd9cc122ecd21f2091bd0f1bde30b0a2a8492420fa7b125e95a4900",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-applying.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-downloading-known.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 79249,
+          "sha256": "2ae460894592360ad428c66495e7d8b9c1af9bca32f5901e34439d66c5ce5749",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-downloading-known.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-downloading-unknown.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 78887,
+          "sha256": "51617c07688f015b522d19eb07ec9eee774a15c4351bd60c52370b4315ded90a",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-downloading-unknown.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-latest-dark.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 81843,
+          "sha256": "7fa47470e7222d1a098bdcd3c01679b4792a1a1df6aa2181163c33f84943d9a7",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-latest-dark.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-latest-light.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 73732,
+          "sha256": "a1cd6ecbda121dff9785c49b0c63e062217f352cc038cbc0339bd9829f6b1075",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-latest-light.png",
+            "mydocs/pr/assets/desktop_v089_release/after-latest-light.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-macos-ready-dark.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 89819,
+          "sha256": "7cc858a3597a8f7e079ceb50f4a1ff1aec7b6caab72c6233d7bd9c3ab1f6d8cb",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-macos-ready-dark.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-macos-ready-light.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 80854,
+          "sha256": "b43c122433c530edaccd32185b821df82b742de266ed0429f8c811b721a239d4",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-macos-ready-light.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-quiet-ready-dark.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 62629,
+          "sha256": "ed9ff5977b61037a2937c82e709023d5448e9869490f5d605ef65c890bd91a6d",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-ready-dark.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-ready-dark.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-quiet-ready-light.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 56355,
+          "sha256": "1fb1cb41527ee27f20116a2b49e415fc33532f292325a3e856f0119cd813ee36",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-ready-light.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-ready-light.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-quiet-statusbar-dark-entry.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 2115,
+          "sha256": "8068fee7fad261f726ed0736f39c67e611416305f222683b1e0048210022320a",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-statusbar-dark-entry.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-statusbar-dark-entry.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-quiet-statusbar-dark.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 6953,
+          "sha256": "d0d4d6c7e487af89be3a64a8081e1df043f17a0a5478403b92c31ad4b96edaf8",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-statusbar-dark.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-statusbar-dark.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-quiet-statusbar-light-entry.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 2082,
+          "sha256": "c2db4e5a5b8ee05ad3adfe0957baeeed0dec21dea9d7f2b60ae22130e0eb2de4",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-statusbar-light-entry.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-statusbar-light-entry.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-quiet-statusbar-light.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 6535,
+          "sha256": "3488184aa24a31bd95b9e853c4ca8e167e6f179b1893b8b2fbf44464836b9266",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-statusbar-light.png",
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-statusbar-light.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-ready-short-height.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 47130,
+          "sha256": "91557a5db9dca0478db9fb187e8a8fa514257e6288c13756d2dfde0e68bbca45",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-ready-short-height.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-ready-small-dark.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 56946,
+          "sha256": "d32c4d2453d28b77ecee7e8f22724ac29ff284e9f2bd15b8ca1d507854cb5684",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-ready-small-dark.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-unsaved-small.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 49531,
+          "sha256": "296c235bb8b495ffc399d2cd93e747be3fc80b569c183a8f7f84deda0ca4354f",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-unsaved-small.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/after-windows-ready-light.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 78713,
+          "sha256": "ee1b603d1dd9a25f6b871eedb25bceb849f5c7c8465ccd6398321841de36bbcf",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/after-windows-ready-light.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/applying-card.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 22479,
+          "sha256": "6f4dcf8ee7854e929172ed9718814fe847a4212f78382cb712eceee90452d661",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/applying-card.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/before-v088-ready-auto-card.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 65605,
+          "sha256": "8b0a87c49f4e27513964d0dac46e3cd059d54813c6baa644a74824a6dea9978e",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/before-v088-ready-auto-card.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/latest-dark-card.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 18410,
+          "sha256": "9a4fa2747e5857d1b18f7f20f055b30aa1277584ed12645c18f37a5528719b34",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/latest-dark-card.png",
+            "mydocs/pr/assets/desktop_v089_release/latest-dark-card.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/latest-light-card.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 17448,
+          "sha256": "ca7ec135644c7635cc67210a1eaf836c1579c171d563f998917a30a890a00a59",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/latest-light-card.png",
+            "mydocs/pr/assets/desktop_v089_release/latest-light-card.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/ready-card.png",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 25785,
+          "sha256": "839670d8b2fd56ad16845255a4d50be842726229a3ec05408557afb2bcc2320d",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/ready-card.png",
+            "mydocs/pr/assets/desktop_v089_release/ready-card.png"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/e2e/results.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 38946,
+          "sha256": "0c50dc36b1382aecb0d49c47317fbdfe3468244359d7c05bc296902ab5f8dc3c",
+          "tracked_same_bytes": [
+            "mydocs/working/assets/desktop_update_dialog_style_20261002/browser-results.json"
+          ]
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/logs/browser.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 13836,
+          "sha256": "03536133f73c9bb74e9ad82c5efe6f53e90c37b3297df3bf89d87e1c53894d5a",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/logs/desktop-frontend-build.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 2130,
+          "sha256": "2c4c25053581fd53d17de646d045b6345c60dfa4648cbfc3b24c1e9138b7517b",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style/logs/frontend-tests.log",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 428270,
+          "sha256": "7d5239db5576c9899f662504e5396e331b36b6fe96aac3978205bbbf91c80c6f",
+          "tracked_same_bytes": []
+        }
+      ],
+      "classification": "defer_until_release_gates_and_required_evidence_persisted",
+      "ownership": "Root task explicitly identified this exact review output as task-owned; never generalize to parent output directory"
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/desktop089",
+      "exists": true,
+      "is_symlink": false,
+      "file_count": 2,
+      "bytes": 90819,
+      "files": [
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/desktop089/ci-postmerge.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 3814,
+          "sha256": "c5e00f0bf56e315f32add22faed11cc0ba08763423f2d9f902663c241a74283e",
+          "tracked_same_bytes": []
+        },
+        {
+          "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/desktop089/ci-review-tail.json",
+          "exists": true,
+          "is_symlink": false,
+          "bytes": 87005,
+          "sha256": "f812da346df8c79d554005eeafdc3526ac077d7b83e0580df343af92d0e35574",
+          "tracked_same_bytes": []
+        }
+      ],
+      "classification": "defer_until_release_gates_and_required_evidence_persisted",
+      "ownership": "Root task explicitly identified this exact review output as task-owned; never generalize to parent output directory"
+    }
+  ],
+  "pkg": {
+    "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/pkg",
+    "exists": true,
+    "is_symlink": false,
+    "file_count": 5,
+    "bytes": 12056265,
+    "files": [
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/pkg/package.json",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 414,
+        "sha256": "0b42e242f782f43b56738ede8d69617a68b1abed40a1fb2e7993a915029230bc",
+        "tracked_same_bytes": [],
+        "same_bytes_as_primary_package": true
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/pkg/rhwp.d.ts",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 182995,
+        "sha256": "a04a48f383223dae50d0a3052f2efe1a25ca33abdf92791238381f4b7daf7e8c",
+        "tracked_same_bytes": [],
+        "same_bytes_as_primary_package": true
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/pkg/rhwp.js",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 453222,
+        "sha256": "2b7e7bb01cbbff0cb0d3c9a3222c6cb187f9d9710045013bcfb077d7abef4133",
+        "tracked_same_bytes": [],
+        "same_bytes_as_primary_package": true
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/pkg/rhwp_bg.wasm",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 11358119,
+        "sha256": "5c7a9a16c22cc6e0086d14d38df0386c5e63a1c75fe194a49848111c95011d12",
+        "tracked_same_bytes": [],
+        "same_bytes_as_primary_package": true
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/pkg/rhwp_bg.wasm.d.ts",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 61515,
+        "sha256": "384563a209cab9666fadcb1b51446985c8bc71b2e8cdab072d2388e459dd0fe1",
+        "tracked_same_bytes": [],
+        "same_bytes_as_primary_package": true
+      }
+    ],
+    "classification": "candidate_after_all_processes_finished",
+    "ownership": "Task-created reconstructed managed package; exact five files byte-match primary package and no tracked files under pkg",
+    "tracked_paths": []
+  },
+  "node_modules_symlinks": [
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/HanPage-Desktop/node_modules",
+      "exists": true,
+      "is_symlink": true,
+      "link": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/HanPage-Desktop/node_modules",
+      "resolved": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/HanPage-Desktop/node_modules",
+      "expected_target": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/HanPage-Desktop/node_modules",
+      "matches_expected_target": true,
+      "classification": "unlink_only_after_task_processes_finished",
+      "target_must_be_preserved": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/node_modules",
+      "exists": true,
+      "is_symlink": true,
+      "link": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/rhwp-studio/node_modules",
+      "resolved": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/rhwp-studio/node_modules",
+      "expected_target": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/rhwp-studio/node_modules",
+      "matches_expected_target": true,
+      "classification": "unlink_only_after_task_processes_finished",
+      "target_must_be_preserved": true
+    }
+  ],
+  "public_generated_files": [
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/public/rhwp.js",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 453222,
+      "sha256": "2b7e7bb01cbbff0cb0d3c9a3222c6cb187f9d9710045013bcfb077d7abef4133",
+      "tracked": true,
+      "classification": "retain_tracked_repository_file"
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/public/rhwp_bg.wasm",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 11358119,
+      "sha256": "5c7a9a16c22cc6e0086d14d38df0386c5e63a1c75fe194a49848111c95011d12",
+      "tracked": false,
+      "classification": "candidate_task_owned_generated_wasm_after_processes_finished"
+    }
+  ],
+  "dist": {
+    "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist",
+    "exists": true,
+    "is_symlink": false,
+    "file_count": 79,
+    "bytes": 63956476,
+    "files": [
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/CNAME",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 19,
+        "sha256": "941b3d58a37c1d46ad135dc8176a1195b9ccf6f70e76cb5cc70f6796a42c544f",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/LICENSE",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 13,
+        "sha256": "a2553752ed447e1147617c1b0bc46775232bbc2c9bf4654516721f9d488191d2",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/assets/canvaskit-SCAxUyCS.wasm",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 7317345,
+        "sha256": "25ebed8e60158c5854f8dc807b936daca21354f8bfb6a2231266b0a93812f301",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/assets/canvaskit-renderer-CYeFKxtb.js",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 246737,
+        "sha256": "4d96c2bd548ed3aa1653250d148ca23052423831fe874429c071212b37a095f6",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/assets/index-B3lK4uQ2.js",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 2126781,
+        "sha256": "f535f1f4cb5518102fdb250ff969ed0f170e024ac27bcbe112fecb6ebb4ea220",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/assets/index-QpbaaoGz.css",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 118911,
+        "sha256": "444d25f12b6a4584cbf6c04a9210e433ae14017485be0884413ed5ed854ee58b",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/assets/rhwp_bg-BkHZPMNg.wasm",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 11358119,
+        "sha256": "5c7a9a16c22cc6e0086d14d38df0386c5e63a1c75fe194a49848111c95011d12",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/assets/studio-plugin-7wns0tfd.js",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 54381,
+        "sha256": "3523819ac5b02bf6ae7cbe43d818ac0abaacf2dd09e03594c5b3172ed835e828",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/favicon.ico",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 27034,
+        "sha256": "552ba2454b39bcbddd2d17243622ddcb3f16d05f110555e158ba6e500ee24c9f",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/Cafe24Ssurround-v2.0.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 391868,
+        "sha256": "2d726dbf8863d66e6d5cf56e2532c5d14d8a4b514461b565c513c1da6ae2f41a",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/Cafe24Supermagic-Regular-v1.0.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 765684,
+        "sha256": "65434a217b9532867a1fe41417d0ad51210a60027a51dca40748aafed48ef0ba",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/D2Coding-Bold.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 1579172,
+        "sha256": "41273810f9aed2775c6f1b9eb7e4f12997da644002872b20a31d3d3144e0cc0a",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/D2Coding-Regular.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 1485508,
+        "sha256": "358df12fdf9b65d0fd31554a826f97af4eeefd96a047297a28a856315fe872c1",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/FONTS.md",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 6608,
+        "sha256": "0547f225f68531b9859d40452bd94189c10d76ff89441640b7a5c642ff5bfe3e",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/GowunBatang-Bold.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 447856,
+        "sha256": "aef1b91ea9ea4688fb296044959b38dfeeaa3e1650af5d543a2b5c160fa30b36",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/GowunBatang-Regular.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 495092,
+        "sha256": "0c6a288aa0c12081dccde769c312f71f290b353243747dd24fb8c57f94f01d72",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/GowunDodum-Regular.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 406476,
+        "sha256": "349c098a6181952dab564bf891b8efcacfbf855adc28d40b4aa2e5937c101c56",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/Happiness-Sans-Bold.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 336604,
+        "sha256": "54becdfd4f7f58e872eba8fbc67778e29cff94c1cd03f9a0ebadfbe482b4aba0",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/Happiness-Sans-Regular.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 291556,
+        "sha256": "4fc37e7663c3d440b5a6af6938bde0c6618b666553ed521745f3362050bd4988",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/Happiness-Sans-Title.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 348700,
+        "sha256": "057e6821a062d9192964d99cf058fe6608230e9e4a464c9652b3756e02460e22",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/HappinessSansVF.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 613412,
+        "sha256": "cd29de60acf8c466938400561fcbfb14812dd5981f4f78b0c8da74609682423c",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/LatinModernMath-Regular.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 391760,
+        "sha256": "1177d9025d1e797c54b3c7676976365abd90f903423091de7f0f4e7a4b372162",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/NanumGothic-Bold.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 417252,
+        "sha256": "0bd36842cc218a7b0e1c0f5ec796d90152a02e4cd487b2d868f1130708fe551a",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/NanumGothic-ExtraBold.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 376972,
+        "sha256": "cffea22fa5791731b3de9f9c48b58f4c9eff52581f29377d364a751e63b81ca3",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/NanumGothic-Regular.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 340688,
+        "sha256": "4a000e3bca1298c43c70dc97447e537a27e0a8c1585f410be57dfeff06d3f713",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/NanumGothicCoding-Bold.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 534060,
+        "sha256": "2fe66da1c9c3f8beca2c618a139e7edabd36a26dd810a324ced06f8b214b2ccd",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/NanumGothicCoding-Regular.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 521332,
+        "sha256": "87ab32ebaf4e1f803099ad1d096744092c8f985b2e08a24e2304f5ac05d81d6a",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/NanumMyeongjo-Bold.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 575580,
+        "sha256": "f2c95c35d72782f71cb60e3cc537c461ae3f5ee7e7504db9653ba7a7024dd548",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/NanumMyeongjo-ExtraBold.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 694516,
+        "sha256": "b3d23b3f93f4bdad6c9b7f69b11156f90f1576b8383f6117448ee79e27609e56",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/NanumMyeongjo-Regular.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 502068,
+        "sha256": "561e9193a6e848b3f7ce9f8f5907310a13e175bc9d69e77da2842a7517a97c16",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/NotoSansKR-Bold.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 559192,
+        "sha256": "dab3d492daa687386292cff1499225db580f931f800ee0d124eb0636378c6020",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/NotoSansKR-ExtraLight.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 592496,
+        "sha256": "3b5cac6af73fd94fa91ded10f6cfc54c7ce52189986fe7ca6fd457208f1d3673",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/NotoSansKR-Regular.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 562220,
+        "sha256": "d1bf8649914a4fe9477a8735bf056383e44e466141fb3d61897252e06d900c1a",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/NotoSerifKR-Bold.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 1033556,
+        "sha256": "504d6af6abb882acd912d47bafa383c4512a6c8c33635e4e8fb37111d9310941",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/NotoSerifKR-Regular.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 971428,
+        "sha256": "c9a1e3ac69994d680883b53b1fd83d520733b704792522a932bfaa276117de45",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/Pretendard-Black.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 800404,
+        "sha256": "c5fd0c3568fc1368a3edc0d0fbb36df029935954276e3573451b3bae09e27296",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/Pretendard-Bold.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 791156,
+        "sha256": "4609c3356e536fafe38f4add0daeceb3d8595d3057bce13c428c33ddbd43d362",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/Pretendard-ExtraBold.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 793540,
+        "sha256": "dd7c1e156f508eb962acc7a33a7a1896d1e0b71e11156fad96e731689ceb6dc3",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/Pretendard-ExtraLight.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 734392,
+        "sha256": "df43dc9165dff4542114674bcd8b79b7daae6dec004004586d5d076fec6fe2aa",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/Pretendard-Light.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 757000,
+        "sha256": "b7426635cce2ea2b95c9c802e43fba1c620e0dafaf25f737c069b8b4e09fa841",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/Pretendard-Medium.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 778432,
+        "sha256": "d03481330eeba0659ab5b87f25ceb504a35de377dd90a0d0aba2982eb2d05e2c",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/Pretendard-Regular.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 765892,
+        "sha256": "fad853f7f47c6c8b103171e7193fa095708cdcd70850a71d93aa5379e8a61d63",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/Pretendard-SemiBold.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 785856,
+        "sha256": "c863f76a7de5c1ddc1ed8b2fa794964530774592c4f31407a84e2a2ae93f17f0",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/Pretendard-Thin.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 694804,
+        "sha256": "1539755224a64719d5b18406762c476db74fcc299b9e4641ca1e9812fbc7a09b",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/SourceHanSerifK-OFL.txt",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 4463,
+        "sha256": "9ff5bb567e1b92c801fc1069e5fbf992ff8efccacb9db94e5959a5b3ba9bb903",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/SourceHanSerifK-OldHangul-subset.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 239628,
+        "sha256": "9e419cd16df2ea3b220aa7751320d956ac2493440ba412484d98325078f09d43",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/fonts/SpoqaHanSans-Regular.woff2",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 275144,
+        "sha256": "6568bf80b50c14f2e54f56f2c07e668416f39f880baf5ea2825d315767f98f69",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/icons/icon-128.png",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 11478,
+        "sha256": "afabf76ac4fe255b33cd8bcb9e9d6577329d17e99facab786ef529f6994ec528",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/icons/icon-192.png",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 19456,
+        "sha256": "979f1656eaf8b8fa39b36292ecc55a37bf0b7163adce8714b5e607301724616c",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/icons/icon-256.png",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 29740,
+        "sha256": "7bed53cd312ed97be61a545ea27a372309aeb6d46eb5cd9313226935ef82ffbb",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/icons/icon-512.png",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 68583,
+        "sha256": "b6389aff6bbcedbbc0765aab1584289ecaa9d245ee2eb516672bea481441637c",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/images/icon_small_ko.svg",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 469618,
+        "sha256": "a0ac1200a41b6a75e9afb30cda5bb850276087d45c2f25870605888238ba9b39",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/images/icon_small_ko_dark.svg",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 451775,
+        "sha256": "9d02ea0b8c1d399a89290d97613759826f19f3e3f392b6d79dcf6109e7e15fa6",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/index.html",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 86914,
+        "sha256": "09513d42f1338de578a9ac513ba2d01cd963981166b907cad3d48f358eae8bfb",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/locale-init.js",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 1342,
+        "sha256": "633d47a6a53b2211cf816769f8c084b097c1b60b6ab263803d8610c0531539fa",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/print.html",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 1436,
+        "sha256": "930907863afbafcc76099d386f6a995bc6c69387cb56838b18e4cdaf6eea6b79",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/rhwp.d.ts",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 107301,
+        "sha256": "d0f6d8baa1a07d78490d16864aac7598ce0997e7e5510e1e634e593d144db5d1",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/rhwp.js",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 453222,
+        "sha256": "2b7e7bb01cbbff0cb0d3c9a3222c6cb187f9d9710045013bcfb077d7abef4133",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/rhwp_bg.wasm",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 11358119,
+        "sha256": "5c7a9a16c22cc6e0086d14d38df0386c5e63a1c75fe194a49848111c95011d12",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/rhwp_bg.wasm.d.ts",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 37887,
+        "sha256": "ef7d8b6ea22eb42c9981644e5ca99786578f5d4580cad361ca094157e214de88",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/BlogForm_BookReview.hwp",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 24576,
+        "sha256": "1dff1f9a721924e9a2dbad7f23a98c36432921c37ac97d06474ae651778a4b8c",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/basic/KTX.hwp",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 66048,
+        "sha256": "6c1a027d67b33c03f469b56548b4c7d6bca36b1c1190c7cc5eac88e35c403cf1",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/biz_plan.hwp",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 33792,
+        "sha256": "8b786d6824622afae2220b203beeef6e5592157e1896fea055ebc602817113c1",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/field-01.hwp",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 514560,
+        "sha256": "518cb939079e6e0640a5f813597f744e2528a17ca52ee418929f1c8f4b5380c0",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/footnote-01.hwp",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 32768,
+        "sha256": "5bbc8a8fd23415aad59dd91d1eb261050946d9c64635933fcd49609ec2cc94e5",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/form-002.hwpx",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 131571,
+        "sha256": "5ab8f7c368e02538f75f1cd2bd82bbd8de2f925a54ba7b38ec9395b2cdb804d4",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/images/moogung.jpg",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 81040,
+        "sha256": "7af06b6410ea950341606e2ffe793f99e680030b39513b4bd835dc5c42822f76",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/images/san-serif.jpg",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 279888,
+        "sha256": "a25cad7d477d6742bdc4af17e3e3da0b64773a4b6ca238ce8954a6e7d5cfab4d",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/images/splatoon01.jpg",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 13213,
+        "sha256": "a99fa2d71328cb8766b77189e88c98542984c57b77cc72a2b929f9080a98de09",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/images/tiger01.jpg",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 4774959,
+        "sha256": "9edbe9722c7a4bfa0381bcb3e21f14ccb66a449c88a1b410a9af543599304353",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/images/younghi.jpg",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 10172,
+        "sha256": "1438be8f4e919366ba83b1e3458fed48780ab23e56a220f9b8655c2dceddcc71",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/issue1949_giant_cell_nested_tables_perf.hwp",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 303616,
+        "sha256": "ef10261cd29325116028e4f4f3e6be1a72c675eb771bddfd8484e7fe5aa94b4e",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/kps-ai.hwp",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 485888,
+        "sha256": "9b0fceb3d96956f27c893e15a72a1ad94f7ee005bd581381a1aadfcb1f57a7b9",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/number-bullet.hwp",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 69120,
+        "sha256": "8d509006e6f4a389f00242966d7fa37f8c2a19a5c0d5a205863c9b8bd070d4a7",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/oullim-01.hwp",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 16896,
+        "sha256": "c8f1ce0d7db0738287e8ce9ce96c6910ec278d887a81e7896405de2878b670e7",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/para-head-num-2.hwp",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 16384,
+        "sha256": "71e776c1ce67a8b7c9d61e1b78461c34294e7a8e78ff4f4a24114ee8ca6447ce",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/shift-return.hwp",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 8704,
+        "sha256": "78969c3bbe753373a3d5e983e7a0ea0dbbf132817bb25427f1ebdef851f8bd57",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/samples/tac-case-001.hwp",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 81920,
+        "sha256": "c003385b7b3495dd93a2688ea74b8a07848543a6c0128cb693635d8ba6fe43da",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist/theme-init.js",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 2783,
+        "sha256": "5a3afcc0139187bfe509414cd60fde2a0dfea72fd72751c4e6e696cdc0f6c587",
+        "tracked_same_bytes": []
+      }
+    ],
+    "classification": "candidate_task_owned_generated_directory_after_processes_finished",
+    "tracked_paths": [],
+    "ownership_log": {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/local-bundle.log",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 3103,
+      "sha256": "a9617ca96b4a772f9311b773a624615198a491976c6faf901cb6f71b91ea67e6"
+    }
+  },
+  "exact_unsigned_local_bundle": {
+    "path": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review/release/bundle/macos/HanPage.app",
+    "exists": true,
+    "is_symlink": false,
+    "file_count": 3,
+    "bytes": 54781513,
+    "files": [
+      {
+        "path": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review/release/bundle/macos/HanPage.app/Contents/Info.plist",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 1669,
+        "sha256": "ce891d03b25adf2d34f73df77dbdf6b2e06cbbea9e347d5f79e80dceebd8bb7e",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review/release/bundle/macos/HanPage.app/Contents/MacOS/HanPage",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 53905200,
+        "sha256": "0e4d115f9bf15a7856fc7f74db3802a6cd31a5785c3f4e746321c051bb96e7f0",
+        "tracked_same_bytes": []
+      },
+      {
+        "path": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review/release/bundle/macos/HanPage.app/Contents/Resources/icon.icns",
+        "exists": true,
+        "is_symlink": false,
+        "bytes": 874644,
+        "sha256": "8260b6100180a8c589c5b63943d77587fc575bbc74d591d3249557a6df8d70c4",
+        "tracked_same_bytes": []
+      }
+    ],
+    "metadata": {
+      "CFBundleShortVersionString": "0.8.9",
+      "CFBundleVersion": "0.8.9",
+      "CFBundleIdentifier": "com.paldyn.hanpage"
+    },
+    "classification": "candidate_exact_task_created_unsigned_bundle_only_after_processes_finished",
+    "ownership": "Task local build log explicitly records this app bundle, 0.8.9, --no-sign; current plist/version/icon hash match local-bundle evidence",
+    "ownership_log": {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/local-bundle.log",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 3103,
+      "sha256": "a9617ca96b4a772f9311b773a624615198a491976c6faf901cb6f71b91ea67e6"
+    },
+    "prohibited_parent_removal": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review"
+  },
+  "temporary_helpers": [
+    {
+      "path": "/private/tmp/hanpage089_artifact_audit.py",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 37852,
+      "sha256": "38f9d9a4fa0571b23e02b746ef60274f5f9173a987a4a3c07e23ddb4c950ff9f",
+      "classification": "candidate_owned_temp_helper_after_execution_and_audit_evidence_persisted"
+    },
+    {
+      "path": "/private/tmp/hanpage089_cached_browser.py",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 3552,
+      "sha256": "359b9dd0b712a32e8054eebc8dcd4dfd1fda00c6e0ce8e0fae40236b680a5c80",
+      "classification": "candidate_owned_temp_helper_after_execution_and_audit_evidence_persisted"
+    },
+    {
+      "path": "/private/tmp/hanpage089_diagnostic.py",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 1184,
+      "sha256": "d126cf993da36fc0c57403fd30ba8735b97219169f3977612d37dcddff7975a1",
+      "classification": "candidate_owned_temp_helper_after_execution_and_audit_evidence_persisted"
+    },
+    {
+      "path": "/private/tmp/hanpage089_local_audit.py",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 1921,
+      "sha256": "3f83d212d3c316d5dcbd8070ef72820c740f4d9859711c7542587e30f62ecd36",
+      "classification": "candidate_owned_temp_helper_after_execution_and_audit_evidence_persisted"
+    },
+    {
+      "path": "/private/tmp/hanpage089_mac_audit.py",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 3046,
+      "sha256": "0cbd9738b3cb1a380178bbe8b2ed7d69fd7d40471407bf9f43d0f40cb598057f",
+      "classification": "candidate_owned_temp_helper_after_execution_and_audit_evidence_persisted"
+    },
+    {
+      "path": "/private/tmp/hanpage089_pr_body.md",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 2568,
+      "sha256": "55224d17af94ce7c948c9fc1e2f1885a6a24759ea9fbc8540cf53c189e7f94e8",
+      "classification": "candidate_owned_temp_helper_after_execution_and_audit_evidence_persisted"
+    },
+    {
+      "path": "/private/tmp/hanpage089_pr_update.py",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 906,
+      "sha256": "5169d6a960281add12928a9c41c5de933302629b99ca6e34e5680a46d859a8f4",
+      "classification": "candidate_owned_temp_helper_after_execution_and_audit_evidence_persisted"
+    },
+    {
+      "path": "/private/tmp/hanpage089_prepare.py",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 3642,
+      "sha256": "5265214b171365ec14c8821bdc140817feccd056034b07807176d6d59c943698",
+      "classification": "candidate_owned_temp_helper_after_execution_and_audit_evidence_persisted"
+    },
+    {
+      "path": "/private/tmp/hanpage089_public_audit.py",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 2822,
+      "sha256": "a4733e8a722dd1f6271d159998dc87a4d209daf9d93c7512287c5d695bd13a32",
+      "classification": "candidate_owned_temp_helper_after_execution_and_audit_evidence_persisted"
+    },
+    {
+      "path": "/private/tmp/hanpage089_record_candidate.py",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 6412,
+      "sha256": "c05c98648d3b2398803d12a5508f2c2f99b2e45c2f89bd491118fcd952e65ca9",
+      "classification": "candidate_owned_temp_helper_after_execution_and_audit_evidence_persisted"
+    },
+    {
+      "path": "/private/tmp/hanpage089_release_final_audit.py",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 5157,
+      "sha256": "7c5700fb5f7de9e9e325305951b29998fc252d6841c72dc6d72ba5727a1a4159",
+      "classification": "candidate_owned_temp_helper_after_execution_and_audit_evidence_persisted"
+    },
+    {
+      "path": "/private/tmp/hanpage089_release_monitor.py",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 6604,
+      "sha256": "2c3450a0488ec77d1c80c35353d0889af2c97b395660a1c1770a6faec7fbd5c0",
+      "classification": "candidate_owned_temp_helper_after_execution_and_audit_evidence_persisted"
+    },
+    {
+      "path": "/private/tmp/hanpage089_release_notes.md",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 1085,
+      "sha256": "fb9a7f5f81d82a91dccf84011aec474726ab99b9f109e95648849547a2cd43a2",
+      "classification": "candidate_owned_temp_helper_after_execution_and_audit_evidence_persisted"
+    },
+    {
+      "path": "/private/tmp/hanpage089_review_tail.py",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 8184,
+      "sha256": "83ca27fb639200981a47ef754f4884aece8e012c1c56d6ea76f60be0b19eb334",
+      "classification": "candidate_owned_temp_helper_after_execution_and_audit_evidence_persisted"
+    }
+  ],
+  "semantic_evidence_to_persist": [
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/ci-code-candidate.json",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 154929,
+      "sha256": "747b175e6eceeb7acf05ffc0889107d4aa7f6e721d846c4905b8fed7b07db6e8",
+      "same_bytes_tracked": [],
+      "retain_or_persist_before_cleanup": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/ci-review-tail.json",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 87005,
+      "sha256": "f812da346df8c79d554005eeafdc3526ac077d7b83e0580df343af92d0e35574",
+      "same_bytes_tracked": [],
+      "retain_or_persist_before_cleanup": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/ci-postmerge.json",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 4861,
+      "sha256": "60e6fead7777034389574d53b1927c41c6a8f0dae75d683374ce14fbc7877658",
+      "same_bytes_tracked": [],
+      "retain_or_persist_before_cleanup": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/release-workflow.json",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 14925,
+      "sha256": "b21a6171b61397dacfd5826ad98039a79b5d5522c679f463db8946774934328b",
+      "same_bytes_tracked": [],
+      "retain_or_persist_before_cleanup": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/draft-release.json",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 11797,
+      "sha256": "14ddf73f5acd61a58505d48f4ced4559a84f82c0683a9496dcd692847d8057d3",
+      "same_bytes_tracked": [],
+      "retain_or_persist_before_cleanup": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/artifact-audit.json",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 24264,
+      "sha256": "712597bb5aab8ee91170ad49bca2518b222b3a4a8f0734e453c6eb779917b9ef",
+      "same_bytes_tracked": [],
+      "retain_or_persist_before_cleanup": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/macos-bundle.json",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 549,
+      "sha256": "9bfaab68692d0f3e6c6a355693a45a40a446b291fe35f09615acbd4397bfd37e",
+      "same_bytes_tracked": [],
+      "retain_or_persist_before_cleanup": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/dmg.json",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 604,
+      "sha256": "6f3c50c0b1abe8eb56d8eab81f634ec87a6cd48282aa800532b67c9333a0f46b",
+      "same_bytes_tracked": [],
+      "retain_or_persist_before_cleanup": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/public-verification.json",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 2252,
+      "sha256": "aa60f42de1cdbe3bdd1a76282714e3179c30c1cc8a92fc635a63fde086c97259",
+      "same_bytes_tracked": [],
+      "retain_or_persist_before_cleanup": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/public-release.json",
+      "exists": true,
+      "is_symlink": false,
+      "bytes": 15124,
+      "sha256": "355a8504466d6bfd360f6f9e3c0e38610ba86ed886fcfc1815e59116a33298b8",
+      "same_bytes_tracked": [],
+      "retain_or_persist_before_cleanup": true
+    }
+  ],
+  "cleanup_conditions": [
+    "Root must finish signed release audits and public endpoint verification before cleaning deployment assets.",
+    "Required semantic summaries and selected permanent images must be committed on devel before removing owned outputs. The final candidate CI JSON differs from its earlier tracked copy and must be updated.",
+    "Recheck active processes and hdiutil mounts immediately before removal. Do not terminate unrelated Vite/copilot tasks.",
+    "Unlink managed node_modules symlinks only if literal targets still match primary targets; never recurse into primary dependencies.",
+    "Remove only ignored/generated owned files whose current hash matches this inventory; retain tracked rhwp-studio/public/rhwp.js.",
+    "Archive managed worktree only through app lifecycle tool; retain path with reason if pinned/protected. Contributor fork branch retained; branch/worktree cleanup is root responsibility.",
+    "Rehash all 39 primary files and compare exact HEAD/status after cleanup."
+  ]
+}

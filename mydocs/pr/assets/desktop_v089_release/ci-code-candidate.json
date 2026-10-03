@@ -383,21 +383,12 @@
       "jobs": [
         {
           "id": 110729963957,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAUptQ",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729963957",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110729963957",
+          "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:08Z",
           "started_at": "2026-10-02T06:16:10Z",
           "completed_at": "2026-10-02T06:16:16Z",
-          "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110729963957",
           "steps": [
             {
               "name": "Set up job",
@@ -495,60 +486,26 @@
               "started_at": "2026-10-02T06:16:14Z",
               "completed_at": "2026-10-02T06:16:14Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729963957",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005521,
-          "runner_name": "GitHub Actions 1000005521",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110729965073,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAUuEQ",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729965073",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110729965073",
+          "name": "WASM Build",
           "status": "completed",
           "conclusion": "skipped",
-          "created_at": "2026-10-02T06:16:08Z",
           "started_at": "2026-10-02T06:16:08Z",
           "completed_at": "2026-10-02T06:16:07Z",
-          "name": "WASM Build",
-          "steps": [],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729965073",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": null,
-          "runner_name": null,
-          "runner_group_id": null,
-          "runner_group_name": null
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110729965073",
+          "steps": []
         },
         {
           "id": 110729999952,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAW2UA",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729999952",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110729999952",
+          "name": "CI preflight",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:17Z",
           "started_at": "2026-10-02T06:16:19Z",
           "completed_at": "2026-10-02T06:16:38Z",
-          "name": "CI preflight",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110729999952",
           "steps": [
             {
               "name": "Set up job",
@@ -646,33 +603,16 @@
               "started_at": "2026-10-02T06:16:35Z",
               "completed_at": "2026-10-02T06:16:35Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729999952",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005525,
-          "runner_name": "GitHub Actions 1000005525",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110730082204,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAb3nA",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730082204",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082204",
+          "name": "Frontend package gates",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:38Z",
           "started_at": "2026-10-02T06:16:40Z",
           "completed_at": "2026-10-02T06:25:56Z",
-          "name": "Frontend package gates",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082204",
           "steps": [
             {
               "name": "Set up job",
@@ -882,33 +822,16 @@
               "started_at": "2026-10-02T06:25:55Z",
               "completed_at": "2026-10-02T06:25:55Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730082204",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005534,
-          "runner_name": "GitHub Actions 1000005534",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110730082227,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAb3sw",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730082227",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082227",
+          "name": "Lint (fmt, clippy, WASM check)",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:38Z",
           "started_at": "2026-10-02T06:16:40Z",
           "completed_at": "2026-10-02T06:26:40Z",
-          "name": "Lint (fmt, clippy, WASM check)",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082227",
           "steps": [
             {
               "name": "Set up job",
@@ -1118,33 +1041,16 @@
               "started_at": "2026-10-02T06:26:39Z",
               "completed_at": "2026-10-02T06:26:39Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730082227",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005536,
-          "runner_name": "GitHub Actions 1000005536",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110730082244,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAb3xA",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730082244",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082244",
+          "name": "Native Skia tests",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:38Z",
           "started_at": "2026-10-02T06:16:40Z",
           "completed_at": "2026-10-02T06:27:15Z",
-          "name": "Native Skia tests",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082244",
           "steps": [
             {
               "name": "Set up job",
@@ -1234,33 +1140,16 @@
               "started_at": "2026-10-02T06:27:12Z",
               "completed_at": "2026-10-02T06:27:12Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730082244",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005533,
-          "runner_name": "GitHub Actions 1000005533",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110730082306,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAb4Ag",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730082306",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082306",
+          "name": "Resolve nextest target duration policy",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:38Z",
           "started_at": "2026-10-02T06:16:40Z",
           "completed_at": "2026-10-02T06:16:44Z",
-          "name": "Resolve nextest target duration policy",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082306",
           "steps": [
             {
               "name": "Set up job",
@@ -1286,33 +1175,16 @@
               "started_at": "2026-10-02T06:16:42Z",
               "completed_at": "2026-10-02T06:16:42Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730082306",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005535,
-          "runner_name": "GitHub Actions 1000005535",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110730082408,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAb4aA",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730082408",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082408",
+          "name": "build-test-archive-a / Build test archive (a)",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:38Z",
           "started_at": "2026-10-02T06:16:40Z",
           "completed_at": "2026-10-02T06:23:49Z",
-          "name": "build-test-archive-a / Build test archive (a)",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730082408",
           "steps": [
             {
               "name": "Set up job",
@@ -1434,87 +1306,36 @@
               "started_at": "2026-10-02T06:23:48Z",
               "completed_at": "2026-10-02T06:23:48Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730082408",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005537,
-          "runner_name": "GitHub Actions 1000005537",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110730083406,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAb8Tg",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730083406",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730083406",
+          "name": "Workflow promotion preflight",
           "status": "completed",
           "conclusion": "skipped",
-          "created_at": "2026-10-02T06:16:38Z",
           "started_at": "2026-10-02T06:16:38Z",
           "completed_at": "2026-10-02T06:16:38Z",
-          "name": "Workflow promotion preflight",
-          "steps": [],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730083406",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": null,
-          "runner_name": null,
-          "runner_group_id": null,
-          "runner_group_name": null
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730083406",
+          "steps": []
         },
         {
           "id": 110730083442,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAb8cg",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730083442",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730083442",
+          "name": "Frontend unit gates",
           "status": "completed",
           "conclusion": "skipped",
-          "created_at": "2026-10-02T06:16:38Z",
           "started_at": "2026-10-02T06:16:38Z",
           "completed_at": "2026-10-02T06:16:38Z",
-          "name": "Frontend unit gates",
-          "steps": [],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730083442",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": null,
-          "runner_name": null,
-          "runner_group_id": null,
-          "runner_group_name": null
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730083442",
+          "steps": []
         },
         {
           "id": 110730108648,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAde6A",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730108648",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730108648",
+          "name": "build-test-archive-c / Build test archive (c)",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:45Z",
           "started_at": "2026-10-02T06:16:48Z",
           "completed_at": "2026-10-02T06:26:13Z",
-          "name": "build-test-archive-c / Build test archive (c)",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730108648",
           "steps": [
             {
               "name": "Set up job",
@@ -1636,33 +1457,16 @@
               "started_at": "2026-10-02T06:26:11Z",
               "completed_at": "2026-10-02T06:26:11Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730108648",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005538,
-          "runner_name": "GitHub Actions 1000005538",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110730108713,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAdfKQ",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730108713",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730108713",
+          "name": "build-test-archive-d / Build test archive (d)",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:45Z",
           "started_at": "2026-10-02T06:16:47Z",
           "completed_at": "2026-10-02T06:26:18Z",
-          "name": "build-test-archive-d / Build test archive (d)",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730108713",
           "steps": [
             {
               "name": "Set up job",
@@ -1784,33 +1588,16 @@
               "started_at": "2026-10-02T06:26:16Z",
               "completed_at": "2026-10-02T06:26:16Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730108713",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005539,
-          "runner_name": "GitHub Actions 1000005539",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110730108717,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAdfLQ",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730108717",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730108717",
+          "name": "build-test-archive-b / Build test archive (b)",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:45Z",
           "started_at": "2026-10-02T06:16:46Z",
           "completed_at": "2026-10-02T06:26:11Z",
-          "name": "build-test-archive-b / Build test archive (b)",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110730108717",
           "steps": [
             {
               "name": "Set up job",
@@ -1932,33 +1719,16 @@
               "started_at": "2026-10-02T06:26:09Z",
               "completed_at": "2026-10-02T06:26:10Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730108717",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005540,
-          "runner_name": "GitHub Actions 1000005540",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110731797877,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyCEldQ",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110731797877",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110731797877",
+          "name": "test-archive-a-shard-1 / Default-feature tests (Archive A)",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:23:50Z",
           "started_at": "2026-10-02T06:23:52Z",
           "completed_at": "2026-10-02T06:27:48Z",
-          "name": "test-archive-a-shard-1 / Default-feature tests (Archive A)",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110731797877",
           "steps": [
             {
               "name": "Set up job",
@@ -2048,33 +1818,16 @@
               "started_at": "2026-10-02T06:27:46Z",
               "completed_at": "2026-10-02T06:27:46Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110731797877",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005544,
-          "runner_name": "GitHub Actions 1000005544",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110732372078,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyCnobg",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110732372078",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110732372078",
+          "name": "test-archive-b-shard-1 / Default-feature tests (Archive B)",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:26:11Z",
           "started_at": "2026-10-02T06:26:13Z",
           "completed_at": "2026-10-02T06:34:17Z",
-          "name": "test-archive-b-shard-1 / Default-feature tests (Archive B)",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110732372078",
           "steps": [
             {
               "name": "Set up job",
@@ -2164,33 +1917,16 @@
               "started_at": "2026-10-02T06:34:15Z",
               "completed_at": "2026-10-02T06:34:15Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110732372078",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005545,
-          "runner_name": "GitHub Actions 1000005545",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110732383285,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyCoUNQ",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110732383285",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110732383285",
+          "name": "test-archive-c-shard-1 / Default-feature tests (Archive C)",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:26:14Z",
           "started_at": "2026-10-02T06:26:16Z",
           "completed_at": "2026-10-02T06:31:50Z",
-          "name": "test-archive-c-shard-1 / Default-feature tests (Archive C)",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110732383285",
           "steps": [
             {
               "name": "Set up job",
@@ -2280,33 +2016,16 @@
               "started_at": "2026-10-02T06:31:48Z",
               "completed_at": "2026-10-02T06:31:49Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110732383285",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005546,
-          "runner_name": "GitHub Actions 1000005546",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110732400922,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyCpZGg",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110732400922",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110732400922",
+          "name": "test-archive-d-shard-1 / Default-feature tests (Archive D)",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:26:18Z",
           "started_at": "2026-10-02T06:26:21Z",
           "completed_at": "2026-10-02T06:36:02Z",
-          "name": "test-archive-d-shard-1 / Default-feature tests (Archive D)",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110732400922",
           "steps": [
             {
               "name": "Set up job",
@@ -2396,33 +2115,16 @@
               "started_at": "2026-10-02T06:36:00Z",
               "completed_at": "2026-10-02T06:36:00Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110732400922",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005547,
-          "runner_name": "GitHub Actions 1000005547",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110734769241,
-          "run_id": 36972737552,
-          "workflow_name": "CI",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737552",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyE58WQ",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110734769241",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110734769241",
+          "name": "Build & Test",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:36:03Z",
           "started_at": "2026-10-02T06:36:04Z",
           "completed_at": "2026-10-02T06:36:12Z",
-          "name": "Build & Test",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737552/job/110734769241",
           "steps": [
             {
               "name": "Set up job",
@@ -2496,15 +2198,7 @@
               "started_at": "2026-10-02T06:36:10Z",
               "completed_at": "2026-10-02T06:36:10Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110734769241",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005551,
-          "runner_name": "GitHub Actions 1000005551",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         }
       ]
     },
@@ -2546,21 +2240,12 @@
       "jobs": [
         {
           "id": 110729962026,
-          "run_id": 36972737024,
-          "workflow_name": "CodeQL",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737024",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAUiKg",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729962026",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110729962026",
+          "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:07Z",
           "started_at": "2026-10-02T06:16:09Z",
           "completed_at": "2026-10-02T06:16:15Z",
-          "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110729962026",
           "steps": [
             {
               "name": "Set up job",
@@ -2658,33 +2343,16 @@
               "started_at": "2026-10-02T06:16:13Z",
               "completed_at": "2026-10-02T06:16:13Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729962026",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005520,
-          "runner_name": "GitHub Actions 1000005520",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110729993161,
-          "run_id": 36972737024,
-          "workflow_name": "CodeQL",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737024",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAWbyQ",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729993161",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110729993161",
+          "name": "CodeQL preflight",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:15Z",
           "started_at": "2026-10-02T06:16:17Z",
           "completed_at": "2026-10-02T06:16:34Z",
-          "name": "CodeQL preflight",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110729993161",
           "steps": [
             {
               "name": "Set up job",
@@ -2782,33 +2450,16 @@
               "started_at": "2026-10-02T06:16:32Z",
               "completed_at": "2026-10-02T06:16:32Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729993161",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005524,
-          "runner_name": "GitHub Actions 1000005524",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110730065332,
-          "run_id": 36972737024,
-          "workflow_name": "CodeQL",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737024",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAa1tA",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730065332",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110730065332",
+          "name": "Analyze (javascript-typescript)",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:34Z",
           "started_at": "2026-10-02T06:16:36Z",
           "completed_at": "2026-10-02T06:21:44Z",
-          "name": "Analyze (javascript-typescript)",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110730065332",
           "steps": [
             {
               "name": "Set up job",
@@ -2914,33 +2565,16 @@
               "started_at": "2026-10-02T06:21:40Z",
               "completed_at": "2026-10-02T06:21:40Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730065332",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005532,
-          "runner_name": "GitHub Actions 1000005532",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110730065348,
-          "run_id": 36972737024,
-          "workflow_name": "CodeQL",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737024",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAa1xA",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730065348",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110730065348",
+          "name": "Analyze (rust)",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:34Z",
           "started_at": "2026-10-02T06:16:36Z",
           "completed_at": "2026-10-02T06:31:44Z",
-          "name": "Analyze (rust)",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110730065348",
           "steps": [
             {
               "name": "Set up job",
@@ -3046,33 +2680,16 @@
               "started_at": "2026-10-02T06:31:41Z",
               "completed_at": "2026-10-02T06:31:41Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730065348",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005530,
-          "runner_name": "GitHub Actions 1000005530",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110730065399,
-          "run_id": 36972737024,
-          "workflow_name": "CodeQL",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737024",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAa19w",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730065399",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110730065399",
+          "name": "Analyze (python)",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:34Z",
           "started_at": "2026-10-02T06:16:36Z",
           "completed_at": "2026-10-02T06:20:09Z",
-          "name": "Analyze (python)",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737024/job/110730065399",
           "steps": [
             {
               "name": "Set up job",
@@ -3178,15 +2795,7 @@
               "started_at": "2026-10-02T06:20:07Z",
               "completed_at": "2026-10-02T06:20:07Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730065399",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005531,
-          "runner_name": "GitHub Actions 1000005531",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         }
       ]
     },
@@ -3228,21 +2837,12 @@
       "jobs": [
         {
           "id": 110729961312,
-          "run_id": 36972736747,
-          "workflow_name": "Render Diff",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972736747",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAUfYA",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729961312",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972736747/job/110729961312",
+          "name": "Render Diff preflight",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:07Z",
           "started_at": "2026-10-02T06:16:10Z",
           "completed_at": "2026-10-02T06:16:21Z",
-          "name": "Render Diff preflight",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972736747/job/110729961312",
           "steps": [
             {
               "name": "Set up job",
@@ -3332,33 +2932,16 @@
               "started_at": "2026-10-02T06:16:18Z",
               "completed_at": "2026-10-02T06:16:18Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729961312",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005518,
-          "runner_name": "GitHub Actions 1000005518",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110730015901,
-          "run_id": 36972736747,
-          "workflow_name": "Render Diff",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972736747",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAX0nQ",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730015901",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972736747/job/110730015901",
+          "name": "Canvas visual diff",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:21Z",
           "started_at": "2026-10-02T06:16:23Z",
           "completed_at": "2026-10-02T06:22:44Z",
-          "name": "Canvas visual diff",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972736747/job/110730015901",
           "steps": [
             {
               "name": "Set up job",
@@ -3528,15 +3111,7 @@
               "started_at": "2026-10-02T06:22:41Z",
               "completed_at": "2026-10-02T06:22:41Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730015901",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005528,
-          "runner_name": "GitHub Actions 1000005528",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         }
       ]
     },
@@ -3578,21 +3153,12 @@
       "jobs": [
         {
           "id": 110729962116,
-          "run_id": 36972737059,
-          "workflow_name": "Adapter inter-diff",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737059",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAUihA",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729962116",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737059/job/110729962116",
+          "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:07Z",
           "started_at": "2026-10-02T06:16:09Z",
           "completed_at": "2026-10-02T06:16:13Z",
-          "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737059/job/110729962116",
           "steps": [
             {
               "name": "Set up job",
@@ -3690,33 +3256,16 @@
               "started_at": "2026-10-02T06:16:12Z",
               "completed_at": "2026-10-02T06:16:12Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729962116",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005519,
-          "runner_name": "GitHub Actions 1000005519",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110729985028,
-          "run_id": 36972737059,
-          "workflow_name": "Adapter inter-diff",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737059",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAV8BA",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729985028",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737059/job/110729985028",
+          "name": "adapter inter-diff preflight",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:13Z",
           "started_at": "2026-10-02T06:16:15Z",
           "completed_at": "2026-10-02T06:16:19Z",
-          "name": "adapter inter-diff preflight",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737059/job/110729985028",
           "steps": [
             {
               "name": "Set up job",
@@ -3766,33 +3315,16 @@
               "started_at": "2026-10-02T06:16:18Z",
               "completed_at": "2026-10-02T06:16:18Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729985028",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005523,
-          "runner_name": "GitHub Actions 1000005523",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110730008450,
-          "run_id": 36972737059,
-          "workflow_name": "Adapter inter-diff",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737059",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAXXgg",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730008450",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737059/job/110730008450",
+          "name": "adapter inter-diff",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:19Z",
           "started_at": "2026-10-02T06:16:21Z",
           "completed_at": "2026-10-02T06:20:22Z",
-          "name": "adapter inter-diff",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737059/job/110730008450",
           "steps": [
             {
               "name": "Set up job",
@@ -3890,15 +3422,7 @@
               "started_at": "2026-10-02T06:20:20Z",
               "completed_at": "2026-10-02T06:20:21Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730008450",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005527,
-          "runner_name": "GitHub Actions 1000005527",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         }
       ]
     },
@@ -3940,21 +3464,12 @@
       "jobs": [
         {
           "id": 110729963182,
-          "run_id": 36972737100,
-          "workflow_name": "Proptest roundtrip",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737100",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAUmrg",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110729963182",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737100/job/110729963182",
+          "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:07Z",
           "started_at": "2026-10-02T06:16:10Z",
           "completed_at": "2026-10-02T06:16:16Z",
-          "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737100/job/110729963182",
           "steps": [
             {
               "name": "Set up job",
@@ -4052,33 +3567,16 @@
               "started_at": "2026-10-02T06:16:14Z",
               "completed_at": "2026-10-02T06:16:14Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110729963182",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005522,
-          "runner_name": "GitHub Actions 1000005522",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110730000217,
-          "run_id": 36972737100,
-          "workflow_name": "Proptest roundtrip",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737100",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAW3WQ",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730000217",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737100/job/110730000217",
+          "name": "Proptest preflight",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:17Z",
           "started_at": "2026-10-02T06:16:18Z",
           "completed_at": "2026-10-02T06:16:23Z",
-          "name": "Proptest preflight",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737100/job/110730000217",
           "steps": [
             {
               "name": "Set up job",
@@ -4128,33 +3626,16 @@
               "started_at": "2026-10-02T06:16:22Z",
               "completed_at": "2026-10-02T06:16:22Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730000217",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005526,
-          "runner_name": "GitHub Actions 1000005526",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         },
         {
           "id": 110730023310,
-          "run_id": 36972737100,
-          "workflow_name": "Proptest roundtrip",
-          "head_branch": "codex/desktop-update-quiet-20261002",
-          "run_url": "https://api.github.com/repos/paldyn/HanPage/actions/runs/36972737100",
-          "run_attempt": 1,
-          "node_id": "CR_kwDOSrG7qs8AAAAZyAYRjg",
-          "head_sha": "4561a2a0b2603eaae74a4b848f6621451cf19bf5",
-          "url": "https://api.github.com/repos/paldyn/HanPage/actions/jobs/110730023310",
-          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737100/job/110730023310",
+          "name": "prop roundtrip",
           "status": "completed",
           "conclusion": "success",
-          "created_at": "2026-10-02T06:16:23Z",
           "started_at": "2026-10-02T06:16:25Z",
           "completed_at": "2026-10-02T06:21:09Z",
-          "name": "prop roundtrip",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/36972737100/job/110730023310",
           "steps": [
             {
               "name": "Set up job",
@@ -4236,15 +3717,7 @@
               "started_at": "2026-10-02T06:21:08Z",
               "completed_at": "2026-10-02T06:21:08Z"
             }
-          ],
-          "check_run_url": "https://api.github.com/repos/paldyn/HanPage/check-runs/110730023310",
-          "labels": [
-            "ubuntu-latest"
-          ],
-          "runner_id": 1000005529,
-          "runner_name": "GitHub Actions 1000005529",
-          "runner_group_id": 0,
-          "runner_group_name": "GitHub Actions"
+          ]
         }
       ]
     }
@@ -4254,7 +3727,7 @@
   "preflightEvidence": {
     "CI": {
       "jobId": 110729999952,
-      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-preflight-110729999952.log",
+      "logFile": "output/pr-review/desktop089/logs/candidate-preflight-110729999952.log",
       "sha256": "e6ae2779832273dee3df15bd6e2e0500d207532e460e6d3800520af33341bb54",
       "bytes": 44059,
       "fast_pass": false,
@@ -4271,7 +3744,7 @@
     },
     "CodeQL": {
       "jobId": 110729993161,
-      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-preflight-110729993161.log",
+      "logFile": "output/pr-review/desktop089/logs/candidate-preflight-110729993161.log",
       "sha256": "2568b2a7aaff293cbe8b0c0f834a9b023424276326c6735abbd4f9645d9b9143",
       "bytes": 42606,
       "fast_pass": false,
@@ -4284,7 +3757,7 @@
     },
     "Render Diff": {
       "jobId": 110729961312,
-      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-preflight-110729961312.log",
+      "logFile": "output/pr-review/desktop089/logs/candidate-preflight-110729961312.log",
       "sha256": "76a88a0c2334e74d85b0988a8cb61d3f06d29013e604fd9a23636ad100f0d462",
       "bytes": 36221,
       "fast_pass": false,
@@ -4296,7 +3769,7 @@
     },
     "Adapter inter-diff": {
       "jobId": 110729985028,
-      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-preflight-110729985028.log",
+      "logFile": "output/pr-review/desktop089/logs/candidate-preflight-110729985028.log",
       "sha256": "73a9d9a55135ef093cda8e96925f88172e8cc65fa9efd62515affd7aefc7af18",
       "bytes": 12587,
       "adapter_required": true,
@@ -4304,7 +3777,7 @@
     },
     "Proptest roundtrip": {
       "jobId": 110730000217,
-      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-preflight-110730000217.log",
+      "logFile": "output/pr-review/desktop089/logs/candidate-preflight-110730000217.log",
       "sha256": "fc949152146f34757566310b3776541b2db40ac8c64da38b04ce81c0cec70658",
       "bytes": 12537,
       "fast_pass": false,
@@ -4314,7 +3787,7 @@
   "resultEvidence": {
     "Adapter inter-diff": {
       "jobId": 110730008450,
-      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110730008450.log",
+      "logFile": "output/pr-review/desktop089/logs/candidate-result-110730008450.log",
       "logSha256": "1bb40702057874101e9d86ddb707ee356cc057a143476e4dd39af3952e3a346f",
       "logBytes": 266159,
       "testGroups": [
@@ -4332,7 +3805,7 @@
     },
     "Proptest roundtrip": {
       "jobId": 110730023310,
-      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110730023310.log",
+      "logFile": "output/pr-review/desktop089/logs/candidate-result-110730023310.log",
       "logSha256": "fdcbf70e15562c8a9dc13a7c446617f722fb5a762004a71593b1bd514a905bcf",
       "logBytes": 273233,
       "testGroups": [
@@ -4390,7 +3863,7 @@
     },
     "Render Diff": {
       "jobId": 110730015901,
-      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110730015901.log",
+      "logFile": "output/pr-review/desktop089/logs/candidate-result-110730015901.log",
       "logSha256": "18513b0d2a6711f087529c16df7cb531d028bcb5531179212166aea403642376",
       "logBytes": 107075,
       "reportOnlyPdf": true,
@@ -4472,7 +3945,7 @@
     },
     "Frontend package gates": {
       "jobId": 110730082204,
-      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110730082204.log",
+      "logFile": "output/pr-review/desktop089/logs/candidate-result-110730082204.log",
       "logSha256": "a84a1e210e46a8b4382a7a4f20ba7fc33155b26ed7fbbfbc097ed11a9e72363a",
       "logBytes": 1139849,
       "unitSummaries": [
@@ -4635,11 +4108,19 @@
           "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
           "conclusion": "success"
         }
+      ],
+      "rustCommands": [
+        "cargo fmt --all -- --check",
+        "cargo clippy -- -D warnings",
+        "cargo clippy -p rhwp --lib --target wasm32-unknown-unknown -- -D warnings",
+        "cargo build --workspace",
+        "cargo clippy --workspace --all-targets -- -D warnings",
+        "cargo check --target wasm32-unknown-unknown --lib"
       ]
     },
     "Native Skia": {
       "jobId": 110730082244,
-      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110730082244.log",
+      "logFile": "output/pr-review/desktop089/logs/candidate-result-110730082244.log",
       "logSha256": "519b418ab6b2c6d2ddc033908d1a625335bf1bdd31877696a11f7b863d0957c1",
       "logBytes": 1174604,
       "testGroups": [
@@ -4716,9 +4197,39 @@
     },
     "Build & Test": {
       "jobId": 110734769241,
-      "logFile": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089/logs/candidate-result-110734769241.log",
+      "logFile": "output/pr-review/desktop089/logs/candidate-result-110734769241.log",
       "logSha256": "8a576ad54cf156616e044eef8034fb3de1b2ef541e86c0bfee9c9780168f2435",
-      "logBytes": 23170
+      "logBytes": 23170,
+      "defaultFeatureNextest": {
+        "expectedArchiveTests": 10090,
+        "actualExecutedTests": 10090,
+        "countsMatch": true,
+        "successfulWorkers": 4,
+        "failedWorkers": 0,
+        "workers": [
+          {
+            "id": 110731797877,
+            "name": "test-archive-a-shard-1 / Default-feature tests (Archive A)",
+            "conclusion": "success"
+          },
+          {
+            "id": 110732372078,
+            "name": "test-archive-b-shard-1 / Default-feature tests (Archive B)",
+            "conclusion": "success"
+          },
+          {
+            "id": 110732383285,
+            "name": "test-archive-c-shard-1 / Default-feature tests (Archive C)",
+            "conclusion": "success"
+          },
+          {
+            "id": 110732400922,
+            "name": "test-archive-d-shard-1 / Default-feature tests (Archive D)",
+            "conclusion": "success"
+          }
+        ],
+        "semanticCountMethod": "Each worker derives shard-count from nextest Summary tests run; Build & Test compares every archive expected count with its executed shard count and verifies all worker results."
+      }
     }
   },
   "testedMerge": {
@@ -4744,7 +4255,6 @@
     "html_url": "https://github.com/paldyn/HanPage/runs/110730870286",
     "output": {
       "title": "1 configuration not found",
-      "summary": "**Warning**: Code scanning cannot determine the alerts introduced by this pull request, because 1 configuration present on `refs/heads/devel` was not found:\n\n### Actions workflow (`codeql.yml`)\n\n* :hourglass:&nbsp;&nbsp;`.github/workflows/codeql.yml:analyze/language:rust`\n\n\n[View all branch alerts](/paldyn/HanPage/security/code-scanning?query=pr%3A116+tool%3ACodeQL+is%3Aopen).",
       "annotations_count": 0
     }
   },
@@ -4759,7 +4269,6 @@
     "html_url": "https://github.com/paldyn/HanPage/runs/110730870286",
     "output": {
       "title": "No new alerts in code changed by this pull request",
-      "summary": "[View all branch alerts](/paldyn/HanPage/security/code-scanning?query=pr%3A116+tool%3ACodeQL+is%3Aopen).",
       "annotations_count": 0
     }
   },
@@ -4830,5 +4339,21 @@
     "allWarningsEmpty": true,
     "totalResults": 0,
     "rawApiFile": "output/pr-review/desktop089/logs/candidate-codeql-analyses-api.json"
-  }
+  },
+  "allSuccess": true,
+  "allChecksComplete": true,
+  "allWorkflowHeadIdentityExact": true,
+  "allWorkflowPrIdentityExact": true,
+  "codeqlIntermediateCheckSuperseded": true,
+  "candidateValidationCompleted": true,
+  "auditCompletedAt": "2026-10-02T06:38:17.535278+00:00",
+  "jobCounts": {
+    "total": 31,
+    "success": 28,
+    "skipped": 3,
+    "failed": 0,
+    "queued": 0,
+    "inProgress": 0
+  },
+  "rawFinalMetadataFile": "output/pr-review/desktop089/logs/candidate-final-metadata.json"
 }
