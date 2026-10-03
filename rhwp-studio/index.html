@@ -10,7 +10,8 @@
   <script src="/theme-init.js"></script>
   <!-- 언어팩: 번들 전에 <html lang> 을 고른 로케일로 — 영어 사용자의 첫 페인트 깜빡임 방지 -->
   <script src="/locale-init.js"></script>
-  <link rel="icon" href="/favicon.ico" />
+  <!-- Vite fingerprints this asset so browsers request the current logo. -->
+  <link rel="icon" type="image/x-icon" href="/src/assets/hanpage-favicon.ico" />
   <link rel="apple-touch-icon" href="/icons/icon-256.png" />
   <title>HanPage</title>
   <link rel="stylesheet" href="/src/style.css" />
