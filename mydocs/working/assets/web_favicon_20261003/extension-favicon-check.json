@@ -1,0 +1,61 @@
+{
+  "source_sha": "a4ddf332745998970b1d28f690e610a1e92c340a",
+  "observed_at": "2026-10-03T04:35:26.961656+00:00",
+  "scope": "Actual extension Vite config builds only; full extension package build and browser installation were not executed.",
+  "expected_favicon_sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+  "extensions": [
+    {
+      "name": "chrome",
+      "command": [
+        "/Users/lwm/.nvm/versions/node/v22.22.1/bin/node",
+        "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/rhwp-studio/node_modules/vite/bin/vite.js",
+        "build",
+        "--config",
+        "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-chrome/vite.config.ts",
+        "--outDir",
+        "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/web-favicon-20261003/extension-chrome"
+      ],
+      "exit_code": 0,
+      "log": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/web-favicon-20261003/extension-chrome-build.log",
+      "temporary_node_modules_created": true,
+      "status": "PASS",
+      "favicon_href": "/assets/hanpage-favicon-DGxGu2KG.ico",
+      "favicon_sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+      "favicon_exists": true,
+      "apple_touch_href": "/icons/icon-256.png",
+      "legacy_apple_copy_rule_present": true,
+      "apple_copy_check_scope": "Simulated unchanged build.mjs copy into isolated config output; full packaging not run.",
+      "apple_source_sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3",
+      "apple_copied_sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3"
+    },
+    {
+      "name": "firefox",
+      "command": [
+        "/Users/lwm/.nvm/versions/node/v22.22.1/bin/node",
+        "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/rhwp-studio/node_modules/vite/bin/vite.js",
+        "build",
+        "--config",
+        "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-firefox/vite.config.ts",
+        "--outDir",
+        "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/web-favicon-20261003/extension-firefox"
+      ],
+      "exit_code": 0,
+      "log": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/web-favicon-20261003/extension-firefox-build.log",
+      "temporary_node_modules_created": true,
+      "status": "PASS",
+      "favicon_href": "/assets/hanpage-favicon-DGxGu2KG.ico",
+      "favicon_sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+      "favicon_exists": true,
+      "apple_touch_href": "/icons/icon-256.png",
+      "legacy_apple_copy_rule_present": true,
+      "apple_copy_check_scope": "Simulated unchanged build.mjs copy into isolated config output; full packaging not run.",
+      "apple_source_sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3",
+      "apple_copied_sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3"
+    }
+  ],
+  "status": "PASS",
+  "temporary_links_removed": [
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-chrome/node_modules",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-firefox/node_modules"
+  ]
+}

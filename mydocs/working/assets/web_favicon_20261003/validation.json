@@ -1,0 +1,28 @@
+{
+  "source_sha": "a4ddf332745998970b1d28f690e610a1e92c340a",
+  "web_build_and_typescript": "PASS",
+  "studio_test": {
+    "pass": 1834,
+    "skip": 2,
+    "fail": 0
+  },
+  "browser": "PASS",
+  "browser_uncaught_exceptions": 0,
+  "browser_offline_branding_urls": 6,
+  "extension_vite_configs": [
+    "Chrome PASS",
+    "Firefox PASS"
+  ],
+  "engine_wasm": "unchanged source; existing compiled WASM reused; no fresh-engine claim",
+  "primary": {
+    "head": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+    "original_39_status_bytes_sha256_preserved": true
+  },
+  "public_deployed": false,
+  "remote_push_pr_merge_workflow_mutation": false,
+  "limits": [
+    "Installed PWA icon and browser-toolbar visual rendering were not inspected.",
+    "Full browser-extension package/install were not executed.",
+    "Current main/devel differ by 28383 paths; latest devel promotion would include prior unshipped changes, so web release scope must be reviewed separately."
+  ]
+}

@@ -1,0 +1,1338 @@
+{
+  "generatedAt": "2026-10-03T05:09:30.868353+00:00",
+  "auditMode": "read-only; no source/Git/remote mutation, dispatch, waiver or deployment performed",
+  "repository": "paldyn/HanPage",
+  "baseMainSha": "f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+  "baselineDevelSha": "133f5d31b88a87b46c483af883efbe1ca0298d70",
+  "faviconLocalSourceSha": "4a3f257353e40ad726f29518b468a8eb8d6060c8",
+  "mainIsAncestorOfDevel": false,
+  "ancestorProbeExitCode": 1,
+  "mergeBase": "cecaf1bbfec9a10778484d30ebb747280e7a02af",
+  "mainOnlyCommitCount": 90,
+  "develOnlyCommitCount": 37,
+  "inventory": {
+    "baseSha": "f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+    "candidateSha": "4a3f257353e40ad726f29518b468a8eb8d6060c8",
+    "entries": [
+      {
+        "after": {
+          "gitBlob": "a8d0eec58519d00a3873b75c69a8e4b3160e96ee",
+          "sha256": "7ec2026e9a08ccb20d44abac2b62ed6b41eb05e0ac86068cee754ff395a2d5f2"
+        },
+        "allowedActors": [
+          "edwardkim"
+        ],
+        "allowedEvents": [
+          "workflow_dispatch"
+        ],
+        "before": null,
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "classification": "executable",
+        "evidencePath": ".github/workflows/adapter-diff.yml",
+        "executionMode": "direct",
+        "path": ".github/workflows/adapter-diff.yml",
+        "requiredArtifacts": [],
+        "requiredJobs": [
+          "adapter inter-diff preflight",
+          "adapter inter-diff"
+        ],
+        "requiredSkippedJobs": [],
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "sensitiveSurfaces": [
+          "cache"
+        ],
+        "status": "added"
+      },
+      {
+        "after": {
+          "gitBlob": "ac1895e9c4d9b108c72624e7c289e0150eb50597",
+          "sha256": "b39e14c530d28e000603606b440f35fdfb5a97ec5f2cee3e34d09c41de91580c"
+        },
+        "before": {
+          "gitBlob": "be76ee71af64c0e3d14663629f45b636a4e9bc82",
+          "sha256": "f6e4b6241f3095fbda6c1a29f9ceeebc3e1d68c21085fdb3cafa6724221bf630"
+        },
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "action-ref",
+          "cache",
+          "artifact",
+          "timeout",
+          "job-command"
+        ],
+        "classification": "executable",
+        "path": ".github/workflows/build-nextest-archives.yml",
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "action-ref",
+          "cache",
+          "artifact",
+          "timeout",
+          "job-command"
+        ],
+        "status": "modified"
+      },
+      {
+        "after": {
+          "gitBlob": "4f9cdd2962a1444d40664f3cf62ad8aaa36ecb2a",
+          "sha256": "57cf8b890aee0ad64ef34549635b9d3ecc6c2f814c08c37b590f8f20252338d3"
+        },
+        "before": {
+          "gitBlob": "774c5cffdf5dbae06821f45a061cc9668087d59b",
+          "sha256": "e25efe7bc8e80b82bbfc5ab8b47d4925920de1bdd5f811c71ec3009331a47028"
+        },
+        "changedAxes": [
+          "trigger",
+          "permissions",
+          "cache",
+          "job-command"
+        ],
+        "classification": "executable",
+        "path": ".github/workflows/cache-generation-sweep.yml",
+        "riskAxes": [
+          "trigger",
+          "permissions",
+          "cache",
+          "job-command"
+        ],
+        "status": "modified"
+      },
+      {
+        "after": {
+          "gitBlob": "1f41b1703cc35e83cb5427c013693d03ff03be4f",
+          "sha256": "871776c904d8e6ab957652b4c05ea02f0d41a305dbfc1be49cba278c7c6c5a41"
+        },
+        "before": {
+          "gitBlob": "9f4cbe5acccabe134bfa38f8646a65fa4934118b",
+          "sha256": "2f63b016228f04ffb4da14ab72e544168d299d4d2ee74980c978c414d4bf70c1"
+        },
+        "changedAxes": [
+          "job-command"
+        ],
+        "classification": "executable",
+        "path": ".github/workflows/cancel-stale-pr-runs.yml",
+        "riskAxes": [
+          "job-command"
+        ],
+        "status": "modified"
+      },
+      {
+        "after": {
+          "gitBlob": "b6c1e7e11b6f08af03681b90dbdd2ae5d028c8f8",
+          "sha256": "7169fda273cb2133a67cdfa88ca4aeac5f8cbe4c8c903055e578badd61102210"
+        },
+        "before": null,
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "classification": "executable",
+        "path": ".github/workflows/ci-impact-policy.yml",
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "status": "added"
+      },
+      {
+        "after": {
+          "gitBlob": "b816f46bb6271611521d8b4bb2244da5e3fd0458",
+          "sha256": "bce9a36e41141acca984d50cd3d6aa340a2b326b558b94b3caf348fae27c41f7"
+        },
+        "allowedActors": [
+          "edwardkim"
+        ],
+        "allowedEvents": [
+          "workflow_dispatch"
+        ],
+        "before": {
+          "gitBlob": "88dd662e5119dd53e13e449ee2e505da9f616ec7",
+          "sha256": "1d2c6878ab69b53b0bcb52475e27dfc193c13a6363621d0de73d9b4c6be48517"
+        },
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "artifact",
+          "timeout",
+          "job-command"
+        ],
+        "classification": "executable",
+        "evidencePath": ".github/workflows/ci.yml",
+        "executionMode": "direct",
+        "path": ".github/workflows/ci.yml",
+        "requiredArtifacts": [],
+        "requiredJobs": [
+          "CI preflight",
+          "Build & Test"
+        ],
+        "requiredSkippedJobs": [],
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "artifact",
+          "timeout",
+          "job-command"
+        ],
+        "sensitiveSurfaces": [
+          "cache",
+          "artifact"
+        ],
+        "status": "modified"
+      },
+      {
+        "after": {
+          "gitBlob": "c2b7ce63cd963122ae89a10d3206cfba9eed4e16",
+          "sha256": "8a63044720a74906504210d39464bba83fc694ca330c48e0ab20e5dafe181f95"
+        },
+        "allowedActors": [
+          "edwardkim"
+        ],
+        "allowedEvents": [
+          "workflow_dispatch"
+        ],
+        "before": {
+          "gitBlob": "a1d006ef6531a56aec95b58425d7f2c87bbc32e4",
+          "sha256": "a4b7a29509099ae26ffc609470acb21d7b23e750bd3d619037c7e86abde01d07"
+        },
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "artifact",
+          "job-command",
+          "security"
+        ],
+        "classification": "executable",
+        "evidencePath": ".github/workflows/codeql.yml",
+        "executionMode": "direct",
+        "path": ".github/workflows/codeql.yml",
+        "requiredArtifacts": [],
+        "requiredJobs": [
+          "CodeQL preflight",
+          "Analyze (javascript-typescript)",
+          "Analyze (python)",
+          "Analyze (rust)"
+        ],
+        "requiredSkippedJobs": [],
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "artifact",
+          "job-command",
+          "security"
+        ],
+        "sensitiveSurfaces": [
+          "permissions",
+          "matrix",
+          "security"
+        ],
+        "status": "modified"
+      },
+      {
+        "after": {
+          "gitBlob": "036047b9f46ae5668a947aa659d964d607fb6fbe",
+          "sha256": "92ec207ba55f0ecb884d2072a2e2e3b041be18a6c535db05c9f3673c59f76697"
+        },
+        "allowedActors": [
+          "edwardkim"
+        ],
+        "allowedEvents": [
+          "workflow_dispatch"
+        ],
+        "before": {
+          "gitBlob": "8b1519bd219ea86d8f1436ac61ff2f13fcbe8b73",
+          "sha256": "4f2bc7efb8c91c6acf858e0d0f8ced848c8163582b9c16348f7f039c5cace749"
+        },
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "artifact",
+          "job-command"
+        ],
+        "classification": "executable",
+        "evidencePath": ".github/workflows/deploy-pages.yml",
+        "executionMode": "verify-only",
+        "path": ".github/workflows/deploy-pages.yml",
+        "requiredArtifacts": [
+          "github-pages"
+        ],
+        "requiredJobs": [
+          "Build"
+        ],
+        "requiredSkippedJobs": [
+          "Deploy"
+        ],
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "artifact",
+          "job-command"
+        ],
+        "sensitiveSurfaces": [
+          "permissions",
+          "artifact",
+          "deployment"
+        ],
+        "status": "modified"
+      },
+      {
+        "after": {
+          "gitBlob": "da3d5e580060e46d5d13ce14b1c6976a3b895e45",
+          "sha256": "9f6d515ce7262d8a4f8914950ffb6f7f71821f4ba2673a540a955fc31192e938"
+        },
+        "before": {
+          "gitBlob": "579cd366c32eda01bc66d815804a0c1ca4adee8c",
+          "sha256": "35a1f7f1432880c82b150ba9dc201bc599356f3f0a00f59ca7eda3680572f2a9"
+        },
+        "changedAxes": [
+          "routing",
+          "job-command"
+        ],
+        "classification": "executable",
+        "path": ".github/workflows/desktop-release.yml",
+        "riskAxes": [
+          "routing",
+          "job-command"
+        ],
+        "status": "modified"
+      },
+      {
+        "after": {
+          "gitBlob": "b9c7394b1711d6d73463682a2989188cc42e5c30",
+          "sha256": "425ce384543f6b064149dea2be4c3c567352634b6dea81adb1a5269e7ceb0f97"
+        },
+        "before": null,
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "matrix",
+          "action-ref",
+          "cache",
+          "artifact",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "classification": "executable",
+        "path": ".github/workflows/fuzz-smoke.yml",
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "matrix",
+          "action-ref",
+          "cache",
+          "artifact",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "status": "added"
+      },
+      {
+        "after": {
+          "gitBlob": "635a62929b9b4ff564a9b8ff678fa63529d25b35",
+          "sha256": "248a51625a8ae8a76aceac8b339d3f9788cf771153783cb2a7286db5d6ab949b"
+        },
+        "allowedActors": [
+          "edwardkim"
+        ],
+        "allowedEvents": [
+          "workflow_dispatch"
+        ],
+        "before": null,
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "artifact",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "classification": "executable",
+        "evidencePath": ".github/workflows/gym-release-gate.yml",
+        "executionMode": "contracts-only",
+        "path": ".github/workflows/gym-release-gate.yml",
+        "requiredArtifacts": [],
+        "requiredJobs": [
+          "Gym benchmark contracts"
+        ],
+        "requiredSkippedJobs": [
+          "Full Gym benchmark validation"
+        ],
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "artifact",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "sensitiveSurfaces": [
+          "artifact"
+        ],
+        "status": "added"
+      },
+      {
+        "after": {
+          "gitBlob": "524893b23c8c7e3d566f3e260b5d031ce999a78c",
+          "sha256": "1940d6c182ee9c2aa4f1357647386eb5512c61ff36daaffcf99e111e10d1d628"
+        },
+        "before": null,
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "classification": "executable",
+        "path": ".github/workflows/issue-form-labels.yml",
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "status": "added"
+      },
+      {
+        "after": {
+          "gitBlob": "68095f631bbf4dea76ba6282d7240038777c4cdf",
+          "sha256": "c1909a780066e9fe57ff5bd871fb08d8a0ba71fd973ec5e28ba5189b77076ee7"
+        },
+        "before": null,
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "artifact",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "classification": "executable",
+        "path": ".github/workflows/layout-anomaly-advisory.yml",
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "artifact",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "status": "added"
+      },
+      {
+        "after": null,
+        "before": {
+          "gitBlob": "e9a1cfc72987f95fc8cf073826f3f6288d8e4332",
+          "sha256": "e83d71e6c812adec2a19f07f28f0f891fb25b2d9b3b976f81d2f818719adc6c2"
+        },
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "matrix",
+          "action-ref",
+          "cache",
+          "artifact",
+          "concurrency",
+          "job-command"
+        ],
+        "classification": "executable",
+        "path": ".github/workflows/node-binding.yml",
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "matrix",
+          "action-ref",
+          "cache",
+          "artifact",
+          "concurrency",
+          "job-command"
+        ],
+        "status": "deleted"
+      },
+      {
+        "after": {
+          "gitBlob": "ba99feb542cb5a119db5c07ebc3d6f8c67d65087",
+          "sha256": "273f219f527cf7779ff924c406240dc7d286e840893514d5a29bd7c476b5871f"
+        },
+        "allowedActors": [
+          "edwardkim"
+        ],
+        "allowedEvents": [
+          "workflow_dispatch"
+        ],
+        "before": {
+          "gitBlob": "2990b6f95d30f89c35dcdcf69125f463fe0a3e5c",
+          "sha256": "3985ed302eb8da99f2e8f0a5a3c5c8399ee804e3c82377903a9de7286fc104b1"
+        },
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "secrets",
+          "action-ref",
+          "cache",
+          "artifact",
+          "concurrency",
+          "job-command",
+          "deployment"
+        ],
+        "classification": "executable",
+        "evidencePath": ".github/workflows/npm-publish.yml",
+        "executionMode": "verify-only",
+        "path": ".github/workflows/npm-publish.yml",
+        "requiredArtifacts": [
+          "wasm-pkg",
+          "vscode-vsix",
+          "release-publish-evidence"
+        ],
+        "requiredJobs": [
+          "Validate release source",
+          "Build WASM",
+          "Build VSIX once",
+          "Publish channel aggregate"
+        ],
+        "requiredSkippedJobs": [
+          "Publish @rhwp/core",
+          "Publish @rhwp/editor",
+          "Publish VS Code Marketplace extension",
+          "Publish Open VSX extension"
+        ],
+        "requiredVerdictArtifact": {
+          "acceptedVerdicts": [
+            "completed"
+          ],
+          "name": "release-publish-evidence",
+          "requiredPath": "release-publish-evidence.json"
+        },
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "secrets",
+          "action-ref",
+          "cache",
+          "artifact",
+          "concurrency",
+          "job-command",
+          "deployment"
+        ],
+        "sensitiveSurfaces": [
+          "permissions",
+          "secrets",
+          "artifact",
+          "deployment"
+        ],
+        "status": "modified"
+      },
+      {
+        "after": {
+          "gitBlob": "c931740027acd1c7507bb00fc60ca213c242ae55",
+          "sha256": "c12545b4004ecbeb59597d8989471efc3b94a2c68961f9bbff19367ce479626f"
+        },
+        "allowedActors": [
+          "edwardkim"
+        ],
+        "allowedEvents": [
+          "push",
+          "workflow_dispatch"
+        ],
+        "before": null,
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "artifact",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "classification": "executable",
+        "evidencePath": ".github/workflows/oracle-public-advisory.yml",
+        "executionMode": "direct",
+        "path": ".github/workflows/oracle-public-advisory.yml",
+        "requiredArtifacts": [],
+        "requiredJobs": [
+          "oracle-public-compare-advisory"
+        ],
+        "requiredSkippedJobs": [],
+        "requiredVerdictArtifact": {
+          "acceptedVerdicts": [
+            "completed"
+          ],
+          "name": "oracle-public-advisory-verdict",
+          "requiredPath": "verdict.json"
+        },
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "artifact",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "sensitiveSurfaces": [
+          "artifact"
+        ],
+        "status": "added"
+      },
+      {
+        "after": {
+          "gitBlob": "ae454c87eca07a579f8bea5a42cb4c13648f0ef0",
+          "sha256": "89bec5f0db8310b3c91de8b6a01ec71848eba644c2f08189d261618940400ebd"
+        },
+        "allowedActors": [
+          "edwardkim"
+        ],
+        "allowedEvents": [
+          "workflow_dispatch"
+        ],
+        "before": null,
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "classification": "executable",
+        "evidencePath": ".github/workflows/proptest-roundtrip.yml",
+        "executionMode": "direct",
+        "path": ".github/workflows/proptest-roundtrip.yml",
+        "requiredArtifacts": [],
+        "requiredJobs": [
+          "Proptest preflight",
+          "prop roundtrip"
+        ],
+        "requiredSkippedJobs": [],
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "sensitiveSurfaces": [
+          "cache"
+        ],
+        "status": "added"
+      },
+      {
+        "after": null,
+        "before": {
+          "gitBlob": "404096db4fa11a2aa6fa36ff946d6b8001098e84",
+          "sha256": "74b593522a085246d3ab43f35d7b9554357069f87945fc113379e9e0a254f983"
+        },
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "matrix",
+          "action-ref",
+          "cache",
+          "artifact",
+          "job-command"
+        ],
+        "classification": "executable",
+        "path": ".github/workflows/python-binding.yml",
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "matrix",
+          "action-ref",
+          "cache",
+          "artifact",
+          "job-command"
+        ],
+        "status": "deleted"
+      },
+      {
+        "after": {
+          "gitBlob": "5fe17d999b8ecc60ca3c0f5fd8e740dede5988cd",
+          "sha256": "194873a895a7ecd240761e82aed9e51b675d91bd21cb49d9dc3a93bd017d1536"
+        },
+        "before": null,
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "classification": "executable",
+        "path": ".github/workflows/refresh-nextest-duration.yml",
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "status": "added"
+      },
+      {
+        "after": {
+          "gitBlob": "aedd03b843059bf730af3f232446166cce45d700",
+          "sha256": "88f7c10564cc34085e0d721db29f1e5c60bda60358891b0a0a3f92db06d7266a"
+        },
+        "allowedActors": [
+          "edwardkim"
+        ],
+        "allowedEvents": [
+          "workflow_dispatch"
+        ],
+        "before": {
+          "gitBlob": "1208f541c87ec40cc62089230515d20aab8555be",
+          "sha256": "d31dbeb2ea9fbe33f59959c24d511b966695fd27b67cf041648653ac86c750b5"
+        },
+        "changedAxes": [
+          "routing",
+          "permissions",
+          "secrets",
+          "matrix",
+          "action-ref",
+          "job-command",
+          "deployment"
+        ],
+        "classification": "executable",
+        "evidencePath": ".github/workflows/release-binary.yml",
+        "executionMode": "verify-only",
+        "path": ".github/workflows/release-binary.yml",
+        "requiredArtifacts": [
+          "rhwp-test-linux-x86_64.tar.gz",
+          "rhwp-test-linux-aarch64.tar.gz",
+          "rhwp-test-macos-x86_64.tar.gz",
+          "rhwp-test-macos-aarch64.tar.gz",
+          "rhwp-test-windows-x86_64.zip",
+          "wasm-pkg",
+          "vscode-vsix",
+          "release-publish-evidence"
+        ],
+        "requiredJobs": [
+          "Build x86_64-unknown-linux-gnu",
+          "Build aarch64-unknown-linux-gnu",
+          "Build x86_64-apple-darwin",
+          "Build aarch64-apple-darwin",
+          "Build x86_64-pc-windows-msvc",
+          "Publish packages after binary release / Validate release source",
+          "Publish packages after binary release / Build WASM",
+          "Publish packages after binary release / Build VSIX once",
+          "Publish packages after binary release / Publish channel aggregate"
+        ],
+        "requiredSkippedJobs": [
+          "Attach to GitHub Release",
+          "Publish packages after binary release / Publish @rhwp/core",
+          "Publish packages after binary release / Publish @rhwp/editor",
+          "Publish packages after binary release / Publish VS Code Marketplace extension",
+          "Publish packages after binary release / Publish Open VSX extension"
+        ],
+        "requiredVerdictArtifact": {
+          "acceptedVerdicts": [
+            "completed"
+          ],
+          "name": "release-publish-evidence",
+          "requiredPath": "release-publish-evidence.json"
+        },
+        "riskAxes": [
+          "routing",
+          "permissions",
+          "secrets",
+          "matrix",
+          "action-ref",
+          "job-command",
+          "deployment"
+        ],
+        "sensitiveSurfaces": [
+          "permissions",
+          "secrets",
+          "matrix",
+          "artifact",
+          "deployment"
+        ],
+        "status": "modified"
+      },
+      {
+        "after": {
+          "gitBlob": "c0152a1b61d4f87ff22f4f3505e1cc73bd487530",
+          "sha256": "62f3bd5edeba1892e074fe804913a20bb07a60c85df4195d9856648235cca98d"
+        },
+        "allowedActors": [
+          "edwardkim"
+        ],
+        "allowedEvents": [
+          "workflow_dispatch"
+        ],
+        "before": {
+          "gitBlob": "9efb2b86c54ac27c9a2e2b5a09ff7467dfa46a88",
+          "sha256": "1088aaceac75bca1adc941dc817eced7a72ad555739915906a71f4af2930c18c"
+        },
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "artifact",
+          "job-command"
+        ],
+        "classification": "executable",
+        "evidencePath": ".github/workflows/render-diff.yml",
+        "executionMode": "direct",
+        "path": ".github/workflows/render-diff.yml",
+        "requiredArtifacts": [
+          "render-diff-artifacts"
+        ],
+        "requiredJobs": [
+          "Render Diff preflight",
+          "Canvas visual diff"
+        ],
+        "requiredSkippedJobs": [],
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "cache",
+          "artifact",
+          "job-command"
+        ],
+        "sensitiveSurfaces": [
+          "cache",
+          "artifact"
+        ],
+        "status": "modified"
+      },
+      {
+        "after": {
+          "gitBlob": "85ef083061b5bda84781f40d81e3d9b07db5ef9a",
+          "sha256": "5f8d134f507d2b2361cded58eea812f92e1528b1b2982e85923a56cc8ebe6654"
+        },
+        "before": {
+          "gitBlob": "66dad14b2547388548b22ae4805e1e4051256ef6",
+          "sha256": "6a351e7ee1b503e571317599a98f031786d1dd3337790341bd85f651249fc791"
+        },
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "action-ref",
+          "artifact",
+          "job-command"
+        ],
+        "classification": "executable",
+        "path": ".github/workflows/run-nextest-archives.yml",
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "action-ref",
+          "artifact",
+          "job-command"
+        ],
+        "status": "modified"
+      },
+      {
+        "after": {
+          "gitBlob": "6d3014cb31efb65f94f5ddbb60af7d54f5fc5788",
+          "sha256": "6b051a682e0be05c2b5831da1a3a8a0f3ccc3614bfadac2120801943487b157c"
+        },
+        "before": null,
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "classification": "executable",
+        "path": ".github/workflows/skill-router-gate.yml",
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "timeout",
+          "concurrency",
+          "job-command"
+        ],
+        "status": "added"
+      },
+      {
+        "after": {
+          "gitBlob": "64ea2dc8d7d69b6139e1ca74874a5b5f92e3783e",
+          "sha256": "0a5f3fe16d784c7fae75cd2f25ec1cf970a89a94c53887b9ee71fdde7063549f"
+        },
+        "before": null,
+        "changedAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "artifact",
+          "timeout",
+          "job-command"
+        ],
+        "classification": "executable",
+        "path": ".github/workflows/trusted-postmerge-ci-reuse.yml",
+        "riskAxes": [
+          "trigger",
+          "routing",
+          "permissions",
+          "action-ref",
+          "artifact",
+          "timeout",
+          "job-command"
+        ],
+        "status": "added"
+      }
+    ],
+    "inventorySha256": "a1b71c5b9ad8b585916d16805c8feb9e1fbe0c5da35c41232c199360757aec37",
+    "mergeBase": "cecaf1bbfec9a10778484d30ebb747280e7a02af",
+    "policySha256": "dbd0bcd8d2829fdf7ffebfab5245f2cf9d2fc022906a2cf556d58f0579bd7b24",
+    "policyViolations": [
+      "actions/upload-artifact@v4",
+      "github/codeql-action/init@v4",
+      "missing-workflow-policy:.github/workflows/build-nextest-archives.yml",
+      "missing-workflow-policy:.github/workflows/cache-generation-sweep.yml",
+      "missing-workflow-policy:.github/workflows/cancel-stale-pr-runs.yml",
+      "missing-workflow-policy:.github/workflows/ci-impact-policy.yml",
+      "missing-workflow-policy:.github/workflows/desktop-release.yml",
+      "missing-workflow-policy:.github/workflows/fuzz-smoke.yml",
+      "missing-workflow-policy:.github/workflows/issue-form-labels.yml",
+      "missing-workflow-policy:.github/workflows/layout-anomaly-advisory.yml",
+      "missing-workflow-policy:.github/workflows/node-binding.yml",
+      "missing-workflow-policy:.github/workflows/python-binding.yml",
+      "missing-workflow-policy:.github/workflows/refresh-nextest-duration.yml",
+      "missing-workflow-policy:.github/workflows/run-nextest-archives.yml",
+      "missing-workflow-policy:.github/workflows/skill-router-gate.yml",
+      "missing-workflow-policy:.github/workflows/trusted-postmerge-ci-reuse.yml"
+    ],
+    "repository": "edwardkim/rhwp",
+    "schemaVersion": 1
+  },
+  "workflowInventorySummary": {
+    "entries": 24,
+    "executable": 24,
+    "commentOnly": 0,
+    "policyViolations": 16,
+    "missingWorkflowPolicyPaths": [
+      ".github/workflows/build-nextest-archives.yml",
+      ".github/workflows/cache-generation-sweep.yml",
+      ".github/workflows/cancel-stale-pr-runs.yml",
+      ".github/workflows/ci-impact-policy.yml",
+      ".github/workflows/desktop-release.yml",
+      ".github/workflows/fuzz-smoke.yml",
+      ".github/workflows/issue-form-labels.yml",
+      ".github/workflows/layout-anomaly-advisory.yml",
+      ".github/workflows/node-binding.yml",
+      ".github/workflows/python-binding.yml",
+      ".github/workflows/refresh-nextest-duration.yml",
+      ".github/workflows/run-nextest-archives.yml",
+      ".github/workflows/skill-router-gate.yml",
+      ".github/workflows/trusted-postmerge-ci-reuse.yml"
+    ],
+    "candidateWorkflowPathsNotRegistered": [
+      ".github/workflows/ci-impact-policy.yml",
+      ".github/workflows/fuzz-smoke.yml",
+      ".github/workflows/gym-release-gate.yml",
+      ".github/workflows/issue-form-labels.yml",
+      ".github/workflows/layout-anomaly-advisory.yml",
+      ".github/workflows/oracle-public-advisory.yml",
+      ".github/workflows/trusted-postmerge-ci-reuse.yml"
+    ]
+  },
+  "forkPolicyBinding": {
+    "policyRepository": "edwardkim/rhwp",
+    "allowedActors": [
+      "edwardkim"
+    ],
+    "currentOperator": "enxec",
+    "ciTrustedMaintainer": "edwardkim",
+    "collectorRepositorySource": "inventory.repository, derived from policy.repository",
+    "consequence": "Current policy collects from upstream edwardkim/rhwp and rejects enxec runs; correct fork binding required through ordinary devel PR."
+  },
+  "registeredWorkflows": [
+    {
+      "id": 371924789,
+      "name": "Adapter inter-diff",
+      "path": ".github/workflows/adapter-diff.yml",
+      "state": "active"
+    },
+    {
+      "id": 326990896,
+      "name": "Build Nextest Archives",
+      "path": ".github/workflows/build-nextest-archives.yml",
+      "state": "active"
+    },
+    {
+      "id": 326990897,
+      "name": "Cache Generation Sweep",
+      "path": ".github/workflows/cache-generation-sweep.yml",
+      "state": "active"
+    },
+    {
+      "id": 326990898,
+      "name": "Cancel stale PR runs",
+      "path": ".github/workflows/cancel-stale-pr-runs.yml",
+      "state": "active"
+    },
+    {
+      "id": 285853481,
+      "name": "CI",
+      "path": ".github/workflows/ci.yml",
+      "state": "active"
+    },
+    {
+      "id": 312710575,
+      "name": "Close Issues on devel Push",
+      "path": ".github/workflows/close-issues-on-devel-push.yml",
+      "state": "active"
+    },
+    {
+      "id": 285853482,
+      "name": "CodeQL",
+      "path": ".github/workflows/codeql.yml",
+      "state": "active"
+    },
+    {
+      "id": 285853483,
+      "name": "Deploy to GitHub Pages",
+      "path": ".github/workflows/deploy-pages.yml",
+      "state": "active"
+    },
+    {
+      "id": 285981737,
+      "name": "Desktop Release",
+      "path": ".github/workflows/desktop-release.yml",
+      "state": "active"
+    },
+    {
+      "id": 295643350,
+      "name": "Full Renderer Sweep",
+      "path": ".github/workflows/full-renderer-sweep.yml",
+      "state": "active"
+    },
+    {
+      "id": 326990899,
+      "name": "node-binding",
+      "path": ".github/workflows/node-binding.yml",
+      "state": "active"
+    },
+    {
+      "id": 285853484,
+      "name": "Publish All Packages",
+      "path": ".github/workflows/npm-publish.yml",
+      "state": "active"
+    },
+    {
+      "id": 371924793,
+      "name": "Proptest roundtrip",
+      "path": ".github/workflows/proptest-roundtrip.yml",
+      "state": "active"
+    },
+    {
+      "id": 326990900,
+      "name": "python-binding",
+      "path": ".github/workflows/python-binding.yml",
+      "state": "active"
+    },
+    {
+      "id": 371969958,
+      "name": "Refresh nextest target duration data",
+      "path": ".github/workflows/refresh-nextest-duration.yml",
+      "state": "active"
+    },
+    {
+      "id": 285853485,
+      "name": "Release Binary",
+      "path": ".github/workflows/release-binary.yml",
+      "state": "active"
+    },
+    {
+      "id": 285853486,
+      "name": "Render Diff",
+      "path": ".github/workflows/render-diff.yml",
+      "state": "active"
+    },
+    {
+      "id": 326990902,
+      "name": "Run Nextest Archives",
+      "path": ".github/workflows/run-nextest-archives.yml",
+      "state": "active"
+    },
+    {
+      "id": 371924783,
+      "name": "Skill router gate",
+      "path": ".github/workflows/skill-router-gate.yml",
+      "state": "active"
+    },
+    {
+      "id": 286104694,
+      "name": "Dependabot Updates",
+      "path": "dynamic/dependabot/dependabot-updates",
+      "state": "active"
+    },
+    {
+      "id": 285861184,
+      "name": "pages-build-deployment",
+      "path": "dynamic/pages/pages-build-deployment",
+      "state": "active"
+    }
+  ],
+  "exactBaselineDevelRuns": {
+    "totalCount": 2,
+    "runs": [
+      {
+        "id": 37096274861,
+        "name": "Close Issues on devel Push",
+        "event": "push",
+        "head_sha": "133f5d31b88a87b46c483af883efbe1ca0298d70",
+        "head_branch": "devel",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 37096274807,
+        "name": "Refresh nextest target duration data",
+        "event": "push",
+        "head_sha": "133f5d31b88a87b46c483af883efbe1ca0298d70",
+        "head_branch": "devel",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "interpretation": "Only operational push workflows exist at baseline devel; they are not the required promotion exact-head workflow evidence."
+  },
+  "pages": {
+    "status": "built",
+    "cname": "hanpage.paldyn.com",
+    "build_type": "legacy",
+    "source": {
+      "branch": "gh-pages",
+      "path": "/"
+    },
+    "html_url": "https://hanpage.paldyn.com/"
+  },
+  "deploymentWorkflowContract": {
+    "path": ".github/workflows/deploy-pages.yml",
+    "mainPush": "Build then Deploy, gh-pages branch publication",
+    "workflowDispatch": "Build artifact only; Deploy skipped",
+    "publicDomain": "hanpage.paldyn.com",
+    "faviconCopy": "assets/logo/favicon.ico -> rhwp-studio/public/favicon.ico",
+    "mainPromotionTriggersWebBuild": true,
+    "noDesktopTagTriggeredWebDeployment": true
+  },
+  "sourceFeatureRetention": {
+    "status": "code-presence audit only; full promotion runtime remains unverified",
+    "checkedPaths": [
+      "rhwp-studio/src/main.ts",
+      "rhwp-studio/src/ui/app-download.ts",
+      "rhwp-studio/src/core/desktop-bridge.ts",
+      "rhwp-studio/public/CNAME",
+      "HanPage-Desktop/src-tauri/tauri.conf.json",
+      "HanPage-Desktop/src-tauri/src/lib.rs"
+    ],
+    "observed": [
+      "Web app download button still uses paldyn/HanPage latest-release API and platform asset selection.",
+      "Desktop web bridge remains inert when Tauri runtime is absent.",
+      "Desktop identifier com.paldyn.hanpage, publisher PALDYN, signed updater endpoint paldyn/HanPage/releases/latest/download/latest.json retained.",
+      "Custom web CNAME hanpage.paldyn.com unchanged.",
+      "Promotion also carries engine/Studio 0.8.2 -> 0.8.6 and Desktop 0.8.9 changes; favicon-only verification cannot establish correctness of this accumulated promotion."
+    ]
+  },
+  "normalRouteMinimum": [
+    "Merge favicon source PR to devel after current source CI review.",
+    "Preserve both main/devel histories and reconcile main into devel through ordinary PR so exact main is candidate ancestor and merge tree equals candidate tree.",
+    "Normalize fork-specific repository/actor bindings and provide equivalent policy adapters for every executable inventory entry through ordinary devel PR, with proportional workflow tests; retain fail-closed evidence requirements.",
+    "Resolve unpinned external action policy violations by verified immutable references; do not relax baseline/gate to publish.",
+    "At one final exact devel SHA execute all applicable inventory direct/contracts-only/verify-only workflows, required jobs/artifacts/skip boundaries; account for default-branch registration honestly with policy-approved evidence only where actually permissible.",
+    "Open same-repository devel -> main release PR only after evidence completion; require Workflow promotion preflight and Build & Test successes.",
+    "Merge approved main release PR; verify actual Pages artifact/deployment and public new favicon/PWA/Apple-touch URLs plus service-worker response."
+  ],
+  "predictedBlockers": [
+    "Canonical topology step exits because main is not devel ancestor.",
+    "Inventory reports 16 policy violations: two unpinned external action names and 14 missing workflow policies.",
+    "Upstream repository/actor trust binding cannot use fork enxec execution evidence.",
+    "Seven current executable workflow files lack remote registration; dispatch availability must be verified and normal policy handling applied.",
+    "No required exact baseline devel workflow suite evidence exists."
+  ],
+  "gateObservationClassification": "static preflight blockers, not a claimed failed GitHub promotion run",
+  "canonicalReferences": [
+    {
+      "path": "mydocs/manual/github_operations.md",
+      "section": "7.6 Workflow promotion preflight"
+    },
+    {
+      "path": "mydocs/manual/publish_guide.md",
+      "section": "4단계: 변경 PR과 devel → main 통합"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "section": "workflow-promotion-preflight"
+    },
+    {
+      "path": "scripts/workflow_promotion_policy.json",
+      "sha256": "41ebcf719b3ef87d14bc52cb0ed79392d0610f71ba8e7042b407c13c5df209b0"
+    }
+  ],
+  "remainingUnverified": [
+    "New devel merge head after source PR integration.",
+    "Topology reconciliation conflicts/resolution and full user feature runtime preservation.",
+    "Promotion policy adapters and workflow registration normalization.",
+    "Final exact-head workflow suite and promotion PR gate.",
+    "Public deployed asset/HTML/manifest/SW verification."
+  ],
+  "mainVsDevelChangedPathCountWithoutRenameDetection": 30917,
+  "mainVsDevelChangedPathCountDefaultRenameDetection": 28383,
+  "renameDetectionWarning": "warning: exhaustive rename detection was skipped due to too many files.\nwarning: you may want to set your diff.renameLimit variable to at least 24778 and retry the command.",
+  "sourceSpecificDeploymentContracts": {
+    "develPreparedFaviconHead": {
+      "path": ".github/workflows/deploy-pages.yml",
+      "mainPush": "Build then Deploy, gh-pages branch publication",
+      "workflowDispatch": "Build artifact only; Deploy skipped",
+      "publicDomain": "hanpage.paldyn.com",
+      "faviconCopy": "assets/logo/favicon.ico -> rhwp-studio/public/favicon.ico",
+      "mainPromotionTriggersWebBuild": true,
+      "noDesktopTagTriggeredWebDeployment": true
+    },
+    "mainFaviconOnlyOption": {
+      "baseSha": "f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+      "status": "read-only comparison; candidate branch/build/PR not created by this auditor",
+      "liveSource": "cc8d04812e44ce4746f6855b88db201b6a7baba3",
+      "mainVsLiveSourceChanges": [
+        {
+          "status": "modified",
+          "path": "mydocs/orders/20260804.md"
+        },
+        {
+          "status": "added",
+          "path": "mydocs/report/task_m100_hp59_report.md"
+        }
+      ],
+      "productSourceMatchesCurrentLiveSource": true,
+      "engineStudioVersion": "0.8.2",
+      "desktopSourceVersion": "0.8.3",
+      "intendedChangedSourcePathCount": 13,
+      "scope": "favicon source ICO, public fallback ICO, source hashed ICO, four PWA named PNGs, four legacy PNG aliases, HTML favicon link, five Vite PWA manifest icon src values",
+      "applicationNote": "Apply favicon-link and manifest-icon edits against main in context; do not replace full devel HTML/config files, which contain unrelated evolution.",
+      "retainedMainRuntime": "All web behavior source, engine source/lockfile, Desktop source/version, workflows stay byte-identical to main; root must verify actual candidate diff.",
+      "develFeaturesNotPromoted": "Recent 0.8.6 engine/Studio changes and PALDYN/new updater UI present only in devel are not added to public web by this restricted option. Installed Desktop 0.8.9 remains separate.",
+      "pagesWorkflow": "main exact existing workflow has one Build & Push to gh-pages job; both main push and workflow_dispatch publish.",
+      "importantNoDryRunDispatch": "Do not invoke old main deploy-pages.yml workflow_dispatch for prepublication validation; it mutates gh-pages. Validate candidate locally and via its ordinary PR CI, then main PR merge triggers normal Pages publication.",
+      "pagesBuildSettings": {
+        "nodeVersion": "20",
+        "dependencies": "npm install",
+        "wasmBuild": "wasm-pack build --target web --release",
+        "wasmPackCompositeVersion": "0.15.0",
+        "productToolchainFile": "1.93.1",
+        "faviconCopy": "assets/logo/favicon.ico -> rhwp-studio/public/favicon.ico",
+        "deployAction": "peaceiris/actions-gh-pages@v4"
+      },
+      "mainOriginalClassifierProbe": {
+        "sourceSha": "f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+        "classifierVersion": "1",
+        "inputSourceDiff": "133f5d31b88a87b46c483af883efbe1ca0298d70..a4ddf332745998970b1d28f690e610a1e92c340a",
+        "inputPathCount": 13,
+        "mode": "source loaded into Node Module in memory; no policy/source edits",
+        "classification": {
+          "rust_required": "true",
+          "frontend_mode": "package",
+          "render_required": "true",
+          "native_skia_required": "true",
+          "codeql_languages": "javascript-typescript,python,rust",
+          "classification_status": "full",
+          "classifier_version": "1",
+          "reason": "fail-closed:unclassified-path"
+        }
+      },
+      "mainOriginalCiSemantics": "Older Stage3 impact routing only activates frontend_mode/render_required; Rust/Native Skia/CodeQL full validation remains required. Original PR CI, CodeQL and Render workflows trigger for Studio paths.",
+      "requiredValidation": "Local exact main-candidate TypeScript/PWA build, branding URL decode/hash/manifest/offline SW checks, existing Studio tests, then actual latest main PR CI/CodeQL/Render full checks. Do not reuse prior devel-based tests as exact main-candidate proof.",
+      "branchProtectionReadOnlyResult": "GitHub branch protection API 404 Branch not protected; normal review/check requirements remain applicable.",
+      "promotionInventoryApplicability": "A real main-based logo-only PR with no workflow changes is distinct from devel->main accumulated workflow promotion; this audit makes no authorization decision. Root proposes user-visible concrete path selection before posting that extra PR."
+    }
+  },
+  "updatedAt": "2026-10-03T05:11:32.497486+00:00"
+}
