@@ -1,0 +1,579 @@
+{
+  "phase": "after",
+  "at": "2026-10-03T05:53:43.581Z",
+  "url": "https://hanpage.paldyn.com/",
+  "ownedProfile": "/private/tmp/hanpage-web-public-upgrade-zsjtph/profile",
+  "helper": "/private/tmp/hanpage-web-public-upgrade-20261003.mjs",
+  "scope": "Public HTML favicon, manifest icons and actual service worker cache in an exclusively owned Chrome profile. User browser, installed PWA, Desktop app and document editing untouched.",
+  "pageExceptions": [],
+  "requestFailures": [],
+  "browserConsoleErrors": [],
+  "checks": [
+    {
+      "name": "Public HTML and current favicon fetched",
+      "pass": true
+    },
+    {
+      "name": "Manifest images decoded at declared sizes",
+      "pass": true
+    },
+    {
+      "name": "Existing service worker controls this owned profile",
+      "pass": true
+    },
+    {
+      "name": "Existing branding assets are in service worker cache",
+      "pass": true
+    },
+    {
+      "name": "This same profile now requests and receives new hashed favicon",
+      "pass": true
+    },
+    {
+      "name": "This same profile receives every new named PWA icon and new Apple touch icon",
+      "pass": true
+    },
+    {
+      "name": "Fallback favicon also receives the new approved ICO",
+      "pass": true
+    },
+    {
+      "name": "The updated real service worker supplies all seven branding URLs offline",
+      "pass": true
+    },
+    {
+      "name": "No unhandled public page exception during branding validation",
+      "pass": true
+    }
+  ],
+  "brandingResponses": [
+    {
+      "url": "https://hanpage.paldyn.com/manifest.webmanifest",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/icon-192.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/manifest.webmanifest",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/assets/hanpage-favicon-DGxGu2KG.ico",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/icon-256.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/manifest.webmanifest",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-128.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-128.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-192.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-192.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-256.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-256.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-512.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-512.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-512.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-512.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/assets/hanpage-favicon-DGxGu2KG.ico",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-192.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/favicon.ico",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/assets/hanpage-favicon-DGxGu2KG.ico",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/icon-256.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/favicon.ico",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-128.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-192.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-256.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-512.png",
+      "status": 200,
+      "fromServiceWorker": true,
+      "fromCache": true
+    }
+  ],
+  "navigation": {
+    "status": 200,
+    "url": "https://hanpage.paldyn.com/",
+    "fromServiceWorker": true,
+    "headers": {
+      "accept-ranges": "bytes",
+      "access-control-allow-origin": "*",
+      "age": "0",
+      "cache-control": "max-age=600",
+      "content-encoding": "gzip",
+      "content-length": "8232",
+      "content-type": "text/html; charset=utf-8",
+      "date": "Sat, 03 Oct 2026 05:18:00 GMT",
+      "etag": "W/\"6a71f089-f3b4\"",
+      "expires": "Sat, 03 Oct 2026 05:28:00 GMT",
+      "last-modified": "Tue, 04 Aug 2026 14:00:41 GMT",
+      "server": "GitHub.com",
+      "vary": "Accept-Encoding",
+      "via": "1.1 varnish",
+      "x-cache": "MISS",
+      "x-cache-hits": "0",
+      "x-fastly-request-id": "a4feeaa3afeefaebfa0b296805a7bd7660e3eaa1",
+      "x-github-edge-region": "koreacentral",
+      "x-github-request-id": "A4E8:23EF0E:2D25BF:2F48C1:6AC09008",
+      "x-proxy-cache": "MISS",
+      "x-served-by": "cache-icn1450084-ICN",
+      "x-timer": "S1791004681.670287,VS0,VE216"
+    }
+  },
+  "document": {
+    "url": "https://hanpage.paldyn.com/",
+    "title": "HanPage",
+    "favicon": {
+      "attribute": "/assets/hanpage-favicon-DGxGu2KG.ico",
+      "url": "https://hanpage.paldyn.com/assets/hanpage-favicon-DGxGu2KG.ico"
+    },
+    "appleTouch": "https://hanpage.paldyn.com/icons/icon-256.png",
+    "manifest": "https://hanpage.paldyn.com/manifest.webmanifest",
+    "serviceWorkerSupported": true
+  },
+  "initialDocumentBeforeAutomaticUpdate": {
+    "url": "https://hanpage.paldyn.com/",
+    "title": "HanPage",
+    "favicon": {
+      "attribute": "/favicon.ico",
+      "url": "https://hanpage.paldyn.com/favicon.ico"
+    },
+    "appleTouch": "https://hanpage.paldyn.com/icons/icon-256.png",
+    "manifest": "https://hanpage.paldyn.com/manifest.webmanifest",
+    "serviceWorkerSupported": true
+  },
+  "initialController": {
+    "scriptURL": "https://hanpage.paldyn.com/sw.js",
+    "state": "activated"
+  },
+  "automaticUpdateObservation": "New favicon HTML was not visible within 45 seconds; one ordinary page reload performed",
+  "automaticUpdateWaitError": "TimeoutError: Waiting failed: 45000ms exceeded",
+  "ordinaryReload": {
+    "status": 200,
+    "fromServiceWorker": true
+  },
+  "favicon": {
+    "url": "https://hanpage.paldyn.com/assets/hanpage-favicon-DGxGu2KG.ico",
+    "finalUrl": "https://hanpage.paldyn.com/assets/hanpage-favicon-DGxGu2KG.ico",
+    "status": 200,
+    "type": "basic",
+    "bytes": 100921,
+    "contentType": "image/vnd.microsoft.icon",
+    "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09"
+  },
+  "appleTouch": {
+    "url": "https://hanpage.paldyn.com/icons/icon-256.png",
+    "finalUrl": "https://hanpage.paldyn.com/icons/icon-256.png",
+    "status": 200,
+    "type": "basic",
+    "bytes": 63171,
+    "contentType": "image/png",
+    "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3"
+  },
+  "manifest": {
+    "url": "https://hanpage.paldyn.com/manifest.webmanifest",
+    "status": 200,
+    "value": {
+      "name": "HanPage",
+      "short_name": "HanPage",
+      "description": "HWP/HWPX/HML 뷰어·에디터",
+      "start_url": "/",
+      "display": "standalone",
+      "background_color": "#ffffff",
+      "theme_color": "#2b6cb0",
+      "lang": "ko",
+      "scope": "/",
+      "file_handlers": [
+        {
+          "action": "/",
+          "accept": {
+            "application/x-hwp": [
+              ".hwp"
+            ],
+            "application/hwp+zip": [
+              ".hwpx"
+            ],
+            "application/xml": [
+              ".hml"
+            ],
+            "text/xml": [
+              ".hml"
+            ]
+          }
+        }
+      ],
+      "icons": [
+        {
+          "src": "icons/hanpage-04-128.png",
+          "sizes": "128x128",
+          "type": "image/png"
+        },
+        {
+          "src": "icons/hanpage-04-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        },
+        {
+          "src": "icons/hanpage-04-256.png",
+          "sizes": "256x256",
+          "type": "image/png"
+        },
+        {
+          "src": "icons/hanpage-04-512.png",
+          "sizes": "512x512",
+          "type": "image/png"
+        },
+        {
+          "src": "icons/hanpage-04-512.png",
+          "sizes": "512x512",
+          "type": "image/png",
+          "purpose": "any maskable"
+        }
+      ]
+    }
+  },
+  "manifestIcons": [
+    {
+      "src": "icons/hanpage-04-128.png",
+      "sizes": "128x128",
+      "type": "basic",
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-128.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/hanpage-04-128.png",
+      "status": 200,
+      "bytes": 18862,
+      "contentType": "image/png",
+      "sha256": "50bf5565ac8b2bf07ee3c31ac50ed0d9515e8aa4b239b94938c54e676dace5f5",
+      "decoded": {
+        "width": 128,
+        "height": 128
+      }
+    },
+    {
+      "src": "icons/hanpage-04-192.png",
+      "sizes": "192x192",
+      "type": "basic",
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-192.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/hanpage-04-192.png",
+      "status": 200,
+      "bytes": 50596,
+      "contentType": "image/png",
+      "sha256": "89d3e2cd23b2d5a50a7f68105cd5117ae0ddb6c9b957982845a1579bb0c36f26",
+      "decoded": {
+        "width": 192,
+        "height": 192
+      }
+    },
+    {
+      "src": "icons/hanpage-04-256.png",
+      "sizes": "256x256",
+      "type": "basic",
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-256.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/hanpage-04-256.png",
+      "status": 200,
+      "bytes": 63171,
+      "contentType": "image/png",
+      "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3",
+      "decoded": {
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "src": "icons/hanpage-04-512.png",
+      "sizes": "512x512",
+      "type": "basic",
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-512.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/hanpage-04-512.png",
+      "status": 200,
+      "bytes": 174447,
+      "contentType": "image/png",
+      "sha256": "5a3dd9f2596e8cdaf8ab398e015823b3d83f1bcac2453337aff7d36d8dc6c7fd",
+      "decoded": {
+        "width": 512,
+        "height": 512
+      }
+    },
+    {
+      "src": "icons/hanpage-04-512.png",
+      "sizes": "512x512",
+      "type": "basic",
+      "purpose": "any maskable",
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-512.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/hanpage-04-512.png",
+      "status": 200,
+      "bytes": 174447,
+      "contentType": "image/png",
+      "sha256": "5a3dd9f2596e8cdaf8ab398e015823b3d83f1bcac2453337aff7d36d8dc6c7fd",
+      "decoded": {
+        "width": 512,
+        "height": 512
+      }
+    }
+  ],
+  "controllerWait": "controlled",
+  "serviceWorker": {
+    "controller": {
+      "scriptURL": "https://hanpage.paldyn.com/sw.js",
+      "state": "activated"
+    },
+    "registrations": [
+      {
+        "scope": "https://hanpage.paldyn.com/",
+        "active": {
+          "scriptURL": "https://hanpage.paldyn.com/sw.js",
+          "state": "activated"
+        },
+        "waiting": null,
+        "installing": null
+      }
+    ]
+  },
+  "cache": {
+    "names": [
+      "workbox-precache-v2-https://hanpage.paldyn.com/",
+      "wasm-cache"
+    ],
+    "brandingMatches": [
+      {
+        "name": "workbox-precache-v2-https://hanpage.paldyn.com/",
+        "url": "https://hanpage.paldyn.com/assets/hanpage-favicon-DGxGu2KG.ico",
+        "status": 200,
+        "bytes": 100921,
+        "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09"
+      },
+      {
+        "name": "workbox-precache-v2-https://hanpage.paldyn.com/",
+        "url": "https://hanpage.paldyn.com/icons/icon-256.png",
+        "status": 200,
+        "bytes": 63171,
+        "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3"
+      },
+      {
+        "name": "workbox-precache-v2-https://hanpage.paldyn.com/",
+        "url": "https://hanpage.paldyn.com/manifest.webmanifest",
+        "status": 200,
+        "bytes": 752,
+        "sha256": "2eb62c92f281cca6e4c84450bd47f0d622b5dfdca70f56aca26b009a18b18e81"
+      },
+      {
+        "name": "workbox-precache-v2-https://hanpage.paldyn.com/",
+        "url": "https://hanpage.paldyn.com/icons/hanpage-04-128.png",
+        "status": 200,
+        "bytes": 18862,
+        "sha256": "50bf5565ac8b2bf07ee3c31ac50ed0d9515e8aa4b239b94938c54e676dace5f5"
+      },
+      {
+        "name": "workbox-precache-v2-https://hanpage.paldyn.com/",
+        "url": "https://hanpage.paldyn.com/icons/hanpage-04-192.png",
+        "status": 200,
+        "bytes": 50596,
+        "sha256": "89d3e2cd23b2d5a50a7f68105cd5117ae0ddb6c9b957982845a1579bb0c36f26"
+      },
+      {
+        "name": "workbox-precache-v2-https://hanpage.paldyn.com/",
+        "url": "https://hanpage.paldyn.com/icons/hanpage-04-256.png",
+        "status": 200,
+        "bytes": 63171,
+        "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3"
+      },
+      {
+        "name": "workbox-precache-v2-https://hanpage.paldyn.com/",
+        "url": "https://hanpage.paldyn.com/icons/hanpage-04-512.png",
+        "status": 200,
+        "bytes": 174447,
+        "sha256": "5a3dd9f2596e8cdaf8ab398e015823b3d83f1bcac2453337aff7d36d8dc6c7fd"
+      }
+    ]
+  },
+  "expectedNewFaviconSha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+  "fallbackFavicon": {
+    "url": "https://hanpage.paldyn.com/favicon.ico",
+    "finalUrl": "https://hanpage.paldyn.com/favicon.ico",
+    "status": 200,
+    "type": "basic",
+    "bytes": 100921,
+    "contentType": "image/vnd.microsoft.icon",
+    "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09"
+  },
+  "offlineAssets": [
+    {
+      "url": "https://hanpage.paldyn.com/assets/hanpage-favicon-DGxGu2KG.ico",
+      "finalUrl": "https://hanpage.paldyn.com/assets/hanpage-favicon-DGxGu2KG.ico",
+      "status": 200,
+      "type": "basic",
+      "bytes": 100921,
+      "contentType": "image/vnd.microsoft.icon",
+      "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09"
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/icon-256.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/icon-256.png",
+      "status": 200,
+      "type": "basic",
+      "bytes": 63171,
+      "contentType": "image/png",
+      "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3"
+    },
+    {
+      "url": "https://hanpage.paldyn.com/favicon.ico",
+      "finalUrl": "https://hanpage.paldyn.com/favicon.ico",
+      "status": 200,
+      "type": "basic",
+      "bytes": 100921,
+      "contentType": "image/vnd.microsoft.icon",
+      "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09"
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-128.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/hanpage-04-128.png",
+      "status": 200,
+      "type": "basic",
+      "bytes": 18862,
+      "contentType": "image/png",
+      "sha256": "50bf5565ac8b2bf07ee3c31ac50ed0d9515e8aa4b239b94938c54e676dace5f5"
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-192.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/hanpage-04-192.png",
+      "status": 200,
+      "type": "basic",
+      "bytes": 50596,
+      "contentType": "image/png",
+      "sha256": "89d3e2cd23b2d5a50a7f68105cd5117ae0ddb6c9b957982845a1579bb0c36f26"
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-256.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/hanpage-04-256.png",
+      "status": 200,
+      "type": "basic",
+      "bytes": 63171,
+      "contentType": "image/png",
+      "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3"
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-512.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/hanpage-04-512.png",
+      "status": 200,
+      "type": "basic",
+      "bytes": 174447,
+      "contentType": "image/png",
+      "sha256": "5a3dd9f2596e8cdaf8ab398e015823b3d83f1bcac2453337aff7d36d8dc6c7fd"
+    }
+  ],
+  "status": "PASS",
+  "browserClosed": true,
+  "profileRetainedForUpgrade": true
+}

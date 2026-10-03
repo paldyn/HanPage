@@ -1,0 +1,273 @@
+{
+  "observedAt": "2026-10-03T05:59:07.246730+00:00",
+  "mode": "remove",
+  "ownedEntries": [
+    {
+      "checkout": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage",
+      "path": "pkg",
+      "owner": "web favicon task / explicit validator ownership",
+      "existsBefore": true,
+      "symlink": false,
+      "fileCount": 5,
+      "removed": true
+    },
+    {
+      "checkout": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage",
+      "path": "rhwp-studio/dist",
+      "owner": "web favicon task / explicit validator ownership",
+      "existsBefore": true,
+      "symlink": false,
+      "fileCount": 88,
+      "removed": true
+    },
+    {
+      "checkout": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage",
+      "path": "rhwp-studio/public/rhwp_bg.wasm",
+      "owner": "web favicon task / explicit validator ownership",
+      "existsBefore": true,
+      "symlink": false,
+      "bytes": 11358119,
+      "sha256": "5c7a9a16c22cc6e0086d14d38df0386c5e63a1c75fe194a49848111c95011d12",
+      "removed": true
+    },
+    {
+      "checkout": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage",
+      "path": "output/pr-review/web-favicon-20261003",
+      "owner": "web favicon task / explicit validator ownership",
+      "existsBefore": true,
+      "symlink": false,
+      "fileCount": 37,
+      "removed": true
+    },
+    {
+      "checkout": "/Users/lwm/.codex/worktrees/web-favicon-release-20261003/HanPage",
+      "path": "pkg",
+      "owner": "web favicon task / explicit validator ownership",
+      "existsBefore": true,
+      "symlink": false,
+      "fileCount": 8,
+      "removed": true
+    },
+    {
+      "checkout": "/Users/lwm/.codex/worktrees/web-favicon-release-20261003/HanPage",
+      "path": "rhwp-studio/node_modules",
+      "owner": "web favicon task / explicit validator ownership",
+      "existsBefore": true,
+      "symlink": false,
+      "fileCount": 13188,
+      "removed": true
+    },
+    {
+      "checkout": "/Users/lwm/.codex/worktrees/web-favicon-release-20261003/HanPage",
+      "path": "rhwp-studio/dist",
+      "owner": "web favicon task / explicit validator ownership",
+      "existsBefore": true,
+      "symlink": false,
+      "fileCount": 86,
+      "removed": true
+    },
+    {
+      "checkout": "/Users/lwm/.codex/worktrees/web-favicon-release-20261003/HanPage",
+      "path": "rhwp-studio/public/rhwp_bg.wasm",
+      "owner": "web favicon task / explicit validator ownership",
+      "existsBefore": true,
+      "symlink": false,
+      "bytes": 7560902,
+      "sha256": "ac3ada490f28af9f7e9f278fcd057ed3ca91cc67e2a3902fc5d7cce2af1dcccd",
+      "removed": true
+    },
+    {
+      "checkout": "/Users/lwm/.codex/worktrees/web-favicon-release-20261003/HanPage",
+      "path": "output/pr-review/web-favicon-main-20261003",
+      "owner": "web favicon task / explicit validator ownership",
+      "existsBefore": true,
+      "symlink": false,
+      "fileCount": 25,
+      "removed": true
+    }
+  ],
+  "trackedPublicJsPreserved": {
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/public/rhwp.js": "2b7e7bb01cbbff0cb0d3c9a3222c6cb187f9d9710045013bcfb077d7abef4133",
+    "/Users/lwm/.codex/worktrees/web-favicon-release-20261003/HanPage/rhwp-studio/public/rhwp.js": "092987f8f36b3e8b0f76d48ec233be7e75114d336d41021ca2a42c89692c90e6"
+  },
+  "preserved": [
+    "primary HEAD and all 39 user dirty files",
+    "primary node_modules/pkg and shared target/pr-review",
+    "global wasm-pack and normal wasm-bindgen cache",
+    "user browser/cache/installed PWA/Desktop app",
+    "unrelated output and local branches",
+    "contributor fork remote branches"
+  ],
+  "worktreeArchive": {
+    "mainRelease": {
+      "root": "/Users/lwm/.codex/worktrees/web-favicon-release-20261003/HanPage",
+      "actualToolAttempt": true,
+      "result": "This worktree is protected by a pinned task or workspace.",
+      "retained": true,
+      "protectionBypassed": false
+    },
+    "develReview": {
+      "root": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage",
+      "actualToolAttempt": true,
+      "result": "This worktree is protected by a pinned task or workspace.",
+      "retained": true,
+      "protectionBypassed": false
+    }
+  },
+  "localAndRemoteBranches": {
+    "preservedContributorForkRemoteBranches": [
+      "codex/web-favicon-hanpage-20261003",
+      "codex/web-favicon-main-20261003"
+    ],
+    "localTaskBranches": "Retained with their protected managed worktrees; unrelated local branches preserved."
+  },
+  "managedWorktreeRetention": "Both exact managed archive attempts returned pinned-task/workspace protection. Clean worktrees and local task recovery branches retained; owned ignored builds removed. No manual removal or unpinning.",
+  "privateHelpers": [
+    {
+      "path": "/private/tmp/hanpage_web_publish_prepare.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "d5d5afa879cad63a5162508434d5f006313e8f672ecc86075517ff48673e9e76",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web_favicon_pr_body.md",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "4089b749c80b65023dbd252ea1d746f36f326dea6688b599e819d3326e2d5942",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web_main_prepare.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "149d1cd47daa51e5785a61bb9ace90c68b820285167f58d153783ffcd8a303ce",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web_main_report_prepare.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "b57ac4b9bbabd737f0ff598d3ce131decc10908fe5b9bdfce77260ee68779657",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web117_review_prepare.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "c8602296eb47f5e4159fa7d7b3c50fab776e07fd15ca820bca1a866099986ed8",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web_primary_preserve.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "2532d2eb5d06fd67f4dd1483cd3e5bf3658adee14b4afc414937c89f3813b333",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web_primary_preservation.json",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "b66933a3beb34d9c2cdd39b3d4a47080315b502a37d00987868d0771a5139d71",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web_route_authorization.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "76968ed381d50248f4ec247e3ee08e7a16b5ceee7797ffe5777e196b5e9eb149",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web_main_record.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "40a1dceed4b84b3736377609bdca09c1cd05d6c2d1fc2079cf1e7607cbab710d",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web_main_pr_body.md",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "a5f35e7e2b4a194bd052740acc7f8aa651d41c4f1ee7bc515d9f7d964dee071f",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web_release_parallel_docs.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "788b2a1d8a700b6aede973c66bb13fa15be8e3f610f08151c76bda924924b03a",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web118_review_prepare.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "d5cde827c8d4486b06693720944238e618b02179e1ae48663370119086b84b40",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web117_tail.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "28e6209d1cc8ccb692605dcfd39a7063cc206a1168f8d86c8d464be15b7826db",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web117_postmerge_record.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "e5906b0c021125c75143c8311c32312a1f1a27b4adcd270e4ef4f39d5521945b",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web118_tail.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "342b6f33cad8effd4583a91cd9dc5ec169522e48014cacd1856a56949da08a92",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web_final_ops_prepare.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "941a13f98f6caed66ec06caa137d98d03e3e48c69fc326d08c356faffd87be5b",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web_public_verify.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "7504ded74ee9af55e330de33b5d270c5b6f4f28939c875e92b4fc5d88639c73c",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web_owned_cleanup.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "0177dfa95b25c556a1021974cca03bf6c26f87a8c305edf4e112c24edad1599b",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web_final_public_record.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "960b57374f7b0a3e8bbb677d90634429fd1793c66efe9a50b9accbf3e2606074",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage_web_finalize_cleanup.py",
+      "owner": "root web favicon task",
+      "existedBefore": true,
+      "sha256": "c4be1a3ea557229b6efede029f4d3c308f242e147e32f1bd6bdc8268a288a3ef",
+      "removed": true
+    }
+  ],
+  "preservedOriginalBaseline": {
+    "path": "/private/tmp/hanpage_primary39_preservation_cleanup_20261002.json",
+    "sha256": "0a0d1a903728ba41e0d2c3340d8e08008bd15f3959ec7373a8f06a21ee1765e5",
+    "removed": false
+  },
+  "closure": "Public release and required exact-tree source checks complete. Automatic main push duplicate CI/CodeQL snapshot remains pending, with no new source changes or failed job observed; no manual repeat validation."
+}

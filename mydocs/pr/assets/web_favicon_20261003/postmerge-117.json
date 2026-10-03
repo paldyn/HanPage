@@ -1,0 +1,40 @@
+{
+  "recordedAt": "2026-10-03T05:37:35.770347+00:00",
+  "pr": {
+    "headRefOid": "0214122e6cf1813413a186e5846cf0ca82854c37",
+    "mergeCommit": {
+      "oid": "343fde08e1aee07009f353eae8086432997401cc"
+    },
+    "mergedAt": "2026-10-03T05:33:14Z",
+    "state": "MERGED",
+    "url": "https://github.com/paldyn/HanPage/pull/117"
+  },
+  "headAndMergeTreeEqual": true,
+  "tree": "789deb3aafb42306afa33f0edb2d77aa3ac702b3",
+  "postmergeRuns": [
+    {
+      "conclusion": "success",
+      "databaseId": 37100192838,
+      "event": "push",
+      "headSha": "343fde08e1aee07009f353eae8086432997401cc",
+      "name": "Close Issues on devel Push",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/37100192838"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 37100192807,
+      "event": "push",
+      "headSha": "343fde08e1aee07009f353eae8086432997401cc",
+      "name": "Refresh nextest target duration data",
+      "status": "completed",
+      "url": "https://github.com/paldyn/HanPage/actions/runs/37100192807"
+    }
+  ],
+  "durationLogEvidence": [
+    "2026-10-03T05:34:58.6545116Z {\"ready\":false,\"reason\":\"no-verified-pr-duration-measurements\"}"
+  ],
+  "issue112": "CLOSED at2026-10-02T02:44:40Z, reference only, no close/comment posted",
+  "primaryLocalDevelCAS": "133f5d31b88a87b46c483af883efbe1ca0298d70 ->343fde08e1aee07009f353eae8086432997401cc without checkout switching",
+  "postmergeManualValidationDispatch": false
+}

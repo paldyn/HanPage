@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-03T05:55:32.674377+00:00",
+  "status": "PASS",
+  "publicDeployedSourceSha": "6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+  "ownershipId": "hanpage-public-upgrade-20261003",
+  "removedProfileRoot": "/private/tmp/hanpage-web-public-upgrade-zsjtph",
+  "removedHelper": "/private/tmp/hanpage-web-public-upgrade-20261003.mjs",
+  "ownedBrowserProcessCheck": {
+    "returncode": 1,
+    "matched": false
+  },
+  "preservedProbe": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/web-favicon-20261003/public-browser-upgrade-probe.mjs",
+  "probeSha256": "44b41905f6921c4fdbeaad26fe562fa8361d6684bd45b2342680c387fafbf6cd",
+  "preservedEvidence": [
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/web-favicon-20261003/public-browser-before.json",
+    "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/web-favicon-20261003/public-browser-after.json"
+  ],
+  "beforeChecks": 5,
+  "afterChecks": 9,
+  "pageExceptions": 0,
+  "requestFailures": 0,
+  "consoleErrors": 0,
+  "actualUpgrade": "Existing own profile first received old cached HTML. It did not change within45seconds; one ordinary reload then received new hashed favicon/PWA/Apple-touch/fallback from the updated SW. Offline7brandingURLs all200 with expected hashes. No manual cache clear/unregister or explicit registration.update was used.",
+  "untouched": [
+    "User Chrome profiles/cache/PWA",
+    "Installed Desktop app",
+    "Source/Git/remote state",
+    "Primary dirty39files",
+    "Shared target/pr-review cache"
+  ]
+}

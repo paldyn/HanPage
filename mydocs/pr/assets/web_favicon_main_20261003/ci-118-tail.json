@@ -1,0 +1,444 @@
+{
+  "schema": 1,
+  "repository": "paldyn/HanPage",
+  "pullRequest": 118,
+  "observedAt": "2026-10-03T05:46:03.700677+00:00",
+  "expectedHead": "a36241b377f52bea9cfca7351db45648f6e601b8",
+  "expectedBase": "f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+  "greenCodeCandidate": "ddffefaf584aa4f9733f33bc09d2c3aa84a22985",
+  "parentCommits": [
+    "ddffefaf584aa4f9733f33bc09d2c3aa84a22985"
+  ],
+  "tailChangedFiles": [
+    "A\tmydocs/orders/20261003.md",
+    "A\tmydocs/pr/archives/pr_118_review.md",
+    "A\tmydocs/pr/assets/web_favicon_main_20261003/ci-code-candidate.json",
+    "A\tmydocs/pr/assets/web_favicon_main_20261003/local-ownership.json",
+    "A\tmydocs/pr/assets/web_favicon_main_20261003/public-browser-before.json"
+  ],
+  "sourceTestWorkflowFixtureUnchanged": true,
+  "originalCodeCiRecord": {
+    "path": "/Users/lwm/.codex/worktrees/web-favicon-release-20261003/HanPage/output/pr-review/web-favicon-main-20261003/ci-118.json",
+    "sha256": "e9311f1c8ae2ab46d8104d11872ba0761d70f63342a7295d54cf5a06f62612d5",
+    "mutated": false,
+    "preservedAfterTail": true
+  },
+  "remoteMutations": false,
+  "verificationStatus": "pass",
+  "runs": {
+    "ci": {
+      "id": 37100771602,
+      "name": "CI",
+      "event": "pull_request",
+      "path": ".github/workflows/ci.yml",
+      "head_sha": "a36241b377f52bea9cfca7351db45648f6e601b8",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-03T05:44:04Z",
+      "updated_at": "2026-10-03T05:44:37Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771602",
+      "run_attempt": 1,
+      "jobs": [
+        {
+          "id": 111139700941,
+          "name": "CI preflight",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:44:07Z",
+          "completed_at": "2026-10-03T05:44:30Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771602/job/111139700941",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Detect review-only fast pass",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Check out trusted CI impact classifier",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Collect CI impact input",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Classify CI impact",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Summarize CI impact classification",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111139701711,
+          "name": "WASM Build",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-03T05:44:05Z",
+          "completed_at": "2026-10-03T05:44:04Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771602/job/111139701711",
+          "steps": []
+        },
+        {
+          "id": 111139765346,
+          "name": "Build & Test",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:44:32Z",
+          "completed_at": "2026-10-03T05:44:37Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771602/job/111139765346",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Download shard counts",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Download archive expected counts",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Verify shard totals",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Check Build & Test worker results",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111139765422,
+          "name": "Lint (fmt, clippy, WASM check)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-03T05:44:30Z",
+          "completed_at": "2026-10-03T05:44:30Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771602/job/111139765422",
+          "steps": []
+        },
+        {
+          "id": 111139765516,
+          "name": "Frontend unit gates",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-03T05:44:30Z",
+          "completed_at": "2026-10-03T05:44:30Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771602/job/111139765516",
+          "steps": []
+        },
+        {
+          "id": 111139765616,
+          "name": "build-test-archive-a",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-03T05:44:30Z",
+          "completed_at": "2026-10-03T05:44:30Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771602/job/111139765616",
+          "steps": []
+        },
+        {
+          "id": 111139765774,
+          "name": "build-test-archive-slow",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-03T05:44:30Z",
+          "completed_at": "2026-10-03T05:44:30Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771602/job/111139765774",
+          "steps": []
+        },
+        {
+          "id": 111139765784,
+          "name": "test-regular-shard-3",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-03T05:44:30Z",
+          "completed_at": "2026-10-03T05:44:30Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771602/job/111139765784",
+          "steps": []
+        },
+        {
+          "id": 111139765834,
+          "name": "build-test-archive-b",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-03T05:44:30Z",
+          "completed_at": "2026-10-03T05:44:30Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771602/job/111139765834",
+          "steps": []
+        },
+        {
+          "id": 111139765861,
+          "name": "Frontend package gates",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-03T05:44:30Z",
+          "completed_at": "2026-10-03T05:44:30Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771602/job/111139765861",
+          "steps": []
+        },
+        {
+          "id": 111139765905,
+          "name": "Native Skia tests",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-03T05:44:30Z",
+          "completed_at": "2026-10-03T05:44:30Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771602/job/111139765905",
+          "steps": []
+        },
+        {
+          "id": 111139766097,
+          "name": "test-regular-shard-1",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-03T05:44:31Z",
+          "completed_at": "2026-10-03T05:44:30Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771602/job/111139766097",
+          "steps": []
+        },
+        {
+          "id": 111139766114,
+          "name": "test-slow-shard",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-03T05:44:31Z",
+          "completed_at": "2026-10-03T05:44:30Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771602/job/111139766114",
+          "steps": []
+        },
+        {
+          "id": 111139766123,
+          "name": "test-regular-shard-2",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-03T05:44:31Z",
+          "completed_at": "2026-10-03T05:44:30Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771602/job/111139766123",
+          "steps": []
+        }
+      ]
+    },
+    "codeql": {
+      "id": 37100771442,
+      "name": "CodeQL",
+      "event": "pull_request",
+      "path": ".github/workflows/codeql.yml",
+      "head_sha": "a36241b377f52bea9cfca7351db45648f6e601b8",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-03T05:44:04Z",
+      "updated_at": "2026-10-03T05:44:16Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771442",
+      "run_attempt": 1,
+      "jobs": [
+        {
+          "id": 111139700543,
+          "name": "CodeQL preflight",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:44:06Z",
+          "completed_at": "2026-10-03T05:44:15Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771442/job/111139700543",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Detect review-only fast pass",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111139731821,
+          "name": "Analyze (${{ matrix.language }})",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-03T05:44:16Z",
+          "completed_at": "2026-10-03T05:44:16Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771442/job/111139731821",
+          "steps": []
+        }
+      ]
+    },
+    "render": {
+      "id": 37100771445,
+      "name": "Render Diff",
+      "event": "pull_request",
+      "path": ".github/workflows/render-diff.yml",
+      "head_sha": "a36241b377f52bea9cfca7351db45648f6e601b8",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-03T05:44:04Z",
+      "updated_at": "2026-10-03T05:44:13Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771445",
+      "run_attempt": 1,
+      "jobs": [
+        {
+          "id": 111139700502,
+          "name": "Render Diff preflight",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:44:06Z",
+          "completed_at": "2026-10-03T05:44:12Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771445/job/111139700502",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Detect review-only fast pass",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Check out trusted CI impact classifier",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Collect Render Diff impact input",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Classify Render Diff impact",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Summarize Render Diff impact",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111139723298,
+          "name": "Canvas visual diff",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-03T05:44:13Z",
+          "completed_at": "2026-10-03T05:44:12Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100771445/job/111139723298",
+          "steps": []
+        }
+      ]
+    }
+  },
+  "preflightLogs": {
+    "ci": [
+      "2026-10-03T05:44:25.9676953Z candidate not reusable yet: a36241b377f52bea9cfca7351db45648f6e601b8 (build-and-test-workflow-not-completed:in_progress)",
+      "2026-10-03T05:44:26.9225186Z fast_pass=true reason=build-and-test-green:success candidate_sha=ddffefaf584aa4f9733f33bc09d2c3aa84a22985",
+      "2026-10-03T05:44:26.9752083Z   FRONTEND_MODE: package",
+      "2026-10-03T05:44:26.9753379Z   CLASSIFICATION_STATUS: full",
+      "2026-10-03T05:44:26.9754033Z   IMPACT_REASON: fail-closed:impact-unavailable"
+    ],
+    "codeql": [
+      "2026-10-03T05:44:12.9209365Z candidate not reusable yet: a36241b377f52bea9cfca7351db45648f6e601b8 (missing-check:Analyze (javascript-typescript):a36241b377f52bea9cfca7351db45648f6e601b8)",
+      "2026-10-03T05:44:13.7679110Z fast_pass=true reason=codeql-checks-green candidate_sha=ddffefaf584aa4f9733f33bc09d2c3aa84a22985"
+    ],
+    "render": [
+      "2026-10-03T05:44:10.0836905Z candidate not reusable yet: a36241b377f52bea9cfca7351db45648f6e601b8 (render-diff-workflow-not-completed:in_progress)",
+      "2026-10-03T05:44:11.2197826Z fast_pass=true reason=canvas-visual-diff-success candidate_sha=ddffefaf584aa4f9733f33bc09d2c3aa84a22985",
+      "2026-10-03T05:44:11.2805846Z   IMPACT_REASON: fail-closed:impact-unavailable"
+    ]
+  },
+  "pr": {
+    "html_url": "https://github.com/paldyn/HanPage/pull/118",
+    "state": "open",
+    "mergeable": true,
+    "mergeable_state": "clean",
+    "merge_commit_sha": "5bdff9e902cd190748bfd628c138e40f2a83dcc2"
+  },
+  "prHead": "a36241b377f52bea9cfca7351db45648f6e601b8",
+  "prBase": "f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+  "allWorkflowsSuccess": true,
+  "allChecksComplete": true,
+  "allThreePreflightReuseExactCandidate": true,
+  "cleanMergeable": true,
+  "aggregateJob": {
+    "id": 111139765346,
+    "status": "completed",
+    "conclusion": "success",
+    "semantic": "Original main fast_pass=true recognizes completed exact ddffefaf Build & Test success; source/test/workflow/fixture unchanged docs-only single-parent tail permits mandatory worker skips. Not a fresh full rerun. Default fallback impact-unavailable outputs are not exercised because fast_pass=true.",
+    "executionExcerpts": [
+      "2026-10-03T05:44:34.6809437Z   PREFLIGHT_RESULT: success",
+      "2026-10-03T05:44:34.6809854Z   FAST_PASS: true",
+      "2026-10-03T05:44:34.6810441Z   FRONTEND_MODE: package",
+      "2026-10-03T05:44:34.6810898Z   IMPACT_REASON: fail-closed:impact-unavailable",
+      "2026-10-03T05:44:34.6811440Z   BUILD_SLOW_RESULT: skipped",
+      "2026-10-03T05:44:34.6811936Z   BUILD_A_RESULT: skipped",
+      "2026-10-03T05:44:34.6812349Z   BUILD_B_RESULT: skipped",
+      "2026-10-03T05:44:34.6812754Z   TEST_SLOW_RESULT: skipped",
+      "2026-10-03T05:44:34.6814526Z   LINT_RESULT: skipped",
+      "2026-10-03T05:44:34.6814931Z   NATIVE_SKIA_RESULT: skipped",
+      "2026-10-03T05:44:34.6815365Z   FRONTEND_UNIT_RESULT: skipped",
+      "2026-10-03T05:44:34.6815802Z   FRONTEND_PACKAGE_RESULT: skipped",
+      "2026-10-03T05:44:34.6946725Z preflight=success",
+      "2026-10-03T05:44:34.6948042Z fast_pass=true",
+      "2026-10-03T05:44:34.6948821Z frontend_mode=package",
+      "2026-10-03T05:44:34.6949610Z impact_reason=fail-closed:impact-unavailable",
+      "2026-10-03T05:44:34.6950524Z build_slow=skipped",
+      "2026-10-03T05:44:34.6950915Z build_a=skipped",
+      "2026-10-03T05:44:34.6951291Z build_b=skipped",
+      "2026-10-03T05:44:34.6951841Z test_slow=skipped",
+      "2026-10-03T05:44:34.6952221Z test_regular_1=skipped",
+      "2026-10-03T05:44:34.6952618Z test_regular_2=skipped",
+      "2026-10-03T05:44:34.6953017Z test_regular_3=skipped",
+      "2026-10-03T05:44:34.6953420Z lint=skipped",
+      "2026-10-03T05:44:34.6953783Z native_skia=skipped",
+      "2026-10-03T05:44:34.6954178Z frontend_unit=skipped",
+      "2026-10-03T05:44:34.6954582Z frontend_package=skipped"
+    ]
+  },
+  "prBodyRawEvidenceUrls": [
+    "https://raw.githubusercontent.com/paldyn/HanPage/a36241b377f52bea9cfca7351db45648f6e601b8/mydocs/working/assets/web_favicon_main_20261003/new-logo-preview.png"
+  ],
+  "prBodyRawEvidenceUrlsPinnedToTail": true
+}

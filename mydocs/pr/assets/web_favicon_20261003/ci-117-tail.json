@@ -1,0 +1,673 @@
+{
+  "observed_at_utc": "2026-10-03T05:32:42.546145+00:00",
+  "repository": "paldyn/HanPage",
+  "source_head": "0214122e6cf1813413a186e5846cf0ca82854c37",
+  "code_candidate_sha": "f2616ba9eaa48f62923d94b3edea005fafff059f",
+  "code_candidate_tested_merge_sha": "c46882b9fad454df2a620273d67e3131997e0c77",
+  "code_candidate_evidence": "ci-117.json",
+  "pr": {
+    "baseRefName": "devel",
+    "headRefOid": "0214122e6cf1813413a186e5846cf0ca82854c37",
+    "mergeStateStatus": "CLEAN",
+    "mergeable": "MERGEABLE",
+    "number": 117,
+    "state": "OPEN",
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:30:50Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100060305/job/111137676142",
+        "name": "cancel-stale-runs",
+        "startedAt": "2026-10-03T05:30:51Z",
+        "status": "COMPLETED",
+        "workflowName": "Cancel stale PR runs"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:30:57Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061563/job/111137678456",
+        "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+        "startedAt": "2026-10-03T05:30:53Z",
+        "status": "COMPLETED",
+        "workflowName": "Adapter inter-diff"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:01Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137679003",
+        "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+        "startedAt": "2026-10-03T05:30:54Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:30:58Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061451/job/111137678346",
+        "name": "cancel-stale-runs",
+        "startedAt": "2026-10-03T05:30:53Z",
+        "status": "COMPLETED",
+        "workflowName": "Cancel stale PR runs"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:30:58Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061572/job/111137678639",
+        "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+        "startedAt": "2026-10-03T05:30:54Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:30:59Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061567/job/111137678731",
+        "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+        "startedAt": "2026-10-03T05:30:54Z",
+        "status": "COMPLETED",
+        "workflowName": "Proptest roundtrip"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:30:59Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061418/job/111137678327",
+        "name": "Render Diff preflight",
+        "startedAt": "2026-10-03T05:30:53Z",
+        "status": "COMPLETED",
+        "workflowName": "Render Diff"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:30:52Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137679753",
+        "name": "WASM Build",
+        "startedAt": "2026-10-03T05:30:52Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:30:59Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061418/job/111137699954",
+        "name": "Canvas visual diff",
+        "startedAt": "2026-10-03T05:31:00Z",
+        "status": "COMPLETED",
+        "workflowName": "Render Diff"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:05Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061563/job/111137694248",
+        "name": "adapter inter-diff preflight",
+        "startedAt": "2026-10-03T05:31:00Z",
+        "status": "COMPLETED",
+        "workflowName": "Adapter inter-diff"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:16Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061572/job/111137695085",
+        "name": "CodeQL preflight",
+        "startedAt": "2026-10-03T05:31:00Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:08Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061567/job/111137699408",
+        "name": "Proptest preflight",
+        "startedAt": "2026-10-03T05:31:02Z",
+        "status": "COMPLETED",
+        "workflowName": "Proptest roundtrip"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:05Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061563/job/111137715234",
+        "name": "adapter inter-diff",
+        "startedAt": "2026-10-03T05:31:05Z",
+        "status": "COMPLETED",
+        "workflowName": "Adapter inter-diff"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:16Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061572/job/111137742749",
+        "name": "Analyze (${{ matrix.language }})",
+        "startedAt": "2026-10-03T05:31:16Z",
+        "status": "COMPLETED",
+        "workflowName": "CodeQL"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:08Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061567/job/111137724449",
+        "name": "prop roundtrip",
+        "startedAt": "2026-10-03T05:31:09Z",
+        "status": "COMPLETED",
+        "workflowName": "Proptest roundtrip"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:17Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137702778",
+        "name": "CI preflight",
+        "startedAt": "2026-10-03T05:31:02Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:17Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745521",
+        "name": "Resolve nextest target duration policy",
+        "startedAt": "2026-10-03T05:31:18Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:17Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745472",
+        "name": "build-test-archive-a",
+        "startedAt": "2026-10-03T05:31:18Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:17Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745864",
+        "name": "Lint (fmt, clippy, WASM check)",
+        "startedAt": "2026-10-03T05:31:18Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:17Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745573",
+        "name": "Native Skia tests",
+        "startedAt": "2026-10-03T05:31:18Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:17Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745665",
+        "name": "Frontend unit gates",
+        "startedAt": "2026-10-03T05:31:18Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:17Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745675",
+        "name": "Frontend package gates",
+        "startedAt": "2026-10-03T05:31:18Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:17Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745672",
+        "name": "Workflow promotion preflight",
+        "startedAt": "2026-10-03T05:31:18Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:17Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745643",
+        "name": "build-test-archive-b",
+        "startedAt": "2026-10-03T05:31:18Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:17Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137746082",
+        "name": "build-test-archive-c",
+        "startedAt": "2026-10-03T05:31:18Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:17Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137746155",
+        "name": "build-test-archive-d",
+        "startedAt": "2026-10-03T05:31:18Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:17Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745784",
+        "name": "test-archive-a-shard-1",
+        "startedAt": "2026-10-03T05:31:18Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:18Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137746288",
+        "name": "test-archive-b-shard-1",
+        "startedAt": "2026-10-03T05:31:18Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:18Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137746303",
+        "name": "test-archive-c-shard-1",
+        "startedAt": "2026-10-03T05:31:18Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:18Z",
+        "conclusion": "SKIPPED",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137746283",
+        "name": "test-archive-d-shard-1",
+        "startedAt": "2026-10-03T05:31:18Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-03T05:31:22Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745576",
+        "name": "Build & Test",
+        "startedAt": "2026-10-03T05:31:19Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      }
+    ],
+    "url": "https://github.com/paldyn/HanPage/pull/117"
+  },
+  "all_latest_checks_complete": true,
+  "latest_check_count": 31,
+  "latest_bad_or_pending_check_count": 0,
+  "reuse_proofs": [
+    {
+      "workflow": "CI",
+      "preflight_job": 111137702778,
+      "reason": "build-and-test-green:success",
+      "candidate_sha": "f2616ba9eaa48f62923d94b3edea005fafff059f",
+      "actual_log_lines": [
+        "2026-10-03T05:31:15.6255528Z fast_pass=true reason=build-and-test-green:success candidate_sha=f2616ba9eaa48f62923d94b3edea005fafff059f",
+        "2026-10-03T05:31:15.6697697Z fast_pass=\"${DETECTED_FAST_PASS}\"",
+        "2026-10-03T05:31:15.6825765Z   DETECTED_REASON: build-and-test-green:success",
+        "2026-10-03T05:31:15.6825963Z   CANDIDATE_SHA: f2616ba9eaa48f62923d94b3edea005fafff059f"
+      ],
+      "run": {
+        "conclusion": "success",
+        "databaseId": 37100061591,
+        "event": "pull_request",
+        "headSha": "0214122e6cf1813413a186e5846cf0ca82854c37",
+        "jobs": [
+          {
+            "databaseId": 111137679003,
+            "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137679003"
+          },
+          {
+            "databaseId": 111137679753,
+            "name": "WASM Build",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137679753"
+          },
+          {
+            "databaseId": 111137702778,
+            "name": "CI preflight",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137702778"
+          },
+          {
+            "databaseId": 111137745472,
+            "name": "build-test-archive-a",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745472"
+          },
+          {
+            "databaseId": 111137745521,
+            "name": "Resolve nextest target duration policy",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745521"
+          },
+          {
+            "databaseId": 111137745573,
+            "name": "Native Skia tests",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745573"
+          },
+          {
+            "databaseId": 111137745576,
+            "name": "Build & Test",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745576"
+          },
+          {
+            "databaseId": 111137745643,
+            "name": "build-test-archive-b",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745643"
+          },
+          {
+            "databaseId": 111137745665,
+            "name": "Frontend unit gates",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745665"
+          },
+          {
+            "databaseId": 111137745672,
+            "name": "Workflow promotion preflight",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745672"
+          },
+          {
+            "databaseId": 111137745675,
+            "name": "Frontend package gates",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745675"
+          },
+          {
+            "databaseId": 111137745784,
+            "name": "test-archive-a-shard-1",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745784"
+          },
+          {
+            "databaseId": 111137745864,
+            "name": "Lint (fmt, clippy, WASM check)",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745864"
+          },
+          {
+            "databaseId": 111137746082,
+            "name": "build-test-archive-c",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137746082"
+          },
+          {
+            "databaseId": 111137746155,
+            "name": "build-test-archive-d",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137746155"
+          },
+          {
+            "databaseId": 111137746283,
+            "name": "test-archive-d-shard-1",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137746283"
+          },
+          {
+            "databaseId": 111137746288,
+            "name": "test-archive-b-shard-1",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137746288"
+          },
+          {
+            "databaseId": 111137746303,
+            "name": "test-archive-c-shard-1",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137746303"
+          }
+        ],
+        "status": "completed",
+        "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591",
+        "workflowName": "CI"
+      }
+    },
+    {
+      "workflow": "CodeQL",
+      "preflight_job": 111137695085,
+      "reason": "codeql-checks-green",
+      "candidate_sha": "f2616ba9eaa48f62923d94b3edea005fafff059f",
+      "actual_log_lines": [
+        "2026-10-03T05:31:14.0866810Z fast_pass=true reason=codeql-checks-green candidate_sha=f2616ba9eaa48f62923d94b3edea005fafff059f",
+        "2026-10-03T05:31:14.1157790Z fast_pass=\"${DETECTED_FAST_PASS}\"",
+        "2026-10-03T05:31:14.1367998Z   DETECTED_REASON: codeql-checks-green",
+        "2026-10-03T05:31:14.1368301Z   CANDIDATE_SHA: f2616ba9eaa48f62923d94b3edea005fafff059f"
+      ],
+      "run": {
+        "conclusion": "success",
+        "databaseId": 37100061572,
+        "event": "pull_request",
+        "headSha": "0214122e6cf1813413a186e5846cf0ca82854c37",
+        "jobs": [
+          {
+            "databaseId": 111137678639,
+            "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061572/job/111137678639"
+          },
+          {
+            "databaseId": 111137695085,
+            "name": "CodeQL preflight",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061572/job/111137695085"
+          },
+          {
+            "databaseId": 111137742749,
+            "name": "Analyze (${{ matrix.language }})",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061572/job/111137742749"
+          }
+        ],
+        "status": "completed",
+        "url": "https://github.com/paldyn/HanPage/actions/runs/37100061572",
+        "workflowName": "CodeQL"
+      }
+    },
+    {
+      "workflow": "Render Diff",
+      "preflight_job": 111137678327,
+      "reason": "canvas-visual-diff-success",
+      "candidate_sha": "f2616ba9eaa48f62923d94b3edea005fafff059f",
+      "actual_log_lines": [
+        "2026-10-03T05:30:57.9964267Z fast_pass=true reason=canvas-visual-diff-success candidate_sha=f2616ba9eaa48f62923d94b3edea005fafff059f",
+        "2026-10-03T05:30:58.0290776Z fast_pass=\"${DETECTED_FAST_PASS}\"",
+        "2026-10-03T05:30:58.0652581Z   DETECTED_REASON: canvas-visual-diff-success",
+        "2026-10-03T05:30:58.0654193Z   CANDIDATE_SHA: f2616ba9eaa48f62923d94b3edea005fafff059f"
+      ],
+      "run": {
+        "conclusion": "success",
+        "databaseId": 37100061418,
+        "event": "pull_request",
+        "headSha": "0214122e6cf1813413a186e5846cf0ca82854c37",
+        "jobs": [
+          {
+            "databaseId": 111137678327,
+            "name": "Render Diff preflight",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061418/job/111137678327"
+          },
+          {
+            "databaseId": 111137699954,
+            "name": "Canvas visual diff",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061418/job/111137699954"
+          }
+        ],
+        "status": "completed",
+        "url": "https://github.com/paldyn/HanPage/actions/runs/37100061418",
+        "workflowName": "Render Diff"
+      }
+    },
+    {
+      "workflow": "Adapter inter-diff",
+      "preflight_job": 111137694248,
+      "reason": "skip-trusted-mydocs-tail:f2616ba9eaa48f62923d94b3edea005fafff059f",
+      "candidate_sha": "f2616ba9eaa48f62923d94b3edea005fafff059f",
+      "actual_log_lines": [
+        "2026-10-03T05:31:03.9101481Z   DETECTED_REASON: skip-trusted-mydocs-tail:f2616ba9eaa48f62923d94b3edea005fafff059f"
+      ],
+      "run": {
+        "conclusion": "success",
+        "databaseId": 37100061563,
+        "event": "pull_request",
+        "headSha": "0214122e6cf1813413a186e5846cf0ca82854c37",
+        "jobs": [
+          {
+            "databaseId": 111137678456,
+            "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061563/job/111137678456"
+          },
+          {
+            "databaseId": 111137694248,
+            "name": "adapter inter-diff preflight",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061563/job/111137694248"
+          },
+          {
+            "databaseId": 111137715234,
+            "name": "adapter inter-diff",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061563/job/111137715234"
+          }
+        ],
+        "status": "completed",
+        "url": "https://github.com/paldyn/HanPage/actions/runs/37100061563",
+        "workflowName": "Adapter inter-diff"
+      }
+    },
+    {
+      "workflow": "Proptest roundtrip",
+      "preflight_job": 111137699408,
+      "reason": "trusted-mydocs-tail:f2616ba9eaa48f62923d94b3edea005fafff059f",
+      "candidate_sha": "f2616ba9eaa48f62923d94b3edea005fafff059f",
+      "actual_log_lines": [
+        "2026-10-03T05:31:06.7475812Z fast_pass=true reason=trusted-mydocs-tail:f2616ba9eaa48f62923d94b3edea005fafff059f",
+        "2026-10-03T05:31:06.7734703Z fast_pass='false'",
+        "2026-10-03T05:31:06.8013525Z   DETECTED_REASON: trusted-mydocs-tail:f2616ba9eaa48f62923d94b3edea005fafff059f"
+      ],
+      "run": {
+        "conclusion": "success",
+        "databaseId": 37100061567,
+        "event": "pull_request",
+        "headSha": "0214122e6cf1813413a186e5846cf0ca82854c37",
+        "jobs": [
+          {
+            "databaseId": 111137678731,
+            "name": "trusted_postmerge_reuse / Verify trusted post-merge reuse",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061567/job/111137678731"
+          },
+          {
+            "databaseId": 111137699408,
+            "name": "Proptest preflight",
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061567/job/111137699408"
+          },
+          {
+            "databaseId": 111137724449,
+            "name": "prop roundtrip",
+            "status": "completed",
+            "conclusion": "skipped",
+            "url": "https://github.com/paldyn/HanPage/actions/runs/37100061567/job/111137724449"
+          }
+        ],
+        "status": "completed",
+        "url": "https://github.com/paldyn/HanPage/actions/runs/37100061567",
+        "workflowName": "Proptest roundtrip"
+      }
+    }
+  ],
+  "build_and_test": {
+    "job": 111137745576,
+    "url": "https://github.com/paldyn/HanPage/actions/runs/37100061591/job/111137745576",
+    "status": "success",
+    "fast_pass": true,
+    "actual_log_lines": [
+      "2026-10-03T05:31:21.2807589Z   FAST_PASS: true",
+      "2026-10-03T05:31:21.2815893Z   PROMOTION_RESULT: skipped"
+    ],
+    "heavy_workers": "skipped as expected after reusing exact code candidate"
+  },
+  "codeql_final": {
+    "workflow_run": 37100061572,
+    "workflow_status": "success",
+    "preflight_reason": "codeql-checks-green",
+    "analyze_worker": "skipped",
+    "source_candidate_three_analyzes": "success",
+    "source_candidate_GHAS_CodeQL": "neutral",
+    "note": "No new GHAS check was posted on the document-only tail; latest CodeQL preflight verifies candidate checks."
+  },
+  "remote_mutations": false,
+  "limitations": [
+    "The code-candidate SHA carries the actual FULL source test results; tail workers reuse that candidate.",
+    "This pre-merge snapshot does not confirm remote merge or web deployment."
+  ]
+}

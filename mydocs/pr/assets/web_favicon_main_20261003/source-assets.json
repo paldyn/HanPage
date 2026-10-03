@@ -1,0 +1,57 @@
+[
+  {
+    "path": "assets/logo/favicon.ico",
+    "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+    "bytes": 100921
+  },
+  {
+    "path": "rhwp-studio/public/favicon.ico",
+    "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+    "bytes": 100921
+  },
+  {
+    "path": "rhwp-studio/src/assets/hanpage-favicon.ico",
+    "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+    "bytes": 100921
+  },
+  {
+    "path": "rhwp-studio/public/icons/hanpage-04-128.png",
+    "sha256": "50bf5565ac8b2bf07ee3c31ac50ed0d9515e8aa4b239b94938c54e676dace5f5",
+    "bytes": 18862
+  },
+  {
+    "path": "rhwp-studio/public/icons/hanpage-04-192.png",
+    "sha256": "89d3e2cd23b2d5a50a7f68105cd5117ae0ddb6c9b957982845a1579bb0c36f26",
+    "bytes": 50596
+  },
+  {
+    "path": "rhwp-studio/public/icons/hanpage-04-256.png",
+    "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3",
+    "bytes": 63171
+  },
+  {
+    "path": "rhwp-studio/public/icons/hanpage-04-512.png",
+    "sha256": "5a3dd9f2596e8cdaf8ab398e015823b3d83f1bcac2453337aff7d36d8dc6c7fd",
+    "bytes": 174447
+  },
+  {
+    "path": "rhwp-studio/public/icons/icon-128.png",
+    "sha256": "50bf5565ac8b2bf07ee3c31ac50ed0d9515e8aa4b239b94938c54e676dace5f5",
+    "bytes": 18862
+  },
+  {
+    "path": "rhwp-studio/public/icons/icon-192.png",
+    "sha256": "89d3e2cd23b2d5a50a7f68105cd5117ae0ddb6c9b957982845a1579bb0c36f26",
+    "bytes": 50596
+  },
+  {
+    "path": "rhwp-studio/public/icons/icon-256.png",
+    "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3",
+    "bytes": 63171
+  },
+  {
+    "path": "rhwp-studio/public/icons/icon-512.png",
+    "sha256": "5a3dd9f2596e8cdaf8ab398e015823b3d83f1bcac2453337aff7d36d8dc6c7fd",
+    "bytes": 174447
+  }
+]

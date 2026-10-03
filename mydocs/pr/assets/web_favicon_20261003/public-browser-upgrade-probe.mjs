@@ -154,6 +154,7 @@ try {
       result.checks.push({ name: 'The updated real service worker supplies all seven branding URLs offline', pass: result.offlineAssets.length === 7 && result.offlineAssets.every(i => i.status === 200 && i.sha256 === ([result.document.favicon.url, result.fallbackFavicon.url].includes(i.url) ? expectedFaviconHash : i.url === result.document.appleTouch ? expectedPwaHashes['256x256'] : expectedPwaHashes[result.manifestIcons.find(m => m.url === i.url)?.sizes])) });
     } finally { await page.setOfflineMode(false); }
   }
+  result.checks.push({ name: 'No unhandled public page exception during branding validation', pass: result.pageExceptions.length === 0 });
   result.status = result.checks.every(c => c.pass) ? 'PASS' : 'FAIL';
   if (result.status !== 'PASS') process.exitCode = 1;
 } catch (error) { result.status = 'FAIL'; result.error = String(error); process.exitCode = 1; }

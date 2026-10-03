@@ -1,0 +1,256 @@
+{
+  "observedAt": "2026-10-03T05:53:48.348890+00:00",
+  "url": "https://hanpage.paldyn.com/",
+  "expectedSource": "6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+  "scope": "Public regular URLs and byte hashes. Actual legacy service-worker upgrade is a separate owned-browser check.",
+  "responses": [
+    {
+      "url": "https://hanpage.paldyn.com/",
+      "finalUrl": "https://hanpage.paldyn.com/",
+      "status": 200,
+      "bytes": 62510,
+      "sha256": "c1762221b4dbea37b49f3d26251b2092ac58d84f0d0a80c14b9d38214cbb422d",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Last-Modified": "Sat, 03 Oct 2026 05:52:31 GMT",
+        "ETag": "\"6ac0981f-f42e\"",
+        "Cache-Control": "max-age=600",
+        "Date": "Sat, 03 Oct 2026 05:53:48 GMT",
+        "Age": "19",
+        "X-Cache": "HIT"
+      }
+    },
+    {
+      "url": "https://hanpage.paldyn.com/assets/hanpage-favicon-DGxGu2KG.ico",
+      "finalUrl": "https://hanpage.paldyn.com/assets/hanpage-favicon-DGxGu2KG.ico",
+      "status": 200,
+      "bytes": 100921,
+      "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+      "headers": {
+        "Content-Type": "image/vnd.microsoft.icon",
+        "Last-Modified": "Sat, 03 Oct 2026 05:52:31 GMT",
+        "ETag": "\"6ac0981f-18a39\"",
+        "Cache-Control": "max-age=600",
+        "Age": "0",
+        "Date": "Sat, 03 Oct 2026 05:53:48 GMT",
+        "X-Cache": "MISS"
+      }
+    },
+    {
+      "url": "https://hanpage.paldyn.com/favicon.ico",
+      "finalUrl": "https://hanpage.paldyn.com/favicon.ico",
+      "status": 200,
+      "bytes": 100921,
+      "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+      "headers": {
+        "Content-Type": "image/vnd.microsoft.icon",
+        "Last-Modified": "Sat, 03 Oct 2026 05:52:31 GMT",
+        "ETag": "\"6ac0981f-18a39\"",
+        "Cache-Control": "max-age=600",
+        "Date": "Sat, 03 Oct 2026 05:53:48 GMT",
+        "Age": "19",
+        "X-Cache": "HIT"
+      }
+    },
+    {
+      "url": "https://hanpage.paldyn.com/manifest.webmanifest",
+      "finalUrl": "https://hanpage.paldyn.com/manifest.webmanifest",
+      "status": 200,
+      "bytes": 752,
+      "sha256": "2eb62c92f281cca6e4c84450bd47f0d622b5dfdca70f56aca26b009a18b18e81",
+      "headers": {
+        "Content-Type": "application/manifest+json; charset=utf-8",
+        "Last-Modified": "Sat, 03 Oct 2026 05:52:31 GMT",
+        "ETag": "\"6ac0981f-2f0\"",
+        "Cache-Control": "max-age=600",
+        "Date": "Sat, 03 Oct 2026 05:53:49 GMT",
+        "Age": "0",
+        "X-Cache": "MISS"
+      }
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-128.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/hanpage-04-128.png",
+      "status": 200,
+      "bytes": 18862,
+      "sha256": "50bf5565ac8b2bf07ee3c31ac50ed0d9515e8aa4b239b94938c54e676dace5f5",
+      "headers": {
+        "Content-Type": "image/png",
+        "Last-Modified": "Sat, 03 Oct 2026 05:52:31 GMT",
+        "ETag": "\"6ac0981f-49ae\"",
+        "Cache-Control": "max-age=600",
+        "Age": "0",
+        "Date": "Sat, 03 Oct 2026 05:53:49 GMT",
+        "X-Cache": "MISS"
+      }
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/icon-128.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/icon-128.png",
+      "status": 200,
+      "bytes": 18862,
+      "sha256": "50bf5565ac8b2bf07ee3c31ac50ed0d9515e8aa4b239b94938c54e676dace5f5",
+      "headers": {
+        "Content-Type": "image/png",
+        "Last-Modified": "Sat, 03 Oct 2026 05:52:31 GMT",
+        "ETag": "\"6ac0981f-49ae\"",
+        "Cache-Control": "max-age=600",
+        "Age": "0",
+        "Date": "Sat, 03 Oct 2026 05:53:49 GMT",
+        "X-Cache": "MISS"
+      }
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-192.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/hanpage-04-192.png",
+      "status": 200,
+      "bytes": 50596,
+      "sha256": "89d3e2cd23b2d5a50a7f68105cd5117ae0ddb6c9b957982845a1579bb0c36f26",
+      "headers": {
+        "Content-Type": "image/png",
+        "Last-Modified": "Sat, 03 Oct 2026 05:52:31 GMT",
+        "ETag": "\"6ac0981f-c5a4\"",
+        "Cache-Control": "max-age=600",
+        "Age": "0",
+        "Date": "Sat, 03 Oct 2026 05:53:49 GMT",
+        "X-Cache": "MISS"
+      }
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/icon-192.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/icon-192.png",
+      "status": 200,
+      "bytes": 50596,
+      "sha256": "89d3e2cd23b2d5a50a7f68105cd5117ae0ddb6c9b957982845a1579bb0c36f26",
+      "headers": {
+        "Content-Type": "image/png",
+        "Last-Modified": "Sat, 03 Oct 2026 05:52:31 GMT",
+        "ETag": "\"6ac0981f-c5a4\"",
+        "Cache-Control": "max-age=600",
+        "Age": "0",
+        "Date": "Sat, 03 Oct 2026 05:53:50 GMT",
+        "X-Cache": "MISS"
+      }
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-256.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/hanpage-04-256.png",
+      "status": 200,
+      "bytes": 63171,
+      "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3",
+      "headers": {
+        "Content-Type": "image/png",
+        "Last-Modified": "Sat, 03 Oct 2026 05:52:31 GMT",
+        "ETag": "\"6ac0981f-f6c3\"",
+        "Cache-Control": "max-age=600",
+        "Age": "0",
+        "Date": "Sat, 03 Oct 2026 05:53:50 GMT",
+        "X-Cache": "MISS"
+      }
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/icon-256.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/icon-256.png",
+      "status": 200,
+      "bytes": 63171,
+      "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3",
+      "headers": {
+        "Content-Type": "image/png",
+        "Last-Modified": "Sat, 03 Oct 2026 05:52:31 GMT",
+        "ETag": "\"6ac0981f-f6c3\"",
+        "Cache-Control": "max-age=600",
+        "Age": "0",
+        "Date": "Sat, 03 Oct 2026 05:53:50 GMT",
+        "X-Cache": "MISS"
+      }
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/hanpage-04-512.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/hanpage-04-512.png",
+      "status": 200,
+      "bytes": 174447,
+      "sha256": "5a3dd9f2596e8cdaf8ab398e015823b3d83f1bcac2453337aff7d36d8dc6c7fd",
+      "headers": {
+        "Content-Type": "image/png",
+        "Last-Modified": "Sat, 03 Oct 2026 05:52:31 GMT",
+        "ETag": "\"6ac0981f-2a96f\"",
+        "Cache-Control": "max-age=600",
+        "Age": "0",
+        "Date": "Sat, 03 Oct 2026 05:53:50 GMT",
+        "X-Cache": "MISS"
+      }
+    },
+    {
+      "url": "https://hanpage.paldyn.com/icons/icon-512.png",
+      "finalUrl": "https://hanpage.paldyn.com/icons/icon-512.png",
+      "status": 200,
+      "bytes": 174447,
+      "sha256": "5a3dd9f2596e8cdaf8ab398e015823b3d83f1bcac2453337aff7d36d8dc6c7fd",
+      "headers": {
+        "Content-Type": "image/png",
+        "Last-Modified": "Sat, 03 Oct 2026 05:52:31 GMT",
+        "ETag": "\"6ac0981f-2a96f\"",
+        "Cache-Control": "max-age=600",
+        "Age": "0",
+        "Date": "Sat, 03 Oct 2026 05:53:51 GMT",
+        "X-Cache": "MISS"
+      }
+    },
+    {
+      "url": "https://hanpage.paldyn.com/sw.js",
+      "finalUrl": "https://hanpage.paldyn.com/sw.js",
+      "status": 200,
+      "bytes": 6051,
+      "sha256": "0011f36a69cd9023746abb8473aafa4e120e9c4da374d8e5dbe1f2ef8383ba35",
+      "headers": {
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Last-Modified": "Sat, 03 Oct 2026 05:52:31 GMT",
+        "ETag": "\"6ac0981f-17a3\"",
+        "Cache-Control": "max-age=600",
+        "Age": "0",
+        "Date": "Sat, 03 Oct 2026 05:53:51 GMT",
+        "X-Cache": "MISS"
+      }
+    }
+  ],
+  "checks": [
+    "Single content-hashed new favicon link",
+    "Both favicon URLs match approved seven-frame Desktop ICO",
+    "All five manifest entries use the new versioned PNGs",
+    "All eight versioned and legacy PNGs match approved hashes and dimensions",
+    "Apple touch retains the supported new 256px alias",
+    "Published service worker precaches the new favicon and icon URLs"
+  ],
+  "faviconHref": "/assets/hanpage-favicon-DGxGu2KG.ico",
+  "manifestIcons": [
+    {
+      "src": "icons/hanpage-04-128.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/hanpage-04-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/hanpage-04-256.png",
+      "sizes": "256x256",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/hanpage-04-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/hanpage-04-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "appleTouchHref": "/icons/icon-256.png",
+  "serviceWorkerSha256": "0011f36a69cd9023746abb8473aafa4e120e9c4da374d8e5dbe1f2ef8383ba35",
+  "status": "pass"
+}

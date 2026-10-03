@@ -1,0 +1,47 @@
+{
+  "source_sha": "fd7dd1d22113930e371fe71aeef75664691693e7",
+  "files": [
+    {
+      "path": "pkg",
+      "existed": false,
+      "symlink": false,
+      "git_blob": null
+    },
+    {
+      "path": "rhwp-studio/node_modules",
+      "existed": false,
+      "symlink": false,
+      "git_blob": null
+    },
+    {
+      "path": "rhwp-studio/dist",
+      "existed": false,
+      "symlink": false,
+      "git_blob": null
+    },
+    {
+      "path": "rhwp-studio/public/rhwp_bg.wasm",
+      "existed": false,
+      "symlink": false,
+      "git_blob": null
+    },
+    {
+      "path": "rhwp-studio/public/rhwp.js",
+      "existed": true,
+      "symlink": false,
+      "sha256": "092987f8f36b3e8b0f76d48ec233be7e75114d336d41021ca2a42c89692c90e6",
+      "bytes": 357732,
+      "git_blob": "87e8d3d1533f9cfba0f4d27769201129fba2f9de"
+    },
+    {
+      "path": "rhwp-studio/package-lock.json",
+      "existed": true,
+      "symlink": false,
+      "sha256": "d9c46d0f0572bec5b27f18d1c593c9de278b0b44d15240ada74e62feb3d4a4d9",
+      "bytes": 248914,
+      "git_blob": "7dad220c4e847b84280c5de9382d3faef2b65af6"
+    }
+  ],
+  "shared_target": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review",
+  "primary_dependencies_not_modified": true
+}

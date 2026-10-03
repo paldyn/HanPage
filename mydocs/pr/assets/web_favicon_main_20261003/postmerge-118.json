@@ -1,0 +1,1228 @@
+{
+  "schema": 1,
+  "repository": "paldyn/HanPage",
+  "pullRequest": 118,
+  "observedAt": "2026-10-03T05:56:49.368507+00:00",
+  "mergeSha": "6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+  "finalPrHead": "a36241b377f52bea9cfca7351db45648f6e601b8",
+  "mergedAt": "2026-10-03T05:47:01Z",
+  "treeComparison": {
+    "mergeTree": "86f67f2717be8045fe859d3b2155e55b123fee90",
+    "headTree": "86f67f2717be8045fe859d3b2155e55b123fee90",
+    "equal": true,
+    "mergeParents": [
+      "f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a"
+    ],
+    "headParents": [
+      "ddffefaf584aa4f9733f33bc09d2c3aa84a22985"
+    ]
+  },
+  "automaticRunIds": {
+    "deployPages": 37100934978,
+    "ci": 37100935139,
+    "codeql": 37100934968
+  },
+  "jobs": {
+    "ci": [
+      {
+        "id": 111140165105,
+        "name": "CI preflight",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-03T05:47:42Z",
+        "completed_at": "2026-10-03T05:47:49Z",
+        "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100935139/job/111140165105",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Detect review-only fast pass",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check out trusted CI impact classifier",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Collect CI impact input",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Classify CI impact",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Summarize CI impact classification",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Check out trusted CI impact classifier",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ]
+      },
+      {
+        "id": 111140165636,
+        "name": "WASM Build",
+        "status": "completed",
+        "conclusion": "skipped",
+        "started_at": "2026-10-03T05:47:05Z",
+        "completed_at": "2026-10-03T05:47:04Z",
+        "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100935139/job/111140165636",
+        "steps": []
+      },
+      {
+        "id": 111140278735,
+        "name": "Lint (fmt, clippy, WASM check)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-03T05:48:27Z",
+        "completed_at": "2026-10-03T05:53:11Z",
+        "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100935139/job/111140278735",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Rust build cache",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Format check",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate CI impact classifier",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Validate Render Diff trigger policy",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Clippy",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check workspace members (FFI bindings, tools)",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Check WASM target",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Rust build cache",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ]
+      },
+      {
+        "id": 111140278779,
+        "name": "Frontend package gates",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-03T05:47:51Z",
+        "completed_at": "2026-10-03T05:49:45Z",
+        "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100935139/job/111140278779",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install wasm-pack",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Restore frontend WASM cargo cache",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build fresh WASM package for frontend gates",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Set up Node.js",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install frontend package dependencies",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Verify WASM bindings and editor embed contract",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run editor package tests when declared",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run shared and extension service worker tests",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run Chrome extension options UI tests",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run Studio unit tests",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build Studio",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build browser extensions",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Verify extension distributions",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Compile VS Code extension",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Verify font asset contracts",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Save frontend WASM cargo cache",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Set up Node.js",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ]
+      },
+      {
+        "id": 111140279538,
+        "name": "Frontend unit gates",
+        "status": "completed",
+        "conclusion": "skipped",
+        "started_at": "2026-10-03T05:47:50Z",
+        "completed_at": "2026-10-03T05:47:50Z",
+        "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100935139/job/111140279538",
+        "steps": []
+      },
+      {
+        "id": 111141094234,
+        "name": "Native Skia tests",
+        "status": "in_progress",
+        "conclusion": null,
+        "started_at": "2026-10-03T05:53:13Z",
+        "completed_at": null,
+        "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100935139/job/111141094234",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Free disk space (remove unused pre-installed toolchains)",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Rust build cache",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install native Skia runtime packages",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Native Skia tests",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "name": "Post Rust build cache",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "pending",
+            "conclusion": null
+          }
+        ]
+      },
+      {
+        "id": 111141094338,
+        "name": "build-test-archive-a / Build test archive (1)",
+        "status": "in_progress",
+        "conclusion": null,
+        "started_at": "2026-10-03T05:53:14Z",
+        "completed_at": null,
+        "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100935139/job/111141094338",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Free disk space (remove unused pre-installed toolchains)",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install cargo-nextest",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Rust build cache",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Select cargo profile",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build and allocate default-feature test archives",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "name": "Upload slow test archive",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Upload test archive 1",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Upload test archive 2",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Upload test archive 3",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Upload archive expected counts",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Post Rust build cache",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "pending",
+            "conclusion": null
+          }
+        ]
+      },
+      {
+        "id": 111141094389,
+        "name": "build-test-archive-b / Build test archive (3)",
+        "status": "in_progress",
+        "conclusion": null,
+        "started_at": "2026-10-03T05:53:13Z",
+        "completed_at": null,
+        "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100935139/job/111141094389",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Free disk space (remove unused pre-installed toolchains)",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install cargo-nextest",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Rust build cache",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Select cargo profile",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build and allocate default-feature test archives",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "name": "Upload slow test archive",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Upload test archive 1",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Upload test archive 2",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Upload test archive 3",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Upload archive expected counts",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Post Rust build cache",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "pending",
+            "conclusion": null
+          }
+        ]
+      },
+      {
+        "id": 111141094405,
+        "name": "build-test-archive-slow / Build test archive (slow 2)",
+        "status": "in_progress",
+        "conclusion": null,
+        "started_at": "2026-10-03T05:53:20Z",
+        "completed_at": null,
+        "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100935139/job/111141094405",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Free disk space (remove unused pre-installed toolchains)",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install cargo-nextest",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Rust build cache",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Select cargo profile",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build and allocate default-feature test archives",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "name": "Upload slow test archive",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Upload test archive 1",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Upload test archive 2",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Upload test archive 3",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Upload archive expected counts",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Post Rust build cache",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "pending",
+            "conclusion": null
+          }
+        ]
+      }
+    ],
+    "codeql": [
+      {
+        "id": 111140164530,
+        "name": "CodeQL preflight",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-03T05:47:06Z",
+        "completed_at": "2026-10-03T05:47:08Z",
+        "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100934968/job/111140164530",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Detect review-only fast pass",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ]
+      },
+      {
+        "id": 111140175060,
+        "name": "Analyze (python)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-03T05:47:11Z",
+        "completed_at": "2026-10-03T05:48:50Z",
+        "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100934968/job/111140175060",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Initialize CodeQL",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "status": "completed",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Restore cargo registry & build cache (rust)",
+            "status": "completed",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Build Rust (for CodeQL)",
+            "status": "completed",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Save cargo registry & build cache (rust)",
+            "status": "completed",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Perform CodeQL Analysis",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Perform CodeQL Analysis",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Initialize CodeQL",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ]
+      },
+      {
+        "id": 111140175064,
+        "name": "Analyze (javascript-typescript)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-03T05:47:10Z",
+        "completed_at": "2026-10-03T05:50:20Z",
+        "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100934968/job/111140175064",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Initialize CodeQL",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "status": "completed",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Restore cargo registry & build cache (rust)",
+            "status": "completed",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Build Rust (for CodeQL)",
+            "status": "completed",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Save cargo registry & build cache (rust)",
+            "status": "completed",
+            "conclusion": "skipped"
+          },
+          {
+            "name": "Perform CodeQL Analysis",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Perform CodeQL Analysis",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Initialize CodeQL",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ]
+      },
+      {
+        "id": 111140175065,
+        "name": "Analyze (rust)",
+        "status": "in_progress",
+        "conclusion": null,
+        "started_at": "2026-10-03T05:47:10Z",
+        "completed_at": null,
+        "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100934968/job/111140175065",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Initialize CodeQL",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Restore cargo registry & build cache (rust)",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build Rust (for CodeQL)",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Save cargo registry & build cache (rust)",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Perform CodeQL Analysis",
+            "status": "in_progress",
+            "conclusion": null
+          },
+          {
+            "name": "Post Perform CodeQL Analysis",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Post Initialize CodeQL",
+            "status": "pending",
+            "conclusion": null
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "pending",
+            "conclusion": null
+          }
+        ]
+      }
+    ],
+    "deploy": [
+      {
+        "id": 111140164699,
+        "name": "Build & Push to gh-pages",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-03T05:47:06Z",
+        "completed_at": "2026-10-03T05:52:13Z",
+        "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100934978/job/111140164699",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install Rust toolchain",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install wasm-pack",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Cache cargo registry & build",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build WASM",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Setup Node.js",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Install dependencies",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Copy WASM to public",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Copy favicon",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Build rhwp-studio",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Push to gh-pages",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Setup Node.js",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Cache cargo registry & build",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success"
+          }
+        ]
+      }
+    ]
+  },
+  "renderDiffAfterMerge": {
+    "status": "not triggered by main push",
+    "exactHeadWorkflowTriggerBlock": "name: Render Diff\n\non:\n  pull_request:\n    branches: [main, devel]\n    types: [opened, reopened, synchronize]\n    paths:\n      - 'Cargo.toml'\n      - 'Cargo.lock'\n      - 'src/paint/**'\n      - 'src/model/**'\n      - 'src/renderer/**'\n      - 'src/document_core/queries/rendering.rs'\n      - 'src/wasm_api.rs'\n      - 'src/main.rs'\n      - 'assets/fonts/**'\n      - 'ttfs/**'\n      - 'scripts/renderer_baseline.py'\n      - 'scripts/renderer_baseline_manifest.json'\n      - 'scripts/ci-impact-classifier.cjs'\n      - 'scripts/generate_font_glyph_payload_fixture.py'\n      - 'scripts/generate_exact_face_collection_fixture.py'\n      - 'scripts/generate_font_native_hwpx_fixture.py'\n      - 'scripts/requirements-font-fixtures.txt'\n      - 'samples/render-p35-font-native-bitmap.hwpx'\n      - 'tests/fixtures/fonts/**'\n      - 'docs/canvaskit-parity-implementation.md'\n      - 'docs/text-ir-v2.md'\n      - 'rhwp-studio/**'\n      # Review 기록·asset은 렌더 입력이 아니다. trailing review-only commit이\n      # Canvas visual diff를 다시 시작하지 않게 mydocs/**는 trigger에서 제외한다 (#3559).\n      - '.github/workflows/render-diff.yml'\n  workflow_dispatch:\n    inputs:\n      fixtures:\n        description: 'Comma-separated sample files under rhwp-studio/public/samples'\n        required: false\n        type: string\n      max-pages:\n        description: 'Pages per fixture to compare, or all'\n        required: false\n        default: '1'\n        type: string\n      full-suite:\n        description: 'Run all built-in sample fixtures'\n        required: false\n        default: false\n        type: boolean\n      write-images:\n        description: 'Write Canvas PNG artifacts even when cases pass. PDF report artifacts are always retained.'\n        required: false\n        default: false\n        type: boolean\n\nenv:\n  CARGO_TERM_COLOR: always\n\n# [Task #1192 F] 같은 PR 에 새 push 가 오면 진행 중 run 을 취소해 중복 실행 제거.\n# render-diff 는 pull_request 트리거 위주 — cancel-in-progress 는 PR 이벤트 한정.\nconcurrency:\n  group: render-diff-${{ github.workflow }}-${{ github.head_ref || github.ref }}\n  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n\njobs:\n  preflight:\n    name: Render Diff preflight\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    ",
+    "premergeCoverage": "Full Render Diff37099603625 and exact-candidate tail preflight37100771445 success; final main tree equals reviewed head."
+  },
+  "remoteMutations": false,
+  "publicationStatus": "exact merge auto Pages publish and legacy Pages build/deployment succeeded; public endpoints delegated to separate agent",
+  "publicEndpointVerification": "Assigned to separate root agent; no public browser verification claimed here.",
+  "publication": {
+    "deployRun": {
+      "id": 37100934978,
+      "event": "push",
+      "head_sha": "6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+      "head_branch": "main",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-03T05:47:04Z",
+      "updated_at": "2026-10-03T05:52:14Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100934978",
+      "run_attempt": 1
+    },
+    "ghPagesCommit": {
+      "sha": "bcc34ff6626ea2261e9450cbae9adb4892a24308",
+      "tree": "44e7a80984a11c7cef9ee1437081bcebbdb84e92",
+      "sourceCommitMessage": "deploy: 6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d 6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+      "date": "2026-10-03T05:52:04Z",
+      "html_url": "https://github.com/paldyn/HanPage/commit/bcc34ff6626ea2261e9450cbae9adb4892a24308"
+    },
+    "pagesSettings": {
+      "status": "built",
+      "cname": "hanpage.paldyn.com",
+      "html_url": "https://hanpage.paldyn.com/",
+      "build_type": "legacy",
+      "source": {
+        "branch": "gh-pages",
+        "path": "/"
+      }
+    },
+    "pagesBuild": {
+      "status": "built",
+      "error": {
+        "message": null
+      },
+      "commit": "bcc34ff6626ea2261e9450cbae9adb4892a24308",
+      "duration": 24196,
+      "created_at": "2026-10-03T05:52:08Z",
+      "updated_at": "2026-10-03T05:52:32Z",
+      "url": "https://api.github.com/repos/paldyn/HanPage/pages/builds/1256683413"
+    },
+    "deployment": {
+      "id": 6823952278,
+      "sha": "bcc34ff6626ea2261e9450cbae9adb4892a24308",
+      "environment": "github-pages",
+      "latestStatus": {
+        "id": 19205164454,
+        "state": "success",
+        "created_at": "2026-10-03T05:52:36Z",
+        "updated_at": "2026-10-03T05:52:36Z",
+        "description": "",
+        "environment_url": "https://hanpage.paldyn.com/",
+        "log_url": "https://github.com/paldyn/HanPage/actions/runs/37101210678/job/111140976033",
+        "target_url": "https://github.com/paldyn/HanPage/actions/runs/37101210678/job/111140976033"
+      }
+    },
+    "internalPagesRuns": [
+      {
+        "id": 37101210678,
+        "name": "pages build and deployment",
+        "path": "dynamic/pages/pages-build-deployment",
+        "event": "dynamic",
+        "head_sha": "bcc34ff6626ea2261e9450cbae9adb4892a24308",
+        "head_branch": "gh-pages",
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-10-03T05:52:09Z",
+        "updated_at": "2026-10-03T05:52:36Z",
+        "html_url": "https://github.com/paldyn/HanPage/actions/runs/37101210678"
+      }
+    ]
+  },
+  "executionExcerpts": {
+    "deploy": [
+      "2026-10-03T05:47:08.6462273Z Download action repository 'peaceiris/actions-gh-pages@v4' (SHA:84c30a85c19949d7eee79c4ff27748b70285e453)",
+      "2026-10-03T05:47:08.8916550Z Complete job name: Build & Push to gh-pages",
+      "2026-10-03T05:47:23.7988366Z 6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+      "2026-10-03T05:47:27.8766732Z 6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+      "2026-10-03T05:51:51.2169509Z [INFO]: 📦   Your wasm pkg is ready to publish at /home/runner/work/HanPage/HanPage/pkg.",
+      "2026-10-03T05:52:03.0756186Z ##[group]Run peaceiris/actions-gh-pages@v4",
+      "2026-10-03T05:52:03.0781308Z   publish_branch: gh-pages",
+      "2026-10-03T05:52:03.0782823Z   commit_message: deploy: 6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+      "2026-10-03T05:52:03.1654119Z [INFO] Usage https://github.com/peaceiris/actions-gh-pages#readme",
+      "2026-10-03T05:52:03.1658174Z [INFO] PublishBranch: gh-pages",
+      "2026-10-03T05:52:03.1660882Z [INFO] CommitMessage: deploy: 6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+      "2026-10-03T05:52:03.1783004Z [command]/usr/bin/git checkout --orphan gh-pages",
+      "2026-10-03T05:52:03.1808501Z Switched to a new branch 'gh-pages'",
+      "2026-10-03T05:52:04.5251859Z [command]/usr/bin/git commit -m deploy: 6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d 6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+      "2026-10-03T05:52:04.5372248Z [gh-pages (root-commit) bcc34ff] deploy: 6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d 6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+      "2026-10-03T05:52:04.5404045Z [command]/usr/bin/git push origin --force gh-pages",
+      "2026-10-03T05:52:07.9751800Z  + d433890...bcc34ff gh-pages -> gh-pages (forced update)"
+    ],
+    "ciPreflight": [
+      "2026-10-03T05:47:44.6682731Z fast_pass=false reason=not-pull-request candidate_sha=",
+      "2026-10-03T05:47:45.3698426Z 6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+      "2026-10-03T05:47:45.8996655Z HEAD is now at 6dc1a2d release(web): 공개 웹에 새 로고 파비콘과 PWA 아이콘 적용 (#118)",
+      "2026-10-03T05:47:45.9085920Z 6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+      "2026-10-03T05:47:47.0568960Z   IMPACT_AUTHORITY: checked-out-ref",
+      "2026-10-03T05:47:47.0569287Z   RUST_REQUIRED: true",
+      "2026-10-03T05:47:47.0569518Z   FRONTEND_MODE: package",
+      "2026-10-03T05:47:47.0570006Z   NATIVE_SKIA_REQUIRED: true",
+      "2026-10-03T05:47:47.0570675Z   CLASSIFICATION_STATUS: full",
+      "2026-10-03T05:47:47.0571522Z   IMPACT_REASON: fail-closed:unclassified-path"
+    ],
+    "codeqlPreflight": [
+      "2026-10-03T05:47:07.9062574Z fast_pass=false reason=not-pull-request candidate_sha="
+    ],
+    "mainFrontend": [
+      "2026-10-03T05:48:07.5672952Z 6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+      "2026-10-03T05:48:10.7950088Z 6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+      "2026-10-03T05:49:16.1892716Z # tests 3",
+      "2026-10-03T05:49:16.1893123Z # pass 3",
+      "2026-10-03T05:49:16.1893301Z # fail 0",
+      "2026-10-03T05:49:16.1893723Z # skipped 0",
+      "2026-10-03T05:49:16.5513042Z # tests 24",
+      "2026-10-03T05:49:16.5513649Z # pass 24",
+      "2026-10-03T05:49:16.5513950Z # fail 0",
+      "2026-10-03T05:49:16.5514570Z # skipped 0",
+      "2026-10-03T05:49:16.8362727Z # tests 113",
+      "2026-10-03T05:49:16.8363072Z # pass 113",
+      "2026-10-03T05:49:16.8363265Z # fail 0",
+      "2026-10-03T05:49:16.8363611Z # skipped 0",
+      "2026-10-03T05:49:16.9156499Z # tests 4",
+      "2026-10-03T05:49:16.9156858Z # pass 4",
+      "2026-10-03T05:49:16.9157031Z # fail 0",
+      "2026-10-03T05:49:16.9157515Z # skipped 0",
+      "2026-10-03T05:49:23.3265295Z # tests 765",
+      "2026-10-03T05:49:23.3265662Z # pass 765",
+      "2026-10-03T05:49:23.3265840Z # fail 0",
+      "2026-10-03T05:49:23.3266214Z # skipped 0",
+      "2026-10-03T05:49:28.8581527Z # tests 3",
+      "2026-10-03T05:49:28.8582283Z # pass 3",
+      "2026-10-03T05:49:28.8582456Z # fail 0",
+      "2026-10-03T05:49:28.8582827Z # skipped 0",
+      "2026-10-03T05:49:36.5385547Z # tests 6",
+      "2026-10-03T05:49:36.5394445Z # pass 6",
+      "2026-10-03T05:49:36.5394633Z # fail 0",
+      "2026-10-03T05:49:36.5395005Z # skipped 0"
+    ]
+  },
+  "runs": {
+    "ci": {
+      "id": 37100935139,
+      "name": "CI",
+      "event": "push",
+      "path": ".github/workflows/ci.yml",
+      "head_sha": "6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+      "head_branch": "main",
+      "status": "in_progress",
+      "conclusion": null,
+      "created_at": "2026-10-03T05:47:04Z",
+      "updated_at": "2026-10-03T05:53:21Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100935139",
+      "run_attempt": 1
+    },
+    "codeql": {
+      "id": 37100934968,
+      "name": "CodeQL",
+      "event": "push",
+      "path": ".github/workflows/codeql.yml",
+      "head_sha": "6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+      "head_branch": "main",
+      "status": "in_progress",
+      "conclusion": null,
+      "created_at": "2026-10-03T05:47:04Z",
+      "updated_at": "2026-10-03T05:47:11Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100934968",
+      "run_attempt": 1
+    },
+    "deploy": {
+      "id": 37100934978,
+      "name": "Deploy to GitHub Pages",
+      "event": "push",
+      "path": ".github/workflows/deploy-pages.yml",
+      "head_sha": "6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+      "head_branch": "main",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-03T05:47:04Z",
+      "updated_at": "2026-10-03T05:52:14Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/37100934978",
+      "run_attempt": 1
+    }
+  },
+  "mergedPrSnapshot": {
+    "number": 118,
+    "html_url": "https://github.com/paldyn/HanPage/pull/118",
+    "state": "closed",
+    "merged": true,
+    "merged_at": "2026-10-03T05:47:01Z",
+    "merge_commit_sha": "6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+    "head_sha": "a36241b377f52bea9cfca7351db45648f6e601b8",
+    "base_sha": "f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a"
+  },
+  "mainRefSnapshot": {
+    "sha": "6dc1a2d55cfb0752b4688d8f303a6f802cf49b5d",
+    "tree": "86f67f2717be8045fe859d3b2155e55b123fee90"
+  },
+  "finalObserverSnapshot": {
+    "observerEndedAt": "2026-10-03T05:56:49.368507+00:00",
+    "noRemoteMutations": true,
+    "noDispatchRerunCancel": true,
+    "observedFailedJobs": [],
+    "pendingDuplicateMainValidation": [
+      {
+        "workflow": "ci",
+        "id": 37100935139,
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "workflow": "codeql",
+        "id": 37100934968,
+        "status": "in_progress",
+        "conclusion": null
+      }
+    ],
+    "coverageDecision": "Root explicitly ended observation after exact product/full-tree premerge CI+CodeQL+Render succeeded and merge/head tree equivalence; automatic duplicate main push validations are reported at actual snapshot status, not promoted to success or treated as new required revalidation absent source changes or failures. No workflow dispatch/rerun/cancel performed.",
+    "premergeRecords": [
+      {
+        "path": "/Users/lwm/.codex/worktrees/web-favicon-release-20261003/HanPage/output/pr-review/web-favicon-main-20261003/ci-118.json",
+        "sha256": "e9311f1c8ae2ab46d8104d11872ba0761d70f63342a7295d54cf5a06f62612d5",
+        "fullRuns": {
+          "ci": 37099603828,
+          "codeql": 37099603622,
+          "render": 37099603625
+        },
+        "testCounts": {
+          "defaultFeatureShards": {
+            "regular1": {
+              "run": 3687,
+              "passed": 3687,
+              "skipped": 12,
+              "failed": 0
+            },
+            "regular2": {
+              "run": 693,
+              "passed": 693,
+              "skipped": 15,
+              "failed": 0
+            },
+            "regular3": {
+              "run": 840,
+              "passed": 840,
+              "skipped": 0,
+              "failed": 0
+            },
+            "slow": {
+              "run": 1,
+              "passed": 1,
+              "skipped": 0,
+              "failed": 0
+            }
+          },
+          "defaultFeatureTotal": {
+            "run": 5221,
+            "passed": 5221,
+            "failed": 0,
+            "skipped": 27
+          },
+          "nativeSkia": {
+            "passed": 64,
+            "failed": 0
+          },
+          "studio": {
+            "passed": 765,
+            "failed": 0
+          }
+        }
+      },
+      {
+        "path": "/Users/lwm/.codex/worktrees/web-favicon-release-20261003/HanPage/output/pr-review/web-favicon-main-20261003/ci-118-tail.json",
+        "sha256": "d739b11e57ac1c320e8dc2c32a75ff2c7ce113e78fd3b55691f21edae820565b",
+        "exactGreenCandidate": "ddffefaf584aa4f9733f33bc09d2c3aa84a22985",
+        "allChecksComplete": true,
+        "verificationStatus": "pass"
+      }
+    ],
+    "publicEndpointEvidence": "Root confirmed HTTP13 PASS and separate agent confirmed same old-SW profile after9PASS/ordinary reload1/offline7/current hash/errors0. Those records are external evidence owned by root/other agent; not claimed as this observer execution."
+  }
+}

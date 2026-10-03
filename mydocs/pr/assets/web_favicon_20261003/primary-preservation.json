@@ -1,0 +1,166 @@
+{
+  "checkedAt": "2026-10-03T05:59:07.234429+00:00",
+  "primaryHead": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+  "headUnchanged": true,
+  "fileCount": 39,
+  "samePathSet": true,
+  "allFileStatusBytesHashesUnchanged": true,
+  "records": [
+    {
+      "path": "HanPage-Desktop/README.md",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/128x128.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/128x128@2x.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/32x32.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/64x64.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square107x107Logo.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square142x142Logo.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square150x150Logo.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square284x284Logo.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square30x30Logo.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square310x310Logo.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square44x44Logo.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square71x71Logo.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/Square89x89Logo.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/StoreLogo.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/icon.icns",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/icon.ico",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/icon.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/tauri.conf.json",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/resources/branding/HanPage-previous-icons-20261001.zip",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/16x16.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/24x24.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/256x256.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/48x48.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/512x512.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage.icns",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage.ico",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_1024.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_128.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_16.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_24.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_256.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_32.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_48.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_512.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_64.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_symbol_blue_transparent_1024.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_symbol_white_transparent_1024.png",
+      "pass": true
+    },
+    {
+      "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/README.txt",
+      "pass": true
+    }
+  ]
+}
