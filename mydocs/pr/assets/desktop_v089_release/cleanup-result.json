@@ -1,0 +1,191 @@
+{
+  "schema": "hanpage.desktop089-cleanup-result.v1",
+  "checked_at_utc": "2026-10-03T04:20:08.941691+00:00",
+  "evidence_commit": "76a5d9b7afe08d6d41b23223bf40e53d1102e5ef",
+  "primary_before": {
+    "head": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+    "file_count": 39,
+    "all_original_status_bytes_sha256_equal": true
+  },
+  "primary_after": {
+    "head": "c5b6022532371fd07a2f5e978fb21e4c3cc37758",
+    "file_count": 39,
+    "all_original_status_bytes_sha256_equal": true
+  },
+  "task_processes_found": [],
+  "task_dmg_mounted": false,
+  "removed": [
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/pkg",
+      "kind": "owned generated directory",
+      "files": 5,
+      "removed": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/dist",
+      "kind": "owned generated directory",
+      "files": 79,
+      "removed": true
+    },
+    {
+      "path": "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review/release/bundle/macos/HanPage.app",
+      "kind": "owned generated directory",
+      "files": 3,
+      "removed": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/HanPage-Desktop/node_modules",
+      "kind": "symlink only",
+      "target_preserved": true,
+      "removed": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/node_modules",
+      "kind": "symlink only",
+      "target_preserved": true,
+      "removed": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/rhwp-studio/public/rhwp_bg.wasm",
+      "kind": "owned generated WASM",
+      "removed": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop089",
+      "kind": "owned review output after evidence persisted on devel",
+      "removed": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-quiet",
+      "kind": "owned review output after evidence persisted on devel",
+      "removed": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/pr-review/desktop-update-dialog-style",
+      "kind": "owned review output after evidence persisted on devel",
+      "removed": true
+    },
+    {
+      "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage/output/desktop089",
+      "kind": "owned review output after evidence persisted on devel",
+      "removed": true
+    }
+  ],
+  "preserved": [
+    "primary user39 files and checkout",
+    "primary dependencies",
+    "shared target/pr-review",
+    "tracked rhwp-studio/public/rhwp.js",
+    "/Applications/HanPage.app",
+    "/private/tmp/hanpage_primary39_preservation_cleanup_20261002.json"
+  ],
+  "worktree_archive": {
+    "status": "retained_protected",
+    "path": "/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage",
+    "actual_tool": "mcp__codex_app__archive_worktree",
+    "actual_error": "This worktree is protected by a pinned task or workspace.",
+    "protection_bypassed": false
+  },
+  "fork_remote_branch": "retained; contributor fork and primary dirty checkout are outside automatic deletion scope",
+  "local_task_branch": {
+    "name": "codex/desktop-update-quiet-20261002",
+    "deleted": true,
+    "previous_head": "79c898194038ad6674af9497a04af793b40e45e5",
+    "basis": "PR116 MERGED; merge SHA is ancestor of devel; same whole tree as merged PR head; records/assets persisted on devel; managed worktree clean and detached"
+  },
+  "local_devel_sync": {
+    "from": "52aeb4be36728109758c56b749c7946122f04d29",
+    "to": "76a5d9b7afe08d6d41b23223bf40e53d1102e5ef",
+    "method": "compare-and-swap update-ref; primary checkout unchanged; final cleanup-only commit will be fast-forwarded after push"
+  },
+  "temporary_helpers_removed": [
+    {
+      "path": "/private/tmp/hanpage089_artifact_audit.py",
+      "sha256_before": "38f9d9a4fa0571b23e02b746ef60274f5f9173a987a4a3c07e23ddb4c950ff9f",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage089_cached_browser.py",
+      "sha256_before": "359b9dd0b712a32e8054eebc8dcd4dfd1fda00c6e0ce8e0fae40236b680a5c80",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage089_diagnostic.py",
+      "sha256_before": "d126cf993da36fc0c57403fd30ba8735b97219169f3977612d37dcddff7975a1",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage089_local_audit.py",
+      "sha256_before": "3f83d212d3c316d5dcbd8070ef72820c740f4d9859711c7542587e30f62ecd36",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage089_mac_audit.py",
+      "sha256_before": "0cbd9738b3cb1a380178bbe8b2ed7d69fd7d40471407bf9f43d0f40cb598057f",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage089_pr_body.md",
+      "sha256_before": "55224d17af94ce7c948c9fc1e2f1885a6a24759ea9fbc8540cf53c189e7f94e8",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage089_pr_update.py",
+      "sha256_before": "5169d6a960281add12928a9c41c5de933302629b99ca6e34e5680a46d859a8f4",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage089_prepare.py",
+      "sha256_before": "5265214b171365ec14c8821bdc140817feccd056034b07807176d6d59c943698",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage089_public_audit.py",
+      "sha256_before": "a4733e8a722dd1f6271d159998dc87a4d209daf9d93c7512287c5d695bd13a32",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage089_record_candidate.py",
+      "sha256_before": "c05c98648d3b2398803d12a5508f2c2f99b2e45c2f89bd491118fcd952e65ca9",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage089_release_final_audit.py",
+      "sha256_before": "7c5700fb5f7de9e9e325305951b29998fc252d6841c72dc6d72ba5727a1a4159",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage089_release_monitor.py",
+      "sha256_before": "2c3450a0488ec77d1c80c35353d0889af2c97b395660a1c1770a6faec7fbd5c0",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage089_release_notes.md",
+      "sha256_before": "fb9a7f5f81d82a91dccf84011aec474726ab99b9f109e95648849547a2cd43a2",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage089_review_tail.py",
+      "sha256_before": "83ca27fb639200981a47ef754f4884aece8e012c1c56d6ea76f60be0b19eb334",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage089_record_public.py",
+      "sha256_before": "02ed654d5999965e2269c877a7c212024e12ad84e7dfb52887ceedb4093d5e25",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage089_cleanup.py",
+      "sha256_before": "812ee6f1cac27c73da5a5398bf720cbcd58ca3f71dbebbe90f851f4b9a9c6cf9",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage089_cleanup_result.json",
+      "sha256_before": "e09319ca76cd15ac9ed340d0ed1954abe56c9c5b21dd219057bcfb78182c15c6",
+      "removed": true
+    }
+  ],
+  "temporary_finalizer": "This task-owned finalizer is removed after writing these records.",
+  "verification_browser_tab": "Owned IAB tab3 was absent when queried; no user tab was closed.",
+  "completed_at_utc": "2026-10-03T04:21:08.449658+00:00"
+}

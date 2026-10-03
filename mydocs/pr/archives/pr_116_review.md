@@ -61,3 +61,9 @@ protectedworktree의actualarchive결과를 확인하고보호면유지사유를 
 - **2026-10-03 13:15:04 KST에 [Desktop 0.8.9 공개](https://github.com/paldyn/HanPage/releases/tag/hanpage-desktop-v0.8.9)**했다. 익명 latest API/앱의 latest.json endpoint는 HTTP200, 버전0.8.9, 검증한 초안 manifest와 byte 동일(SHA256 `184f3700b8929d8a32478ddede5dcf59af5bd8b8ff3f376544ad8c0d68e7a5ef`), 6 asset/public URL·한국어 release notes UTF-8 동일을 확인했다. [공개 확인](../assets/desktop_v089_release/public-verification.json).
 
 제품 source/test/workflow/baseline을 다시 바꾸지 않고 관리자 운영 기록 범위의 archive·assets·오늘할일만 직접 반영한다. 실제 앱 설치·실행·재시작은 하지 않았으며 새 UI는 0.8.9 설치 후 적용된다. 사용자 primary39파일·HEAD와 공유 target/pr-review 보존 및 소유 임시 자료의 실제 정리 결과는 cleanup 기록으로 연결한다.
+
+## 실제 정리와 최종 유지 사유
+
+[정리 인벤토리](../assets/desktop_v089_release/cleanup-inventory.json)로 소유·파일별 hash를 확인하고, 배포 gate와 영구 증적의 devel 반영 뒤 [실제 정리 결과](../assets/desktop_v089_release/cleanup-result.json)를 기록했다. 소유 output4경로·pkg5파일·dist79파일·ignored WASM·primary 의존성을 가리키는 symlink2개(링크만)·공유 target 내부의 이번 unsigned HanPage.app만 제거했다. 사용자 원래39파일은 status/bytes/SHA256와 HEAD가 전후 동일하고, shared target/pr-review·primary dependencies·tracked public/rhwp.js·설치앱·원본 보존 baseline은 유지했다. 원격 fork head는 자동 삭제 범위가 아니므로 유지했고, clean/detached 확인 뒤 이번 local 작업 branch만 삭제했다. 기본 checkout을 바꾸지 않고 local devel을 CAS로 fast-forward했으며 최종 cleanup-only commit 공개 뒤 한 번 더 동기화한다.
+
+앱 archive tool의 실제 결과는 **`This worktree is protected by a pinned task or workspace.`**였다. 따라서 `/Users/lwm/.codex/worktrees/upstream-sync-final-20261001/HanPage`는 유지하며 고정 해제·보호 우회·수동 worktree 삭제를 수행하지 않았다. 이 보호는 배포 완료와 무관한 작업공간 보존 사유다. 자기 PR 및 참조만 한 CLOSED Issue59에는 중복 댓글·close를 추가하지 않았다. 추가 필수 구현·배포 작업은 남지 않았다.
