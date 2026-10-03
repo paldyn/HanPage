@@ -1,0 +1,86 @@
+{
+  "base": "f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+  "implementation": "fd7dd1d22113930e371fe71aeef75664691693e7",
+  "product_paths": [
+    {
+      "path": "assets/logo/favicon.ico",
+      "bytes": 100921,
+      "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+      "same_as_devel_candidate": true
+    },
+    {
+      "path": "rhwp-studio/index.html",
+      "bytes": 62337,
+      "sha256": "10f91a6260d69bdab2d181b704079181f81f5f3bb423765caa89d3365e8189b9",
+      "same_as_devel_candidate": false
+    },
+    {
+      "path": "rhwp-studio/public/favicon.ico",
+      "bytes": 100921,
+      "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+      "same_as_devel_candidate": true
+    },
+    {
+      "path": "rhwp-studio/public/icons/hanpage-04-128.png",
+      "bytes": 18862,
+      "sha256": "50bf5565ac8b2bf07ee3c31ac50ed0d9515e8aa4b239b94938c54e676dace5f5",
+      "same_as_devel_candidate": true
+    },
+    {
+      "path": "rhwp-studio/public/icons/hanpage-04-192.png",
+      "bytes": 50596,
+      "sha256": "89d3e2cd23b2d5a50a7f68105cd5117ae0ddb6c9b957982845a1579bb0c36f26",
+      "same_as_devel_candidate": true
+    },
+    {
+      "path": "rhwp-studio/public/icons/hanpage-04-256.png",
+      "bytes": 63171,
+      "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3",
+      "same_as_devel_candidate": true
+    },
+    {
+      "path": "rhwp-studio/public/icons/hanpage-04-512.png",
+      "bytes": 174447,
+      "sha256": "5a3dd9f2596e8cdaf8ab398e015823b3d83f1bcac2453337aff7d36d8dc6c7fd",
+      "same_as_devel_candidate": true
+    },
+    {
+      "path": "rhwp-studio/public/icons/icon-128.png",
+      "bytes": 18862,
+      "sha256": "50bf5565ac8b2bf07ee3c31ac50ed0d9515e8aa4b239b94938c54e676dace5f5",
+      "same_as_devel_candidate": true
+    },
+    {
+      "path": "rhwp-studio/public/icons/icon-192.png",
+      "bytes": 50596,
+      "sha256": "89d3e2cd23b2d5a50a7f68105cd5117ae0ddb6c9b957982845a1579bb0c36f26",
+      "same_as_devel_candidate": true
+    },
+    {
+      "path": "rhwp-studio/public/icons/icon-256.png",
+      "bytes": 63171,
+      "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3",
+      "same_as_devel_candidate": true
+    },
+    {
+      "path": "rhwp-studio/public/icons/icon-512.png",
+      "bytes": 174447,
+      "sha256": "5a3dd9f2596e8cdaf8ab398e015823b3d83f1bcac2453337aff7d36d8dc6c7fd",
+      "same_as_devel_candidate": true
+    },
+    {
+      "path": "rhwp-studio/src/assets/hanpage-favicon.ico",
+      "bytes": 100921,
+      "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+      "same_as_devel_candidate": true
+    },
+    {
+      "path": "rhwp-studio/vite.config.ts",
+      "bytes": 6210,
+      "sha256": "fd775594e64f94963a3a65e41727b98028c156d5c72870979757b047a3e5a738",
+      "same_as_devel_candidate": false
+    }
+  ],
+  "workflow_source_test_changes": false,
+  "note": "HTML and Vite config preserve existing main context; only favicon link and five manifest icon paths changed."
+}

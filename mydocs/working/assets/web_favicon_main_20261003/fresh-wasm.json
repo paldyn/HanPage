@@ -1,0 +1,28 @@
+{
+  "source_sha": "fd7dd1d22113930e371fe71aeef75664691693e7",
+  "cargo_version": "1.93.1",
+  "wasm_pack_version": "0.15.0",
+  "command": "CARGO_TARGET_DIR=/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review /private/tmp/hanpage-main-wasmpack-015-20261003/wasm-pack-v0.15.0-aarch64-apple-darwin/wasm-pack build --target web --release --out-dir pkg --locked",
+  "status": "PASS",
+  "public_copies_match": true,
+  "assets": [
+    {
+      "path": "pkg/rhwp.js",
+      "public_path": "rhwp-studio/public/rhwp.js",
+      "sha256": "092987f8f36b3e8b0f76d48ec233be7e75114d336d41021ca2a42c89692c90e6",
+      "bytes": 357732,
+      "equals_013_output": true,
+      "public_copies_match": true
+    },
+    {
+      "path": "pkg/rhwp_bg.wasm",
+      "public_path": "rhwp-studio/public/rhwp_bg.wasm",
+      "sha256": "ac3ada490f28af9f7e9f278fcd057ed3ca91cc67e2a3902fc5d7cce2af1dcccd",
+      "bytes": 7560902,
+      "equals_013_output": false,
+      "public_copies_match": true
+    }
+  ],
+  "wasm_bindgen_version": "0.2.125",
+  "exact_output_equal_to_browser_tested_013_build": false
+}
