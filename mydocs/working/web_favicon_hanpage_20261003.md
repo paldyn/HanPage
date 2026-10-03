@@ -27,7 +27,7 @@
 
 ## 게시·배포 대기
 
-현재는 로컬 수정과 검증까지 완료했으며 remote push·PR 생성·merge·workflow 실행·웹 배포는 하지 않았다. 앞선 0.8.9 승인은 Desktop 배포였고 웹 공개를 새로 승인한 요청은 아직 없다. [내부 task 승인 규칙](../manual/codex/docs_and_git_workflow.md#internal-task-pr-approval)의 push/PR 경계를 따른다.
+2026-10-03 작업지시자가 웹 파비콘 수정의 PR·웹 배포 요청에 “응”으로 승인했다. 이 승인을 받은 뒤 일반 devel PR을 게시하고 정확한 최신 head CI와 정상 merge를 진행한다. source 구현과 로컬 검증은 완료했으며, 공개 웹 갱신은 아직 미실행이다. [내부 task 승인 규칙](../manual/codex/docs_and_git_workflow.md#internal-task-pr-approval)의 push/PR 경계를 따른다.
 
 현재 main과 devel은 파일28,383개 차이이며 최근 engine/Studio 통합·Desktop 작업 등 미공개 변경을 포함한다. 이 favicon 후보의13파일과 별도로 전체 devel→main 웹 promotion 범위를 검토해야 한다. 승인 시 일반 devel PR의 최신 CI와 정상 병합을 먼저 처리하고, main release 후보의 정확한 차이·promotion gate를 확인한 뒤 웹 공개 파일/hashed URL·manifest·SW를 다시 검증한다. 공개 웹에서 새 로고 확인 전에는 배포 완료로 보고하지 않는다.
 
