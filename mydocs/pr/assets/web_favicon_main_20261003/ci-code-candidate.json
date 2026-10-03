@@ -1,0 +1,1805 @@
+{
+  "schema": 1,
+  "observedAt": "2026-10-03T05:42:29.215977+00:00",
+  "repository": "paldyn/HanPage",
+  "pullRequest": 118,
+  "expectedHead": "ddffefaf584aa4f9733f33bc09d2c3aa84a22985",
+  "expectedBase": "f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+  "expectedImplementation": "fd7dd1d22113930e371fe71aeef75664691693e7",
+  "pr": {
+    "html_url": "https://github.com/paldyn/HanPage/pull/118",
+    "state": "open",
+    "mergeable": true,
+    "mergeable_state": "clean",
+    "merge_commit_sha": "9b9590c230b41012ec88f2bef342332b7fe6284e"
+  },
+  "prHead": "ddffefaf584aa4f9733f33bc09d2c3aa84a22985",
+  "prBase": "f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+  "remoteMutations": false,
+  "runs": {
+    "ci": {
+      "id": 37099603828,
+      "name": "CI",
+      "event": "pull_request",
+      "path": ".github/workflows/ci.yml",
+      "head_sha": "ddffefaf584aa4f9733f33bc09d2c3aa84a22985",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-03T05:22:16Z",
+      "updated_at": "2026-10-03T05:39:06Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603828",
+      "run_attempt": 1,
+      "jobs": [
+        {
+          "id": 111136389109,
+          "name": "CI preflight",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:22:18Z",
+          "completed_at": "2026-10-03T05:22:28Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603828/job/111136389109",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Detect review-only fast pass",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Check out trusted CI impact classifier",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Collect CI impact input",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Classify CI impact",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Summarize CI impact classification",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Check out trusted CI impact classifier",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111136389708,
+          "name": "WASM Build",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-03T05:22:16Z",
+          "completed_at": "2026-10-03T05:22:16Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603828/job/111136389708",
+          "steps": []
+        },
+        {
+          "id": 111136419716,
+          "name": "Frontend package gates",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:22:31Z",
+          "completed_at": "2026-10-03T05:24:49Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603828/job/111136419716",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install wasm-pack",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore frontend WASM cargo cache",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build fresh WASM package for frontend gates",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up Node.js",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install frontend package dependencies",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify WASM bindings and editor embed contract",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run editor package tests when declared",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run shared and extension service worker tests",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run Chrome extension options UI tests",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run Studio unit tests",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build Studio",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build browser extensions",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify extension distributions",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Compile VS Code extension",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify font asset contracts",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Save frontend WASM cargo cache",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Set up Node.js",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111136419771,
+          "name": "Lint (fmt, clippy, WASM check)",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:22:31Z",
+          "completed_at": "2026-10-03T05:27:21Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603828/job/111136419771",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Rust build cache",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Format check",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Validate CI impact classifier",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Validate Render Diff trigger policy",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Clippy",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Check workspace members (FFI bindings, tools)",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Check WASM target",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Rust build cache",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111136420472,
+          "name": "Frontend unit gates",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-10-03T05:22:29Z",
+          "completed_at": "2026-10-03T05:22:29Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603828/job/111136420472",
+          "steps": []
+        },
+        {
+          "id": 111137144134,
+          "name": "Native Skia tests",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:27:23Z",
+          "completed_at": "2026-10-03T05:35:06Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603828/job/111137144134",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Free disk space (remove unused pre-installed toolchains)",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Rust build cache",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install native Skia runtime packages",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Native Skia tests",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Rust build cache",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111137144193,
+          "name": "build-test-archive-slow / Build test archive (slow 2)",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:27:24Z",
+          "completed_at": "2026-10-03T05:34:43Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603828/job/111137144193",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Free disk space (remove unused pre-installed toolchains)",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install cargo-nextest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Rust build cache",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Select cargo profile",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build and allocate default-feature test archives",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload slow test archive",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload test archive 1",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Upload test archive 2",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload test archive 3",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Upload archive expected counts",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Rust build cache",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111137144265,
+          "name": "build-test-archive-b / Build test archive (3)",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:27:23Z",
+          "completed_at": "2026-10-03T05:34:41Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603828/job/111137144265",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Free disk space (remove unused pre-installed toolchains)",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install cargo-nextest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Rust build cache",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Select cargo profile",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build and allocate default-feature test archives",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload slow test archive",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Upload test archive 1",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Upload test archive 2",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Upload test archive 3",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload archive expected counts",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Rust build cache",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111137144323,
+          "name": "build-test-archive-a / Build test archive (1)",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:27:23Z",
+          "completed_at": "2026-10-03T05:35:57Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603828/job/111137144323",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Free disk space (remove unused pre-installed toolchains)",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install cargo-nextest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Rust build cache",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Select cargo profile",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build and allocate default-feature test archives",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload slow test archive",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Upload test archive 1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload test archive 2",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Upload test archive 3",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Upload archive expected counts",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Rust build cache",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111138321231,
+          "name": "test-regular-shard-2 / Default-feature tests (shard 2/3)",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:35:09Z",
+          "completed_at": "2026-10-03T05:37:45Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603828/job/111138321231",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install cargo-nextest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Download test archive 2",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run shard 2/3",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload shard 2/3 count",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111138321238,
+          "name": "test-regular-shard-3 / Default-feature tests (shard 3/3)",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:35:09Z",
+          "completed_at": "2026-10-03T05:37:26Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603828/job/111138321238",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install cargo-nextest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Download test archive 3",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run shard 3/3",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload shard 3/3 count",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111138321316,
+          "name": "test-slow-shard / Default-feature tests (slow shard)",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:35:08Z",
+          "completed_at": "2026-10-03T05:38:31Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603828/job/111138321316",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install cargo-nextest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Download test archive slow",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run slow shard",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload slow shard count",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111138451204,
+          "name": "test-regular-shard-1 / Default-feature tests (shard 1/3)",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:35:59Z",
+          "completed_at": "2026-10-03T05:38:55Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603828/job/111138451204",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install cargo-nextest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Download test archive 1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run shard 1/3",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload shard 1/3 count",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111138897726,
+          "name": "Build & Test",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:38:58Z",
+          "completed_at": "2026-10-03T05:39:05Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603828/job/111138897726",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Download shard counts",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Download archive expected counts",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify shard totals",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Check Build & Test worker results",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    "codeql": {
+      "id": 37099603622,
+      "name": "CodeQL",
+      "event": "pull_request",
+      "path": ".github/workflows/codeql.yml",
+      "head_sha": "ddffefaf584aa4f9733f33bc09d2c3aa84a22985",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-03T05:22:15Z",
+      "updated_at": "2026-10-03T05:37:45Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603622",
+      "run_attempt": 1,
+      "jobs": [
+        {
+          "id": 111136388341,
+          "name": "CodeQL preflight",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:22:18Z",
+          "completed_at": "2026-10-03T05:22:24Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603622/job/111136388341",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Detect review-only fast pass",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111136408418,
+          "name": "Analyze (rust)",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:22:26Z",
+          "completed_at": "2026-10-03T05:37:44Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603622/job/111136408418",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Initialize CodeQL",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore cargo registry & build cache (rust)",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build Rust (for CodeQL)",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Save cargo registry & build cache (rust)",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Perform CodeQL Analysis",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Perform CodeQL Analysis",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Initialize CodeQL",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111136408464,
+          "name": "Analyze (javascript-typescript)",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:22:26Z",
+          "completed_at": "2026-10-03T05:24:08Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603622/job/111136408464",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Initialize CodeQL",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Restore cargo registry & build cache (rust)",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Build Rust (for CodeQL)",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Save cargo registry & build cache (rust)",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Perform CodeQL Analysis",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Perform CodeQL Analysis",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Initialize CodeQL",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111136408535,
+          "name": "Analyze (python)",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:22:26Z",
+          "completed_at": "2026-10-03T05:23:49Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603622/job/111136408535",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Initialize CodeQL",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Restore cargo registry & build cache (rust)",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Build Rust (for CodeQL)",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Save cargo registry & build cache (rust)",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Perform CodeQL Analysis",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Perform CodeQL Analysis",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Initialize CodeQL",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    },
+    "render": {
+      "id": 37099603625,
+      "name": "Render Diff",
+      "event": "pull_request",
+      "path": ".github/workflows/render-diff.yml",
+      "head_sha": "ddffefaf584aa4f9733f33bc09d2c3aa84a22985",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-03T05:22:15Z",
+      "updated_at": "2026-10-03T05:26:46Z",
+      "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603625",
+      "run_attempt": 1,
+      "jobs": [
+        {
+          "id": 111136388400,
+          "name": "Render Diff preflight",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:22:17Z",
+          "completed_at": "2026-10-03T05:22:26Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603625/job/111136388400",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Detect review-only fast pass",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Check out trusted CI impact classifier",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Collect Render Diff impact input",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Classify Render Diff impact",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Summarize Render Diff impact",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Check out trusted CI impact classifier",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 111136414345,
+          "name": "Canvas visual diff",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-10-03T05:22:29Z",
+          "completed_at": "2026-10-03T05:26:46Z",
+          "html_url": "https://github.com/paldyn/HanPage/actions/runs/37099603625/job/111136414345",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Render Diff identity PR #118 base f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Rust toolchain",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install PDF raster tools",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install wasm-pack",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore cargo registry & build cache",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build WASM package",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build native CLI for PDF report",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Save cargo registry & build cache",
+              "status": "completed",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Setup Node.js",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Studio dependencies",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install Chromium",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Check render diff script syntax",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run canvas visual diff and PDF report",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run selected CanvasKit readiness gate",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Add render diff summary",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Upload render diff artifacts",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Setup Node.js",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "preflightLogs": {
+    "ci": [
+      "2026-10-03T05:22:22.8341770Z candidate not reusable yet: ddffefaf584aa4f9733f33bc09d2c3aa84a22985 (build-and-test-workflow-not-completed:in_progress)",
+      "2026-10-03T05:22:23.7444077Z candidate not reusable yet: ae8f3752e50914b569f9fc163968a923bff58a2a (missing-build-and-test:ae8f3752e50914b569f9fc163968a923bff58a2a)",
+      "2026-10-03T05:22:24.4771936Z candidate not reusable yet: fd7dd1d22113930e371fe71aeef75664691693e7 (missing-build-and-test:fd7dd1d22113930e371fe71aeef75664691693e7)",
+      "2026-10-03T05:22:24.4777438Z fast_pass=false reason=no-green-current-base-build-candidate candidate_sha=",
+      "2026-10-03T05:22:26.6724491Z   IMPACT_AUTHORITY: pr-base-trusted",
+      "2026-10-03T05:22:26.6724631Z   RUST_REQUIRED: true",
+      "2026-10-03T05:22:26.6724752Z   FRONTEND_MODE: package",
+      "2026-10-03T05:22:26.6724872Z   RENDER_REQUIRED: true",
+      "2026-10-03T05:22:26.6725001Z   NATIVE_SKIA_REQUIRED: true",
+      "2026-10-03T05:22:26.6725156Z   CODEQL_LANGUAGES: javascript-typescript,python,rust",
+      "2026-10-03T05:22:26.6725328Z   CLASSIFICATION_STATUS: full",
+      "2026-10-03T05:22:26.6725593Z   IMPACT_REASON: fail-closed:unclassified-path"
+    ],
+    "codeql": [
+      "2026-10-03T05:22:22.0182864Z candidate not reusable yet: ddffefaf584aa4f9733f33bc09d2c3aa84a22985 (missing-check:Analyze (javascript-typescript):ddffefaf584aa4f9733f33bc09d2c3aa84a22985)",
+      "2026-10-03T05:22:22.5870834Z candidate not reusable yet: ae8f3752e50914b569f9fc163968a923bff58a2a (missing-check:Analyze (javascript-typescript):ae8f3752e50914b569f9fc163968a923bff58a2a)",
+      "2026-10-03T05:22:23.1173385Z candidate not reusable yet: fd7dd1d22113930e371fe71aeef75664691693e7 (missing-check:Analyze (javascript-typescript):fd7dd1d22113930e371fe71aeef75664691693e7)",
+      "2026-10-03T05:22:23.1182632Z fast_pass=false reason=no-green-current-base-codeql-candidate candidate_sha="
+    ],
+    "render": [
+      "2026-10-03T05:22:21.2645262Z candidate not reusable yet: ddffefaf584aa4f9733f33bc09d2c3aa84a22985 (render-diff-workflow-not-completed:in_progress)",
+      "2026-10-03T05:22:21.9767216Z candidate not reusable yet: ae8f3752e50914b569f9fc163968a923bff58a2a (missing-render-diff-workflow:ae8f3752e50914b569f9fc163968a923bff58a2a)",
+      "2026-10-03T05:22:22.6276704Z candidate not reusable yet: fd7dd1d22113930e371fe71aeef75664691693e7 (missing-render-diff-workflow:fd7dd1d22113930e371fe71aeef75664691693e7)",
+      "2026-10-03T05:22:22.6282546Z fast_pass=false reason=no-green-current-base-render-candidate candidate_sha=",
+      "2026-10-03T05:22:24.7432232Z   RENDER_REQUIRED: true",
+      "2026-10-03T05:22:24.7432381Z   IMPACT_REASON: fail-closed:unclassified-path"
+    ]
+  },
+  "independentReview": {
+    "base": "f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+    "implementation": "fd7dd1d22113930e371fe71aeef75664691693e7",
+    "sourceChangedPaths": 13,
+    "assets": [
+      {
+        "path": "assets/logo/favicon.ico",
+        "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+        "matchesApprovedDesktop": true,
+        "icoSizes": [
+          [
+            16,
+            16
+          ],
+          [
+            24,
+            24
+          ],
+          [
+            32,
+            32
+          ],
+          [
+            48,
+            48
+          ],
+          [
+            64,
+            64
+          ],
+          [
+            128,
+            128
+          ],
+          [
+            256,
+            256
+          ]
+        ]
+      },
+      {
+        "path": "rhwp-studio/public/favicon.ico",
+        "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+        "matchesApprovedDesktop": true,
+        "icoSizes": [
+          [
+            16,
+            16
+          ],
+          [
+            24,
+            24
+          ],
+          [
+            32,
+            32
+          ],
+          [
+            48,
+            48
+          ],
+          [
+            64,
+            64
+          ],
+          [
+            128,
+            128
+          ],
+          [
+            256,
+            256
+          ]
+        ]
+      },
+      {
+        "path": "rhwp-studio/src/assets/hanpage-favicon.ico",
+        "sha256": "c4bdbc5ab66b05b549c6c4113b030133c1691450c68bb8183232b516efde2b09",
+        "matchesApprovedDesktop": true,
+        "icoSizes": [
+          [
+            16,
+            16
+          ],
+          [
+            24,
+            24
+          ],
+          [
+            32,
+            32
+          ],
+          [
+            48,
+            48
+          ],
+          [
+            64,
+            64
+          ],
+          [
+            128,
+            128
+          ],
+          [
+            256,
+            256
+          ]
+        ]
+      },
+      {
+        "path": "rhwp-studio/public/icons/hanpage-04-128.png",
+        "sha256": "50bf5565ac8b2bf07ee3c31ac50ed0d9515e8aa4b239b94938c54e676dace5f5",
+        "dimensions": [
+          128,
+          128
+        ],
+        "mode": "RGBA",
+        "legacyAliasByteEqual": true,
+        "matchesApprovedDesktop": true
+      },
+      {
+        "path": "rhwp-studio/public/icons/hanpage-04-192.png",
+        "sha256": "89d3e2cd23b2d5a50a7f68105cd5117ae0ddb6c9b957982845a1579bb0c36f26",
+        "dimensions": [
+          192,
+          192
+        ],
+        "mode": "RGBA",
+        "legacyAliasByteEqual": true,
+        "resizeProvenance": "prepared-assets.json: sips proportional resize approved desktop 256x256 -> 192x192"
+      },
+      {
+        "path": "rhwp-studio/public/icons/hanpage-04-256.png",
+        "sha256": "ba4aa7a59ac3fa4fe4dd24e844e9c670a1b1cdc0a765e287ac7f528206433af3",
+        "dimensions": [
+          256,
+          256
+        ],
+        "mode": "RGBA",
+        "legacyAliasByteEqual": true,
+        "matchesApprovedDesktop": true
+      },
+      {
+        "path": "rhwp-studio/public/icons/hanpage-04-512.png",
+        "sha256": "5a3dd9f2596e8cdaf8ab398e015823b3d83f1bcac2453337aff7d36d8dc6c7fd",
+        "dimensions": [
+          512,
+          512
+        ],
+        "mode": "RGBA",
+        "legacyAliasByteEqual": true,
+        "matchesApprovedDesktop": true
+      }
+    ],
+    "textDiffScope": "One HTML favicon link with explanatory comment, five Vite manifest src paths; no other text/product behavior edits. All other source, lockfile, workflows and tests unchanged.",
+    "lastPublishedSource": "cc8d04812e44ce4746f6855b88db201b6a7baba3",
+    "lastPublishedToBaseDiff": [
+      "mydocs/orders/20260804.md",
+      "mydocs/report/task_m100_hp59_report.md"
+    ],
+    "lastPublishedRuntimeSourceMatchesBase": true,
+    "pagesCopy": "Unchanged main deploy-pages.yml copies assets/logo/favicon.ico to rhwp-studio/public/favicon.ico before npx vite build --base=/; both source and public ICO updated identically.",
+    "legacyAppleTouch": "/icons/icon-256.png retained and byte-identical to versioned approved 256 PNG.",
+    "pwaWorkbox": "Existing includeAssets favicon.ico/icons/*.png and globPatterns retain ico/png precache; no SW/cache behavior change.",
+    "findings": [],
+    "limits": [
+      "No fresh extension install or browser toolbar inspection in this independent code review.",
+      "192 derivation verified against saved provenance and dimensions/hash; no duplicate resize performed."
+    ],
+    "extensionConsumer": "Unchanged main Chrome/Firefox publicDir:false build configs process imported source ICO; each unchanged build.mjs also copies public/favicon.ico. Actual CI Frontend package gates Build browser extensions and Verify extension distributions success; no extension install claimed."
+  },
+  "executionExcerpts": {
+    "frontend": [
+      "2026-10-03T05:22:55.3088514Z HEAD is now at 9b9590c Merge ddffefaf584aa4f9733f33bc09d2c3aa84a22985 into f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+      "2026-10-03T05:22:55.3274322Z 9b9590c230b41012ec88f2bef342332b7fe6284e",
+      "2026-10-03T05:24:20.2515751Z # tests 3",
+      "2026-10-03T05:24:20.2516159Z # suites 0",
+      "2026-10-03T05:24:20.2516557Z # pass 3",
+      "2026-10-03T05:24:20.2516983Z # fail 0",
+      "2026-10-03T05:24:20.7468725Z # tests 24",
+      "2026-10-03T05:24:20.7468940Z # suites 0",
+      "2026-10-03T05:24:20.7469152Z # pass 24",
+      "2026-10-03T05:24:20.7469364Z # fail 0",
+      "2026-10-03T05:24:21.0831439Z # tests 113",
+      "2026-10-03T05:24:21.0831648Z # suites 0",
+      "2026-10-03T05:24:21.0831860Z # pass 113",
+      "2026-10-03T05:24:21.0832047Z # fail 0",
+      "2026-10-03T05:24:21.1784859Z # tests 4",
+      "2026-10-03T05:24:21.1785199Z # suites 0",
+      "2026-10-03T05:24:21.1785547Z # pass 4",
+      "2026-10-03T05:24:21.1785847Z # fail 0",
+      "2026-10-03T05:24:28.6276753Z # tests 765",
+      "2026-10-03T05:24:28.6277141Z # suites 0",
+      "2026-10-03T05:24:28.6277472Z # pass 765",
+      "2026-10-03T05:24:28.6277789Z # fail 0",
+      "2026-10-03T05:24:35.0404118Z # tests 3",
+      "2026-10-03T05:24:35.0404375Z # suites 0",
+      "2026-10-03T05:24:35.0405370Z # pass 3",
+      "2026-10-03T05:24:35.0405740Z # fail 0",
+      "2026-10-03T05:24:44.3057677Z # tests 6",
+      "2026-10-03T05:24:44.3057901Z # suites 0",
+      "2026-10-03T05:24:44.3058174Z # pass 6",
+      "2026-10-03T05:24:44.3058510Z # fail 0"
+    ],
+    "lint": [
+      "2026-10-03T05:22:52.6835469Z HEAD is now at 9b9590c Merge ddffefaf584aa4f9733f33bc09d2c3aa84a22985 into f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+      "2026-10-03T05:22:52.7063741Z 9b9590c230b41012ec88f2bef342332b7fe6284e",
+      "2026-10-03T05:23:12.5003676Z # tests 24",
+      "2026-10-03T05:23:12.5004396Z # pass 24",
+      "2026-10-03T05:23:12.5004732Z # fail 0",
+      "2026-10-03T05:23:12.5618196Z Ran 10 tests in 0.003s",
+      "2026-10-03T05:23:12.5618555Z OK",
+      "2026-10-03T05:23:12.6327975Z Ran 4 tests in 0.000s",
+      "2026-10-03T05:23:12.6328342Z OK"
+    ],
+    "render": [
+      "2026-10-03T05:22:48.8714262Z HEAD is now at 9b9590c Merge ddffefaf584aa4f9733f33bc09d2c3aa84a22985 into f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+      "2026-10-03T05:22:48.8924678Z 9b9590c230b41012ec88f2bef342332b7fe6284e",
+      "2026-10-03T05:23:10.1057051Z   key: Linux-render-diff-cargo-6dec797ece0e73bd329af61850f50a12bfb8dac5e028f37dff4b2386c0918388",
+      "2026-10-03T05:23:10.1057330Z   restore-keys: Linux-render-diff-cargo-",
+      "2026-10-03T05:23:10.3142030Z Cache not found for input keys: Linux-render-diff-cargo-6dec797ece0e73bd329af61850f50a12bfb8dac5e028f37dff4b2386c0918388, Linux-render-diff-cargo-",
+      "2026-10-03T05:25:23.0604337Z \u001b[36;1mnode --check e2e/canvas-render-diff.test.mjs\u001b[0m",
+      "2026-10-03T05:25:23.0604633Z \u001b[36;1mnode --check e2e/pdf-render-diff-report.mjs\u001b[0m",
+      "2026-10-03T05:25:23.0606013Z \u001b[36;1mnode --check e2e/run-render-diff.mjs\u001b[0m",
+      "2026-10-03T05:25:24.5024150Z ##[group]Run npm run e2e:render-diff:ci",
+      "2026-10-03T05:25:24.5024339Z \u001b[36;1mnpm run e2e:render-diff:ci\u001b[0m",
+      "2026-10-03T05:25:24.5718283Z > rhwp-studio@0.8.2 e2e:render-diff:ci",
+      "2026-10-03T05:25:24.5718534Z > node e2e/run-render-diff.mjs",
+      "2026-10-03T05:25:25.2316878Z > rhwp-studio@0.8.2 e2e:render-diff",
+      "2026-10-03T05:25:25.2317347Z > node e2e/canvas-render-diff.test.mjs --mode=headless",
+      "2026-10-03T05:25:32.3970204Z 📋 HTML 보고서: ../output/e2e/canvas-render-diff-report.html",
+      "2026-10-03T05:25:32.5705971Z > rhwp-studio@0.8.2 e2e:pdf-render-diff",
+      "2026-10-03T05:25:32.5706414Z > node e2e/pdf-render-diff-report.mjs --mode=headless",
+      "2026-10-03T05:25:45.0834368Z PDF visual diff summary: /home/runner/work/HanPage/HanPage/rhwp-studio/e2e/screenshots/render-diff/pdf-summary.md",
+      "2026-10-03T05:25:45.0916659Z 📋 HTML 보고서: ../output/e2e/pdf-render-diff-report.mjs-report.html",
+      "2026-10-03T05:26:43.0285538Z ##[group]Run for summary in \\",
+      "2026-10-03T05:26:43.0285722Z \u001b[36;1mfor summary in \\\u001b[0m",
+      "2026-10-03T05:26:43.0285874Z \u001b[36;1m  e2e/screenshots/render-diff/summary.md \\\u001b[0m",
+      "2026-10-03T05:26:43.0286068Z \u001b[36;1m  e2e/screenshots/render-diff/pdf-summary.md \\\u001b[0m",
+      "2026-10-03T05:26:43.0286622Z \u001b[36;1m  if [ -f \"$summary\" ]; then\u001b[0m",
+      "2026-10-03T05:26:43.0286798Z \u001b[36;1m    cat \"$summary\" >> \"$GITHUB_STEP_SUMMARY\"\u001b[0m",
+      "2026-10-03T05:26:43.0489586Z   name: render-diff-artifacts",
+      "2026-10-03T05:26:43.0490052Z   path: rhwp-studio/e2e/screenshots/render-diff/",
+      "2026-10-03T05:26:43.3994634Z Uploading artifact: render-diff-artifacts.zip",
+      "2026-10-03T05:26:44.2420310Z Artifact render-diff-artifacts successfully finalized. Artifact ID 11265398756",
+      "2026-10-03T05:26:44.2421008Z Artifact render-diff-artifacts has been successfully uploaded! Final size is 1907681 bytes. Artifact ID is 11265398756"
+    ],
+    "nativeSkia": [
+      "2026-10-03T05:27:44.2887595Z HEAD is now at 9b9590c Merge ddffefaf584aa4f9733f33bc09d2c3aa84a22985 into f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+      "2026-10-03T05:27:44.3111409Z 9b9590c230b41012ec88f2bef342332b7fe6284e",
+      "2026-10-03T05:33:16.1946629Z test result: ok. 58 passed; 0 failed; 0 ignored; 0 measured; 3248 filtered out; finished in 0.14s",
+      "2026-10-03T05:35:03.9280860Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s",
+      "2026-10-03T05:35:05.0830051Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s"
+    ],
+    "regular2": [
+      "2026-10-03T05:35:33.5943193Z HEAD is now at 9b9590c Merge ddffefaf584aa4f9733f33bc09d2c3aa84a22985 into f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+      "2026-10-03T05:35:33.6166433Z 9b9590c230b41012ec88f2bef342332b7fe6284e",
+      "2026-10-03T05:36:01.0392746Z cargo nextest run \\",
+      "2026-10-03T05:36:01.0394778Z summary=$(sed 's/\\x1b\\[[0-9;]*m//g' \"$log\" | grep -E \"Summary \\[\" | tail -1)",
+      "2026-10-03T05:36:06.5494705Z  Nextest run ID ab30572b-b513-417f-b8e7-935fe863b466 with nextest profile: default",
+      "2026-10-03T05:37:40.9854475Z      Summary [  94.437s] 693 tests run: 693 passed (1 slow), 15 skipped"
+    ],
+    "regular3": [
+      "2026-10-03T05:35:31.0580955Z HEAD is now at 9b9590c Merge ddffefaf584aa4f9733f33bc09d2c3aa84a22985 into f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+      "2026-10-03T05:35:31.0822748Z 9b9590c230b41012ec88f2bef342332b7fe6284e",
+      "2026-10-03T05:35:44.6957064Z cargo nextest run \\",
+      "2026-10-03T05:35:44.6958559Z summary=$(sed 's/\\x1b\\[[0-9;]*m//g' \"$log\" | grep -E \"Summary \\[\" | tail -1)",
+      "2026-10-03T05:35:50.0903745Z  Nextest run ID 07ecfe8d-cfab-4009-a80e-1f481dd81064 with nextest profile: default",
+      "2026-10-03T05:37:24.5128704Z      Summary [  94.422s] 840 tests run: 840 passed, 0 skipped"
+    ],
+    "regular1": [
+      "2026-10-03T05:36:20.4911455Z HEAD is now at 9b9590c Merge ddffefaf584aa4f9733f33bc09d2c3aa84a22985 into f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+      "2026-10-03T05:36:20.5140445Z 9b9590c230b41012ec88f2bef342332b7fe6284e",
+      "2026-10-03T05:36:29.0142015Z   INPUT_CHECKSUM: true",
+      "2026-10-03T05:38:53.0440187Z      Summary [ 129.375s] 3687 tests run: 3687 passed (1 slow), 12 skipped"
+    ],
+    "slow": [
+      "2026-10-03T05:35:33.3021867Z HEAD is now at 9b9590c Merge ddffefaf584aa4f9733f33bc09d2c3aa84a22985 into f590c24de8f75c90a2a143e3c1fd32dcb73c0d8a",
+      "2026-10-03T05:35:33.3268491Z 9b9590c230b41012ec88f2bef342332b7fe6284e",
+      "2026-10-03T05:35:42.0011947Z   INPUT_CHECKSUM: true",
+      "2026-10-03T05:38:27.9208068Z      Summary [ 159.747s] 1 test run: 1 passed (1 slow), 0 skipped"
+    ],
+    "aggregate": [
+      "2026-10-03T05:39:03.1344565Z shard-count-1.txt: run=3687",
+      "2026-10-03T05:39:03.1345072Z shard-count-2.txt: run=693",
+      "2026-10-03T05:39:03.1345610Z shard-count-3.txt: run=840",
+      "2026-10-03T05:39:03.1346126Z shard-count-slow.txt: run=1",
+      "2026-10-03T05:39:03.1497671Z   PREFLIGHT_RESULT: success",
+      "2026-10-03T05:39:03.1497947Z   FAST_PASS: false",
+      "2026-10-03T05:39:03.1498198Z   FRONTEND_MODE: package",
+      "2026-10-03T05:39:03.1498507Z   IMPACT_REASON: fail-closed:unclassified-path",
+      "2026-10-03T05:39:03.1499152Z   BUILD_SLOW_RESULT: success",
+      "2026-10-03T05:39:03.1499448Z   BUILD_A_RESULT: success",
+      "2026-10-03T05:39:03.1499718Z   BUILD_B_RESULT: success",
+      "2026-10-03T05:39:03.1500150Z   TEST_SLOW_RESULT: success",
+      "2026-10-03T05:39:03.1501271Z   LINT_RESULT: success",
+      "2026-10-03T05:39:03.1501529Z   NATIVE_SKIA_RESULT: success",
+      "2026-10-03T05:39:03.1501813Z   FRONTEND_UNIT_RESULT: skipped",
+      "2026-10-03T05:39:03.1502112Z   FRONTEND_PACKAGE_RESULT: success",
+      "2026-10-03T05:39:03.1583707Z preflight=success",
+      "2026-10-03T05:39:03.1584213Z fast_pass=false",
+      "2026-10-03T05:39:03.1584592Z frontend_mode=package",
+      "2026-10-03T05:39:03.1584929Z impact_reason=fail-closed:unclassified-path",
+      "2026-10-03T05:39:03.1585299Z build_slow=success",
+      "2026-10-03T05:39:03.1585568Z build_a=success",
+      "2026-10-03T05:39:03.1585827Z build_b=success",
+      "2026-10-03T05:39:03.1586282Z test_slow=success",
+      "2026-10-03T05:39:03.1586570Z test_regular_1=success",
+      "2026-10-03T05:39:03.1586860Z test_regular_2=success",
+      "2026-10-03T05:39:03.1587185Z test_regular_3=success",
+      "2026-10-03T05:39:03.1589836Z lint=success",
+      "2026-10-03T05:39:03.1590593Z native_skia=success",
+      "2026-10-03T05:39:03.1591075Z frontend_unit=skipped",
+      "2026-10-03T05:39:03.1591561Z frontend_package=success"
+    ]
+  },
+  "renderArtifact": {
+    "id": 11265398756,
+    "bytes": 1907681,
+    "sha256": "c749dd488f1b889d10d6e67e51fbd24d68909fcbb18865f7a7ec27c601a580b1",
+    "inspectionScope": "Read summary text only; no claim of visual PDF/PNG inspection for this unchanged renderer source.",
+    "canvas": {
+      "comparedPages": 3,
+      "failedPages": 0,
+      "maxDiffRatio": 0.0005,
+      "pages": [
+        {
+          "fixture": "basic/KTX.hwp",
+          "pageIndex": 0,
+          "diffRatio": 0.00010542111248432702,
+          "pass": true
+        },
+        {
+          "fixture": "biz_plan.hwp",
+          "pageIndex": 0,
+          "diffRatio": 0,
+          "pass": true
+        },
+        {
+          "fixture": "tac-case-001.hwp",
+          "pageIndex": 0,
+          "diffRatio": 0,
+          "pass": true
+        }
+      ]
+    },
+    "pdfCompatibilityReport": {
+      "status": "report-only",
+      "comparedPages": 4,
+      "warningPages": 4,
+      "errorPages": 0,
+      "note": "Includes differing raster sizes; success is not a claim of all PDF/independent Hancom output equivalence."
+    },
+    "directPdfGate": {
+      "enabled": true,
+      "comparedPages": 3,
+      "failedPages": 0,
+      "maxDiffRatio": 0.02,
+      "pages": [
+        {
+          "fixture": "biz_plan.hwp",
+          "pageIndex": 0,
+          "diffRatio": 0.011942243619378597,
+          "failed": false
+        },
+        {
+          "fixture": "tac-case-001.hwp",
+          "pageIndex": 0,
+          "diffRatio": 0.0034214637567951027,
+          "failed": false
+        },
+        {
+          "fixture": "kps-ai.hwp",
+          "pageIndex": 0,
+          "diffRatio": 0.007745620048143602,
+          "failed": false
+        }
+      ]
+    },
+    "canvasKitHardGateViolationCount": 0
+  },
+  "testCounts": {
+    "defaultFeatureShards": {
+      "regular1": {
+        "run": 3687,
+        "passed": 3687,
+        "skipped": 12,
+        "failed": 0
+      },
+      "regular2": {
+        "run": 693,
+        "passed": 693,
+        "skipped": 15,
+        "failed": 0
+      },
+      "regular3": {
+        "run": 840,
+        "passed": 840,
+        "skipped": 0,
+        "failed": 0
+      },
+      "slow": {
+        "run": 1,
+        "passed": 1,
+        "skipped": 0,
+        "failed": 0
+      }
+    },
+    "defaultFeatureTotal": {
+      "run": 5221,
+      "passed": 5221,
+      "failed": 0,
+      "skipped": 27
+    },
+    "nativeSkia": {
+      "passed": 64,
+      "failed": 0
+    },
+    "studio": {
+      "passed": 765,
+      "failed": 0
+    }
+  },
+  "completedInitialReview": {
+    "allThreeWorkflowsSuccess": true,
+    "allChecksCompleteExpectedConclusions": true,
+    "runsMatchExpectedHead": true,
+    "prMatchesExpectedHeadAndBase": true,
+    "cleanMergeable": true,
+    "testedSyntheticMerge": "9b9590c230b41012ec88f2bef342332b7fe6284e",
+    "aggregateJobId": 111138897726,
+    "aggregateSemantic": "fast_pass=false, frontend_mode=package, fail-closed:unclassified-path full routing; preflight/lint/all 3 archive builds/all 4 Rust shards/native Skia/frontend package success, frontend unit skipped as expected; 4 shard count files matched 4 expected allocations.",
+    "remoteMutation": false,
+    "reviewScope": "Initial head ddffefaf. Any subsequent review-only head requires latest checks and original main preflight reuse semantics."
+  }
+}

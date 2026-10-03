@@ -1,0 +1,93 @@
+{
+  "recorded_at": "2026-10-03T05:20:39.469340+00:00",
+  "source_sha": "fd7dd1d22113930e371fe71aeef75664691693e7",
+  "private_cleanup": [
+    {
+      "path": "/private/tmp/hanpage-main-favicon-browser-20261003.mjs",
+      "type": "file",
+      "existed": true,
+      "owner": "web_main_local_validation",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage-main-node20-20261003",
+      "type": "directory",
+      "existed": true,
+      "owner": "web_main_local_validation",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage-main-wasmpack-015-20261003",
+      "type": "directory",
+      "existed": true,
+      "owner": "web_main_local_validation",
+      "official_tarball_sha256": "0abff4a03d670b6c00ea31d0e1608a72407e355f3d3765e9c30eb45cd5b7e318",
+      "official_url": "https://github.com/wasm-bindgen/wasm-pack/releases/download/v0.15.0/wasm-pack-v0.15.0-aarch64-apple-darwin.tar.gz",
+      "binary_sha256": "cab15410c87e79c19ecd46043b045a1bef6a5874ae7c5163e055570c21bd8627",
+      "removed": true
+    },
+    {
+      "path": "/private/tmp/hanpage-main-node20-install.log",
+      "type": "file",
+      "existed": true,
+      "owner": "web_main_local_validation",
+      "removed": true
+    }
+  ],
+  "chrome_profiles_remaining": [],
+  "own_preview_sessions_stopped": [
+    99691,
+    94155
+  ],
+  "primary39_preserved": true,
+  "source_tracked_files_not_changed_by_agent": true,
+  "retained_owned_artifacts": [
+    {
+      "path": "pkg",
+      "exists": true,
+      "symlink": false,
+      "owner": "web_main_local_validation",
+      "purpose": "Retained for main PR/release review; root can clean up after evidence is preserved.",
+      "file_count": 8
+    },
+    {
+      "path": "rhwp-studio/node_modules",
+      "exists": true,
+      "symlink": false,
+      "owner": "web_main_local_validation",
+      "purpose": "Retained for main PR/release review; root can clean up after evidence is preserved.",
+      "file_count": 13188
+    },
+    {
+      "path": "rhwp-studio/dist",
+      "exists": true,
+      "symlink": false,
+      "owner": "web_main_local_validation",
+      "purpose": "Retained for main PR/release review; root can clean up after evidence is preserved.",
+      "file_count": 86
+    },
+    {
+      "path": "rhwp-studio/public/rhwp_bg.wasm",
+      "exists": true,
+      "symlink": false,
+      "owner": "web_main_local_validation",
+      "purpose": "Retained for main PR/release review; root can clean up after evidence is preserved.",
+      "sha256": "ac3ada490f28af9f7e9f278fcd057ed3ca91cc67e2a3902fc5d7cce2af1dcccd",
+      "bytes": 7560902
+    },
+    {
+      "path": "output/pr-review/web-favicon-main-20261003",
+      "exists": true,
+      "symlink": false,
+      "owner": "web_main_local_validation",
+      "purpose": "Retained for main PR/release review; root can clean up after evidence is preserved.",
+      "file_count": 21
+    }
+  ],
+  "preserved_shared": [
+    "/Users/lwm/vault/dev/company/paldyn/project/in-house/HanPage/target/pr-review",
+    "/Users/lwm/Library/Caches/.wasm-pack/.wasm-bindgen-cargo-install-0.2.125",
+    "/Users/lwm/.cargo/bin/wasm-pack"
+  ],
+  "other_browser_cache_installed_app_and_processes_modified": false
+}
