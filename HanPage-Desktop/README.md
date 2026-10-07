@@ -22,7 +22,11 @@ OS 웹뷰로 감싼 **HanPage** 데스크톱 앱이다. (제품 표시명: **Han
 - Rust (stable) — `rustup`
 - Node.js 18+
 - macOS: Xcode Command Line Tools (시스템 WebKit 사용)
+- Windows: WebView2 런타임. 배포용 NSIS 설치 파일은 `desktop-release.yml`의 `windows-latest` 러너가 만든다.
 - Tauri 전제조건: <https://v2.tauri.app/start/prerequisites/>
+
+로컬 빌드는 서명하지 않는다. 코드 서명 자격 증명은 로컬에 필요하지 않으며, 배포 서명은
+`desktop-release.yml`에서만 한다.
 
 ## 개발 / 빌드
 
@@ -40,10 +44,11 @@ npm run build               # 릴리스: 프런트 빌드 + .dmg/.app 번들 산
 
 ## 범위 로드맵
 
-- **1단계 (현재, Task #1)**: rhwp-studio 래핑 + 네이티브 열기/저장·파일연결·메뉴·
-  최근문서·윈도우 상태 + macOS `.dmg`.
-- **2단계 이후**: 네이티브 `rlib` 코어 직접 호출, 자동 업데이트, 코드 서명·공증,
-  Windows/Linux 인스톨러 CI.
+- **완료**: rhwp-studio 래핑, 네이티브 열기/저장·파일연결·메뉴·최근문서·윈도우 상태(Task #1),
+  macOS `.dmg`·Windows NSIS 설치 파일 CI, 자동 업데이트(Task #26), macOS Developer ID 서명·공증(Task #4).
+- **진행 중**: Windows Authenticode 서명(Azure Artifact Signing). CI 연동은 들어 있고, 서명 설정을
+  등록하면 태그 빌드부터 서명된다.
+- **이후**: 네이티브 `rlib` 코어 직접 호출, Linux 설치 파일.
 
 ## 앱 아이콘 (04 한글 심볼)
 
@@ -76,12 +81,14 @@ Tauri가 Windows 창 아이콘으로 첫 프레임을 읽으므로 고해상도 
 
 앱 버전은 `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`,
 `src-tauri/Cargo.lock`의 앱 항목과 `src-tauri/tauri.conf.json`에서 함께 맞춘다.
-엔진·Studio 버전과 독립적으로 관리하며 현재 릴리스 후보는 0.8.9이다.
+엔진·Studio 버전과 독립적으로 관리한다.
 
 검증·병합된 commit에 `hanpage-desktop-v{버전}` 태그를 push하면
 `desktop-release.yml`이 macOS aarch64와 Windows x64를 빌드하여 **초안 릴리스**에
 첨부한다. 두 플랫폼의 설치파일, updater 서명과 `latest.json` 플랫폼 항목, macOS
-서명·공증을 확인한 후 릴리스를 공개한다. devel 병합만으로 설치된 앱이 갱신되지 않는다.
+서명·공증, Windows Authenticode 서명(설정한 경우)을 확인한 후 릴리스를 공개한다.
+devel 병합만으로 설치된 앱이 갱신되지 않는다. 전체 절차와 서명 설정은
+[Desktop 자동 업데이트·릴리스 운영 가이드](../mydocs/manual/desktop_auto_update.md)를 따른다.
 
 변경 내용은 [변경 이력](CHANGELOG.md)을 참고한다.
 

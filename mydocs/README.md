@@ -69,6 +69,7 @@ front matter는 `mydocs/manual`, `mydocs/tech`, `mydocs/troubleshootings`의 모
 | [Gym 벤치마크 수동 운영 매뉴얼](manual/gym_benchmark_operations.md) | canonical | active | `manual/gym_benchmark_operations.md` | 2026-09-03 |
 | [온보딩 가이드](manual/onboarding_guide.md) | guide | active | `manual/README.md` | 2026-07-17 |
 | [배포 가이드](manual/publish_guide.md) | guide | active | `manual/publish_guide.md` | 2026-07-17 |
+| [Desktop 자동 업데이트·릴리스 운영 가이드](manual/desktop_auto_update.md) | guide | active | `manual/desktop_auto_update.md` | 2026-10-07 |
 | [Hyper-Waterfall 문서 체계](manual/hyper_waterfall_docs_guide.md) | guide | active | `manual/codex/docs_and_git_workflow.md` | 2026-07-17 |
 | [AI 페어프로그래밍 기록](manual/ai_pair_programming_guide.md) | reference | historical | `manual/codex/docs_and_git_workflow.md` | 2026-07-17 |
 | [CLI 명령어 매뉴얼](manual/cli_commands.md) | canonical | active | `manual/cli_commands.md` | 2026-08-23 |

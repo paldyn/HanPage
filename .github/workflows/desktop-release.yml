@@ -12,16 +12,38 @@ name: Desktop Release
 # CLI 바이너리 릴리스(`release-binary.yml`, `v*` 태그)와 태그 패턴을 분리해 충돌을
 # 회피한다. `main` push 가 아니므로 Pages 배포(`deploy-pages.yml`)와도 트리거 분리.
 #
-# 코드 서명·공증은 범위 밖(미서명 → macOS Gatekeeper / Windows SmartScreen 경고 정상).
+# 코드 서명:
+# - macOS: Developer ID Application 서명 + Apple 공증·stapler (Task #4, APPLE_* 시크릿).
+# - Windows: Azure Artifact Signing 으로 Authenticode 서명. `bundle.windows.signCommand` 를
+#   CI 에서만 `--config` 로 주입해 tauri build 안에서 서명한다 → 앱 exe·NSIS 플러그인·
+#   uninstaller·setup.exe 가 서명되고, updater `.sig` 는 서명이 끝난 setup.exe 로 만들어진다.
+#   빌드 뒤 따로 서명하면 latest.json 의 updater 서명이 깨지므로 금지한다.
+#   릴리스 빌드(`hanpage-desktop-v*` 태그 push)는 서명하고, dispatch 빌드는 `windows_sign`
+#   입력을 켠 경우에만 서명한다. Artifact Signing 설정(secrets·vars 6개)이 하나도 없으면
+#   미서명으로 빌드하고 경고를 남기며, 일부만 있으면 설정 오류로 실패한다.
+#   서명을 개시한 뒤에는 아래 `WINDOWS_SIGNING_REQUIRED` 를 'true' 로 바꿔, 설정이 사라진
+#   릴리스 빌드가 미서명 설치 파일로 통과하지 못하게 한다.
+# - 빌드 뒤 검증 단계가 서명·공증 결과를 확인한다. 검증이 실패하면 초안 릴리스를 공개하지 않는다.
+# 운영 절차는 mydocs/manual/desktop_auto_update.md 의 "코드 서명" 절을 따른다.
 
 on:
   push:
     tags:
       - 'hanpage-desktop-v*'
   workflow_dispatch:
+    inputs:
+      windows_sign:
+        description: 'Windows 설치 파일을 Artifact Signing 으로 서명(서명 설정이 등록된 경우)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write # GitHub Release 자산 첨부
+
+env:
+  # Artifact Signing 설정을 마치고 첫 서명 릴리스를 확인한 뒤 'true' 로 바꾼다. 'true' 이면
+  # 릴리스 빌드에서 Windows 서명 설정이 없거나 서명되지 않은 설치 파일이 나올 때 실패한다.
+  WINDOWS_SIGNING_REQUIRED: 'false'
 
 jobs:
   bundle:
@@ -106,14 +128,15 @@ jobs:
       # tagName 은 git 태그(hanpage-desktop-v{ver}) 그대로, 표시명만 "HanPage Desktop-v{ver}".
       - name: Compute release name
         id: relname
-        if: startsWith(github.ref, 'refs/tags/')
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v')
         shell: bash
         run: |
           ver="${GITHUB_REF_NAME#hanpage-desktop-v}"
           echo "name=HanPage Desktop-v${ver}" >> "$GITHUB_OUTPUT"
 
       # [Task #4] macOS 공증용 App Store Connect API 키(.p8)를 시크릿(base64)에서 복원.
-      # 시크릿 미설정 시 빈 파일 → tauri-action 이 공증을 건너뛰고 미서명 번들 생성(회귀 없음).
+      # 시크릿 미설정(fork 등) 시 빈 파일 → tauri-action 이 공증을 건너뛴다. 태그 빌드는
+      # 아래 "Verify macOS signature" 단계가 서명·공증 누락을 실패로 처리한다.
       - name: Prepare notarization API key (macOS)
         if: runner.os == 'macOS'
         shell: bash
@@ -122,14 +145,104 @@ jobs:
         run: |
           echo "$APPLE_API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/apple_api_key.p8"
 
+      # --- Windows Authenticode 서명 준비 (Azure Artifact Signing) ---
+      # 서명 도구(signtool + Microsoft Artifact Signing dlib)와 접속 정보(metadata.json)를
+      # 러너 임시 폴더에 준비하고, signCommand 를 담은 tauri 설정 조각의 `--config` 인자를
+      # 출력한다. 비밀값은 signCommand 인자에 넣지 않는다(tauri 가 명령줄을 로그·NSIS
+      # 스크립트에 남긴다). dlib 은 DefaultAzureCredential 의 EnvironmentCredential 로
+      # 아래 tauri-action 단계의 AZURE_* 환경 변수를 읽는다.
+      - name: Prepare Windows signing (Artifact Signing)
+        id: winsign
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          RELEASE_BUILD: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') }}
+          SIGN_REQUESTED: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v')) || inputs.windows_sign == true }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARTIFACT_SIGNING_ENDPOINT: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          ARTIFACT_SIGNING_ACCOUNT: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+          ARTIFACT_SIGNING_PROFILE: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $names = @('AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_CLIENT_SECRET',
+                     'ARTIFACT_SIGNING_ENDPOINT', 'ARTIFACT_SIGNING_ACCOUNT', 'ARTIFACT_SIGNING_PROFILE')
+          $missing = @($names | Where-Object { -not [Environment]::GetEnvironmentVariable($_) })
+          if ($env:SIGN_REQUESTED -ne 'true') {
+            Write-Output '::notice title=Windows 서명 생략::dispatch 빌드에서 windows_sign 입력을 켜지 않아 미서명으로 빌드합니다.'
+            'signed=false' >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+          if ($missing.Count -eq $names.Count) {
+            if ($env:RELEASE_BUILD -eq 'true' -and $env:WINDOWS_SIGNING_REQUIRED -eq 'true') {
+              throw 'WINDOWS_SIGNING_REQUIRED 인데 Artifact Signing 설정이 없습니다.'
+            }
+            Write-Output '::warning title=Windows 미서명::Artifact Signing 설정이 없어 Windows 설치 파일을 서명하지 않습니다.'
+            'signed=false' >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+          if ($missing.Count -gt 0) {
+            throw "Windows 서명 설정 일부가 없습니다: $($missing -join ', ')"
+          }
+
+          $root = Join-Path $env:RUNNER_TEMP 'artifact-signing'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          # Microsoft 가 게시한 Artifact Signing 클라이언트(dlib). 이 패키지의 DLL 들은 클라이언트
+          # 비밀을 가진 signtool 프로세스에 로드되므로, 버전과 패키지 전체 SHA-512(NuGet 카탈로그
+          # packageHash)를 함께 고정한다. 버전을 바꾸면 해시도 같이 바꾼다.
+          $clientVersion = '1.0.128'
+          $clientSha512 = '98F06A691F4FC2FA22F19DCF8556733E98607FBEF91A312C453B9B0798CC9088DAE0ACB36E389B552A11B4D2320324785B8541C2B51091A724C05BC5DF5CBF95'
+          Invoke-WebRequest "https://api.nuget.org/v3-flatcontainer/microsoft.artifactsigning.client/$clientVersion/microsoft.artifactsigning.client.$clientVersion.nupkg" -OutFile "$root/client.zip"
+          $actualSha512 = (Get-FileHash -LiteralPath "$root/client.zip" -Algorithm SHA512).Hash
+          if ($actualSha512 -ne $clientSha512) { throw "Artifact Signing 클라이언트 패키지 해시 불일치: $actualSha512" }
+          Expand-Archive "$root/client.zip" "$root/client" -Force
+          $dlib = Get-Item -LiteralPath "$root/client/bin/x64/Azure.CodeSigning.Dlib.dll" -ErrorAction SilentlyContinue
+          if (-not $dlib) { throw 'bin/x64/Azure.CodeSigning.Dlib.dll 을 찾지 못했습니다.' }
+          # 패키지 해시와 별개로 dlib 의 Microsoft 서명도 확인한다.
+          $dlibSig = Get-AuthenticodeSignature -LiteralPath $dlib.FullName
+          if ($dlibSig.Status -ne 'Valid' -or $dlibSig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+            throw "Artifact Signing dlib 서명 확인 실패: $($dlibSig.Status) $($dlibSig.SignerCertificate.Subject)"
+          }
+          $signtool = Get-ChildItem 'C:/Program Files (x86)/Windows Kits/10/bin/10.*/x64/signtool.exe' |
+            Sort-Object { [version]$_.Directory.Parent.Name } -Descending | Select-Object -First 1
+          if (-not $signtool) { throw 'signtool.exe 를 찾지 못했습니다.' }
+          Write-Output "signtool: $($signtool.FullName)"
+          Write-Output "dlib: $($dlib.FullName) ($($dlibSig.SignerCertificate.Subject))"
+
+          # EnvironmentCredential(AZURE_CLIENT_ID/TENANT_ID/CLIENT_SECRET)만 쓰도록 나머지 자격 증명 경로를 끈다.
+          $metadata = [ordered]@{
+            Endpoint = $env:ARTIFACT_SIGNING_ENDPOINT
+            CodeSigningAccountName = $env:ARTIFACT_SIGNING_ACCOUNT
+            CertificateProfileName = $env:ARTIFACT_SIGNING_PROFILE
+            CorrelationId = "$env:GITHUB_REPOSITORY@$env:GITHUB_SHA"
+            ExcludeCredentials = @('ManagedIdentityCredential', 'WorkloadIdentityCredential',
+              'SharedTokenCacheCredential', 'VisualStudioCredential', 'VisualStudioCodeCredential',
+              'AzureCliCredential', 'AzurePowerShellCredential', 'AzureDeveloperCliCredential',
+              'InteractiveBrowserCredential')
+          }
+          $metadata | ConvertTo-Json | Set-Content "$root/metadata.json" -Encoding utf8NoBOM
+
+          # Artifact Signing 인증서는 72시간짜리라 RFC 3161 타임스탬프가 필수다.
+          $config = @{ bundle = @{ windows = @{ signCommand = @{
+            cmd = $signtool.FullName
+            args = @('sign', '/v', '/fd', 'SHA256', '/tr', 'http://timestamp.acs.microsoft.com', '/td', 'SHA256',
+                     '/d', 'HanPage', '/dlib', $dlib.FullName, '/dmdf', "$root/metadata.json", '%1')
+          } } } }
+          $config | ConvertTo-Json -Depth 8 | Set-Content "$root/tauri.signing.json" -Encoding utf8NoBOM
+          $configPath = "$root/tauri.signing.json" -replace '\\', '/'
+          "args=--config $configPath" >> $env:GITHUB_OUTPUT
+          'signed=true' >> $env:GITHUB_OUTPUT
+
       # --- Tauri 번들 (beforeBuildCommand = build:frontend = copy-wasm + studio build:desktop) ---
       - name: Build & bundle (tauri-action)
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # [Task #26] updater 서명용 개인키·비번(시크릿). createUpdaterArtifacts=true 와
           # 함께 tauri-action 이 서명·latest.json 생성·릴리스 첨부를 자동 처리한다.
-          # 시크릿 미설정(fork 등) 시 updater 아티팩트만 생략, 일반 dmg/nsis 는 정상 생성.
+          # tauri.conf.json 에 updater 공개키가 있으므로 개인키가 없으면 tauri build 의
+          # updater 서명 단계가 실패한다(fork 에서는 이 workflow 를 쓰지 않는다).
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # [Task #4] macOS 코드 서명(Developer ID Application) + 공증(App Store Connect API key).
@@ -140,15 +253,133 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_KEY_PATH: ${{ runner.temp }}/apple_api_key.p8
+          # Windows Authenticode: signCommand(signtool + Artifact Signing dlib)가 읽는
+          # 서비스 주체 자격 증명. makensis 가 실행하는 uninstaller 서명에도 상속된다.
+          AZURE_CLIENT_ID: ${{ runner.os == 'Windows' && secrets.AZURE_CLIENT_ID || '' }}
+          AZURE_TENANT_ID: ${{ runner.os == 'Windows' && secrets.AZURE_TENANT_ID || '' }}
+          AZURE_CLIENT_SECRET: ${{ runner.os == 'Windows' && secrets.AZURE_CLIENT_SECRET || '' }}
         with:
           projectPath: HanPage-Desktop
-          # 태그 push 시에만 릴리스 생성. dispatch 는 빈 tagName → 빌드만 수행.
-          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
-          releaseName: ${{ startsWith(github.ref, 'refs/tags/') && steps.relname.outputs.name || '' }}
+          # 태그 push 시에만 릴리스 생성. dispatch 는 태그에서 실행해도 빈 tagName → 빌드만 수행.
+          tagName: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') && github.ref_name || '' }}
+          releaseName: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') && steps.relname.outputs.name || '' }}
           # 양 플랫폼 자산·updater 서명·공증을 확인한 뒤 명시적으로 공개한다.
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }} -- --locked
+          # Windows 서명이 준비되면 winsign 이 `--config <signCommand 조각>` 을 더한다.
+          args: ${{ matrix.args }} ${{ steps.winsign.outputs.args }} -- --locked
+
+      # --- 서명 검증: 실패하면 초안 릴리스를 공개하지 않는다 ---
+      # 0.8.9 수동 감사(mydocs/pr/assets/desktop_v089_release/macos-audit.py)와 같은 검사를
+      # updater 아카이브에 들어가는 .app 과 DMG 안의 .app 에 수행한다.
+      - name: Verify macOS signature and notarization
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          REQUIRE_SIGNED: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') }}
+        run: |
+          set -euo pipefail
+          bundle=HanPage-Desktop/src-tauri/target/release/bundle
+          app="$bundle/macos/HanPage.app"
+          dmg=$(ls "$bundle"/dmg/*.dmg | head -n 1)
+          if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+            if [ "$REQUIRE_SIGNED" = true ]; then
+              echo "::error title=macOS 미서명::태그 빌드인데 APPLE_SIGNING_IDENTITY 가 없습니다."
+              exit 1
+            fi
+            echo "::warning title=macOS 미서명::Apple 서명 설정이 없어 서명·공증 검증을 건너뜁니다."
+            exit 0
+          fi
+          team=$(sed -nE 's/.*\(([A-Z0-9]{10})\)$/\1/p' <<<"$APPLE_SIGNING_IDENTITY")
+          test -n "$team"
+          check_app() {
+            codesign --verify --deep --strict --verbose=2 "$1"
+            info=$(codesign -dv --verbose=4 "$1" 2>&1)
+            grep -qx "TeamIdentifier=$team" <<<"$info"
+            grep -q '^Authority=Developer ID Application:' <<<"$info"
+            spctl --assess --type execute --verbose=4 "$1" 2>&1 | tee "$RUNNER_TEMP/spctl.txt"
+            grep -q 'source=Notarized Developer ID' "$RUNNER_TEMP/spctl.txt"
+            xcrun stapler validate "$1"
+          }
+          check_app "$app"
+          hdiutil verify "$dmg"
+          mnt="$RUNNER_TEMP/dmg-mount"
+          mkdir -p "$mnt"
+          hdiutil attach -readonly -nobrowse -mountpoint "$mnt" "$dmg"
+          trap 'hdiutil detach "$mnt" || true' EXIT
+          check_app "$mnt/HanPage.app"
+          {
+            echo "### macOS 서명·공증 확인"
+            echo "- Team: $team, Developer ID Application, Gatekeeper: Notarized Developer ID, stapler: valid"
+            echo "- 대상: \`macos/HanPage.app\`, \`$(basename "$dmg")\` 안의 HanPage.app"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # 설치 파일·안의 HanPage.exe·NSIS 플러그인 DLL·설치 후 uninstall.exe 를 확인한다.
+      # target/release/HanPage.exe 는 번들 뒤 미서명 원본으로 복원되므로 검사 대상이 아니다.
+      - name: Verify Windows installer signature
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_SIGNED: ${{ steps.winsign.outputs.signed }}
+          RELEASE_BUILD: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $nsis = 'HanPage-Desktop/src-tauri/target/release/bundle/nsis'
+          $setup = Get-ChildItem $nsis -Filter '*-setup.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'NSIS 설치 파일을 찾지 못했습니다.' }
+          if ($env:WINDOWS_SIGNED -ne 'true') {
+            if ($env:RELEASE_BUILD -eq 'true' -and $env:WINDOWS_SIGNING_REQUIRED -eq 'true') {
+              throw 'WINDOWS_SIGNING_REQUIRED 인데 Windows 설치 파일이 서명되지 않았습니다.'
+            }
+            $status = (Get-AuthenticodeSignature -LiteralPath $setup.FullName).Status
+            Write-Output "::warning title=Windows 미서명::$($setup.Name) 서명 상태: $status"
+            "### Windows 설치 파일: 미서명 ($status)" >> $env:GITHUB_STEP_SUMMARY
+            exit 0
+          }
+          $signtool = Get-ChildItem 'C:/Program Files (x86)/Windows Kits/10/bin/10.*/x64/signtool.exe' |
+            Sort-Object { [version]$_.Directory.Parent.Name } -Descending | Select-Object -First 1
+          $report = [System.Collections.Generic.List[string]]::new()
+          function Assert-Signed([string]$Path) {
+            $s = Get-AuthenticodeSignature -LiteralPath $Path
+            if ($s.Status -ne 'Valid') { throw "$Path 서명 상태: $($s.Status) $($s.StatusMessage)" }
+            if (-not $s.TimeStamperCertificate) { throw "$Path 에 타임스탬프가 없습니다." }
+            & $signtool.FullName verify /pa /tw $Path | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "signtool verify 실패($LASTEXITCODE): $Path" }
+            $report.Add("- ``$(Split-Path $Path -Leaf)``: $($s.SignerCertificate.Subject)")
+          }
+
+          Assert-Signed $setup.FullName
+          $sig = Get-Item "$($setup.FullName).sig" -ErrorAction SilentlyContinue
+          if ($sig -and $sig.LastWriteTimeUtc -lt $setup.LastWriteTimeUtc) {
+            throw 'updater 서명(.sig)이 Authenticode 서명 전 설치 파일로 만들어졌습니다.'
+          }
+
+          # 설치 파일 안의 앱 exe 와 NSIS 플러그인. LangDLL.dll 은 Tauri 가 서명하지 않는다.
+          $extract = Join-Path $env:RUNNER_TEMP 'nsis-extract'
+          & 7z x $setup.FullName "-o$extract" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "7z 압축 해제 실패($LASTEXITCODE)" }
+          Assert-Signed (Join-Path $extract 'HanPage.exe')
+          Get-ChildItem -LiteralPath (Join-Path $extract '$PLUGINSDIR') -Filter '*.dll' -Recurse -ErrorAction SilentlyContinue |
+            Where-Object Name -ne 'LangDLL.dll' | ForEach-Object { Assert-Signed $_.FullName }
+
+          # uninstaller 는 설치 때 만들어진다. 조용히 설치해 확인한 뒤 제거한다.
+          $installer = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -PassThru
+          if (-not $installer.WaitForExit(300000)) { throw '설치 파일이 5분 안에 끝나지 않았습니다.' }
+          Get-Process HanPage -ErrorAction SilentlyContinue | Stop-Process -Force
+          # Tauri NSIS 는 SHCTX\...\Uninstall\${PRODUCTNAME} 에 DisplayName=HanPage 로 기록한다.
+          $entry = Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall',
+                                 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
+            Get-ItemProperty | Where-Object DisplayName -eq 'HanPage' | Select-Object -First 1
+          if (-not $entry) { throw '설치 후 HanPage 제거 항목을 찾지 못했습니다.' }
+          $uninstall = ($entry.UninstallString -replace '^"([^"]+)".*$', '$1')
+          Assert-Signed (Join-Path (Split-Path $uninstall) 'HanPage.exe')
+          Assert-Signed $uninstall
+          $remover = Start-Process -FilePath $uninstall -ArgumentList '/S' -PassThru
+          [void]$remover.WaitForExit(300000)
+
+          "### Windows Authenticode 서명 확인 (타임스탬프 포함)" >> $env:GITHUB_STEP_SUMMARY
+          $report >> $env:GITHUB_STEP_SUMMARY
 
       # --- dispatch 테스트 빌드: 릴리스가 없으므로 아티팩트로 업로드 ---
       - name: Upload bundle (dispatch test)

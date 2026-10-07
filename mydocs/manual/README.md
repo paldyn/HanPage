@@ -49,6 +49,7 @@ last_verified: 2026-09-04
 | 수식 스크립트 파서·명령 디스패치 | [수식 모듈 매뉴얼](equation_module.md) | 모듈 지도 [`src/renderer/equation/README.md`](../../src/renderer/equation/README.md), 분류 정본 [`dispatch.rs`](../../src/renderer/equation/dispatch.rs) |
 | 품질 지표와 리팩터링 검토 | [코드 품질 대시보드](dashboard.md) | [SOLID 채점 기준](solid_scoring_guide.md) |
 | release 준비와 배포 | [배포 가이드](publish_guide.md) | [개발 환경 가이드](dev_environment_guide.md) |
+| HanPage Desktop 릴리스·코드 서명·자동 업데이트 | [Desktop 자동 업데이트·릴리스 운영 가이드](desktop_auto_update.md) | [배포 가이드](publish_guide.md), [GitHub 저장소 운영 매뉴얼](github_operations.md) |
 | rhwp-studio UI 명칭·CSS 접두어 | [rhwp-studio UI 명칭과 CSS 접두어](rhwp_studio_ui_conventions.md) | [개발 환경 가이드](dev_environment_guide.md) |
 | rhwp-studio 테마 토큰·스킨 제작 | [rhwp-studio 테마 토큰과 스킨 제작](rhwp_studio_theming.md) | [rhwp-studio UI 명칭과 CSS 접두어](rhwp_studio_ui_conventions.md) |
 
