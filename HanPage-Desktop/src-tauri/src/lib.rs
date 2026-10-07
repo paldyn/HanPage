@@ -143,7 +143,7 @@ fn display_name(path: &Path) -> String {
         .unwrap_or_else(|| path.display().to_string())
 }
 
-/// 시작 argv 를 큐에 넣기 전에 도착한 single-instance 경로를 보관하는 관문.
+/// [#121] 시작 argv 를 큐에 넣기 전에 도착한 single-instance 경로를 보관하는 관문.
 ///
 /// Windows 는 첫 실행이 WebView2 를 만드는 동안(`setup()` 전)에도 메시지를 처리하므로,
 /// 그 사이 두 번째 실행이 넘긴 파일이 첫 실행의 시작 파일보다 먼저 큐에 들어갈 수 있다.
@@ -182,7 +182,7 @@ impl StartupGate {
 #[cfg(desktop)]
 static STARTUP_GATE: Mutex<StartupGate> = Mutex::new(StartupGate::new());
 
-/// 업데이트 적용 직전에 남기는 재실행 표식.
+/// [#121] 업데이트 적용 직전에 남기는 재실행 표식.
 ///
 /// 업데이터는 새 버전을 띄울 때 지금 프로세스의 실행 인자를 그대로 넘긴다(Windows NSIS
 /// `/ARGS`, macOS `restart()`). 표식이 없으면 처음 파일 연결로 연 문서를 업데이트할 때마다
@@ -372,7 +372,7 @@ fn queue_failure(app: &tauri::AppHandle, path: &Path, message: String) {
 }
 
 /// 경로를 읽어 펜딩 큐에 넣는다(파일 연결/최근 문서 클릭/single-instance 공통).
-/// 읽지 못하면 실패 항목을 넣는다 — 조용히 버리면 사용자는 빈 창만 보고 다시 열어야 한다.
+/// [#121] 읽지 못하면 실패 항목을 넣는다 — 조용히 버리면 사용자는 빈 창만 보고 다시 열어야 한다.
 fn open_path(app: &tauri::AppHandle, path: PathBuf) {
     match read_document(&path) {
         Ok(file) => queue_document(app, file),
@@ -804,7 +804,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
-            // 콜드 스타트 파일 연결(Win/Linux): 문서 경로가 이 프로세스의 argv 로 온다.
+            // [#121] 콜드 스타트 파일 연결(Win/Linux): 문서 경로가 이 프로세스의 argv 로 온다.
             // single-instance 콜백은 두 번째 실행에서만 불리므로 첫 실행 argv 는 여기서
             // 읽는다. macOS 는 LaunchServices 가 argv 대신 `RunEvent::Opened` 로 넘긴다.
             // 업데이트 직후 자동 재실행이면 처음 연 문서를 다시 열지 않는다(`RelaunchMarker`).
