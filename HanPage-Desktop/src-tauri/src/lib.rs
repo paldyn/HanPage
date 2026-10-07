@@ -8,8 +8,10 @@
 // 않는다(앱 자체 command 는 ACL 권한 대상이 아니다).
 //
 // Stage 3: 파일 연결(.hwp/.hwpx 더블클릭)·네이티브 메뉴바·최근 문서·창 상태 복원.
-//   - 파일 연결: macOS 는 `RunEvent::Opened{urls}`, Win/Linux 는 single-instance argv 로
-//     경로를 받아 바이트를 읽고 "펜딩 큐"에 적재 후 웹뷰에 신호(emit)를 보낸다.
+//   - 파일 연결: macOS 는 `RunEvent::Opened{urls}`, Win/Linux 는 실행 argv 로 경로를 받는다
+//     (첫 실행은 `setup()` 에서 자기 argv, 이미 실행 중이면 single-instance 가 넘긴 argv).
+//     바이트를 읽어 "펜딩 큐"에 적재 후 웹뷰에 신호(emit)를 보낸다. 읽지 못한 문서도
+//     실패 항목으로 큐에 넣어 웹뷰가 사용자에게 알린다.
 //   - 메뉴바: Rust 에서 메뉴를 만들고, 사용자 정의 항목 클릭 시 커맨드 id 를 웹뷰로
 //     emit 한다. 프런트 브리지가 이를 받아 기존 rhwp-studio 커맨드를 dispatch 한다
 //     (열기/저장/저장하기는 Stage 2 흐름 재사용). 단축키는 스튜디오의 문맥 인지
@@ -46,6 +48,15 @@ const RECENT_STORE: &str = "recent.json";
 const RECENT_KEY: &str = "documents";
 const RECENT_MAX: usize = 10;
 
+/// 업데이트 뒤 재실행 표식 store 파일명·키·유효 시간.
+#[cfg(desktop)]
+const RELAUNCH_STORE: &str = "relaunch.json";
+#[cfg(desktop)]
+const RELAUNCH_KEY: &str = "updateRelaunch";
+/// 업데이트 직후의 자동 재실행만 걸러내고, 나중의 실제 파일 열기는 막지 않도록 짧게 둔다.
+#[cfg(desktop)]
+const RELAUNCH_MARKER_TTL_SECS: u64 = 600;
+
 /// 웹뷰로 보내는 이벤트 이름.
 const EVT_MENU: &str = "hanpage://menu"; // 메뉴 액션 → 스튜디오 커맨드 id
 const EVT_DOCS_READY: &str = "hanpage://documents-ready"; // 펜딩 문서 도착 신호
@@ -59,6 +70,10 @@ struct OpenedFile {
     name: String,
     path: String,
     data: Vec<u8>,
+    /// 펜딩 큐 전용: 파일을 읽지 못한 사유. `Some` 이면 `data` 는 비어 있고, 웹뷰는
+    /// 문서를 여는 대신 이 사유를 사용자에게 알린다.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
 }
 
 /// 저장 dialog 결과. 프런트에서 `status` 로 분기한다(saved/cancelled).
@@ -116,7 +131,182 @@ fn read_document(path: &Path) -> Result<OpenedFile, String> {
         name,
         path: path.to_string_lossy().into_owned(),
         data,
+        error: None,
     })
+}
+
+/// 경로의 파일 이름(표시용). 없으면 경로 전체를 쓴다.
+fn display_name(path: &Path) -> String {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| path.display().to_string())
+}
+
+/// 시작 argv 를 큐에 넣기 전에 도착한 single-instance 경로를 보관하는 관문.
+///
+/// Windows 는 첫 실행이 WebView2 를 만드는 동안(`setup()` 전)에도 메시지를 처리하므로,
+/// 그 사이 두 번째 실행이 넘긴 파일이 첫 실행의 시작 파일보다 먼저 큐에 들어갈 수 있다.
+/// 그러면 나중에 연 파일 위에 시작 파일이 열린다. 시작 파일을 넣을 때까지 모아 두었다가
+/// 그 뒤에 넣어 실행 순서를 지킨다. 확인과 보관을 한 락 안에서 해 `setup()` 과 경합하지 않는다.
+#[cfg(desktop)]
+struct StartupGate {
+    pending: Option<Vec<PathBuf>>,
+}
+
+#[cfg(desktop)]
+impl StartupGate {
+    const fn new() -> Self {
+        Self {
+            pending: Some(Vec::new()),
+        }
+    }
+
+    /// 시작 전이면 경로를 보관하고 빈 목록을, 시작 뒤면 그대로 돌려준다.
+    fn admit(&mut self, paths: Vec<PathBuf>) -> Vec<PathBuf> {
+        match &mut self.pending {
+            Some(early) => {
+                early.extend(paths);
+                Vec::new()
+            }
+            None => paths,
+        }
+    }
+
+    /// 시작 문서를 큐에 넣은 뒤 호출한다. 보관분을 돌려주고 이후 경로는 바로 통과시킨다.
+    fn open(&mut self) -> Vec<PathBuf> {
+        self.pending.take().unwrap_or_default()
+    }
+}
+
+#[cfg(desktop)]
+static STARTUP_GATE: Mutex<StartupGate> = Mutex::new(StartupGate::new());
+
+/// 업데이트 적용 직전에 남기는 재실행 표식.
+///
+/// 업데이터는 새 버전을 띄울 때 지금 프로세스의 실행 인자를 그대로 넘긴다(Windows NSIS
+/// `/ARGS`, macOS `restart()`). 표식이 없으면 처음 파일 연결로 연 문서를 업데이트할 때마다
+/// 다시 열고, NSIS 가 따옴표를 벗겨 공백 있는 경로가 쪼개지면 엉뚱한 실패 안내가 뜬다.
+#[cfg(desktop)]
+#[derive(Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+struct RelaunchMarker {
+    /// 실행 인자(argv[1..])를 공백으로 이은 값. NSIS 가 따옴표를 벗겨도 같게 비교된다.
+    args: String,
+    /// 설치할 버전. 설치가 실패해 이전 버전이 다시 뜨면 일치하지 않는다.
+    version: String,
+    /// 표식을 남긴 시각(UNIX 초).
+    at: u64,
+}
+
+/// argv[1..] 를 공백으로 이어 재실행 비교 키를 만든다.
+#[cfg(desktop)]
+fn launch_args_key<I, S>(args: I) -> String
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    args.into_iter()
+        .skip(1)
+        .map(|arg| arg.as_ref().to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// 이번 실행이 업데이트 직후의 자동 재실행이라 실행 인자의 문서를 다시 열지 말아야 하는지.
+#[cfg(desktop)]
+fn is_update_relaunch(
+    marker: Option<&RelaunchMarker>,
+    args_key: &str,
+    current_version: &str,
+    now: u64,
+) -> bool {
+    marker.is_some_and(|m| {
+        !m.args.is_empty()
+            && m.args == args_key
+            && m.version == current_version
+            && now.saturating_sub(m.at) <= RELAUNCH_MARKER_TTL_SECS
+    })
+}
+
+#[cfg(desktop)]
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or_default()
+}
+
+/// 업데이트 적용 직전: 실행 인자에 문서가 있으면 재실행 표식을 남긴다. Windows 는 설치
+/// 프로그램을 띄운 뒤 곧바로 프로세스를 끝내므로 즉시 저장한다.
+#[cfg(desktop)]
+fn mark_update_relaunch(app: &tauri::AppHandle, version: &str) {
+    let args: Vec<std::ffi::OsString> = std::env::args_os().collect();
+    let cwd = std::env::current_dir().unwrap_or_default();
+    if document_paths_from_args(args.iter().cloned(), &cwd).is_empty() {
+        return;
+    }
+    let marker = RelaunchMarker {
+        args: launch_args_key(&args),
+        version: version.to_string(),
+        at: unix_now(),
+    };
+    if let (Ok(store), Ok(value)) = (app.store(RELAUNCH_STORE), serde_json::to_value(&marker)) {
+        store.set(RELAUNCH_KEY, value);
+        let _ = store.save();
+    }
+}
+
+/// 재실행 표식을 지운다(설치 실패 시, 그리고 시작 시 한 번 읽은 뒤).
+#[cfg(desktop)]
+fn clear_update_relaunch(app: &tauri::AppHandle) {
+    if let Ok(store) = app.store(RELAUNCH_STORE) {
+        if store.delete(RELAUNCH_KEY) {
+            let _ = store.save();
+        }
+    }
+}
+
+/// 시작 시 재실행 표식을 한 번 읽고 지운다.
+#[cfg(desktop)]
+fn take_update_relaunch(app: &tauri::AppHandle) -> Option<RelaunchMarker> {
+    let marker = app
+        .store(RELAUNCH_STORE)
+        .ok()
+        .and_then(|store| store.get(RELAUNCH_KEY))
+        .and_then(|value| serde_json::from_value(value).ok());
+    clear_update_relaunch(app);
+    marker
+}
+
+/// `.hwp`/`.hwpx` 확장자인지(대소문자 무시) — 파일 연결 대상과 같다.
+#[cfg(desktop)]
+fn is_document_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("hwp") || e.eq_ignore_ascii_case("hwpx"))
+}
+
+/// 실행 인자에서 열 문서 경로를 고른다. 첫 항목은 실행 파일이라 건너뛰고, 상대 경로는
+/// 그 인자를 받은 프로세스의 작업 디렉터리(`cwd`) 기준으로 바꾼다 — single-instance 로
+/// 넘어온 argv 는 이미 떠 있는 프로세스와 작업 디렉터리가 다를 수 있다.
+#[cfg(desktop)]
+fn document_paths_from_args<I, S>(args: I, cwd: &Path) -> Vec<PathBuf>
+where
+    I: IntoIterator<Item = S>,
+    S: Into<PathBuf>,
+{
+    args.into_iter()
+        .skip(1)
+        .map(Into::into)
+        .filter(|path: &PathBuf| is_document_path(path))
+        .map(|path| {
+            if path.is_relative() {
+                cwd.join(path)
+            } else {
+                path
+            }
+        })
+        .collect()
 }
 
 // ─── 최근 문서(store) ────────────────────────────────────────────────────────
@@ -167,11 +357,29 @@ fn queue_document(app: &tauri::AppHandle, file: OpenedFile) {
     let _ = app.emit(EVT_DOCS_READY, ());
 }
 
+/// 읽지 못한 문서를 실패 항목으로 큐에 넣고 웹뷰에 도착 신호를 보낸다.
+/// 문서와 같은 큐를 써서 콜드 스타트에서도 유실되지 않고 도착 순서도 지킨다.
+fn queue_failure(app: &tauri::AppHandle, path: &Path, message: String) {
+    if let Ok(mut q) = PENDING_DOCUMENTS.lock() {
+        q.push(OpenedFile {
+            name: display_name(path),
+            path: path.to_string_lossy().into_owned(),
+            data: Vec::new(),
+            error: Some(message),
+        });
+    }
+    let _ = app.emit(EVT_DOCS_READY, ());
+}
+
 /// 경로를 읽어 펜딩 큐에 넣는다(파일 연결/최근 문서 클릭/single-instance 공통).
+/// 읽지 못하면 실패 항목을 넣는다 — 조용히 버리면 사용자는 빈 창만 보고 다시 열어야 한다.
 fn open_path(app: &tauri::AppHandle, path: PathBuf) {
     match read_document(&path) {
         Ok(file) => queue_document(app, file),
-        Err(e) => eprintln!("[HanPage] 파일 열기 실패 {}: {}", path.display(), e),
+        Err(e) => {
+            eprintln!("[HanPage] 파일 열기 실패 {}: {}", path.display(), e);
+            queue_failure(app, &path, e);
+        }
     }
 }
 
@@ -531,6 +739,7 @@ async fn cmd_update_apply(app: tauri::AppHandle) -> Result<(), String> {
         (ready, slot.state.clone())
     };
     let _ = app.emit(EVT_UPDATE_STATUS, applying_state);
+    mark_update_relaunch(&app, &ready.update.version);
 
     // 파일은 복사하지 않고 공유한다. worker 자체가 실패하더라도 이 command의 Arc가
     // 검증된 바이트를 보존하므로 사용자 재시도에 재다운로드가 필요하지 않다.
@@ -550,6 +759,7 @@ async fn cmd_update_apply(app: tauri::AppHandle) -> Result<(), String> {
         Ok(Err(message)) => message,
         Err(error) => error.to_string(),
     };
+    clear_update_relaunch(&app);
     let failed_state = if let Ok(mut slot) = UPDATE_SLOT.lock() {
         slot.fail_apply(ready, message.clone());
         Some(slot.state.clone())
@@ -570,17 +780,14 @@ pub fn run() {
     // 실행 argv 의 .hwp/.hwpx 경로를 캡처해 기존 창으로 넘긴다(macOS 는 Opened 사용).
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            for arg in argv.iter().skip(1) {
-                let path = PathBuf::from(arg);
-                let is_doc = path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(|e| e.eq_ignore_ascii_case("hwp") || e.eq_ignore_ascii_case("hwpx"))
-                    .unwrap_or(false);
-                if is_doc {
-                    open_path(app, path);
-                }
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            let paths = document_paths_from_args(argv, Path::new(&cwd));
+            let ready = match STARTUP_GATE.lock() {
+                Ok(mut gate) => gate.admit(paths),
+                Err(_) => paths,
+            };
+            for path in ready {
+                open_path(app, path);
             }
             if let Some(w) = app.webview_windows().values().next() {
                 let _ = w.set_focus();
@@ -597,6 +804,34 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
+            // 콜드 스타트 파일 연결(Win/Linux): 문서 경로가 이 프로세스의 argv 로 온다.
+            // single-instance 콜백은 두 번째 실행에서만 불리므로 첫 실행 argv 는 여기서
+            // 읽는다. macOS 는 LaunchServices 가 argv 대신 `RunEvent::Opened` 로 넘긴다.
+            // 업데이트 직후 자동 재실행이면 처음 연 문서를 다시 열지 않는다(`RelaunchMarker`).
+            #[cfg(desktop)]
+            {
+                let args: Vec<std::ffi::OsString> = std::env::args_os().collect();
+                let relaunch = take_update_relaunch(app.handle());
+                let version = app.package_info().version.to_string();
+                if !is_update_relaunch(
+                    relaunch.as_ref(),
+                    &launch_args_key(&args),
+                    &version,
+                    unix_now(),
+                ) {
+                    let cwd = std::env::current_dir().unwrap_or_default();
+                    for path in document_paths_from_args(args, &cwd) {
+                        open_path(app.handle(), path);
+                    }
+                }
+                let early = STARTUP_GATE
+                    .lock()
+                    .map(|mut gate| gate.open())
+                    .unwrap_or_default();
+                for path in early {
+                    open_path(app.handle(), path);
+                }
+            }
             // [Task #26] 시작 시 백그라운드 업데이트 확인(조용히; 새 버전이면 알림).
             #[cfg(desktop)]
             {
@@ -646,4 +881,100 @@ pub fn run() {
             }
             let _ = (&app_handle, &event); // 플랫폼별 미사용 경고 억제
         });
+}
+
+#[cfg(all(test, desktop))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn launch_args_skip_executable_and_keep_only_documents() {
+        let cwd = std::env::temp_dir();
+        let doc = cwd.join("보고서 최종.HWP");
+        let args = vec![
+            cwd.join("HanPage.hwp").into_os_string(), // argv[0]: 확장자와 무관하게 실행 파일
+            "--flag".into(),
+            doc.clone().into_os_string(),
+            cwd.join("note.txt").into_os_string(),
+            cwd.join("양식.hwpx").into_os_string(),
+        ];
+        assert_eq!(
+            document_paths_from_args(args, &cwd),
+            vec![doc, cwd.join("양식.hwpx")]
+        );
+    }
+
+    #[test]
+    fn relative_launch_args_resolve_against_sender_cwd() {
+        let cwd = std::env::temp_dir().join("hanpage-second-instance");
+        let paths = document_paths_from_args(
+            ["HanPage.exe".to_string(), "sub/문서.hwp".to_string()],
+            &cwd,
+        );
+        assert_eq!(paths, vec![cwd.join("sub/문서.hwp")]);
+    }
+
+    #[test]
+    fn startup_gate_keeps_early_instance_paths_after_startup_documents() {
+        let mut gate = StartupGate::new();
+        let early = std::env::temp_dir().join("두번째.hwp");
+        assert!(gate.admit(vec![early.clone()]).is_empty());
+        assert_eq!(gate.open(), vec![early]);
+        let late = std::env::temp_dir().join("세번째.hwpx");
+        assert_eq!(gate.admit(vec![late.clone()]), vec![late]);
+        assert!(gate.open().is_empty());
+    }
+
+    #[test]
+    fn update_relaunch_matches_args_even_after_nsis_strips_quotes() {
+        let original = launch_args_key(["HanPage.exe", r"C:\Users\me\Desktop\보고서 최종.hwp"]);
+        // NSIS GetOptions 가 /ARGS 의 따옴표를 벗겨 공백에서 인자가 쪼개진 재실행.
+        let relaunched =
+            launch_args_key(["HanPage.exe", r"C:\Users\me\Desktop\보고서", "최종.hwp"]);
+        assert_eq!(original, relaunched);
+        let marker = RelaunchMarker {
+            args: original,
+            version: "0.9.0".into(),
+            at: 1_000,
+        };
+        assert!(is_update_relaunch(
+            Some(&marker),
+            &relaunched,
+            "0.9.0",
+            1_100
+        ));
+    }
+
+    #[test]
+    fn update_relaunch_does_not_hide_real_file_opens() {
+        let marker = RelaunchMarker {
+            args: launch_args_key(["HanPage.exe", "/docs/a.hwp"]),
+            version: "0.9.0".into(),
+            at: 1_000,
+        };
+        let same = launch_args_key(["HanPage.exe", "/docs/a.hwp"]);
+        let other = launch_args_key(["HanPage.exe", "/docs/b.hwp"]);
+        assert!(!is_update_relaunch(None, &same, "0.9.0", 1_100));
+        // 다른 파일, 설치 실패로 이전 버전 실행, 유효 시간 경과는 실제 열기로 본다.
+        assert!(!is_update_relaunch(Some(&marker), &other, "0.9.0", 1_100));
+        assert!(!is_update_relaunch(Some(&marker), &same, "0.8.9", 1_100));
+        assert!(!is_update_relaunch(
+            Some(&marker),
+            &same,
+            "0.9.0",
+            1_000 + RELAUNCH_MARKER_TTL_SECS + 1
+        ));
+        let empty = RelaunchMarker {
+            args: String::new(),
+            ..marker
+        };
+        assert!(!is_update_relaunch(Some(&empty), "", "0.9.0", 1_100));
+    }
+
+    #[test]
+    fn launch_args_without_documents_open_nothing() {
+        let cwd = std::env::temp_dir();
+        assert!(document_paths_from_args(["HanPage.exe"], &cwd).is_empty());
+        assert!(document_paths_from_args(Vec::<String>::new(), &cwd).is_empty());
+    }
 }

@@ -144,6 +144,47 @@ test('등록 중 이벤트가 먼저 큐를 소비해도 startup과 다음 nativ
 });
 
 
+test('네이티브가 읽지 못한 큐 항목은 열지 않고 알리며 뒤 문서는 순서대로 연다', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const events: string[] = [];
+  const queue: { name: string; path: string; data: number[]; error?: string }[] = [
+    { name: 'locked.hwp', path: '/docs/locked.hwp', data: [], error: 'Permission denied (os error 13)' },
+    { name: 'ok.hwpx', path: '/docs/ok.hwpx', data: [7] },
+  ];
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: {
+    __TAURI_INTERNALS__: {},
+    __TAURI__: {
+      core: { async invoke(command: string) {
+        assert.equal(command, 'cmd_take_pending_documents');
+        return queue.splice(0);
+      } },
+      event: { async listen() { return () => {}; } },
+    },
+  } });
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const bridge = await freshBridge();
+    await bridge.initDesktopBridge({
+      async openDocument(bytes: Uint8Array, name: string) {
+        events.push(`open:${name}:${bytes[0]}`);
+      },
+      dispatchCommand() {},
+      notifyOpenFailure(name: string, message: string) {
+        events.push(`fail:${name}:${message}`);
+      },
+    });
+    assert.deepEqual(events, [
+      'fail:locked.hwp:Permission denied (os error 13)',
+      'open:ok.hwpx:7',
+    ]);
+  } finally {
+    console.error = originalError;
+    if (previous) Object.defineProperty(globalThis, 'window', previous);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
+});
+
 test('업데이트 진행 구독을 완료한 뒤 상태를 읽고 실제 payload를 전달한다', async () => {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const handlers = new Map<string, (event: { payload: unknown }) => void>();
