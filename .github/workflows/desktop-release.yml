@@ -14,7 +14,7 @@ name: Desktop Release
 #
 # 코드 서명:
 # - macOS: Developer ID Application 서명 + Apple 공증·stapler (Task #4, APPLE_* 시크릿).
-# - Windows: Azure Artifact Signing 으로 Authenticode 서명. `bundle.windows.signCommand` 를
+# - Windows: Azure Artifact Signing 으로 Authenticode 서명(#122). `bundle.windows.signCommand` 를
 #   CI 에서만 `--config` 로 주입해 tauri build 안에서 서명한다 → 앱 exe·NSIS 플러그인·
 #   uninstaller·setup.exe 가 서명되고, updater `.sig` 는 서명이 끝난 setup.exe 로 만들어진다.
 #   빌드 뒤 따로 서명하면 latest.json 의 updater 서명이 깨지므로 금지한다.

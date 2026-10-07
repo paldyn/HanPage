@@ -60,7 +60,7 @@ updater 서명(§2)은 업데이트 파일의 위변조를 막는다. 코드 서
 - Apple Developer Program 약관이 갱신되면 계정 소유자가 developer.apple.com에서 다시 동의할 때까지
   공증이 HTTP 403(`agreement missing or expired`)으로 실패한다. 동의 후 같은 태그의 실패 job만 다시 실행한다.
 
-### 3.2 Windows — Azure Artifact Signing (Authenticode)
+### 3.2 Windows — Azure Artifact Signing (Authenticode, #122)
 
 Microsoft의 관리형 서명 서비스(옛 이름 Trusted Signing)를 쓴다. 2026-07-23부터 한국 **법인**의
 Public Trust 인증서가 지원된다(개인 개발자는 미국·캐나다만 가능). 키는 Microsoft HSM에 있고 CI에서

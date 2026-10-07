@@ -46,7 +46,7 @@ npm run build               # 릴리스: 프런트 빌드 + .dmg/.app 번들 산
 
 - **완료**: rhwp-studio 래핑, 네이티브 열기/저장·파일연결·메뉴·최근문서·윈도우 상태(Task #1),
   macOS `.dmg`·Windows NSIS 설치 파일 CI, 자동 업데이트(Task #26), macOS Developer ID 서명·공증(Task #4).
-- **진행 중**: Windows Authenticode 서명(Azure Artifact Signing). CI 연동은 들어 있고, 서명 설정을
+- **진행 중**: Windows Authenticode 서명(Azure Artifact Signing, #122). CI 연동은 들어 있고, 서명 설정을
   등록하면 태그 빌드부터 서명된다.
 - **이후**: 네이티브 `rlib` 코어 직접 호출, Linux 설치 파일.
 
