@@ -12,7 +12,14 @@ name: Desktop Release
 # CLI 바이너리 릴리스(`release-binary.yml`, `v*` 태그)와 태그 패턴을 분리해 충돌을
 # 회피한다. `main` push 가 아니므로 Pages 배포(`deploy-pages.yml`)와도 트리거 분리.
 #
-# 코드 서명·공증은 범위 밖(미서명 → macOS Gatekeeper / Windows SmartScreen 경고 정상).
+# 코드 서명:
+# - macOS: Developer ID Application 서명 + Apple 공증·stapler (Task #4, APPLE_* 시크릿).
+#   빌드 뒤 "Verify macOS signature and notarization" 단계가 결과를 확인한다.
+# - Windows: Authenticode 서명 없이 배포한다(#122 결정, 2026-10-08). 개인 개발자는 게시자
+#   이름을 본인 실명으로만 받을 수 있고 비용 대비 효과가 작아 보류했다. 나중에 서명할 때는
+#   `bundle.windows.signCommand` 를 CI 에서만 `--config` 로 주입해 tauri build 안에서 서명한다
+#   (빌드 뒤 서명은 latest.json 의 updater 서명을 깨뜨린다).
+# 운영 절차는 mydocs/manual/desktop_auto_update.md 의 "코드 서명" 절을 따른다.
 
 on:
   push:
@@ -106,14 +113,15 @@ jobs:
       # tagName 은 git 태그(hanpage-desktop-v{ver}) 그대로, 표시명만 "HanPage Desktop-v{ver}".
       - name: Compute release name
         id: relname
-        if: startsWith(github.ref, 'refs/tags/')
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v')
         shell: bash
         run: |
           ver="${GITHUB_REF_NAME#hanpage-desktop-v}"
           echo "name=HanPage Desktop-v${ver}" >> "$GITHUB_OUTPUT"
 
       # [Task #4] macOS 공증용 App Store Connect API 키(.p8)를 시크릿(base64)에서 복원.
-      # 시크릿 미설정 시 빈 파일 → tauri-action 이 공증을 건너뛰고 미서명 번들 생성(회귀 없음).
+      # 시크릿 미설정(fork 등) 시 빈 파일 → tauri-action 이 공증을 건너뛴다. 태그 빌드는
+      # 아래 "Verify macOS signature" 단계가 서명·공증 누락을 실패로 처리한다.
       - name: Prepare notarization API key (macOS)
         if: runner.os == 'macOS'
         shell: bash
@@ -124,12 +132,13 @@ jobs:
 
       # --- Tauri 번들 (beforeBuildCommand = build:frontend = copy-wasm + studio build:desktop) ---
       - name: Build & bundle (tauri-action)
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # [Task #26] updater 서명용 개인키·비번(시크릿). createUpdaterArtifacts=true 와
           # 함께 tauri-action 이 서명·latest.json 생성·릴리스 첨부를 자동 처리한다.
-          # 시크릿 미설정(fork 등) 시 updater 아티팩트만 생략, 일반 dmg/nsis 는 정상 생성.
+          # tauri.conf.json 에 updater 공개키가 있으므로 개인키가 없으면 tauri build 의
+          # updater 서명 단계가 실패한다(fork 에서는 이 workflow 를 쓰지 않는다).
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # [Task #4] macOS 코드 서명(Developer ID Application) + 공증(App Store Connect API key).
@@ -142,13 +151,72 @@ jobs:
           APPLE_API_KEY_PATH: ${{ runner.temp }}/apple_api_key.p8
         with:
           projectPath: HanPage-Desktop
-          # 태그 push 시에만 릴리스 생성. dispatch 는 빈 tagName → 빌드만 수행.
-          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
-          releaseName: ${{ startsWith(github.ref, 'refs/tags/') && steps.relname.outputs.name || '' }}
+          # 태그 push 시에만 릴리스 생성. dispatch 는 태그에서 실행해도 빈 tagName → 빌드만 수행.
+          tagName: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') && github.ref_name || '' }}
+          releaseName: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') && steps.relname.outputs.name || '' }}
           # 양 플랫폼 자산·updater 서명·공증을 확인한 뒤 명시적으로 공개한다.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }} -- --locked
+
+      # --- 서명 검증: 실패하면 초안 릴리스를 공개하지 않는다 ---
+      # 0.8.9 수동 감사(mydocs/pr/assets/desktop_v089_release/macos-audit.py)와 같은 검사를
+      # updater 아카이브에 들어가는 .app 과 DMG 안의 .app 에 수행한다.
+      - name: Verify macOS signature and notarization
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          REQUIRE_SIGNED: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') }}
+        run: |
+          set -euo pipefail
+          bundle=HanPage-Desktop/src-tauri/target/release/bundle
+          app="$bundle/macos/HanPage.app"
+          dmg=$(ls "$bundle"/dmg/*.dmg | head -n 1)
+          if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+            if [ "$REQUIRE_SIGNED" = true ]; then
+              echo "::error title=macOS 미서명::태그 빌드인데 APPLE_SIGNING_IDENTITY 가 없습니다."
+              exit 1
+            fi
+            echo "::warning title=macOS 미서명::Apple 서명 설정이 없어 서명·공증 검증을 건너뜁니다."
+            exit 0
+          fi
+          team=$(sed -nE 's/.*\(([A-Z0-9]{10})\)$/\1/p' <<<"$APPLE_SIGNING_IDENTITY")
+          test -n "$team"
+          check_app() {
+            codesign --verify --deep --strict --verbose=2 "$1"
+            info=$(codesign -dv --verbose=4 "$1" 2>&1)
+            grep -qx "TeamIdentifier=$team" <<<"$info"
+            grep -q '^Authority=Developer ID Application:' <<<"$info"
+            spctl --assess --type execute --verbose=4 "$1" 2>&1 | tee "$RUNNER_TEMP/spctl.txt"
+            grep -q 'source=Notarized Developer ID' "$RUNNER_TEMP/spctl.txt"
+            xcrun stapler validate "$1"
+          }
+          check_app "$app"
+          hdiutil verify "$dmg"
+          mnt="$RUNNER_TEMP/dmg-mount"
+          mkdir -p "$mnt"
+          hdiutil attach -readonly -nobrowse -mountpoint "$mnt" "$dmg"
+          trap 'hdiutil detach "$mnt" || true' EXIT
+          check_app "$mnt/HanPage.app"
+          {
+            echo "### macOS 서명·공증 확인"
+            echo "- Team: $team, Developer ID Application, Gatekeeper: Notarized Developer ID, stapler: valid"
+            echo "- 대상: \`macos/HanPage.app\`, \`$(basename "$dmg")\` 안의 HanPage.app"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Windows 설치 파일은 미서명으로 배포한다(#122). 서명 상태를 요약에 남겨 릴리스 확인 때
+      # 의도와 다른 상태(예: 서명 설정이 일부만 섞임)를 알아볼 수 있게 한다.
+      - name: Report Windows installer signature status
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem 'HanPage-Desktop/src-tauri/target/release/bundle/nsis' -Filter '*-setup.exe' |
+            Select-Object -First 1
+          if (-not $setup) { throw 'NSIS 설치 파일을 찾지 못했습니다.' }
+          $status = (Get-AuthenticodeSignature -LiteralPath $setup.FullName).Status
+          "### Windows 설치 파일: $($setup.Name) — Authenticode $status (미서명 배포, #122)" >> $env:GITHUB_STEP_SUMMARY
 
       # --- dispatch 테스트 빌드: 릴리스가 없으므로 아티팩트로 업로드 ---
       - name: Upload bundle (dispatch test)
