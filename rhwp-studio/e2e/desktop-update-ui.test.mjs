@@ -3,6 +3,7 @@
  *
  * node e2e/run-with-vite.mjs -- node e2e/desktop-update-ui.test.mjs --mode=headless
  * --baseline=<Git ref>는 이전 토스트를, --quiet-baseline=<Git ref>는 이전 자동 카드를 비교한다.
+ * 백그라운드 준비 완료는 큰 카드 대신 구석의 작은 알림(#desktop-update-nudge)을 버전마다 한 번 띄운다.
  */
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
@@ -248,6 +249,24 @@ async function quietDocumentSnapshot(page) {
   }));
 }
 
+async function nudgeState(page) {
+  return page.evaluate(() => {
+    const el = document.getElementById('desktop-update-nudge');
+    const rect = el && !el.hidden ? el.getBoundingClientRect() : null;
+    return {
+      visible: Boolean(el && !el.hidden),
+      count: document.querySelectorAll('#desktop-update-nudge').length,
+      title: el?.querySelector('.dialog-update-nudge-title')?.textContent ?? '',
+      body: el?.querySelector('.dialog-update-nudge-body')?.textContent ?? '',
+      role: el?.getAttribute('role'),
+      focusPreserved: document.activeElement === window.__quietUpdateFocus,
+      box: rect && { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom },
+      statusTop: document.getElementById('status-bar')?.getBoundingClientRect().top ?? innerHeight,
+      viewport: { width: innerWidth, height: innerHeight },
+    };
+  });
+}
+
 async function snapshot(page) {
   return page.evaluate(() => {
     const card = document.getElementById('desktop-update-card');
@@ -386,9 +405,12 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
   await loadApp(page);
   await page.bringToFront();
   await page.waitForSelector('#desktop-update-entry[data-state="ready"]');
+  const initialNudge = await nudgeState(page);
   await page.waitForFunction(() => window.__wasm.pageCount > 0);
 
   setTestCase('자동 확인은 하단만 표시 · 초기 조회 · 늦은 이벤트 · 편집 보존');
+  check(initialNudge.visible && initialNudge.title.includes('0.8.8') && initialNudge.count === 1,
+    '초기 ready 조회는 큰 카드 대신 작은 준비 알림을 한 번 띄운다');
   check(!(await snapshot(page)).visible && (await snapshot(page)).entryLabel === '업데이트 준비됨', '초기 ready 조회는 큰 알림 없이 하단의 업데이트 준비 상태만 표시한다');
   await createNewDocument(page);
   await page.evaluate(() => window.__inputHandler.focus());
@@ -421,6 +443,99 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
       && quietAfter.text === quietBefore.text && quietAfter.dirty === quietBefore.dirty,
     `늦은 ready·다른 버전·중복 이벤트도 조용히 준비 상태만 갱신한다 (${version})`);
   }
+  setTestCase('준비 완료 작은 알림 · 버전당 1회 · 포커스 유지 · 자동 닫힘 · 버튼');
+  await page.mouse.move(5, 5);
+  await page.evaluate(() => { window.__inputHandler.focus(); window.__quietUpdateFocus = document.activeElement; });
+  await state(page, { state: 'downloading', downloaded: 10 * mib, total: 100 * mib });
+  check(!(await nudgeState(page)).visible, '다운로드 중에는 준비 알림을 띄우지 않는다');
+  await page.evaluate(() => window.__updateMock.ready('0.9.0'));
+  let nudgeNow = await nudgeState(page);
+  const quietNudge = await quietDocumentSnapshot(page);
+  check(nudgeNow.visible && nudgeNow.count === 1 && nudgeNow.role === 'status' && nudgeNow.title === '새 버전 0.9.0 준비됨'
+    && nudgeNow.body.includes('앱이 다시 시작됩니다') && nudgeNow.body.includes('파일 메뉴'),
+  '새 버전이 준비되면 버전과 이후 진입 경로를 담은 작은 알림을 한 번 띄운다');
+  check(!quietNudge.visibleCard && !quietNudge.modal && quietNudge.focusPreserved
+    && quietNudge.text === quietBefore.text && quietNudge.dirty === quietBefore.dirty,
+  '작은 알림은 큰 카드를 열지 않고 편집 포커스·내용을 바꾸지 않는다');
+  check(Boolean(nudgeNow.box) && nudgeNow.box.left >= 0 && nudgeNow.box.right <= nudgeNow.viewport.width
+    && nudgeNow.box.bottom <= nudgeNow.statusTop + 0.5 && nudgeNow.box.right > nudgeNow.viewport.width / 2,
+  '작은 알림은 화면 안 오른쪽 아래, 상태 표시줄 위에 놓인다');
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 400)));
+  await capture(page, 'after-ready-nudge-light');
+  await page.click('#desktop-update-nudge .dialog-update-nudge-later');
+  nudgeNow = await nudgeState(page);
+  check(!nudgeNow.visible && nudgeNow.focusPreserved, '나중에를 마우스로 누르면 알림만 닫고 편집 포커스는 그대로 둔다');
+  await page.evaluate(() => window.__updateMock.ready('0.9.0'));
+  check(!(await nudgeState(page)).visible, '같은 버전의 중복 준비 이벤트로는 다시 띄우지 않는다');
+  await page.evaluate(() => window.__updateMock.ready('0.9.1'));
+  const nudgeShownAt = Date.now();
+  check((await nudgeState(page)).visible, '다른 버전이 준비되면 다시 한 번 알린다');
+  await page.waitForFunction(() => document.getElementById('desktop-update-nudge').hidden, { timeout: 15000 });
+  const nudgeElapsed = Date.now() - nudgeShownAt;
+  check(nudgeElapsed >= 7000 && nudgeElapsed <= 12000 && (await nudgeState(page)).focusPreserved,
+    `작은 알림은 약 8초 뒤 포커스 변화 없이 자동으로 닫힌다 (${nudgeElapsed}ms)`);
+  await page.evaluate(() => window.__updateMock.ready('0.9.2'));
+  await page.hover('#desktop-update-nudge');
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 9000)));
+  check((await nudgeState(page)).visible, '마우스를 올려 둔 동안에는 자동으로 닫지 않는다');
+  await page.focus('#desktop-update-nudge .dialog-update-nudge-later');
+  await page.keyboard.press('Escape');
+  await page.mouse.move(5, 5);
+  nudgeNow = await nudgeState(page);
+  check(!nudgeNow.visible && nudgeNow.focusPreserved && !(await snapshot(page)).visible,
+    'Escape로 알림만 닫고 편집 위치로 포커스를 되돌린다');
+  await page.evaluate(() => window.__theme.setThemeMode('dark'));
+  await page.evaluate(() => window.__updateMock.ready('0.9.3'));
+  // 나타나는 애니메이션(0.2초)이 끝난 뒤의 실제 색을 캡처한다.
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 400)));
+  await capture(page, 'after-ready-nudge-dark');
+  await page.evaluate(() => window.__theme.setThemeMode('light'));
+  const applyBeforeNudge = (await snapshot(page)).applyCount;
+  await page.click('#desktop-update-nudge .dialog-update-nudge-primary');
+  await page.waitForSelector('.modal-overlay .dialog-wrap');
+  const nudgeCard = await snapshot(page);
+  check(!(await nudgeState(page)).visible && nudgeCard.visible && nudgeCard.state === 'ready' && nudgeCard.applyCount === applyBeforeNudge,
+    '알림의 업데이트는 카드를 열고 기존 저장 확인을 먼저 거친다');
+  await clickUnsaved(page, '취소');
+  check((await snapshot(page)).applyCount === applyBeforeNudge && await hasText(page, 'QUIET_BACKGROUND_SEED'),
+    '알림에서 시작한 업데이트도 저장 확인을 취소하면 적용하지 않고 문서를 보존한다');
+  await page.evaluate(() => window.__updateMock.ready('0.9.4'));
+  check(!(await nudgeState(page)).visible && (await snapshot(page)).visible, '카드를 보고 있을 때는 작은 알림을 겹쳐 띄우지 않는다');
+  await page.click('.dialog-update-later');
+  await page.evaluate(() => window.__updateMock.ready('0.9.4'));
+  check(!(await nudgeState(page)).visible, '카드에서 이미 확인한 버전은 닫은 뒤에도 다시 알리지 않는다');
+  await page.evaluate(() => { window.__inputHandler.focus(); window.__quietUpdateFocus = document.activeElement; });
+  // 모달이 열려 있으면 가려진 채 사라지지 않도록 미뤘다가, 모달이 닫힌 뒤 띄운다.
+  await clickFileMenu(page, 'file:about');
+  await page.waitForSelector('.modal-overlay .about-body');
+  await page.evaluate(() => window.__updateMock.ready('0.9.5'));
+  check(!(await nudgeState(page)).visible, '모달 대화상자가 열려 있는 동안에는 준비 알림을 미룬다');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.modal-overlay'));
+  await page.waitForSelector('#desktop-update-nudge:not([hidden])');
+  nudgeNow = await nudgeState(page);
+  check(nudgeNow.visible && nudgeNow.title.includes('0.9.5'), '모달이 닫히면 미뤄 둔 준비 알림을 띄운다');
+  check(await page.$eval('#desktop-update-nudge', el => Number(getComputedStyle(el).zIndex) < 9000),
+    '준비 알림은 사용자가 연 팝오버(9000)·모달보다 아래에 놓인다');
+  await page.click('#desktop-update-nudge .dialog-update-nudge-later');
+  // 알림이 떠 있는 중 모달을 열고 포커스가 비어도, 자동 닫힘이 모달 뒤 편집기로 포커스를 옮기지 않는다.
+  await page.evaluate(() => { window.__inputHandler.focus(); window.__quietUpdateFocus = document.activeElement; });
+  await page.mouse.move(5, 5);
+  await page.evaluate(() => window.__updateMock.ready('0.9.6'));
+  check((await nudgeState(page)).visible, '모달이 없을 때는 준비 알림을 바로 띄운다');
+  await clickFileMenu(page, 'file:about');
+  await page.waitForSelector('.modal-overlay .about-body');
+  await page.evaluate(() => { document.activeElement?.blur?.(); });
+  await page.waitForFunction(() => document.getElementById('desktop-update-nudge').hidden, { timeout: 15000 });
+  const behindModal = await page.evaluate(() => ({
+    editorFocused: document.activeElement === window.__quietUpdateFocus,
+    modal: Boolean(document.querySelector('.modal-overlay .about-body')),
+  }));
+  check(!behindModal.editorFocused && behindModal.modal, '자동 닫힘은 열린 모달 뒤의 편집기로 포커스를 옮기지 않는다');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.modal-overlay'));
+  await page.evaluate(() => { window.__inputHandler.focus(); window.__quietUpdateFocus = document.activeElement; });
+
   setTestCase('Desktop 최소·일반 크기에서 하단 업데이트와 확대 제어의 경계');
   for (const [width, height] of [[800, 600], [1280, 900]]) {
     await page.setViewport({ width, height });
@@ -760,6 +875,8 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
   await loadApp(windows);
   await windows.waitForSelector('#desktop-update-entry[data-state="ready"]');
   check(!(await snapshot(windows)).visible, 'Windows 초기 준비 완료도 큰 알림을 자동으로 표시하지 않는다');
+  const windowsNudge = await nudgeState(windows);
+  check(windowsNudge.visible && windowsNudge.body.includes('설치 프로그램'), 'Windows 준비 알림은 설치 프로그램이 열린다고 안내한다');
   await windows.click('#desktop-update-entry');
   await windows.waitForSelector(visibleCard);
   check((await snapshot(windows)).primary === '업데이트', 'Windows도 설치 대신 업데이트 버튼을 표시한다');
@@ -789,7 +906,8 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
   const web = await createPage(browser);
   await loadApp(web, '/?lang=ko');
   check(await web.evaluate(() => !document.querySelector('#desktop-update-entry') && !document.querySelector('#desktop-update-card')
-    && !document.querySelector('#desktop-update-menu') && !document.querySelector('.md-item[data-cmd="app:check-update"]')),
+    && !document.querySelector('#desktop-update-menu') && !document.querySelector('.md-item[data-cmd="app:check-update"]')
+    && !document.querySelector('#desktop-update-nudge')),
     '일반 웹에서는 업데이트 카드·상태 버튼·파일 메뉴가 모두 생기지 않는다');
 
   setTestCase('실제 한국어·영어 제품 정보 · PALDYN 재배포 표기');

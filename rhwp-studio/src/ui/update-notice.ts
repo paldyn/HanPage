@@ -1,4 +1,7 @@
-/** Desktop 전용 업데이트 카드. 백그라운드 다운로드와 수동 재진입은 같은 상태를 표시한다. */
+/**
+ * Desktop 전용 업데이트 카드. 백그라운드 다운로드와 수동 재진입은 같은 상태를 표시한다.
+ * 백그라운드 준비 완료는 큰 카드를 자동으로 열지 않고, 구석의 작은 알림을 버전마다 한 번 띄운다.
+ */
 import {
   applyUpdate, checkUpdate, getUpdateStatus, isDesktopRuntime, MENU_CHECK_UPDATE, onUpdateReady, onUpdateStatus,
   type DesktopUpdateReady, type DesktopUpdateStatus,
@@ -19,6 +22,21 @@ let priorFocus: HTMLElement | null = null;
 let applyBlocker: HTMLElement | null = null;
 let blockedRoot: HTMLElement | null = null;
 let rootWasInert = false;
+let nudge: HTMLElement | null = null;
+let nudgeTimer: ReturnType<typeof setTimeout> | null = null;
+/** 키보드로 알림에 들어오기 직전의 포커스. 알림 안에서 닫을 때만 이곳으로 되돌린다. */
+let nudgeFocusOrigin: HTMLElement | null = null;
+/**
+ * 사용자가 마우스를 실제로 움직여 알림 위에 올려 둔 상태. `:hover` 를 쓰지 않는 이유는
+ * 알림이 멈춰 있는 커서 밑에 나타나도 hover 로 판정되어 영영 닫히지 않기 때문이다.
+ */
+let nudgeHovered = false;
+/** 작은 알림을 실제로 보여줬거나 카드에서 확인한 준비 버전. 같은 버전으로는 다시 띄우지 않는다. */
+let acknowledgedVersion: string | null = null;
+/** 모달이 열려 있어 미뤄 둔 준비 버전과, 모달이 모두 닫히는 것을 지켜보는 관찰자. */
+let deferredNudgeVersion: string | null = null;
+let modalWatcher: MutationObserver | null = null;
+const NUDGE_DURATION_MS = 8000;
 
 export function isApplyingUpdate(): boolean { return status.state === 'applying'; }
 
@@ -104,7 +122,136 @@ function ensureCard(): HTMLElement {
   return card;
 }
 
+function clearNudgeTimer(): void {
+  if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; }
+}
+
+/** 업데이트 적용 차단막을 제외한 모달 대화상자가 열려 있는지. */
+function modalOpen(): boolean {
+  return Boolean(document.querySelector('.modal-overlay:not(.dialog-update-blocker)'));
+}
+
+/** 마우스를 올려 두었거나 키보드 포커스가 안에 있으면 자동으로 닫지 않는다. */
+function armNudgeTimer(): void {
+  clearNudgeTimer();
+  nudgeTimer = setTimeout(() => {
+    nudgeTimer = null;
+    if (nudge && !nudgeHovered && !nudge.contains(document.activeElement)) hideNudge();
+  }, NUDGE_DURATION_MS);
+}
+
+/**
+ * 알림을 닫는다. 포커스는 알림 안에 있을 때만(키보드로 들어온 경우) 들어오기 직전 위치로 되돌린다.
+ * 마우스 클릭은 mousedown 기본 동작을 막아 처음부터 포커스를 옮기지 않으므로 복원이 필요 없다.
+ * 모달이 열려 있으면 그 뒤의 편집기로 포커스를 보내지 않는다.
+ */
+function hideNudge(): void {
+  clearNudgeTimer();
+  nudgeHovered = false;
+  if (!nudge || nudge.hidden) return;
+  const focusInside = nudge.contains(document.activeElement);
+  nudge.hidden = true;
+  if (focusInside && !modalOpen()) (nudgeFocusOrigin?.isConnected ? nudgeFocusOrigin : entry)?.focus();
+  nudgeFocusOrigin = null;
+}
+
+function stopWatchingModals(): void {
+  modalWatcher?.disconnect();
+  modalWatcher = null;
+}
+
+/** 미뤄 둔 알림은 모달이 모두 닫힌 뒤, 그 버전이 아직 준비 상태일 때만 띄운다. */
+function watchModalsForDeferredNudge(): void {
+  if (modalWatcher) return;
+  modalWatcher = new MutationObserver(() => {
+    if (modalOpen()) return;
+    stopWatchingModals();
+    const version = deferredNudgeVersion;
+    deferredNudgeVersion = null;
+    if (version && status.state === 'ready' && status.version === version) maybeNudge(version);
+  });
+  modalWatcher.observe(document.body, { childList: true, subtree: true });
+}
+
+/** 알림 안의 키는 문서 수준 capture 처리(찾기 대화상자 등)보다 먼저 받는다. */
+function handleNudgeKeys(event: KeyboardEvent): void {
+  if (!nudge || nudge.hidden || !nudge.contains(event.target as Node | null)) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    hideNudge();
+  } else if (event.key === 'Enter' || event.key === ' ' || event.key === 'Tab') {
+    // 버튼 기본 동작·Tab 이동은 그대로 두고 다른 전역 단축키만 막는다.
+    event.stopPropagation();
+  }
+}
+
+function ensureNudge(): HTMLElement {
+  if (nudge) return nudge;
+  nudge = document.createElement('div');
+  nudge.id = 'desktop-update-nudge';
+  nudge.className = 'dialog-update-nudge';
+  nudge.hidden = true;
+  nudge.setAttribute('role', 'status');
+  nudge.setAttribute('aria-live', 'polite');
+  // 앱이 소유한 정적 markup. 버전은 textContent로만 넣는다.
+  nudge.innerHTML = `
+    <p class="dialog-update-nudge-title"></p>
+    <p class="dialog-update-nudge-body"></p>
+    <div class="dialog-update-nudge-actions"><button type="button" class="dialog-update-nudge-later">나중에</button><button type="button" class="dialog-update-nudge-primary">업데이트</button></div>`;
+  // 클릭이 편집기 포커스를 빼앗지 않게 한다(WebKit 은 버튼에 포커스를 주지 않아 body 로 빠진다).
+  nudge.addEventListener('mousedown', (event) => event.preventDefault());
+  nudge.querySelector('.dialog-update-nudge-later')!.addEventListener('click', hideNudge);
+  nudge.querySelector('.dialog-update-nudge-primary')!.addEventListener('click', () => {
+    hideNudge();
+    showCard(true);
+    void primaryAction();
+  });
+  nudge.addEventListener('mousemove', () => { nudgeHovered = true; clearNudgeTimer(); });
+  nudge.addEventListener('mouseleave', () => {
+    nudgeHovered = false;
+    if (!nudge?.contains(document.activeElement)) armNudgeTimer();
+  });
+  nudge.addEventListener('focusin', (event) => {
+    clearNudgeTimer();
+    const from = event.relatedTarget;
+    if (from instanceof HTMLElement && !nudge?.contains(from)) nudgeFocusOrigin = from;
+  });
+  nudge.addEventListener('focusout', (event) => {
+    if (!nudge?.contains(event.relatedTarget as Node | null) && !nudgeHovered) armNudgeTimer();
+  });
+  window.addEventListener('keydown', handleNudgeKeys, true);
+  document.body.appendChild(nudge);
+  return nudge;
+}
+
+/**
+ * 백그라운드 준비 완료를 포커스 이동 없이 한 번 알린다. 카드를 보고 있으면 띄우지 않고 확인한 것으로
+ * 보며, 모달이 열려 있으면 가려진 채 사라지지 않도록 모달이 모두 닫힐 때까지 미룬다.
+ */
+function maybeNudge(version: string): void {
+  if (acknowledgedVersion === version || busy()) return;
+  if (card && !card.hidden) { acknowledgedVersion = version; return; }
+  if (modalOpen()) {
+    deferredNudgeVersion = version;
+    watchModalsForDeferredNudge();
+    return;
+  }
+  acknowledgedVersion = version;
+  const el = ensureNudge();
+  el.querySelector('.dialog-update-nudge-title')!.textContent = `새 버전 ${version} 준비됨`;
+  el.querySelector('.dialog-update-nudge-body')!.textContent = `${isWindows() ? '업데이트하면 설치 프로그램이 열립니다.' : '업데이트하면 앱이 다시 시작됩니다.'}
+나중에 하단 버튼이나 파일 메뉴에서도 할 수 있습니다.`;
+  if (el.hidden) nudgeHovered = false;
+  el.hidden = false;
+  armNudgeTimer();
+}
+
 function showCard(manual = false): void {
+  hideNudge();
+  deferredNudgeVersion = null;
+  stopWatchingModals();
+  if (status.state === 'ready') acknowledgedVersion = status.version;
   const panel = ensureCard();
   if (panel.hidden) priorFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   panel.hidden = false;
@@ -211,7 +358,12 @@ function receiveStatus(next: DesktopUpdateStatus): void {
   status = next;
   if (next.state === 'ready') {
     if (readyInfo?.version !== next.version) readyInfo = { version: next.version, currentVersion: '', notes: null };
-    // 백그라운드 완료는 상태 표시줄만 갱신한다. 상세 안내는 사용자 요청으로 연다.
+    // 백그라운드 완료는 큰 카드를 열지 않는다. 상태 표시줄을 갱신하고 작은 알림을 버전마다 한 번 띄운다.
+    maybeNudge(next.version);
+  } else {
+    deferredNudgeVersion = null;
+    stopWatchingModals();
+    hideNudge();
   }
   render();
 }

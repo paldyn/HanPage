@@ -42,17 +42,44 @@
 .dialog-update-card .dialog-update-return { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--ui-border-subtle); color: var(--ui-text-muted); font-size: 11px; white-space: pre-line; word-break: keep-all; text-wrap: pretty; }
 .dialog-update-actions { display: flex; gap: 10px; margin-top: 22px; }
 .dialog-update-actions button { flex: 1; min-height: 40px; border-radius: 10px; padding: 9px 14px; font: 600 13px var(--font-family-ui); cursor: pointer; }
-.dialog-update-later { border: 1px solid var(--ui-border-subtle); color: var(--ui-text-secondary); background: var(--ui-surface); }
-.dialog-update-primary { border: 1px solid var(--accent-primary); color: var(--ui-text-on-accent); background: var(--accent-primary); }
-.dialog-update-primary:hover:enabled { background: var(--accent-strong); border-color: var(--accent-strong); }
-.dialog-update-later:hover:enabled, .dialog-update-close:hover:enabled { background: var(--ui-hover); }
+.dialog-update-later, .dialog-update-nudge-later { border: 1px solid var(--ui-border-subtle); color: var(--ui-text-secondary); background: var(--ui-surface); }
+.dialog-update-primary, .dialog-update-nudge-primary { border: 1px solid var(--accent-primary); color: var(--ui-text-on-accent); background: var(--accent-primary); }
+.dialog-update-primary:hover:enabled, .dialog-update-nudge-primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+.dialog-update-later:hover:enabled, .dialog-update-close:hover:enabled, .dialog-update-nudge-later:hover { background: var(--ui-hover); }
 .dialog-update-card button:disabled { opacity: .55; cursor: default; }
-.dialog-update-card button:focus-visible, .stb-update-button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.dialog-update-card button:focus-visible, .dialog-update-nudge button:focus-visible, .stb-update-button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
 .stb-update-button { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; height: 18px; margin-left: 6px; border: 0; border-radius: 6px; background: transparent; color: var(--ui-text-secondary); cursor: pointer; font: 11px var(--font-family-ui); padding: 0 7px; white-space: nowrap; }
 .stb-update-button svg { width: 12px; height: 12px; flex-shrink: 0; }
 .stb-update-button[data-state="ready"] { background: var(--ui-accent-bg-light); color: var(--accent-strong); font-weight: 600; }
 .stb-update-button[data-state="error"] { color: var(--ui-danger); }
 .stb-update-button:hover { background: var(--ui-hover); }
+/* 백그라운드 준비 완료 알림: 상태 표시줄 위 오른쪽 구석. 포커스를 가져가지 않는다.
+   사용자가 연 팝오버(명령 팔레트·도구 모음 메뉴 9000)와 모달(10000)보다 아래에 둔다. */
+.dialog-update-nudge {
+  position: fixed;
+  right: 16px;
+  bottom: 36px;
+  z-index: 8900;
+  width: min(320px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border: 1px solid var(--ui-border-subtle);
+  border-color: color-mix(in srgb, var(--accent-primary) 24%, var(--ui-border-subtle));
+  border-radius: 14px;
+  background: var(--ui-accent-bg-light);
+  background: color-mix(in srgb, var(--ui-surface) 90%, var(--accent-primary));
+  color: var(--ui-text);
+  box-shadow: var(--shadow-dialog);
+  font: 13px/1.5 var(--font-family-ui);
+  animation: dialog-update-nudge-in .2s ease-out;
+}
+.dialog-update-nudge[hidden] { display: none; }
+.dialog-update-nudge p { margin: 0; }
+.dialog-update-nudge-title { font-weight: 700; font-size: 14px; margin-bottom: 4px !important; }
+.dialog-update-nudge-body { color: var(--ui-text-secondary); font-size: 12px; white-space: pre-line; word-break: keep-all; text-wrap: pretty; }
+.dialog-update-nudge-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.dialog-update-nudge-actions button { min-height: 32px; border-radius: 8px; padding: 6px 14px; font: 600 12px var(--font-family-ui); cursor: pointer; }
+@keyframes dialog-update-nudge-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes dialog-update-moving { 0% { transform: translateX(-110%); } 100% { transform: translateX(390%); } }
 @media (max-width: 480px) { .dialog-update-card { padding: 20px; } .stb-update-button { font-size: 10px; padding-inline: 4px; } }
-@media (prefers-reduced-motion: reduce) { .dialog-update-progress span { animation: none; transition: none; } .dialog-update-indeterminate span { width: 100%; opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { .dialog-update-nudge { animation: none; } .dialog-update-progress span { animation: none; transition: none; } .dialog-update-indeterminate span { width: 100%; opacity: .5; } }
