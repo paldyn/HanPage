@@ -37,4 +37,16 @@
 
 ## 결과
 
-(초안 검증 후 기록)
+| 단계 | 결과 |
+| --- | --- |
+| PR #125 | CI 28 성공·6 건너뜀, squash 병합 `3c598548c3c3560156a9ec8e7ec26f5a169438fa` |
+| 태그 전 시험 | desktop-release dispatch [run 37729208261](https://github.com/paldyn/HanPage/actions/runs/37729208261) (`ed82f5def`): 양 플랫폼 번들 성공, macOS 공증 검증 통과. 병합 커밋 tree `4aa147fc` 가 시험 source 와 동일 |
+| 태그 | annotated `hanpage-desktop-v0.8.10` → `3c598548c` |
+| 태그 빌드 | [run 37731061888](https://github.com/paldyn/HanPage/actions/runs/37731061888) 성공. macOS `Verify macOS signature and notarization`(태그 필수 경로) 성공, Windows 서명 상태 보고 실행. 초안 생성 |
+| 게이트 2~4 | [감사 결과](../pr/assets/desktop_v0810_release/draft-audit.json) 18/18 통과 — 자산 6개, `latest.json` 버전·플랫폼 4개·같은 태그 URL·`.sig` 일치, minisign 서명(키 `835d6b3831e133aa`, 0.8.9 와 동일) 검증과 1바이트 변조 거부, updater `.app` 0.8.10, setup.exe 버전 문자열, setup.exe Authenticode 없음. 감사 스크립트는 공개된 0.8.9 자산에서도 18/18 통과(대조군) |
+| macOS 로컬 | updater `.app`·DMG 안 `.app`: codesign strict, `Developer ID Application: Wonmo Lee (8L78W6D8XF)`, Gatekeeper `accepted / Notarized Developer ID`, stapler 정상, 0.8.10·arm64·`com.paldyn.hanpage`. DMG checksum VALID |
+| 자산 digest | 6개 모두 GitHub API `digest` 와 로컬 SHA-256 일치 |
+| 게이트 5 | [릴리스 노트](../pr/assets/desktop_v0810_release/release-notes.md)를 초안에 반영(Windows 설치 안내·#121 한계 공개) |
+| 공개 | 작업지시자 승인 "공개해"(2026-10-08) 후 2026-10-08 05:36:42Z [공개](https://github.com/paldyn/HanPage/releases/tag/hanpage-desktop-v0.8.10). GitHub latest·API latest·updater 엔드포인트 모두 0.8.10, 공개 `latest.json` 이 감사한 파일과 SHA-256 동일, DMG·setup.exe·updater 아카이브 공개 URL 응답 정상. 0.8.9·0.8.8 릴리스는 유지 |
+
+#121 은 Windows 실기기에서 0.8.10 파일 연결 첫 실행을 확인한 뒤 닫는다.
