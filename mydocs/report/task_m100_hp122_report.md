@@ -40,8 +40,11 @@ Azure Artifact Signing 연동 구현은 커밋 [`39710e814`](https://github.com/
 | `tauri-action` v0 = v0.6.2 = `84b9d35b5fc46c1e45415bdb6144030364f7ebc5` | GitHub API 확인 |
 | 문서 링크 검사 / 메타데이터 검사 | 오류 0 / base 와 동일 |
 
-## 5. 미검증·남은 일
+## 5. 병합 전 실행 확인과 남은 일
 
-- macOS 검증 단계와 Windows 보고 단계는 다음 태그 빌드(또는 dispatch 빌드)에서 처음 실행된다.
-- CLI 2.11.5 의 Windows NSIS 빌드는 아직 실행하지 않았다(PR CI 는 desktop-release 를 돌리지 않음).
+- Desktop Release dispatch 시험 [run 37724295849](https://github.com/paldyn/HanPage/actions/runs/37724295849)
+  (`9f80c2143`): macOS·Windows 번들 성공. macOS 검증 단계가 `macos/HanPage.app` 과 DMG 안 `HanPage.app` 에서
+  `Notarized Developer ID`·stapler·DMG checksum 을 통과했고, CLI 2.11.5 Windows NSIS 빌드와 서명 상태 보고 단계가 실행됐다.
+- PR #124 squash 병합 `c629b7ed7ea47a317f74f9708ee7feba7fead377`.
+- 태그 릴리스 경로(`REQUIRE_SIGNED`·초안 릴리스 첨부)는 다음 `hanpage-desktop-v*` 태그에서 처음 실행된다.
 - 사업자등록 등 조건이 바뀌면 #122 를 다시 열고 위 표와 `39710e814` 구현을 출발점으로 삼는다.
