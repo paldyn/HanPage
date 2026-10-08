@@ -2,7 +2,7 @@
 kind: guide
 status: active
 canonical: mydocs/manual/desktop_auto_update.md
-last_verified: 2026-10-07
+last_verified: 2026-10-08
 ---
 
 # HanPage Desktop 자동 업데이트·릴리스 운영 가이드
@@ -20,7 +20,7 @@ Tauri v2 updater 기반. 새 릴리스 출시 시 앱이 **백그라운드로 �
 | 엔드포인트 | `https://github.com/paldyn/HanPage/releases/latest/download/latest.json` |
 | 서명 | ed25519/minisign. 공개키=config, **개인키=GitHub 시크릿** |
 | CI | `desktop-release.yml`의 `tauri-action`이 서명·`latest.json`·첨부 자동 |
-| 코드 서명 | macOS Developer ID 서명·Apple 공증, Windows Azure Artifact Signing([§3](#3-코드-서명)) |
+| 코드 서명 | macOS Developer ID 서명·Apple 공증. Windows는 미서명 배포([§3](#3-코드-서명)) |
 
 ## 2. 서명 키 (중요)
 
@@ -43,7 +43,8 @@ gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --repo paldyn/HanPage   # 비�
 ## 3. 코드 서명
 
 updater 서명(§2)은 업데이트 파일의 위변조를 막는다. 코드 서명은 운영체제가 설치 파일과 앱의
-게시자를 확인하는 별도 서명이다. 둘 다 `desktop-release.yml`의 같은 `tauri build` 안에서 처리한다.
+게시자를 확인하는 별도 서명이다. macOS는 둘 다 `desktop-release.yml`의 같은 `tauri build` 안에서 처리하고,
+Windows는 updater 서명만 한다.
 
 ### 3.1 macOS — Developer ID 서명·공증 (Task #4)
 
@@ -60,63 +61,41 @@ updater 서명(§2)은 업데이트 파일의 위변조를 막는다. 코드 서
 - Apple Developer Program 약관이 갱신되면 계정 소유자가 developer.apple.com에서 다시 동의할 때까지
   공증이 HTTP 403(`agreement missing or expired`)으로 실패한다. 동의 후 같은 태그의 실패 job만 다시 실행한다.
 
-### 3.2 Windows — Azure Artifact Signing (Authenticode, #122)
+### 3.2 Windows — 미서명 배포 (#122 결정, 2026-10-08)
 
-Microsoft의 관리형 서명 서비스(옛 이름 Trusted Signing)를 쓴다. 2026-07-23부터 한국 **법인**의
-Public Trust 인증서가 지원된다(개인 개발자는 미국·캐나다만 가능). 키는 Microsoft HSM에 있고 CI에서
-비대화식으로 서명한다. Basic 요금제는 월 $9.99, 월 5,000회 서명이다(빌드 1회 약 8회 서명).
+Windows 설치 파일(`HanPage_<버전>_x64-setup.exe`)은 Authenticode 서명 없이 배포한다. 자동 업데이트는
+updater 서명(§2)으로 위변조를 검증하므로 이 결정과 무관하게 안전하게 동작한다.
 
-**최초 1회 설정** (Azure 포털)
+**결정 근거** — PALDYN은 사업자등록이 없는 1인 개발이다. 2026-10-07 조사 기준으로 다음과 같다.
 
-1. 유료 Azure 구독에서 `Microsoft.CodeSigning` 리소스 공급자를 등록한다.
-2. Artifact Signing 계정을 **Korea Central** 지역에 만든다(엔드포인트 `https://krc.codesigning.azure.net`).
-   엔드포인트는 계정 지역과 같아야 한다.
-3. 조직(Organization) 신원 검증을 신청한다. 영문 법인명·주소가 공적 등록 정보와 정확히 같아야 하고,
-   회사 도메인 이메일과 대표자의 정부 발급 신분증 확인이 필요하다. 처리에 1~20영업일이 걸리며
-   제출 기회는 3번이다. 검증된 법인명이 인증서 Subject가 되고, Windows가 게시자로 표시한다.
-4. **Public Trust** 인증서 프로필을 만든다. 프로필을 지우고 다시 만들면 게시자 식별값이 바뀌어
-   SmartScreen 평판이 처음부터 다시 쌓이므로 같은 프로필을 계속 쓴다.
-5. Microsoft Entra 앱 등록을 만들고 클라이언트 비밀을 발급한 뒤, 계정 또는 프로필에
-   `Artifact Signing Certificate Profile Signer` 역할을 부여한다.
+| 방법 | 개인 가능 여부 | 게시자 표시 | 연 비용 | 판단 |
+|---|---|---|---|---|
+| Azure Artifact Signing | 불가(개인은 미국·캐나다만, 한국은 조직만) | — | 약 $120 | 해당 없음 |
+| SSL.com 개인(IV) + eSigner 클라우드 | 가능 | 본인 실명 | 약 $309 | 비용 대비 효과 작음 |
+| Certum 오픈소스(SimplySign) | 가능 | `Open Source Developer, <실명>` | 약 €49 | CI 자동화가 비공식 도구뿐 |
+| Microsoft Store(MSIX) | 가능 | 본인 실명 | 0 | 스토어 설치본만 해결, 별도 패키징 |
+| 개인사업자 등록 후 사업자 명의 | 등록 필요 | 등록 상호(PALDYN) | 약 €209~ | 등록·세무 부담, 보류 |
 
-**GitHub 저장소 설정** (Settings → Secrets and variables → Actions)
+등록되지 않은 브랜드명(PALDYN)은 어떤 경로로도 게시자 이름이 될 수 없다. 서명하더라도 SmartScreen
+평판이 쌓이기 전에는 경고가 계속 뜰 수 있고(2024년부터 EV도 즉시 평판 없음), 그래서 실명 서명에 비용을
+들이는 이점이 작다고 판단했다.
 
-| 종류 | 이름 | 값 |
-|---|---|---|
-| Secret | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET` | 위 앱 등록의 자격 증명 |
-| Variable | `ARTIFACT_SIGNING_ENDPOINT` | `https://krc.codesigning.azure.net` |
-| Variable | `ARTIFACT_SIGNING_ACCOUNT` | Artifact Signing 계정 이름 |
-| Variable | `ARTIFACT_SIGNING_PROFILE` | 인증서 프로필 이름 |
+**사용자 안내** — 릴리스 노트와 [Desktop README](../../HanPage-Desktop/README.md#windows-설치-안내)에 둔다.
 
-**CI 동작**
+- 처음 실행하면 "Windows의 PC 보호" 화면이 뜰 수 있다. **추가 정보 → 실행**을 누르면 설치된다.
+- 공식 배포처는 GitHub Releases(`paldyn/HanPage`)와 hanpage.paldyn.com 다운로드 버튼뿐이다.
 
-- `Prepare Windows signing` 단계가 signtool과 Microsoft Artifact Signing 클라이언트(dlib)를 준비하고
-  `bundle.windows.signCommand`를 `--config`로 주입한다. 클라이언트는 버전과 패키지 SHA-512를 함께
-  고정하고 dlib의 Microsoft 서명도 확인한다. 버전을 올릴 때는 NuGet 카탈로그의 `packageHash`로 해시도 바꾼다.
-  저장소의 `tauri.conf.json`에는 서명 설정을 넣지 않으므로 로컬 빌드는 미서명이다.
-- 위 6개가 **모두 없으면** 미서명으로 빌드하고 경고(`Windows 미서명`)를 남긴다. **일부만** 있으면 실패한다.
-- 릴리스 빌드(`hanpage-desktop-v*` 태그 push)는 서명한다. `workflow_dispatch` 빌드는 태그에서 실행해도
-  릴리스를 만들지 않으며, `windows_sign` 입력을 켠 경우에만 서명한다.
-- **서명 개시 절차**: 설정 6개를 등록 → `windows_sign`을 켠 dispatch 빌드로 서명·검증 단계 성공 확인 →
-  첫 서명 릴리스 확인 후 workflow의 `WINDOWS_SIGNING_REQUIRED`를 `'true'`로 바꾸는 PR을 병합한다.
-  그 뒤에는 설정이 사라지거나 설치 파일이 미서명이면 릴리스 빌드가 실패한다. `'false'`인 동안에는
-  미서명 릴리스 빌드도 job이 성공하므로 §4의 확인 항목을 반드시 본다.
-- 서명은 `tauri build` 안에서 앱 exe → NSIS 플러그인 DLL → uninstaller → `setup.exe` 순으로 하고,
-  그 다음 updater `.sig`를 만든다. **빌드가 끝난 뒤 따로 서명하면 `latest.json`의 updater 서명이
-  깨지므로 금지한다.**
-- `Verify Windows installer signature` 단계가 `setup.exe`, 설치 파일 안의 `HanPage.exe`·NSIS 플러그인
-  DLL, 조용히 설치한 뒤의 `HanPage.exe`·`uninstall.exe`에 대해 서명 `Valid`와 타임스탬프를 확인한다.
-  Artifact Signing 인증서는 72시간짜리라 타임스탬프가 없으면 곧 무효가 된다.
-  `LangDLL.dll`은 Tauri가 서명하지 않는 알려진 예외다.
-- NSIS 플러그인 DLL 서명은 `@tauri-apps/cli` 2.11.3 이상이 필요하다(2.11.2 이하는 미서명 DLL을 넣는다).
+**나중에 서명할 때의 규칙** (사업자등록 등으로 조건이 바뀌면 [#122](https://github.com/paldyn/HanPage/issues/122)를 다시 연다)
 
-**사용자에게 보이는 효과와 한계**
-
-- "알 수 없는 게시자" 대신 검증된 법인명이 표시된다. `bundle.publisher`(`PALDYN`)는 제거 항목의
-  게시자 표기일 뿐 인증서 게시자를 바꾸지 않는다.
-- SmartScreen 평판은 다운로드가 쌓이며 생긴다. 서명 초기에는 "Windows의 PC 보호" 안내가 계속 뜰 수 있다.
-  2024년부터 EV 인증서도 즉시 평판을 주지 않는다.
-- 클라이언트 비밀 만료와 신원 검증 갱신(만료 60일 전부터 안내)을 일정에 넣는다.
+- 서명은 CI가 만든 `--config` 조각의 `bundle.windows.signCommand`로 `tauri build` **안에서** 한다.
+  tauri-cli는 앱 exe·NSIS 플러그인 DLL·uninstaller·setup.exe를 서명한 뒤 updater `.sig`를 만든다.
+  빌드가 끝난 뒤 따로 서명하면 `latest.json`의 updater 서명이 깨진다.
+- `tauri.windows.conf.json`에 서명 설정을 넣지 않는다(로컬 Windows 빌드에도 자동 병합된다). 빈 문자열
+  `signCommand`도 서명을 켜므로, 설정이 없을 때는 키 자체를 넣지 않는다.
+- 비밀값은 `signCommand` 인자에 넣지 않는다(tauri가 명령줄을 로그·NSIS 스크립트에 남긴다). 환경 변수로 넘긴다.
+- NSIS 플러그인 DLL 서명에는 `@tauri-apps/cli` 2.11.3 이상이 필요하다(현재 2.11.5).
+- Azure Artifact Signing 연동 예시(서명 준비 단계·Authenticode 검증 단계)는 PR #124의 첫 커밋
+  [`39710e814`](https://github.com/paldyn/HanPage/commit/39710e814bbb938df679517d6b6ae3ede51e32c3)에 남아 있다.
 
 ## 4. 릴리스 절차
 
@@ -131,11 +110,11 @@ Public Trust 인증서가 지원된다(개인 개발자는 미국·캐나다만 
    **초안 릴리스**에 첨부한다.
 4. 공개 전에 확인한다.
    - 두 플랫폼 job과 서명 검증 단계(§3.1·§3.2)가 모두 성공했는지
-   - Artifact Signing을 설정한 뒤라면 Windows job 요약에 `Windows Authenticode 서명 확인 (타임스탬프 포함)`이
-     있고 Subject가 검증된 법인명인지, `Windows 미서명` 경고나 `Windows 설치 파일: 미서명` 요약이 없는지
+   - Windows job 요약의 `Windows 설치 파일: ... Authenticode NotSigned (미서명 배포, #122)` — 미서명 배포 중에는
+     이 상태가 정상이다. 다른 상태가 나오면 의도하지 않은 서명 설정이 섞인 것이므로 원인을 확인한다.
    - 자산 6개(DMG, `.app.tar.gz`·`.sig`, `setup.exe`·`.sig`, `latest.json`)
    - `latest.json`의 플랫폼 4개와 같은 태그의 URL, 각 updater 서명이 실제 자산으로 검증되는지
-5. 초안을 공개한다. 다음 실행부터 기존 사용자 앱이 `latest.json`을 확인해 새 버전을 감지한다.
+5. 릴리스 노트에 Windows 설치 안내(§3.2)를 넣고 초안을 공개한다. 다음 실행부터 기존 사용자 앱이 `latest.json`을 확인해 새 버전을 감지한다.
 
 ## 5. latest.json 형식 (tauri-action 자동 생성, 참고)
 
@@ -171,7 +150,7 @@ Authenticode 서명이 updater 서명보다 먼저 끝나야 한다.
 
 - **부트스트랩**: updater가 없던 기존 버전(예: v0.7.13)은 자동 감지 불가. **첫 updater 포함 버전은 사용자가 수동 1회 설치**해야 이후 자동화된다. 릴리스 노트에 안내 권장.
 - **macOS 배포**: 코드 서명·Apple 공증·stapler와 Gatekeeper 검증이 완료된 산출물을 게시한다. 0.8.7 실제 배포 검증은 [PR 114 기록](../pr/archives/pr_114_review.md)을 참고한다.
-- **Windows 배포**: Artifact Signing 설정을 마친 뒤에는 Authenticode 서명·타임스탬프 검증이 완료된 설치 파일만 게시한다.
+- **Windows 배포**: 미서명 설치 파일로 배포한다(§3.2). 릴리스 노트에 "Windows의 PC 보호 → 추가 정보 → 실행" 안내를 넣는다.
 - **게시 게이트**: 필수 번들·업데이트 서명·매니페스트·코드 서명·공증 검증이 실패하면 공개 게시를 완료하지 않는다. UI 로컬 검증은 실제 업데이트 설치와 공개 릴리스 검증을 대신하지 않는다.
 
 ## 8. 트러블슈팅
@@ -182,8 +161,6 @@ Authenticode 서명이 updater 서명보다 먼저 끝나야 한다.
 | "signature 검증 실패" | config `pubkey` ↔ 서명 개인키 불일치(키 교체 후 pubkey 미반영) |
 | CI 빌드가 "A public key has been found, but no private key"로 실패 | updater 시크릿 2개 미설정. config에 공개키가 있으면 개인키 없이 빌드할 수 없다 |
 | macOS 공증 HTTP 403 | Apple Developer Program 약관 미동의(§3.1). 계정 소유자 동의 후 실패 job 재실행 |
-| Windows 빌드가 `failed to run ...signtool.exe`로 실패 | Artifact Signing 자격 증명·역할·엔드포인트 지역·클라이언트 비밀 만료 확인. 원인 출력은 tauri `--verbose`에서만 보인다 |
-| Windows 서명 검증 단계 실패 | 메시지의 파일과 상태 확인. 타임스탬프 누락이면 타임스탬프 서버 응답 문제이므로 재실행 |
 | Windows 사용자 업데이트가 "signature 검증 실패" | 빌드 뒤 설치 파일을 다시 서명해 `.sig`와 내용이 달라짐. 서명은 `tauri build` 안에서만 한다 |
-| 서명했는데 SmartScreen 안내가 뜸 | 평판 축적 전의 정상 동작(§3.2). 인증서 프로필을 다시 만들지 않는다 |
+| Windows 설치 시 "Windows의 PC 보호" | 미서명 배포의 정상 동작(§3.2). 추가 정보 → 실행 |
 | 매니페스트 404 | 엔드포인트 URL ↔ 릴리스에 `latest.json` 첨부 여부 확인 |

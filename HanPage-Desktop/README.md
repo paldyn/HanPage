@@ -46,8 +46,8 @@ npm run build               # 릴리스: 프런트 빌드 + .dmg/.app 번들 산
 
 - **완료**: rhwp-studio 래핑, 네이티브 열기/저장·파일연결·메뉴·최근문서·윈도우 상태(Task #1),
   macOS `.dmg`·Windows NSIS 설치 파일 CI, 자동 업데이트(Task #26), macOS Developer ID 서명·공증(Task #4).
-- **진행 중**: Windows Authenticode 서명(Azure Artifact Signing, #122). CI 연동은 들어 있고, 서명 설정을
-  등록하면 태그 빌드부터 서명된다.
+- **보류**: Windows Authenticode 서명(#122). 1인 개발이라 게시자를 실명으로만 받을 수 있어 비용 대비 효과가
+  작다고 판단했다. 사업자등록 등 조건이 바뀌면 다시 검토한다.
 - **이후**: 네이티브 `rlib` 코어 직접 호출, Linux 설치 파일.
 
 ## 앱 아이콘 (04 한글 심볼)
@@ -86,10 +86,16 @@ Tauri가 Windows 창 아이콘으로 첫 프레임을 읽으므로 고해상도 
 검증·병합된 commit에 `hanpage-desktop-v{버전}` 태그를 push하면
 `desktop-release.yml`이 macOS aarch64와 Windows x64를 빌드하여 **초안 릴리스**에
 첨부한다. 두 플랫폼의 설치파일, updater 서명과 `latest.json` 플랫폼 항목, macOS
-서명·공증, Windows Authenticode 서명(설정한 경우)을 확인한 후 릴리스를 공개한다.
+서명·공증을 확인하고 릴리스 노트에 아래 Windows 설치 안내를 넣은 뒤 릴리스를 공개한다.
 devel 병합만으로 설치된 앱이 갱신되지 않는다. 전체 절차와 서명 설정은
 [Desktop 자동 업데이트·릴리스 운영 가이드](../mydocs/manual/desktop_auto_update.md)를 따른다.
 
 변경 내용은 [변경 이력](CHANGELOG.md)을 참고한다.
+
+## Windows 설치 안내
+
+Windows 설치 파일은 코드 서명 없이 배포한다(#122). 처음 실행하면 "Windows의 PC 보호" 화면이 뜰 수 있으며,
+**추가 정보 → 실행**을 누르면 설치된다. 공식 배포처는 GitHub Releases(`paldyn/HanPage`)와 hanpage.paldyn.com의
+다운로드 버튼뿐이다. 자동 업데이트는 별도의 updater 서명으로 위변조를 검증한다.
 
 백그라운드 업데이트는 하단 상태 버튼에 표시한다. 하단 버튼, `파일 > 업데이트 확인`, macOS의 `HanPage > 업데이트 확인` 메뉴에서 가운데 카드를 다시 열 수 있다. 카드는 테마에 어울리는 별도 표면색과 다운로드 용량·진행률, 파일 확인·적용 중 상태를 표시한다. 최신 버전이면 `닫기`와 `다시 확인`을 제공하고, 준비된 업데이트는 `나중에`로 닫을 수 있다. 적용 전 저장 확인을 거치고 실제 적용 중에는 문서 입력을 보호한다.

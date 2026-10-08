@@ -40,3 +40,13 @@
 - Tauri NSIS 템플릿으로 제거 항목·조용한 설치·파일 연결 명령 확인.
 - 문서 링크 검사, 메타데이터 검사 기준선 비교.
 - Windows 서명·검증 단계 실제 실행은 Artifact Signing 계정 준비 후로 남긴다.
+
+## 5. 결정 변경 (2026-10-08)
+
+- 작업지시자 확인: PALDYN 은 사업자등록이 없는 1인 개발("팔딘 그냥 내혼자 하는건데", "사업자 등록안되어있어").
+- 재조사 결과 Azure Artifact Signing 은 개인(한국) 불가, 게시자에 PALDYN 을 넣는 방법은 사업자등록 없이는 없음.
+  실명 서명 최저 현실안(SSL.com IV + eSigner)은 연 약 $309 로 작업지시자가 과하다고 판단("연 약 42만원 너무한데").
+- 작업지시자 선택 "1로하자": **Windows 는 미서명 배포를 유지**하고 설치 안내를 추가한다.
+- 범위 조정: Azure 서명 준비 단계·Windows Authenticode 검증 단계·관련 설정과 문서를 제거한다(구현은 커밋
+  [`39710e814`](https://github.com/paldyn/HanPage/commit/39710e814bbb938df679517d6b6ae3ede51e32c3)에 보존). macOS 검증 단계, CLI 2.11.5, `tauri-action` SHA 고정,
+  단일 릴리스 조건, 낡은 주석·문서 정정은 유지한다. Windows 는 서명 상태를 CI 요약에 보고한다.
