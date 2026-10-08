@@ -57,6 +57,8 @@ interface OpenedFile {
   name: string;
   path: string;
   data: number[];
+  /** 펜딩 큐 전용: 네이티브가 파일을 읽지 못한 사유. 있으면 `data` 는 비어 있다. */
+  error?: string;
 }
 
 // ─── 저장 ──────────────────────────────────────────────────────────────────
@@ -88,6 +90,8 @@ export interface DesktopBridgeDeps {
   openDocument: (bytes: Uint8Array, fileName: string) => void | Promise<void>;
   /** 네이티브 메뉴 명령을 스튜디오 커맨드 디스패처로 전달한다(예: `file:open`). */
   dispatchCommand: (commandId: string) => void;
+  /** 파일 연결·최근 문서로 넘어온 파일을 네이티브가 읽지 못했을 때 사용자에게 알린다. */
+  notifyOpenFailure?: (fileName: string, message: string) => void;
 }
 
 /**
@@ -95,8 +99,9 @@ export interface DesktopBridgeDeps {
  * 브라우저에서는 즉시 return 하여 완전한 no-op 이다.
  *
  * `deps` 가 주어지면(데스크톱) 네이티브 푸시 2종을 추가로 연결한다:
- * 1. **펜딩 문서 드레인** — 파일 연결/최근 문서/단일 인스턴스 argv 로 큐잉된 바이트를
+ * 1. **펜딩 문서 드레인** — 파일 연결/최근 문서/실행 argv 로 큐잉된 바이트를
  *    꺼내 `openDocument` 으로 오픈. 초기 1회(콜드 스타트) + `EVT_DOCS_READY` 수신 시(웜).
+ *    네이티브가 읽지 못한 항목은 `notifyOpenFailure` 로 알린다.
  * 2. **메뉴 명령** — `EVT_MENU` 페이로드(커맨드 id)를 `dispatchCommand` 로 디스패치.
  */
 export async function initDesktopBridge(deps?: DesktopBridgeDeps): Promise<void> {
@@ -136,7 +141,14 @@ export async function initDesktopBridge(deps?: DesktopBridgeDeps): Promise<void>
     pendingDrain = pendingDrain.then(async () => {
       try {
         const docs = await invoke<OpenedFile[]>('cmd_take_pending_documents');
-        for (const d of docs) await deps.openDocument(new Uint8Array(d.data), d.name);
+        for (const d of docs) {
+          if (d.error !== undefined) {
+            console.error(`[desktop-bridge] 파일 열기 실패: ${d.path}: ${d.error}`);
+            deps.notifyOpenFailure?.(d.name, d.error);
+            continue;
+          }
+          await deps.openDocument(new Uint8Array(d.data), d.name);
+        }
       } catch (e) {
         console.error('[desktop-bridge] 펜딩 문서 처리 실패:', e);
       }

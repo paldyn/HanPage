@@ -826,6 +826,13 @@ async function initialize(): Promise<void> {
         }
         dispatcher.dispatch(id);
       },
+      notifyOpenFailure(fileName, message) {
+        showToast({
+          message: `파일을 열 수 없습니다: ${fileName}\n${message}`,
+          durationMs: 0, // 에러는 자동 페이드 없음 — 사용자가 읽고 닫기
+          confirmLabel: '확인',
+        });
+      },
     });
     installUpdateNotice({ beforeApply: () => canReplaceCurrentDocument() });
     // 시작 진입점은 순서를 지켜야 한다 — ?url= 로드와 자동저장 복구가 문서를 열 기회를
