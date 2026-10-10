@@ -668,6 +668,20 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
   const returnedElapsed = Date.now() - returnedAt;
   check(returnedElapsed >= 7000 && returnedElapsed <= 12000 && (await nudgeState(page)).focusPreserved,
     `창으로 돌아온 뒤 약 8초를 다시 세어 닫는다 (${returnedElapsed}ms)`);
+  // 창이 뒤에 있는 동안 미룬 알림은, 돌아왔을 때 모달이 열려 있으면 그 모달이 닫힌 뒤에 띄운다.
+  await otherTab.bringToFront();
+  await page.evaluate(() => window.__updateMock.ready('0.9.11'));
+  await page.evaluate(() => document.querySelector('.menu-item[data-menu="file"] .md-item[data-cmd="file:about"]').click());
+  await page.waitForSelector('.modal-overlay .about-body');
+  await page.bringToFront();
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 300)));
+  check(!(await nudgeState(page)).visible, '창으로 돌아와도 모달이 열려 있으면 미룬 알림을 계속 미룬다');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.modal-overlay'));
+  await page.waitForSelector('#desktop-update-nudge:not([hidden])', { timeout: 3000 }).catch(() => {});
+  nudgeNow = await nudgeState(page);
+  check(nudgeNow.visible && nudgeNow.title.includes('0.9.11'), '그 모달이 닫히면 미뤄 둔 알림을 띄운다');
+  await page.click('#desktop-update-nudge .dialog-update-nudge-later').catch(() => {});
   await otherTab.close();
   await page.bringToFront();
   await page.evaluate(() => { window.__inputHandler.focus(); window.__quietUpdateFocus = document.activeElement; });

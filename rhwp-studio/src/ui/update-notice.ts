@@ -179,10 +179,13 @@ function stopWatchingModals(): void {
   modalWatcher = null;
 }
 
-/** 미뤄 둔 알림은 모달이 모두 닫히고 창을 보고 있을 때, 그 버전이 아직 준비 상태일 때만 띄운다. */
+/**
+ * 미뤄 둔 알림을 그 버전이 아직 준비 상태일 때 다시 시도한다. 모달이 남아 있거나 창을 보고 있지 않으면
+ * maybeNudge 가 다시 미루고, 모달이면 그 모달이 닫히는 것을 지켜본다.
+ */
 function resumeDeferredNudge(): void {
   const version = deferredNudgeVersion;
-  if (!version || modalOpen() || !windowAttended()) return;
+  if (!version) return;
   deferredNudgeVersion = null;
   if (status.state === 'ready' && status.version === version) maybeNudge(version);
 }
