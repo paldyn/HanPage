@@ -39,4 +39,11 @@ source 와 다르면 그 차이(병합 후 문서 등)를 기록한다. 태그�
 | --- | --- |
 | PR #127 | CI 30 성공·4 건너뜀, squash 병합 `6dbff3c92cef39c000d5f5c40404012fbc7a81d7`, 병합 기록 `ec3b1dcff` |
 | 태그 전 시험 | desktop-release dispatch [run 38047022225](https://github.com/paldyn/HanPage/actions/runs/38047022225) (`75f57aca4`, #127 최종 head 위 버전 커밋): 양 플랫폼 번들 성공, `Verify macOS signature and notarization` 성공, Windows 서명 상태 보고 실행. devel 위로 옮긴 버전 커밋과 시험 source 의 차이는 `mydocs/orders/20261010.md`·`mydocs/pr/archives/pr_127_review.md` 문서 2개뿐(비문서 차이 0) |
-| 릴리스 PR·태그·초안 | (진행 후 기록) |
+| PR #128 | CI 27 성공·3 건너뜀, squash 병합 `a431608afdf79059c6f47b2b98a795a98286156b`. 병합 커밋 tree `72cb18ac` 가 PR head 와 동일 |
+| 태그 | annotated `hanpage-desktop-v0.8.11` → `a431608af` |
+| 태그 빌드 | [run 38049768297](https://github.com/paldyn/HanPage/actions/runs/38049768297) 성공. macOS `Verify macOS signature and notarization`(태그 필수 경로) 성공, Windows 서명 상태 보고 실행. 초안 생성 |
+| 게이트 2~4 | [감사 결과](../pr/assets/desktop_v0811_release/draft-audit.json) 18/18 통과 — 자산 6개, `latest.json` 버전·플랫폼 4개·같은 태그 URL·`.sig` 일치, minisign 서명(키 `835d6b3831e133aa`, 0.8.10 과 동일) 검증과 1바이트 변조 거부, updater `.app` 0.8.11, setup.exe 버전 문자열, setup.exe Authenticode 없음. 같은 스크립트가 공개된 0.8.10 자산에서도 통과(대조군) |
+| macOS 로컬 | [확인 결과](../pr/assets/desktop_v0811_release/macos-local.txt)([스크립트](../pr/assets/desktop_v0811_release/macos-local.sh)) — updater `.app`·DMG 안 `.app`: codesign strict, `Developer ID Application: Wonmo Lee (8L78W6D8XF)`, Gatekeeper `accepted / Notarized Developer ID`, stapler 정상, 0.8.11·arm64·`com.paldyn.hanpage`. DMG checksum VALID. 공개된 0.8.10 자산으로 먼저 대조 실행 |
+| 자산 digest | 6개 모두 GitHub API `digest` 와 로컬 SHA-256 일치 |
+| 게이트 5 | [릴리스 노트](../pr/assets/desktop_v0811_release/release-notes.md)를 초안에 반영(작은 알림 설명·적용 시점, Windows 설치 안내) |
+| 공개 | 작업지시자 승인 "응"(2026-10-10) 후 2026-10-10 12:13:05Z [공개](https://github.com/paldyn/HanPage/releases/tag/hanpage-desktop-v0.8.11). GitHub latest·API latest 0.8.11. updater 엔드포인트(`releases/latest/download/latest.json`)는 공개 직후 약 1분간 0.8.10 으로 redirect 되다가 12:14Z 무렵 0.8.11 로 바뀌었고, 응답이 감사한 [`latest.json`](../pr/assets/desktop_v0811_release/latest.json)과 SHA-256 동일. DMG·setup.exe·updater 아카이브 공개 URL 응답 200. 0.8.10·0.8.9 릴리스는 유지 |

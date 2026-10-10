@@ -1,0 +1,26 @@
+== updater .app
+<upd>/HanPage.app: valid on disk
+<upd>/HanPage.app: satisfies its Designated Requirement
+Identifier=com.paldyn.hanpage
+Authority=Developer ID Application: Wonmo Lee (8L78W6D8XF)
+TeamIdentifier=8L78W6D8XF
+<upd>/HanPage.app: accepted
+source=Notarized Developer ID
+origin=Developer ID Application: Wonmo Lee (8L78W6D8XF)
+The validate action worked!
+version=0.8.11 id=com.paldyn.hanpage
+arch=arm64
+== DMG
+hdiutil: verify: checksum of "HanPage_0.8.11_aarch64.dmg" is VALID
+== DMG HanPage.app
+<mnt>/HanPage.app: valid on disk
+<mnt>/HanPage.app: satisfies its Designated Requirement
+Identifier=com.paldyn.hanpage
+Authority=Developer ID Application: Wonmo Lee (8L78W6D8XF)
+TeamIdentifier=8L78W6D8XF
+<mnt>/HanPage.app: accepted
+source=Notarized Developer ID
+origin=Developer ID Application: Wonmo Lee (8L78W6D8XF)
+The validate action worked!
+version=0.8.11 id=com.paldyn.hanpage
+arch=arm64

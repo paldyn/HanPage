@@ -1,0 +1,123 @@
+{
+  "version": "0.8.11",
+  "tag": "hanpage-desktop-v0.8.11",
+  "checks": [
+    {
+      "name": "assets: exactly the 6 expected files",
+      "ok": true,
+      "detail": "HanPage_0.8.11_aarch64.dmg, HanPage_0.8.11_x64-setup.exe, HanPage_0.8.11_x64-setup.exe.sig, HanPage_aarch64.app.tar.gz, HanPage_aarch64.app.tar.gz.sig, latest.json"
+    },
+    {
+      "name": "latest.json: version",
+      "ok": true,
+      "detail": "0.8.11"
+    },
+    {
+      "name": "latest.json: 4 platform keys",
+      "ok": true,
+      "detail": "darwin-aarch64, darwin-aarch64-app, windows-x86_64, windows-x86_64-nsis"
+    },
+    {
+      "name": "latest.json: darwin-aarch64 url",
+      "ok": true,
+      "detail": "https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v0.8.11/HanPage_aarch64.app.tar.gz"
+    },
+    {
+      "name": "latest.json: darwin-aarch64 signature equals .sig asset",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "latest.json: darwin-aarch64-app url",
+      "ok": true,
+      "detail": "https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v0.8.11/HanPage_aarch64.app.tar.gz"
+    },
+    {
+      "name": "latest.json: darwin-aarch64-app signature equals .sig asset",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "latest.json: windows-x86_64 url",
+      "ok": true,
+      "detail": "https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v0.8.11/HanPage_0.8.11_x64-setup.exe"
+    },
+    {
+      "name": "latest.json: windows-x86_64 signature equals .sig asset",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "latest.json: windows-x86_64-nsis url",
+      "ok": true,
+      "detail": "https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v0.8.11/HanPage_0.8.11_x64-setup.exe"
+    },
+    {
+      "name": "latest.json: windows-x86_64-nsis signature equals .sig asset",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "minisign: HanPage_aarch64.app.tar.gz payload+global signature",
+      "ok": true,
+      "detail": "ED key 835d6b3831e133aa | timestamp:1791633949\tfile:HanPage.app.tar.gz\tversion:0.8.11"
+    },
+    {
+      "name": "minisign: HanPage_aarch64.app.tar.gz rejects 1-byte tamper",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "minisign: HanPage_0.8.11_x64-setup.exe payload+global signature",
+      "ok": true,
+      "detail": "ED key 835d6b3831e133aa | timestamp:1791634138\tfile:HanPage_0.8.11_x64-setup.exe\tversion:0.8.11"
+    },
+    {
+      "name": "minisign: HanPage_0.8.11_x64-setup.exe rejects 1-byte tamper",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "updater .app Info.plist version",
+      "ok": true,
+      "detail": "0.8.11"
+    },
+    {
+      "name": "setup.exe contains UTF-16 version string",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "setup.exe Authenticode absent (unsigned by decision #122)",
+      "ok": true,
+      "detail": "security dir size 0"
+    }
+  ],
+  "assets": {
+    "HanPage_0.8.11_aarch64.dmg": {
+      "bytes": 43729414,
+      "sha256": "4c4c2d4054882af958a6ca216fb38893461a91acb44bd253b12743aeefbe0fa4"
+    },
+    "HanPage_0.8.11_x64-setup.exe": {
+      "bytes": 40150833,
+      "sha256": "2e14355be79be5fb32903dee8bb9f468e8190c09d814ba029e8a0b969b9fec94"
+    },
+    "HanPage_0.8.11_x64-setup.exe.sig": {
+      "bytes": 440,
+      "sha256": "5b686fcc170bdd27e9814ccc8b16b8a56cc9fa8552f5b639cbcc167ca390a603"
+    },
+    "HanPage_aarch64.app.tar.gz": {
+      "bytes": 42965888,
+      "sha256": "1440c8c2314e65fc28b6fab771c73e8ad7d3926743627e73a327549261e92890"
+    },
+    "HanPage_aarch64.app.tar.gz.sig": {
+      "bytes": 424,
+      "sha256": "cb7919429635e51d842ac8dd1fb83056dea32dd5b5b00e7f48abab47e9ada744"
+    },
+    "latest.json": {
+      "bytes": 2532,
+      "sha256": "5c5381ba857cfd8dc00e7153c71dc95cce8bd9580c42b4445dbe888e2323f317"
+    }
+  },
+  "pass": true
+}
