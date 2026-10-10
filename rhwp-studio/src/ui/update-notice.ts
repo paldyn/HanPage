@@ -33,7 +33,7 @@ let nudgeFocusOrigin: HTMLElement | null = null;
 let nudgeHovered = false;
 /** 작은 알림을 실제로 보여줬거나 카드에서 확인한 준비 버전. 같은 버전으로는 다시 띄우지 않는다. */
 let acknowledgedVersion: string | null = null;
-/** 모달이 열려 있어 미뤄 둔 준비 버전과, 모달이 모두 닫히는 것을 지켜보는 관찰자. */
+/** 모달이 열려 있거나 창이 뒤에 있어 미뤄 둔 준비 버전과, 모달이 모두 닫히는 것을 지켜보는 관찰자. */
 let deferredNudgeVersion: string | null = null;
 let modalWatcher: MutationObserver | null = null;
 const NUDGE_DURATION_MS = 8000;
@@ -126,24 +126,38 @@ function clearNudgeTimer(): void {
   if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; }
 }
 
-/** 업데이트 적용 차단막을 제외한 모달 대화상자가 열려 있는지. */
-function modalOpen(): boolean {
-  return Boolean(document.querySelector('.modal-overlay:not(.dialog-update-blocker)'));
+/** 업데이트 적용 차단막을 제외한 모달 대화상자 중 가장 위(나중에 연) overlay. */
+function topModal(): Element | null {
+  const overlays = document.querySelectorAll('.modal-overlay:not(.dialog-update-blocker)');
+  return overlays[overlays.length - 1] ?? null;
 }
 
-/** 마우스를 올려 두었거나 키보드 포커스가 안에 있으면 자동으로 닫지 않는다. */
+function modalOpen(): boolean {
+  return topModal() !== null;
+}
+
+/**
+ * 사용자가 실제로 앱 창을 보고 있는지. 다른 앱으로 전환했거나 최소화한 동안에는 알림을 띄우지 않고
+ * 자동 닫힘 시간도 세지 않는다. 버전당 한 번뿐인 알림이 아무도 못 본 채 사라지지 않게 한다.
+ */
+function windowAttended(): boolean {
+  return document.visibilityState === 'visible' && document.hasFocus();
+}
+
+/** 마우스를 올려 두었거나 키보드 포커스가 안에 있거나 창을 보고 있지 않으면 자동으로 닫지 않는다. */
 function armNudgeTimer(): void {
   clearNudgeTimer();
+  if (!windowAttended()) return; // 창으로 돌아오면 onWindowAttention 이 다시 센다.
   nudgeTimer = setTimeout(() => {
     nudgeTimer = null;
-    if (nudge && !nudgeHovered && !nudge.contains(document.activeElement)) hideNudge();
+    if (nudge && !nudgeHovered && !nudge.contains(document.activeElement) && windowAttended()) hideNudge();
   }, NUDGE_DURATION_MS);
 }
 
 /**
  * 알림을 닫는다. 포커스는 알림 안에 있을 때만(키보드로 들어온 경우) 들어오기 직전 위치로 되돌린다.
  * 마우스 클릭은 mousedown 기본 동작을 막아 처음부터 포커스를 옮기지 않으므로 복원이 필요 없다.
- * 모달이 열려 있으면 그 뒤의 편집기로 포커스를 보내지 않는다.
+ * 모달이 열려 있으면 그 모달 안에서 들어온 경우에만 되돌리고, 모달 뒤의 편집기로는 보내지 않는다.
  */
 function hideNudge(): void {
   clearNudgeTimer();
@@ -151,7 +165,12 @@ function hideNudge(): void {
   if (!nudge || nudge.hidden) return;
   const focusInside = nudge.contains(document.activeElement);
   nudge.hidden = true;
-  if (focusInside && !modalOpen()) (nudgeFocusOrigin?.isConnected ? nudgeFocusOrigin : entry)?.focus();
+  if (focusInside) {
+    const origin = nudgeFocusOrigin?.isConnected ? nudgeFocusOrigin : null;
+    const modal = topModal();
+    if (!modal) (origin ?? entry)?.focus();
+    else if (origin && modal.contains(origin)) origin.focus();
+  }
   nudgeFocusOrigin = null;
 }
 
@@ -160,17 +179,29 @@ function stopWatchingModals(): void {
   modalWatcher = null;
 }
 
-/** 미뤄 둔 알림은 모달이 모두 닫힌 뒤, 그 버전이 아직 준비 상태일 때만 띄운다. */
+/** 미뤄 둔 알림은 모달이 모두 닫히고 창을 보고 있을 때, 그 버전이 아직 준비 상태일 때만 띄운다. */
+function resumeDeferredNudge(): void {
+  const version = deferredNudgeVersion;
+  if (!version || modalOpen() || !windowAttended()) return;
+  deferredNudgeVersion = null;
+  if (status.state === 'ready' && status.version === version) maybeNudge(version);
+}
+
 function watchModalsForDeferredNudge(): void {
   if (modalWatcher) return;
   modalWatcher = new MutationObserver(() => {
     if (modalOpen()) return;
     stopWatchingModals();
-    const version = deferredNudgeVersion;
-    deferredNudgeVersion = null;
-    if (version && status.state === 'ready' && status.version === version) maybeNudge(version);
+    resumeDeferredNudge();
   });
   modalWatcher.observe(document.body, { childList: true, subtree: true });
+}
+
+/** 창으로 돌아오면 미뤄 둔 알림을 띄우고, 떠 있던 알림은 그때부터 다시 센다. 창을 떠나면 멈춘다. */
+function onWindowAttention(): void {
+  if (!windowAttended()) { clearNudgeTimer(); return; }
+  resumeDeferredNudge();
+  if (nudge && !nudge.hidden && !nudgeTimer && !nudgeHovered && !nudge.contains(document.activeElement)) armNudgeTimer();
 }
 
 /** 알림 안의 키는 문서 수준 capture 처리(찾기 대화상자 등)보다 먼저 받는다. */
@@ -227,14 +258,14 @@ function ensureNudge(): HTMLElement {
 
 /**
  * 백그라운드 준비 완료를 포커스 이동 없이 한 번 알린다. 카드를 보고 있으면 띄우지 않고 확인한 것으로
- * 보며, 모달이 열려 있으면 가려진 채 사라지지 않도록 모달이 모두 닫힐 때까지 미룬다.
+ * 보며, 모달이 열려 있거나 창이 뒤에 있으면 아무도 못 본 채 사라지지 않도록 그동안 미룬다.
  */
 function maybeNudge(version: string): void {
   if (acknowledgedVersion === version || busy()) return;
   if (card && !card.hidden) { acknowledgedVersion = version; return; }
-  if (modalOpen()) {
+  if (modalOpen() || !windowAttended()) {
     deferredNudgeVersion = version;
-    watchModalsForDeferredNudge();
+    if (modalOpen()) watchModalsForDeferredNudge();
     return;
   }
   acknowledgedVersion = version;
@@ -428,6 +459,9 @@ export function installUpdateNotice(options?: { beforeApply?: () => Promise<bool
     menuEntry.querySelector('.md-label')!.textContent = t('command.app.checkUpdate.label');
     aboutItem.before(menuEntry);
   }
+  window.addEventListener('focus', onWindowAttention);
+  window.addEventListener('blur', onWindowAttention);
+  document.addEventListener('visibilitychange', onWindowAttention);
   render();
   void (async () => {
     try {

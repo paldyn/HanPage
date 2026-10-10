@@ -267,6 +267,28 @@ async function nudgeState(page) {
   });
 }
 
+/**
+ * 사용자가 연 팝업을 알림 자리로 옮겨 실제로 어느 쪽이 위에 그려지는지 elementFromPoint 로 확인한다.
+ * position 만 바꾸고 DOM 위치는 그대로라 원래 속한 쌓임 맥락을 유지한다.
+ */
+async function popupAboveNudge(page, selector) {
+  return page.evaluate(sel => {
+    const nudge = document.getElementById('desktop-update-nudge');
+    const popup = document.querySelector(sel);
+    if (!nudge || nudge.hidden || !popup) return { ready: false };
+    const n = nudge.getBoundingClientRect();
+    for (const [name, value] of [['position', 'fixed'], ['left', `${n.left}px`], ['top', `${n.top}px`], ['display', 'block']]) {
+      popup.style.setProperty(name, value, 'important');
+    }
+    const p = popup.getBoundingClientRect();
+    const box = { left: Math.max(n.left, p.left), right: Math.min(n.right, p.right), top: Math.max(n.top, p.top), bottom: Math.min(n.bottom, p.bottom) };
+    const overlap = box.right - box.left > 4 && box.bottom - box.top > 4;
+    const hit = overlap ? document.elementFromPoint((box.left + box.right) / 2, (box.top + box.bottom) / 2) : null;
+    for (const name of ['position', 'left', 'top', 'display']) popup.style.removeProperty(name);
+    return { ready: true, overlap, popupOnTop: Boolean(hit && popup.contains(hit)), nudgeOnTop: Boolean(hit && nudge.contains(hit)) };
+  }, selector);
+}
+
 async function snapshot(page) {
   return page.evaluate(() => {
     const card = document.getElementById('desktop-update-card');
@@ -462,9 +484,15 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
   '작은 알림은 화면 안 오른쪽 아래, 상태 표시줄 위에 놓인다');
   await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 400)));
   await capture(page, 'after-ready-nudge-light');
+  await page.evaluate(() => {
+    window.__nudgeFocusins = 0;
+    document.getElementById('desktop-update-nudge').addEventListener('focusin', () => { window.__nudgeFocusins++; });
+  });
   await page.click('#desktop-update-nudge .dialog-update-nudge-later');
   nudgeNow = await nudgeState(page);
-  check(!nudgeNow.visible && nudgeNow.focusPreserved, '나중에를 마우스로 누르면 알림만 닫고 편집 포커스는 그대로 둔다');
+  const mouseFocusins = await page.evaluate(() => window.__nudgeFocusins);
+  check(!nudgeNow.visible && nudgeNow.focusPreserved && mouseFocusins === 0,
+    `나중에를 마우스로 누르면 포커스가 알림에 한 번도 들어가지 않고 알림만 닫힌다 (focusin ${mouseFocusins})`);
   await page.evaluate(() => window.__updateMock.ready('0.9.0'));
   check(!(await nudgeState(page)).visible, '같은 버전의 중복 준비 이벤트로는 다시 띄우지 않는다');
   await page.evaluate(() => window.__updateMock.ready('0.9.1'));
@@ -515,8 +543,6 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
   await page.waitForSelector('#desktop-update-nudge:not([hidden])');
   nudgeNow = await nudgeState(page);
   check(nudgeNow.visible && nudgeNow.title.includes('0.9.5'), '모달이 닫히면 미뤄 둔 준비 알림을 띄운다');
-  check(await page.$eval('#desktop-update-nudge', el => Number(getComputedStyle(el).zIndex) < 9000),
-    '준비 알림은 사용자가 연 팝오버(9000)·모달보다 아래에 놓인다');
   await page.click('#desktop-update-nudge .dialog-update-nudge-later');
   // 알림이 떠 있는 중 모달을 열고 포커스가 비어도, 자동 닫힘이 모달 뒤 편집기로 포커스를 옮기지 않는다.
   await page.evaluate(() => { window.__inputHandler.focus(); window.__quietUpdateFocus = document.activeElement; });
@@ -534,6 +560,116 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
   check(!behindModal.editorFocused && behindModal.modal, '자동 닫힘은 열린 모달 뒤의 편집기로 포커스를 옮기지 않는다');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector('.modal-overlay'));
+  await page.evaluate(() => { window.__inputHandler.focus(); window.__quietUpdateFocus = document.activeElement; });
+
+  setTestCase('준비 알림은 편집 화면 위, 사용자가 연 메뉴·팝업 아래에 놓인다');
+  await page.mouse.move(5, 5);
+  await page.evaluate(() => window.__updateMock.ready('0.9.7'));
+  const nudgeCenterHit = await page.evaluate(() => {
+    const el = document.getElementById('desktop-update-nudge');
+    const rect = el.getBoundingClientRect();
+    return el.contains(document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2));
+  });
+  check(nudgeCenterHit, '준비 알림은 편집 화면 위에 보인다');
+  await page.click('.menu-item[data-menu="table"] .menu-title');
+  const menuStack = await popupAboveNudge(page, '.menu-item.open > .menu-dropdown');
+  await page.keyboard.press('Escape');
+  check(menuStack.ready && menuStack.overlap && menuStack.popupOnTop,
+    `사용자가 연 메뉴는 준비 알림 위에 그려져 클릭을 받는다 (${JSON.stringify(menuStack)})`);
+  for (const [host, className, label] of [
+    ['#scroll-content', 'form-combo-dropdown', '문서 안 양식 목록 상자'],
+    ['body', 'compare-inspector-window', '문서 비교 결과 창'],
+  ]) {
+    await page.evaluate((hostSel, cls) => {
+      const probe = document.createElement('div');
+      probe.className = `${cls} e2e-stack-probe`;
+      probe.style.width = '220px';
+      probe.style.height = '90px';
+      probe.textContent = '항목';
+      document.querySelector(hostSel).appendChild(probe);
+    }, host, className);
+    const stack = await popupAboveNudge(page, '.e2e-stack-probe');
+    await page.evaluate(() => document.querySelector('.e2e-stack-probe')?.remove());
+    check(stack.ready && stack.overlap && stack.popupOnTop, `${label}도 준비 알림 위에 그려진다 (${JSON.stringify(stack)})`);
+  }
+  await page.click('#desktop-update-nudge .dialog-update-nudge-later');
+
+  setTestCase('찾기 창과 모달 안에서 키보드로 들어온 알림의 Esc · 포커스 복귀');
+  await page.evaluate(() => { window.__inputHandler.focus(); window.__quietUpdateFocus = document.activeElement; });
+  await page.evaluate(() => window.__updateMock.ready('0.9.8'));
+  await page.click('.menu-item[data-menu="edit"] .menu-title');
+  await page.click('.menu-item[data-menu="edit"] .md-item[data-cmd="edit:find"]');
+  await page.waitForSelector('.find-dialog');
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 200)));
+  await page.focus('#desktop-update-nudge .dialog-update-nudge-later');
+  await page.keyboard.press('Escape');
+  const withFind = await page.evaluate(() => ({
+    nudgeHidden: document.getElementById('desktop-update-nudge').hidden,
+    findOpen: Boolean(document.querySelector('.find-dialog')),
+    focusInFind: Boolean(document.querySelector('.find-dialog')?.contains(document.activeElement)),
+  }));
+  check(withFind.nudgeHidden && withFind.findOpen && withFind.focusInFind,
+    `찾기 창이 열려 있어도 알림 안의 Esc 는 알림만 닫고 포커스를 찾기 창으로 되돌린다 (${JSON.stringify(withFind)})`);
+  await page.click('.find-dialog .dialog-close');
+  await page.evaluate(() => { window.__inputHandler.focus(); window.__quietUpdateFocus = document.activeElement; });
+  await page.evaluate(() => window.__updateMock.ready('0.9.9'));
+  check((await nudgeState(page)).visible, '모달을 열기 전에 준비 알림이 떠 있다');
+  // 글자 모양 대화상자는 선택 범위가 있어야 열린다.
+  await page.keyboard.down('Shift');
+  await page.keyboard.press('Home');
+  await page.keyboard.up('Shift');
+  await page.click('.menu-item[data-menu="format"] .menu-title');
+  await page.click('.menu-item[data-menu="format"] .md-item[data-cmd="format:char-shape"]');
+  await page.waitForSelector('.modal-overlay .cs-dialog');
+  // 대화상자가 50ms 뒤 입력 칸을 선택하므로 그 뒤에 포커스를 옮긴다.
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 200)));
+  const intoNudge = await page.evaluate(() => {
+    window.__modalOrigin = document.querySelector('.modal-overlay .cs-dialog .dialog-close');
+    window.__modalOrigin.focus();
+    document.querySelector('#desktop-update-nudge .dialog-update-nudge-later').focus();
+    return document.getElementById('desktop-update-nudge').contains(document.activeElement);
+  });
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 100)));
+  const inModal = await page.evaluate(() => ({
+    nudgeHidden: document.getElementById('desktop-update-nudge').hidden,
+    restored: document.activeElement === window.__modalOrigin,
+    modal: Boolean(document.querySelector('.modal-overlay .cs-dialog')),
+  }));
+  check(intoNudge && inModal.nudgeHidden && inModal.restored && inModal.modal,
+    `모달 안에서 들어온 알림을 Esc 로 닫으면 모달의 원래 컨트롤로 포커스를 되돌린다 (${JSON.stringify(inModal)})`);
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 200)));
+  check(await page.evaluate(() => !document.querySelector('.modal-overlay')), '되돌린 포커스에서 Esc 로 그 모달을 닫을 수 있다');
+  await page.evaluate(() => window.__inputHandler.focus());
+  await page.keyboard.press('End');
+
+  setTestCase('창이 뒤에 있는 동안 알림을 미루고 자동 닫힘을 멈춘다');
+  await page.evaluate(() => { window.__inputHandler.focus(); window.__quietUpdateFocus = document.activeElement; });
+  await page.mouse.move(5, 5);
+  const otherTab = await browser.newPage();
+  await otherTab.bringToFront();
+  const away = await page.evaluate(() => ({ focus: document.hasFocus(), visibility: document.visibilityState }));
+  check(!away.focus && away.visibility === 'hidden', `다른 탭으로 전환해 앱 창이 뒤에 있는 상태를 만든다 (${JSON.stringify(away)})`);
+  await page.evaluate(() => window.__updateMock.ready('0.9.10'));
+  await new Promise(resolve => setTimeout(resolve, 9000));
+  check(!(await nudgeState(page)).visible, '창이 뒤에 있는 동안 준비된 버전은 알림을 띄우지 않고 미룬다');
+  await page.bringToFront();
+  await page.waitForSelector('#desktop-update-nudge:not([hidden])', { timeout: 5000 }).catch(() => {});
+  nudgeNow = await nudgeState(page);
+  check(nudgeNow.visible && nudgeNow.title.includes('0.9.10') && nudgeNow.focusPreserved,
+    '창으로 돌아오면 미뤄 둔 알림을 띄우고 편집 포커스는 그대로 둔다');
+  await otherTab.bringToFront();
+  await new Promise(resolve => setTimeout(resolve, 9000));
+  check((await nudgeState(page)).visible, '창을 떠나 있는 동안에는 떠 있던 알림이 자동으로 닫히지 않는다');
+  await page.bringToFront();
+  const returnedAt = Date.now();
+  await page.waitForFunction(() => document.getElementById('desktop-update-nudge').hidden, { timeout: 15000 });
+  const returnedElapsed = Date.now() - returnedAt;
+  check(returnedElapsed >= 7000 && returnedElapsed <= 12000 && (await nudgeState(page)).focusPreserved,
+    `창으로 돌아온 뒤 약 8초를 다시 세어 닫는다 (${returnedElapsed}ms)`);
+  await otherTab.close();
+  await page.bringToFront();
   await page.evaluate(() => { window.__inputHandler.focus(); window.__quietUpdateFocus = document.activeElement; });
 
   setTestCase('Desktop 최소·일반 크기에서 하단 업데이트와 확대 제어의 경계');
