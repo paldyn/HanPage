@@ -60,12 +60,24 @@ build jobs 6, nextest test threads 10. 로그는 커밋하지 않는 scratch 경
 | 웹 / Desktop frontend 빌드 | 둘 다 성공. 웹은 `sw.js`·manifest·CNAME(`hanpage.paldyn.com`), Desktop 은 SW 없음·상대 경로 |
 | HanPage-Desktop crate | `cargo fmt --check`, `clippy --all-targets -D warnings` 경고 0, `cargo test` 8 PASS |
 | Rust lint 묶음 | `--prepare`, `fmt --all --check`, native clippy, WASM clippy, workspace build, workspace all-targets clippy 모두 통과 |
-| 테스트 정책 | `rust-test-suite-manifest --check`·`rust-unit-test-tiers --check` (base `9b4f20a69`) 통과 |
+| 테스트 정책 | `rust-unit-test-tiers --check` (base `9b4f20a69`) 통과. `rust-test-suite-manifest --check` 는 아래 보정 뒤 통과(1,767 sources, 48/48 targets) |
 | 전체 nextest (`--cargo-profile release-test --workspace`) | 11,707 PASS / 0 FAIL / 45 SKIP (테스트 실행 1,290초). 보안 코퍼스는 devel 대비 추가된 samples 212개를 `RHWP_SECURITY_SWEEP_SAMPLES_JSON` 으로 넣어 실제 실행 |
 | CI 계약 (Node 9개 파일 245, Python promotion 29) | 모두 PASS. 처음 3건은 `rhwp-vscode`·`frontend-metrics` 의존성 미설치였고 설치 후 PASS |
 
 새 회귀 테스트 중 수정 전 실패를 확인한 것: 늦은 CDN face 테스트(수정 전 FAIL). 데스크톱 열기 PDF 전달·저장 형식 기억·
 네이티브 편집 메뉴 테스트는 새 동작을 고정하는 계약 테스트다.
+
+### 3.1 PR CI 에서 드러난 결함과 보정
+
+첫 PR CI(head `dc5a2dcd9`)의 Lint 가 `rust-test-suite-manifest --check --base-ref` 에서 `spawnSync git ENOBUFS` 로 실패했다.
+PR base 대비 변경 경로 목록(2만 경로 이상)이 `execFileSync` 기본 출력 버퍼 1 MiB 를 넘었다. upstream 스크립트에도 있는
+잠재 결함이며 보통 크기의 PR 에선 드러나지 않는다. 앞의 로컬 검사는 커밋 전(HEAD = devel)이라 비교 diff 가 비어 이 경로를
+실제로 검사하지 못했다 — 검증 누락이었다. 커밋 뒤 같은 명령으로 실패를 재현하고, 세 `git` 호출에 64 MiB 버퍼를 지정해
+(이웃 helper `rust-test-policy-base.mjs` 는 이미 32 MiB) 통과를 확인했다. 계약 테스트 23/23 통과.
+
+같은 CI 의 CodeQL 은 `crates/rhwp-password-crypto` 의 경고 7건(DES·고정 키·SHA-256 비밀번호 키 유도·테스트 고정 비밀번호)을
+"이 PR 이 바꾼 코드의 새 경고"로 보고했다. HWP3·HWP5·HWPX 비밀번호 형식 호환에 필요한 upstream 코드로 upstream 과 동일하며,
+devel 에도 이 크레이트가 있었다(upstream #7861 이 파일을 수정해 새 경고로 집계됨). HanPage 보정 대상이 아니다.
 
 ## 4. 미검증·한계
 
