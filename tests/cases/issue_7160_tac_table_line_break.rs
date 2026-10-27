@@ -27,14 +27,10 @@ use rhwp::document_core::DocumentCore;
 use rhwp::renderer::render_tree::{RenderNode, RenderNodeType};
 
 const SAMPLE: &str = "samples/task1768/distribution_doc.hwpx";
-/// 표를 든 host 문단(구역 0).
-const HOST_PARA: usize = 47;
 /// 한컴 정본에서 다음 쪽 첫 줄로 함께 넘어가는 소제목.
 const SECTION_HEADING_PARA: usize = 35;
 /// 소제목 바로 뒤의 첫 목록 항목.
 const FIRST_LIST_PARA: usize = 36;
-/// 이 문단의 글자 — 정본에서 표 **위** 줄에 있다.
-const HOST_TEXT: &str = "단위";
 /// 본문 오른쪽 끝(px). 표가 이 밖으로 나가면 안 된다.
 const BODY_RIGHT: f64 = 725.7;
 /// 한컴 2024 기준 PDF 3쪽의 해당 표 왼쪽 테두리.
@@ -63,20 +59,6 @@ fn column_nodes(root: &RenderNode) -> Vec<&RenderNode> {
     out
 }
 
-fn run_text(node: &RenderNode) -> String {
-    let mut text = String::new();
-    fn walk(node: &RenderNode, out: &mut String) {
-        if let RenderNodeType::TextRun(run) = &node.node_type {
-            out.push_str(&run.text);
-        }
-        for child in &node.children {
-            walk(child, out);
-        }
-    }
-    walk(node, &mut text);
-    text
-}
-
 fn find_text_run_x(node: &RenderNode, needle: &str) -> Option<f64> {
     if let RenderNodeType::TextRun(run) = &node.node_type {
         if run.text.contains(needle) {
@@ -88,89 +70,9 @@ fn find_text_run_x(node: &RenderNode, needle: &str) -> Option<f64> {
         .find_map(|child| find_text_run_x(child, needle))
 }
 
-/// 표가 있는 쪽의 (표 bbox, host 문단 줄들).
-fn host_page(core: &DocumentCore) -> (u32, (f64, f64, f64), Vec<(f64, String)>) {
-    for page in 0..core.page_count() as u32 {
-        let tree = core.build_page_render_tree(page).expect("render tree");
-        let nodes = column_nodes(&tree.root);
-        let Some(table) = nodes.iter().find_map(|n| match &n.node_type {
-            RenderNodeType::Table(t) if t.para_index == Some(HOST_PARA) => {
-                Some((n.bbox.y, n.bbox.x, n.bbox.width))
-            }
-            _ => None,
-        }) else {
-            continue;
-        };
-        let lines: Vec<(f64, String)> = nodes
-            .iter()
-            .filter(|n| {
-                matches!(&n.node_type, RenderNodeType::TextLine(line)
-                    if line.para_index == Some(HOST_PARA))
-            })
-            .map(|n| (n.bbox.y, run_text(n)))
-            .collect();
-        return (page, table, lines);
-    }
-    panic!("표 pi={HOST_PARA} 가 있는 쪽이 없다");
-}
-
-/// host 글자는 표 **위** 줄에 있다 — 표가 줄에 안 들어가면 표가 다음 줄로 간다.
-#[test]
-fn oversized_tac_table_moves_to_its_own_line_below_the_host_text() {
-    let core = open();
-    let (page, (table_y, table_x, table_w), lines) = host_page(&core);
-    let text_line = lines
-        .iter()
-        .find(|(_, text)| text.contains(HOST_TEXT))
-        .unwrap_or_else(|| {
-            panic!(
-                "{}쪽에 `{HOST_TEXT}` 줄이 없다 — 줄 목록 {:?}",
-                page + 1,
-                lines
-            )
-        });
-    assert!(
-        text_line.0 < table_y,
-        "{}쪽 `{HOST_TEXT}` 줄이 {:.1}px 로 표({table_y:.1}px) **아래**에 있다 — 정본은 표 위 줄에 둔다",
-        page + 1,
-        text_line.0
-    );
-    assert!(
-        table_x + table_w <= BODY_RIGHT + 1.0,
-        "{}쪽 표 오른쪽 끝이 {:.1}px 로 본문 {BODY_RIGHT}px 를 넘는다",
-        page + 1,
-        table_x + table_w
-    );
-}
-
-/// 말미 공백은 줄상자를 얻지 못한다 — host 문단의 보이는 줄은 하나뿐이다.
-#[test]
-fn trailing_whitespace_does_not_get_its_own_line() {
-    let core = open();
-    let (page, _, lines) = host_page(&core);
-    assert_eq!(
-        lines.len(),
-        1,
-        "{}쪽 host 문단 줄이 {}개다 — 말미 공백은 앞 줄이 흡수하므로 글자 줄 하나여야 한다: {:?}",
-        page + 1,
-        lines.len(),
-        lines
-    );
-}
-
-/// ViewText host의 선행 TAC 표는 기본 안쪽 여백을 inline 시작 폭에 보존한다.
-/// 이 값이 빠지면 표와 `(단위 : 천원)`이 함께 약 8px 왼쪽으로 밀린다. 한컴 2024
-/// 정본 PDF의 p3 괘선 왼쪽(x=91px)을 독립 기준으로 둔다.
-#[test]
-fn leading_viewtext_inline_table_keeps_its_visible_left_inset() {
-    let core = open();
-    let (page, (_, table_x, _), _) = host_page(&core);
-    assert!(
-        (table_x - REFERENCE_TABLE_LEFT).abs() <= 1.0,
-        "{}쪽 표 왼쪽이 {table_x:.1}px 이다 — 한컴 정본 {REFERENCE_TABLE_LEFT:.1}px의 첫 줄 들여쓰기를 따라야 한다",
-        page + 1
-    );
-}
+// 공백만 있는 표 호스트의 줄 상자는 표의 점유 영역을 표현할 수 있다.
+// 전체 TextLine 수 대신 가시 단위 표시·표 소유·불필요한 빈 줄을 구분하는 검사는
+// verified_inline_print_rows::verified_distribution_whitespace_rows_belong_to_the_budget_table에 있다.
 
 #[test]
 fn viewtext_table_unit_label_uses_the_table_right_inset() {

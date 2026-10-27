@@ -84,8 +84,14 @@ fn synthetic_lineseg_indent_tree() -> crate::renderer::render_tree::PageRenderTr
     ];
     let composed: Vec<_> = paragraphs.iter().map(compose_paragraph).collect();
     let styles = ResolvedStyleSet {
+        source_program_projection_slots: Default::default(),
+        isolated_jamo_font: None,
+        native_pua_fonts: Default::default(),
+        resolved_dpi: None,
         page_number_char_style_id: None,
+        page_number_font_is_hft: false,
         hwp3_variant: false,
+        hft_ascii_halfwidth: false,
         char_styles: vec![ResolvedCharStyle::default(), ResolvedCharStyle::default()],
         para_styles: vec![
             ResolvedParaStyle {
@@ -111,6 +117,8 @@ fn synthetic_lineseg_indent_tree() -> crate::renderer::render_tree::PageRenderTr
         section_index: 0,
         layout,
         column_contents: vec![ColumnContent {
+            paragraph_origins: Default::default(),
+            computed_paragraphs: Default::default(),
             column_index: 0,
             start_height: 0.0,
             endnote_flow: false,
@@ -127,7 +135,11 @@ fn synthetic_lineseg_indent_tree() -> crate::renderer::render_tree::PageRenderTr
             overlay_cuts: Vec::new(),
             inline_placements: Default::default(),
             inline_flow_plans: Default::default(),
+            stored_paragraph_flow_ends: Default::default(),
+            stored_column_top_spacings: Default::default(),
             paragraph_float_placements: Default::default(),
+            float_pushed_line_spacings: Default::default(),
+            page_band_flow_starts: Default::default(),
         }],
         active_header: None,
         active_footer: None,

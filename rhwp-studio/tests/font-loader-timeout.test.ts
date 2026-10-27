@@ -83,7 +83,8 @@ test('전체 대기는 8초 안에 끝나고 남은 모든 배치와 별칭 등�
     if (required.length === 9) break;
   }
   assert.equal(required.length, 9);
-  const expectedNames = new Set([...required, '함초롬바탕', '함초롬돋움']);
+  // font-loader 의 CRITICAL_FONTS(함초롬 2종 + upstream #8191 의 옛한글)는 요청과 무관하게 함께 등록된다.
+  const expectedNames = new Set([...required, '함초롬바탕', '함초롬돋움', 'RHWP Old Hangul']);
   const progress: number[] = [];
   let finished = false;
   const loading = loadWebFonts(required, loaded => progress.push(loaded)).then(() => { finished = true; });
@@ -120,4 +121,39 @@ test('전체 대기는 8초 안에 끝나고 남은 모든 배치와 별칭 등�
   const requestCount = environment.requests.length;
   await loadWebFonts(required);
   assert.equal(environment.requests.length, requestCount, '배경에서 등록한 별칭은 다음 요청에서 다시 로드하지 않는다');
+});
+
+test('8초 예산 뒤 늦게 끝난 CDN 글꼴은 그사이 로컬로 공급된 글꼴을 덮지 않는다', async t => {
+  const environment = installFontEnvironment(t);
+  const { loadWebFonts, registerLoadedLocalFontFace } = await import('../src/core/font-loader.ts?timeout=late-local');
+  const required: string[] = [];
+  const files = new Set<string>();
+  for (const entry of FONT_RULE_WEBFONT_ENTRIES) {
+    if (entry.name.startsWith('함초롬') || files.has(entry.file)) continue;
+    required.push(entry.name);
+    files.add(entry.file);
+    if (required.length === 9) break;
+  }
+  let finished = false;
+  const loading = loadWebFonts(required).then(() => { finished = true; });
+  const firstBatch = environment.requests.slice();
+  t.mock.timers.tick(4000);
+  firstBatch.forEach(request => request.resolve());
+  await flushPromises();
+  t.mock.timers.tick(0);
+  await flushPromises();
+  const secondBatch = environment.requests.slice(firstBatch.length);
+  assert.ok(secondBatch.length > 0, '둘째 배치가 4초에 시작된다');
+  t.mock.timers.tick(4000);
+  await flushPromises();
+  assert.equal(finished, true, '8초 예산이 끝나 문서 열기는 계속된다');
+  await loading;
+
+  // 다음 문서의 선언 환경이 같은 글꼴을 로컬 프로그램으로 공급한 뒤, 둘째 배치(5초 제한 전)가 끝난다.
+  const family = secondBatch[0].family;
+  registerLoadedLocalFontFace({ family, status: 'loaded' } as unknown as FontFace);
+  secondBatch.forEach(request => request.resolve());
+  await flushPromises();
+  assert.equal(environment.registered.filter(name => name === family).length, 1,
+    '로컬 face 만 남고 CDN face 를 추가로 등록하지 않는다');
 });

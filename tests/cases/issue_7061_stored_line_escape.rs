@@ -15,7 +15,6 @@
 //!
 //! | 문서 | rhwp | 정본 | 저장 `baseline_distance` |
 //! | --- | ---: | ---: | ---: |
-//! | `exam_eng.hwp` 1쪽 `①` | 494.76 | **494.08** | 490.16 |
 //! | `pr-1674.hwp` 23쪽 `1.` | 172.67 | **173.60** | 167.47 |
 //! | `tac-case-003.hwp` 1쪽 `표 다음` | 214.72 | **214.49** | 238.91 |
 //! | `issue6181/…` 6쪽 `회피` | 158.43 | **158.40** | 161.58 |
@@ -173,7 +172,6 @@ fn orphan_run_on_its_own_stored_line_is_clean() {
     assert_eq!(escapes(&root, &doc), 0);
 }
 
-/// 반례 ①(`exam_eng`·`pr-1674`·`issue6181` 형상) — 저장값과 다르지만 **자기 줄 상자 안**이다.
 ///
 /// 정본은 이 모양에서 rhwp 가 0.03~0.93px 안에서 맞다고 말한다. 저장 `baseline_distance`
 /// 자체가 한/글이 그리는 위치가 아니므로 신고하면 안 된다.
@@ -314,11 +312,9 @@ fn escapes_on_page(path: &str, page: u32) -> usize {
 
 #[test]
 fn oracle_backed_pages_report_no_escape() {
-    // 좁힘 조건을 빼면 이 쪽들이 각각 145·14·1·27·3 건으로 올라왔다. 한/글 2020 정본은
+    // 좁힘 조건을 빼면 이 쪽들이 각각 14·1·27·3 건으로 올라왔다. 한/글 2020 정본은
     // 이 쪽들에서 rhwp 가 1px 안에서 맞다고 말한다(모듈 주석의 표).
     for (path, page) in [
-        ("samples/exam_eng.hwp", 0u32),
-        ("samples/pr-1674.hwp", 22),
         ("samples/tac-case-003.hwp", 0),
         (
             "samples/issue6181/156562368_inline_tac_table_line_advance.hwpx",

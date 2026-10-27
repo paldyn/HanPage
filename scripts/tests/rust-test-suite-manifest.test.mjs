@@ -153,12 +153,12 @@ test('전체 integration source는 파생 산출물을 쓰지 않고 검증한�
 });
 
 test('일반 case는 weighted suite로 해석한다', () => {
-  const target = resolveCase('issue_1035_alignment');
+  const target = resolveCase('issue_8160_all_pages');
   assert.match(target, /^regression_suite_\d{3}$/);
-  const plan = resolveCasePlan('issue_1035_alignment');
+  const plan = resolveCasePlan('issue_8160_all_pages');
   assert.equal(plan.grouped, true);
-  assert.match(nextestArguments(plan).join(' '), /issue_1035_alignment::/);
-  assert.match(cargoTestArguments(plan).at(-1), /issue_1035_alignment::/);
+  assert.match(nextestArguments(plan).join(' '), /issue_8160_all_pages::/);
+  assert.match(cargoTestArguments(plan).at(-1), /issue_8160_all_pages::/);
 });
 
 test('경로 의존 case는 기존 target 이름을 유지한다', () => {
@@ -464,11 +464,11 @@ test('CI가 일반 PR base를 integration과 source unit 정책 검사에 전달
   );
   assert.match(
     workflow,
-    /node "\$policy_check_root\/scripts\/rust-test-suite-manifest\.mjs" --check "\$\{base_args\[@\]\}"/,
+    /rust-test-suite-manifest\.mjs --check "\$\{base_args\[@\]\}"/,
   );
   assert.match(
     workflow,
-    /node "\$policy_check_root\/scripts\/rust-unit-test-tiers\.mjs" --check "\$\{base_args\[@\]\}"/,
+    /rust-unit-test-tiers\.mjs --check "\$\{base_args\[@\]\}"/,
   );
 });
 

@@ -148,6 +148,9 @@ export class CanvasView {
   private rendererFallbackScheduled = false;
   private canvasMetricRecovery = new CanvasMetricRecovery();
   private activeRendererDecisionKey: string | null = null;
+  private readonly canvasKitResourcePreparations = new WeakMap<HTMLCanvasElement, {
+    decisionKey: string | null; pageIdx: number; ready: boolean;
+  }>();
   private autoRendererReselectionTimer: ReturnType<typeof setTimeout> | null = null;
   private documentLoadPrepared = false;
   private layoutViewportSize = { width: 0, height: 0 };
@@ -575,6 +578,7 @@ export class CanvasView {
       element.style.transform = 'translateX(-50%)';
     }
     element.style.transformOrigin = '';
+    this.applyCanvasRasterFilter(element, pageIdx, this.viewportManager.getZoom());
   }
 
   /** [#3377] 이미 렌더된 페이지의 캔버스와 오버레이를 현재 레이아웃 좌표로 재배치한다. */
@@ -1301,7 +1305,12 @@ export class CanvasView {
       if (!canvas) continue;
       const renderedZoom = Number(canvas.dataset.rhwpRenderedZoom);
       const staleZoom = Number.isFinite(renderedZoom) && renderedZoom > 0 && renderedZoom !== zoom;
-      if (changed || staleZoom) {
+      // deferred 갱신은 계획만 먼저 교체할 수 있다. 계획이 같아졌어도 실제
+      // 표면이 구 DPR에 남아 있으면 strict 갱신에서 paint를 완료해야 한다.
+      const renderedScale = Number(canvas.dataset.rhwpRenderScale);
+      const staleScale = afterScale !== null && Number.isFinite(renderedScale)
+        && renderedScale > 0 && Math.abs(renderedScale - afterScale) > 0.001;
+      if (changed || staleZoom || staleScale) {
         // raster에 실패한 쪽을 active로 남기면 다음 visibility 갱신이 has()로 건너뛰어
         // 빈 canvas가 그대로 보인다. 이미 붙어 있던 surface의 실패 계약에 맞춘다.
         if (!this.renderCanvas(pageIndex, canvas)) this.discardActivePageSurface(pageIndex);
@@ -1384,7 +1393,33 @@ export class CanvasView {
     for (const element of this.pageSurfaceElements(pageIdx, mainCanvas)) {
       element.style.width = cssWidth;
       element.style.height = cssHeight;
+      this.applyCanvasRasterFilter(element, pageIdx, zoom);
     }
+  }
+
+  private applyCanvasRasterFilter(element: HTMLElement, pageIdx: number, zoom: number): void {
+    const page = this.pages[pageIdx];
+    if (!page || element.tagName !== 'CANVAS') return;
+    const canvas = element as HTMLCanvasElement;
+    const dpr = globalThis.devicePixelRatio || 1;
+    const paper = page.printSize && this.pageRenderer.getRenderProfile() === 'print'
+      ? page.printSize : page;
+    const preserveRasterSamples = this.pageRenderer?.getRenderProfile?.() !== 'print'
+      || this.pageRenderer.hasRasterContent(pageIdx) !== false;
+    const ownsDeviceAxis = (actual: number, logical: number): boolean => (
+      Number.isFinite(logical) && logical > 0
+      && (actual === Math.floor(logical) || actual === Math.ceil(logical))
+    );
+    // 조판·paint가 장치 해상도로 만든 표본은 소수 CSS 크기에 표시할 때 다시
+    // 평균하지 않는다. 정수 축 반올림만 허용하며 실제 축소 예산·미리보기는 보간한다.
+    // 논리 page box와 DOM 그림의 원본 필터는 바꾸지 않는다.
+    // Print의 정수 point 종이와 원본 편집 크기는 다를 수 있다. 표본의
+    // 소유만 공통 paint 종이에 대조하고 CSS·스크롤의 논리 크기는 유지한다.
+    // 그림이 없는 Print 쪽은 선과 글자만 raster한 표면이다. 소수 CSS 합성에서
+    // 최근접 표본을 복제하면 가는 괘선의 coverage가 달라지므로 일반 보간을 유지한다.
+    canvas.style.imageRendering = preserveRasterSamples
+      && ownsDeviceAxis(canvas.width, paper.width * zoom * dpr)
+      && ownsDeviceAxis(canvas.height, paper.height * zoom * dpr) ? 'crisp-edges' : 'auto';
   }
 
   private pageSurfaceShape(elements: readonly HTMLElement[], mainCanvas: HTMLCanvasElement): string {
@@ -1615,6 +1650,28 @@ export class CanvasView {
     let renderedCanvas = canvas;
     const rendererDecisionKey = this.activeRendererDecisionKey;
     try {
+      if (this.pageRenderer.getBackend() === 'canvaskit') {
+        let preparation = this.canvasKitResourcePreparations.get(canvas);
+        if (!preparation || preparation.ready
+          || preparation.decisionKey !== rendererDecisionKey || preparation.pageIdx !== pageIdx) {
+          const pending = this.pageRenderer.prepareCanvasKitPageResources(pageIdx);
+          preparation = { decisionKey: rendererDecisionKey, pageIdx, ready: pending === null };
+          this.canvasKitResourcePreparations.set(canvas, preparation);
+          if (pending) {
+            const expected = preparation;
+            const finish = () => {
+              if (this.canvasKitResourcePreparations.get(canvas) !== expected) return;
+              expected.ready = true;
+              if (this.activeRendererDecisionKey === rendererDecisionKey
+                && this.canvasPool.getCanvas(pageIdx) === canvas && canvas.parentElement) {
+                this.renderCanvas(pageIdx, canvas, renderContext);
+              }
+            };
+            void pending.then(finish, finish);
+          }
+        }
+        if (!preparation.ready) return true;
+      }
       renderResult = this.pageRenderer.renderPage(pageIdx, canvas, renderScale, zoom, dpr, renderContext);
       if (renderResult.renderedCanvas && renderResult.renderedCanvas !== canvas) {
         renderedCanvas = renderResult.renderedCanvas;
@@ -1926,6 +1983,7 @@ export class CanvasView {
   }
 
   private applyZoomPreviewBox(element: HTMLElement, pageIdx: number, scale: number): void {
+    if (element.tagName === 'CANVAS') element.style.imageRendering = 'auto';
     element.style.top = `${this.virtualScroll.getPageOffset(pageIdx)}px`;
     const pageLeft = this.virtualScroll.getPageLeft(pageIdx);
     if (pageLeft >= 0) {

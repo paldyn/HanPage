@@ -150,6 +150,7 @@ impl TypesetEngine {
         &self,
         job: &mut ResumableTablePaginationJob,
         paragraph: &Paragraph,
+        paragraphs_all: &[Paragraph],
         table: &crate::model::table::Table,
         measured_table: &MeasuredTable,
         styles: &ResolvedStyleSet,
@@ -162,6 +163,9 @@ impl TypesetEngine {
             para_index: job.paragraph_index,
             control_index: job.control_index,
             paragraph,
+            paragraphs_all,
+            // 재개 작업은 host 글이 없는 표만 받는다(`begin_resumable_table_pagination`).
+            composed_all: &[],
             table,
             row_geometry_table: row_geometry_table(table),
             measured_table,

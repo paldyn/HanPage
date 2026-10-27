@@ -138,8 +138,8 @@ fn find_cursor_in_cell_node(
                 && ctx.path[0].cell_index == c_idx
                 && ctx.path[0].cell_para_index == cp_idx
         });
-        if matches_cell {
-            let char_start = text_run.char_start.unwrap_or(0);
+        // 번호/글머리표 TextRun (char_start: None)은 건너뛴다
+        if let (true, Some(char_start)) = (matches_cell, text_run.char_start) {
             let char_count = effective_char_count(text_run);
 
             if offset >= char_start && offset <= char_start + char_count {
@@ -204,48 +204,6 @@ fn format_cursor_rect_json(
             page_index, x, y, height
         )
     }
-}
-
-fn note_number_format_from_hwp_code(code: u8) -> crate::renderer::NumberFormat {
-    match code {
-        0 => crate::renderer::NumberFormat::Digit,
-        1 => crate::renderer::NumberFormat::CircledDigit,
-        2 => crate::renderer::NumberFormat::RomanUpper,
-        3 => crate::renderer::NumberFormat::RomanLower,
-        4 => crate::renderer::NumberFormat::LatinUpper,
-        5 => crate::renderer::NumberFormat::LatinLower,
-        8 => crate::renderer::NumberFormat::HangulGaNaDa,
-        12 => crate::renderer::NumberFormat::HangulNumber,
-        13 => crate::renderer::NumberFormat::HanjaNumber,
-        _ => crate::renderer::NumberFormat::Digit,
-    }
-}
-
-fn note_decoration_char(value: u16) -> Option<char> {
-    if value == 0 {
-        None
-    } else {
-        char::from_u32(value as u32).filter(|ch| *ch != '\0')
-    }
-}
-
-fn note_marker_text(
-    number: u16,
-    number_shape: u32,
-    before_decoration_letter: u16,
-    after_decoration_letter: u16,
-) -> String {
-    let number = crate::renderer::format_number(
-        number,
-        note_number_format_from_hwp_code(number_shape as u8),
-    );
-    let prefix = note_decoration_char(before_decoration_letter)
-        .map(|ch| ch.to_string())
-        .unwrap_or_default();
-    let suffix = note_decoration_char(after_decoration_letter)
-        .unwrap_or(')')
-        .to_string();
-    format!("{}{}{}", prefix, number, suffix)
 }
 
 /// 한 시각 줄(line)을 구성하는 한 run 의, 클릭 x → 문자 위치 해석에 필요한 최소 정보.
@@ -824,6 +782,15 @@ impl DocumentCore {
         } else {
             None
         };
+        // [#7418] 마커 글자 x 에서 본문 시작까지 — 배치가 쓴 마커 기하(영역·정렬)와 같은 값.
+        let list_marker_body_dx = if is_list_para {
+            self.get_render_paragraph_ref(section_idx, para_idx)
+                .ok()
+                .and_then(|para| crate::renderer::layout::list_marker_geometry(para, &self.styles))
+                .map(|geometry| -geometry.marker_dx_px)
+        } else {
+            None
+        };
 
         // 렌더 트리에서 커서 위치를 찾는 재귀 함수
         // exact_only: true이면 정확한 매칭(zero-width 앵커)만 반환
@@ -1187,6 +1154,7 @@ impl DocumentCore {
             para: usize,
             is_list_para: bool,
             list_marker_char_shape_id: Option<u32>,
+            list_marker_body_dx: Option<f64>,
             styles: &crate::renderer::style_resolver::ResolvedStyleSet,
             hit: &mut ParaLineHit,
         ) {
@@ -1202,10 +1170,12 @@ impl DocumentCore {
                         && text_run.field_marker
                             == crate::renderer::render_tree::FieldMarkerType::None
                     {
-                        let marker_width = list_marker_char_shape_id
-                            .map(|cs_id| {
-                                let marker_style = resolved_to_text_style(styles, cs_id, 0);
-                                estimate_text_width(&text_run.text, &marker_style)
+                        let marker_width = list_marker_body_dx
+                            .or_else(|| {
+                                list_marker_char_shape_id.map(|cs_id| {
+                                    let marker_style = resolved_to_text_style(styles, cs_id, 0);
+                                    estimate_text_width(&text_run.text, &marker_style)
+                                })
                             })
                             .unwrap_or(node.bbox.width);
                         hit.marker_end_x.get_or_insert(node.bbox.x + marker_width);
@@ -1221,6 +1191,7 @@ impl DocumentCore {
                     para,
                     is_list_para,
                     list_marker_char_shape_id,
+                    list_marker_body_dx,
                     styles,
                     hit,
                 );
@@ -1234,6 +1205,7 @@ impl DocumentCore {
             para: usize,
             is_list_para: bool,
             list_marker_char_shape_id: Option<u32>,
+            list_marker_body_dx: Option<f64>,
             styles: &crate::renderer::style_resolver::ResolvedStyleSet,
         ) -> Option<ParaLineHit> {
             if let RenderNodeType::TextLine(ref line) = node.node_type {
@@ -1251,6 +1223,7 @@ impl DocumentCore {
                         para,
                         is_list_para,
                         list_marker_char_shape_id,
+                        list_marker_body_dx,
                         styles,
                         &mut hit,
                     );
@@ -1282,6 +1255,7 @@ impl DocumentCore {
                     para,
                     is_list_para,
                     list_marker_char_shape_id,
+                    list_marker_body_dx,
                     styles,
                 ) {
                     return Some(r);
@@ -1424,6 +1398,7 @@ impl DocumentCore {
             para_idx,
             is_list_para,
             list_marker_char_shape_id,
+            list_marker_body_dx,
             &self.styles,
         ) {
             let x = line_hit.cursor_x(is_list_para, char_offset);
@@ -1531,6 +1506,9 @@ impl DocumentCore {
         use crate::renderer::render_tree::{RenderNode, RenderNodeType};
 
         let tree = self.build_page_tree_cached(page_num)?;
+        if let Some(hit) = super::transformed_text::hit(&tree.root, page_num, x, y) {
+            return Ok(hit);
+        }
 
         // 문자 위치를 미리 계산한 TextRun 정보
         struct RunInfo {
@@ -2845,6 +2823,16 @@ impl DocumentCore {
 
         for &page_num in &pages {
             let tree = self.build_page_tree(page_num)?;
+            if let Some(hit) = super::transformed_text::cursor(
+                &tree.root,
+                section_idx,
+                parent_para_idx,
+                &[(control_idx, cell_idx, cell_para_idx)],
+                char_offset,
+                page_num,
+            ) {
+                return Ok(hit);
+            }
             let cell_bounds =
                 find_table_cell_bounds_in_node(&tree.root, parent_para_idx, control_idx, cell_idx);
             if let Some(hit) = find_cursor_in_cell_node(
@@ -3131,6 +3119,11 @@ impl DocumentCore {
             row_cursor_is_nested,
             end_row_height_override,
             start_row_height_override,
+            straddle_row_relief,
+            straddle_page_bands,
+            fragment_row_heights,
+            fragment_block_frames,
+            end_row_owns_stored_frame,
         }) = col.items.first()
         else {
             return Ok(Unsupported);
@@ -3175,20 +3168,47 @@ impl DocumentCore {
         // 모든 셀 렌더 후 수행되는 border clip 확장으로 바깥 셀 bbox를 넓힐 수 있다.
         // `cellBounds`도 공개 JSON 계약이므로, 이 형상에서는 대상 셀만 끝까지
         // 렌더해 같은 후처리를 재현한다. 다른 셀과 페이지 트리는 여전히 생략한다.
-        let needs_full_cell_for_bounds = cell
-            .paragraphs
-            .iter()
-            .skip(cell_para_idx.saturating_add(1))
-            .any(|para| {
-                para.controls
-                    .iter()
-                    .any(|control| matches!(control, Control::Table(_)))
-            });
+        let cell_owns_block_frame = fragment_block_frames.iter().any(|&(first, end)| {
+            first <= usize::from(cell.row)
+                && usize::from(cell.row) + usize::from(cell.row_span) <= end
+        });
+        let needs_full_cell_for_bounds = *end_row_owns_stored_frame
+            || cell_owns_block_frame
+            || cell
+                .paragraphs
+                .iter()
+                .skip(cell_para_idx.saturating_add(1))
+                .any(|para| {
+                    para.controls
+                        .iter()
+                        .any(|control| matches!(control, Control::Table(_)))
+                });
         // 반복 제목행 사본으로 그려질 수 있는 셀은 컷 창 모델 밖
         let cell_row = cell.row as usize;
         let cell_end_row = cell_row + (cell.row_span as usize).max(1);
         if *is_continuation && table.repeat_header && cell_end_row <= *start_row {
             return Ok(Unsupported);
+        }
+        // [#6976] 쪽을 끝내는 조각은 마지막 그린 행의 상자를 배치 뒤에 접고, 그 양은
+        // 그 행 **모든 칸**이 내놓는 여분의 최솟값이다. 셀 하나만 방출하는 이 프로브는
+        // 대상 셀이 그 행의 유일한 칸일 때만 같은 값을 재현한다 — 그 밖에는 legacy 로
+        // 폴백한다. 접는 조각에서는 여분이 실제 배치 커서로 정해지므로 대상 셀을 끝까지
+        // 렌더한다(`needs_full_cell_for_bounds` 와 같은 이유·같은 방법).
+        let fragment_may_fold = !*end_row_owns_stored_frame
+            && !fragment_block_frames
+                .iter()
+                .any(|&(first, end)| first < *end_row && *end_row <= end)
+            && end_cut.iter().any(|&unit| unit > 0);
+        if fragment_may_fold {
+            let Some(fold_row) = (*end_row).min(table.row_count as usize).checked_sub(1) else {
+                return Ok(Unsupported);
+            };
+            let sole_target = table.cells.iter().enumerate().all(|(idx, c)| {
+                c.row as usize + (c.row_span as usize).max(1) != fold_row + 1 || idx == cell_idx
+            });
+            if !sole_target {
+                return Ok(Unsupported);
+            }
         }
 
         // ── 좌표계 프라이밍 — build_page_tree/build_single_column 과 동일 상태.
@@ -3222,8 +3242,10 @@ impl DocumentCore {
             .set_hidden_empty_paras(&pr.hidden_empty_paras);
         self.layout_engine
             .set_pre_emitted_host_paras(&pr.pre_emitted_host_paras);
-        self.layout_engine
-            .set_pre_emitted_host_heights(&pr.pre_emitted_host_heights);
+        self.layout_engine.set_pre_emitted_host_heights(
+            &pr.pre_emitted_host_heights,
+            &pr.pre_emitted_host_content_heights,
+        );
         let layout = &page_content.layout;
         self.layout_engine.prime_column_layout_env(layout);
 
@@ -3253,6 +3275,11 @@ impl DocumentCore {
         // 존재 이유(속도)를 지키는 게이트다.
         const FULL_COMPOSE_MAX: usize = 64;
         let n_paras = cell.paragraphs.len();
+        // 저장 정렬은 선택 내용의 높이를 함께 읽는다. 빠른 경로의 기존 전량
+        // 구성 상한을 넘으면 같은 item을 소비하는 정상 전체 배치로 돌아간다.
+        if *end_row_owns_stored_frame && n_paras > FULL_COMPOSE_MAX {
+            return Ok(Unsupported);
+        }
         let (windowed, window_paras) = match plan {
             ProbeCutPlan::Unsupported => return Ok(Unsupported),
             ProbeCutPlan::Uncut => {
@@ -3318,6 +3345,16 @@ impl DocumentCore {
             v.iter()
                 .find(|mt| mt.para_index == parent_para_idx && mt.control_index == control_idx)
         });
+        let fragment_measurement =
+            pt_mt
+                .zip(fragment_row_heights.as_deref())
+                .map(|(measured, rows)| {
+                    let mut measured = measured.clone();
+                    measured.row_heights = rows.to_vec();
+                    measured.fragment_block_frames = fragment_block_frames.clone();
+                    measured
+                });
+        let pt_mt = fragment_measurement.as_ref().or(pt_mt);
         let outline_num_id = self
             .document
             .sections
@@ -3340,7 +3377,7 @@ impl DocumentCore {
         );
         let probe = PartialTableCellProbe {
             cell_idx,
-            stop_after_para: if needs_full_cell_for_bounds {
+            stop_after_para: if needs_full_cell_for_bounds || fragment_may_fold {
                 n_paras - 1
             } else {
                 cell_para_idx
@@ -3373,8 +3410,11 @@ impl DocumentCore {
             *is_block_split,
             *start_cut_is_block,
             *row_cursor_is_nested,
+            *end_row_owns_stored_frame,
             *end_row_height_override,
             *start_row_height_override,
+            straddle_row_relief,
+            straddle_page_bands,
             pt_margin_left,
             pt_margin_right,
             pt_mt,
@@ -3384,6 +3424,12 @@ impl DocumentCore {
             col.paragraph_float_placements
                 .get(&(parent_para_idx, control_idx))
                 .map(|p| col_area.y + p.table_top),
+            crate::renderer::float_placement::preceding_control_flow_bottom_px(
+                &col.paragraph_float_placements,
+                &col.inline_placements,
+                parent_para_idx,
+            )
+            .map(|bottom| col_area.y + bottom),
         );
 
         // legacy 와 동일한 매칭 함수로 캐럿·셀 bbox 탐색
@@ -3689,8 +3735,11 @@ impl DocumentCore {
                 if let Some(ref mut ctx) = cell_context {
                     core.repair_unwrapped_wrapper_cell_context(section_idx, ctx);
                 }
-                if cell_context_matches(&cell_context, parent_para, path) {
-                    let cs = tr.char_start.unwrap_or(0);
+                // 번호/글머리표 TextRun (char_start: None)은 건너뛴다
+                if let (true, Some(cs)) = (
+                    cell_context_matches(&cell_context, parent_para, path),
+                    tr.char_start,
+                ) {
                     let cc = effective_char_count(tr);
                     if offset >= cs && offset <= cs + cc {
                         let positions = if tr.char_overlap.is_some() && cc == 1 {
@@ -3737,6 +3786,16 @@ impl DocumentCore {
 
         for &page_num in &pages {
             let tree = self.build_page_tree_cached(page_num)?;
+            if let Some(hit) = super::transformed_text::cursor(
+                &tree.root,
+                section_idx,
+                parent_para_idx,
+                &path,
+                char_offset,
+                page_num,
+            ) {
+                return Ok(hit);
+            }
             if let Some((pi, x, y, h, cell_bounds)) = find_cursor_by_path(
                 self,
                 &tree.root,
@@ -5714,6 +5773,7 @@ impl DocumentCore {
         let pr = self.pagination.get(section_idx)?;
         let local_idx = pr.endnote_para_sources.iter().position(|src| {
             src.section_index == section_idx
+                && src.cell_path.is_empty()
                 && src.para_index == para_idx
                 && src.control_index == control_idx
                 && src.note_para_index == note_para_idx
@@ -5824,16 +5884,7 @@ impl DocumentCore {
                         HwpError::RenderError("미주 렌더 위치를 찾을 수 없습니다".to_string())
                     })?;
                 let render_char_offset = if note_para_idx == 0 {
-                    char_offset
-                        + note_marker_text(
-                            endnote.number,
-                            endnote.number_shape,
-                            endnote.before_decoration_letter,
-                            endnote.after_decoration_letter,
-                        )
-                        .chars()
-                        .count()
-                        + 1
+                    crate::renderer::typeset::endnote_first_para_render_offset(endnote, char_offset)
                 } else {
                     char_offset
                 };
@@ -6147,6 +6198,11 @@ impl DocumentCore {
                 control_index,
             } => (*para_index, *control_index, "body"),
             FootnoteSource::TableCell {
+                para_index,
+                table_control_index,
+                ..
+            }
+            | FootnoteSource::NestedTableCell {
                 para_index,
                 table_control_index,
                 ..
@@ -7017,7 +7073,7 @@ mod tests {
     /// [#4149] KTX.hwp — 일반 표 문서. 패리티만 요구 (적중률은 보고).
     #[test]
     fn issue4149_fast_path_parity_ktx() {
-        issue4149_assert_fast_parity("samples/KTX.hwp", 400);
+        issue4149_assert_fast_parity("mydocs/pr/assets/issue7445/ktx-toc27/KTX.hwp", 400);
     }
 
     /// [#4149] hwp_table_test_saved.hwp — 저장 왕복 표 문서. 패리티만 요구.

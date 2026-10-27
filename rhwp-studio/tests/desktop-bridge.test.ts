@@ -231,3 +231,35 @@ test('수동 업데이트 IPC 실패를 화면이 처리할 수 있도록 반환
     else Reflect.deleteProperty(globalThis, 'window');
   }
 });
+
+test('네이티브 열기는 PDF 가져오기 지원 여부를 대화상자 필터로 넘긴다', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const calls: { command: string; args: unknown }[] = [];
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: {
+    __TAURI_INTERNALS__: {},
+    __TAURI__: {
+      core: { async invoke(command: string, args?: unknown) {
+        calls.push({ command, args });
+        if (command === 'cmd_take_pending_documents') return [];
+        if (command === 'cmd_open_document') return { name: '스캔.pdf', path: '/tmp/스캔.pdf', data: [37, 80] };
+        return null;
+      } },
+      event: { async listen() { return () => {}; } },
+    },
+  } });
+  try {
+    const bridge = await freshBridge();
+    await bridge.initDesktopBridge({ async openDocument() {}, dispatchCommand() {} });
+    const open = bridge.getDesktopOpenHandler();
+    assert.ok(open);
+    const opened: string[] = [];
+    await open((bytes: Uint8Array, name: string) => { opened.push(`${name}:${bytes[0]}`); }, { pdfImportEnabled: true });
+    await open(() => {});
+    assert.deepEqual(calls.filter(c => c.command === 'cmd_open_document').map(c => c.args),
+      [{ allowPdf: true }, { allowPdf: false }]);
+    assert.deepEqual(opened, ['스캔.pdf:37']);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'window', previous);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
+});

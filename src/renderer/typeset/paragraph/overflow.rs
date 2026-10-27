@@ -1,13 +1,13 @@
 //! 일반 fit 실패 뒤의 기존 넘침 허용 판정. 상태 변경과 높이 반영은 하지 않는다.
 
 use super::super::{
-    paragraph_forces_page_boundary_after, stored_vpos_overflow_defers_paragraph,
-    stored_zero_vpos_after_near_full_line,
+    line_seg_visible_bounds_px, paragraph_forces_page_boundary_after,
+    stored_vpos_overflow_defers_paragraph, stored_zero_vpos_after_near_full_line,
 };
 use super::metrics::FormattedParagraph;
 use crate::model::{
     control::Control,
-    paragraph::{ColumnBreakType, Paragraph},
+    paragraph::{ColumnBreakType, LineSeg, Paragraph},
 };
 use crate::renderer::hwpunit_to_px;
 
@@ -19,6 +19,8 @@ pub(in crate::renderer::typeset) struct OverflowPage {
     pub body_height: f64,
     pub body_area_height: f64,
     pub hwp3_layout: bool,
+    pub stored_layout_valid: bool,
+    pub current_page_vpos_base: Option<i32>,
 }
 
 pub(in crate::renderer::typeset) fn atomic_overflow_fits(
@@ -28,6 +30,7 @@ pub(in crate::renderer::typeset) fn atomic_overflow_fits(
     para_idx: usize,
     page: &OverflowPage,
     available: f64,
+    stored_vpos_rewind_overflow_break: bool,
     dpi: f64,
 ) -> bool {
     // [Task #409 v3] atomic TAC top-fit:
@@ -58,8 +61,14 @@ pub(in crate::renderer::typeset) fn atomic_overflow_fits(
             para_idx,
             crate::renderer::px_to_hwpunit(page.body_height, dpi),
         );
+    // 저장 vpos 가 이 문단에서 되감기고 통째로는 안 들어가면(#5755) 한글은 이 문단을
+    // 다음 쪽 첫머리에 둔 것이다 — top-fit 스필은 저장 사다리가 쪽을 끊지 않은 자리의
+    // 규칙이다. 1480000-201900698 pi=88(그림 370px, 저장 vpos 44640 → 300): 남은
+    // 334px 에 27px 넘친 채 19쪽에 남아 984.7px 로 본문을 넘쳤고, 한/글 PDF 는 20쪽
+    // 첫머리에 둔다.
     if is_atomic_tac_singleton
         && !stored_next_page_atomic
+        && !stored_vpos_rewind_overflow_break
         && page.current_height < available
         && page.has_items
     {
@@ -83,6 +92,14 @@ pub(in crate::renderer::typeset) fn atomic_overflow_fits(
     false
 }
 
+/// 꼬리 넘침 통째 배치의 허용 여부와 그 문턱.
+pub(in crate::renderer::typeset) struct TailOverflowAllowance {
+    pub allowed: bool,
+    /// `true` 면 초과량이 **0 이하**(줄이 온전히 들어감)여야 한다. `false` 면 종전의
+    /// "한 줄 미만" 문턱을 쓴다.
+    pub requires_whole_line: bool,
+}
+
 pub(in crate::renderer::typeset) fn tail_overflow_candidate(
     para: &Paragraph,
     fmt: &FormattedParagraph,
@@ -91,7 +108,7 @@ pub(in crate::renderer::typeset) fn tail_overflow_candidate(
     page: &OverflowPage,
     forced_page_break_line: Option<usize>,
     dpi: f64,
-) -> bool {
+) -> TailOverflowAllowance {
     // [Task #1537] 폰트 치환 drift 로 인한 "tail 1줄 spill 후 강제 쪽나누기 고아 페이지" 차단.
     //
     // 증상: 본문 문단 N 이 페이지 하단을 ~한 줄 미만으로 미세 초과(폰트 치환으로 부피가
@@ -182,7 +199,33 @@ pub(in crate::renderer::typeset) fn tail_overflow_candidate(
         .all(|c| matches!(c, Control::Footnote(_) | Control::Endnote(_)));
     // [Task #1537] 원래 대상 — 폰트 치환 drift 로 꼬리 한 줄이 흘러넘치는 **글자 있는**
     // 여러 줄 문단.
-    let font_drift_tail = !para.text.trim().is_empty() && fmt.line_heights.len() >= 2;
+    // 저장 상자 자체가 본문을 넘으면 대체 글꼴 때문에 커진 꼬리가 아니다.
+    // 통째 수용으로 원래 다음 쪽에 속한 줄을 여백에 남기지 않고 줄 분할로 넘긴다.
+    // 편집 후 캐시와 합성 줄은 독립적인 저장 소속 근거로 사용하지 않는다.
+    let stored_tail_outside_body = page.stored_layout_valid
+        && !para.stored_text_partition_dirty
+        && !para.cell_format_vpos_dirty
+        && para
+            .line_segs
+            .iter()
+            .all(|line| line.tag & LineSeg::TAG_IMPLEMENTATION_PROPERTY == 0)
+        && page.current_page_vpos_base.is_some_and(|base| {
+            para.line_segs
+                .last()
+                .and_then(|line| line_seg_visible_bounds_px(line, base, dpi))
+                .is_some_and(|(_, bottom)| bottom > page.body_height)
+        });
+    let font_drift_tail =
+        !para.text.trim().is_empty() && fmt.line_heights.len() >= 2 && !stored_tail_outside_body;
+    if std::env::var("RHWP_DIAG_6031").is_ok() {
+        eprintln!(
+            "DIAG_TAIL pi={para_idx} stored_valid={} base={:?} text_dirty={} cell_dirty={} stored_outside={stored_tail_outside_body} font_drift={font_drift_tail}",
+            page.stored_layout_valid,
+            page.current_page_vpos_base,
+            para.stored_text_partition_dirty,
+            para.cell_format_vpos_dirty,
+        );
+    }
     // [#6854] 같은 고아 쪽이 **잉크 없는 빈 문단**으로도 생긴다. 78494 `pi=86` 은
     // 글자가 없는 한 줄짜리 문단인데 8쪽을 **2.3px** 넘겨(953.6+20.0 vs 971.3) 혼자
     // 9쪽을 열고, 바로 다음 `pi=87` 이 명시적 쪽나누기라 그 쪽에 더는 아무것도
@@ -194,16 +237,38 @@ pub(in crate::renderer::typeset) fn tail_overflow_candidate(
     //
     // ⚠ 여기서는 **선언된** 쪽나누기만 인정한다 — 사다리에서 추론한 경계까지 받으면
     // 쪽 이득 없이 넘침만 는다.
+    //
+    // [#7429] 쪽 나누기 **선언만으로는** 한 줄 미만 넘침을 흡수하지 않는다. 한/글 2024 합성
+    // 실험(`samples/issue7429/inkless_tail_synthetic`: 한 줄 문단 39개 + 빈 문단 + 쪽 나누기,
+    // 첫 문단 글자 크기만 바꿔 넘침량을 100 HWPUNIT 씩 조절)에서 한/글은 빈 문단의 줄 높이가
+    // 본문 안에 **온전히** 들어갈 때만(넘침 −0.4 HWPUNIT) 그 쪽에 두고, +100 HWPUNIT(1.3px)만
+    // 넘쳐도 다음 쪽으로 넘겨 쪽번호만 남은 빈 쪽을 만든다. 80168 152쪽도 같다(넘침 +7.9px →
+    // 한/글 빈 쪽 153).
+    //
+    // 그러므로 **후보에서 빼는 것이 아니라 문턱을 조인다**(`requires_whole_line`). 빼 버리면
+    // 이 갈래가 하던 다른 일까지 사라진다 — 빈 문단은 넘쳐도 잉크가 없으므로 drift 안전마진
+    // (`LAYOUT_DRIFT_SAFETY_PX`)이 걸릴 자리가 아닌데, 후보가 아니면 그 마진 때문에 **줄이
+    // 온전히 들어가는** 빈 꼬리까지 다음 쪽으로 밀린다(위 fixture B1·B2: 잔여 14.67·13.36 에
+    // 잉크 높이 13.33 → 한/글은 같은 쪽).
+    // 후보 집합은 `#7429` **이전과 같다** — 바깥 관문을 넓히면 다음 문단이 쪽나누기가 아닌
+    // 꼬리까지 들어와 근거(fixture 형상: 빈 문단 바로 뒤 **선언된** 쪽 나누기) 밖으로 나간다.
     let inkless_tail = para.text.trim().is_empty()
         && fmt.line_heights.len() == 1
         && (next_para_declares_page_break || next_para_stored_vpos_exceeds_body);
+    // 문서가 다음 문단의 저장 vpos 로 그 쪽 끝을 적어 둔 경우(#7288)만 종전의 "한 줄 미만"
+    // 흡수를 남긴다. 그 밖의 잉크 없는 꼬리는 줄이 온전히 들어가야 한다.
+    let requires_whole_line = inkless_tail && !next_para_stored_vpos_exceeds_body;
     // ⚠ 새 사실은 **잉크 없는 갈래만** 연다. 바깥 관문까지 넓히면 글자 있는
     // `font_drift_tail` 도 함께 열려 다른 문서의 쪽 귀속이 바뀐다 — 실측으로
     // `issue_1749`·`issue_2470` 핀과 본문 넘침 래칫 3구획이 깨졌다.
-    page.col_count == 1
+    let allowed = page.col_count == 1
         && forced_page_break_line.is_none()
         && (next_para_forces_break || inkless_tail)
         && only_note_controls
         && page.has_items
-        && (font_drift_tail || inkless_tail)
+        && (font_drift_tail || inkless_tail);
+    TailOverflowAllowance {
+        allowed,
+        requires_whole_line: allowed && requires_whole_line,
+    }
 }

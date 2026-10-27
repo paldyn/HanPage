@@ -1,8 +1,17 @@
 use std::cell::RefCell;
 use std::io::Cursor;
 
+mod print_crop;
+mod print_jpeg;
+mod print_tone;
+pub(crate) use print_crop::{publish_print_jpeg_crop, resolve_print_jpeg_window};
+pub(crate) use print_jpeg::{encode_print_jpeg, print_jpeg_payload};
+pub(crate) use print_tone::print_bitmap_payload;
+
 use crate::model::image::ImageEffect;
 use crate::paint::{ResolvedImageKind, ResolvedImagePayload};
+#[path = "png_sampling.rs"]
+pub(crate) mod png_sampling;
 use crate::renderer::image_header::{
     canvaskit_encoded_image_header, CANVASKIT_MAX_IMAGE_DIMENSION, CANVASKIT_MAX_IMAGE_PIXELS,
 };
@@ -13,6 +22,67 @@ use crate::renderer::render_tree::{
     REAL_PICTURE_WATERMARK_FILL_WHITE_BLEND, REAL_PICTURE_WATERMARK_SATURATION,
     REAL_PICTURE_WATERMARK_WHITE_BLEND,
 };
+
+mod picture_adjustments;
+pub(crate) use picture_adjustments::{adjusted_picture_bytes, picture_tone_parameters};
+mod wmf_picture;
+/// 명시된 crop 좌표 범위는 보존한다. 원본 WMF의 범위가 없으면 한컴의
+/// 메타파일 자르기 좌표계(축마다 15000)를 사용한다. SVG/PNG 변환 뒤의 픽셀
+/// 크기는 이 범위의 단위가 아니므로 원본 데이터에서 한 번 판정한다.
+pub(crate) fn resolved_image_crop_reference_size(image: &ImageNode) -> Option<(u32, u32)> {
+    image.original_size_hu.or_else(|| {
+        let data = image.data.as_deref()?;
+        (image.crop.is_some()
+            && crate::renderer::svg::detect_image_mime_type(data) == "image/x-wmf")
+            .then_some((15_000, 15_000))
+    })
+}
+
+/// 그림 source rect의 내재 크기. 비트맵 헤더와 변환 SVG의 논리 크기를 구분한다.
+/// SVG는 첫 요소의 숫자 치수 또는 viewBox만 읽고 본문의 path를 다시 파싱하지 않는다.
+pub(crate) fn render_image_dimensions(data: &[u8]) -> Option<(f64, f64)> {
+    if let Some((width, height)) = crate::renderer::svg::parse_image_dimensions(data) {
+        return Some((f64::from(width), f64::from(height)));
+    }
+    if !data.starts_with(b"<svg") {
+        return None;
+    }
+    let end = data.iter().position(|b| *b == b'>')?;
+    let header = std::str::from_utf8(&data[..=end]).ok()?;
+    let mut reader = quick_xml::Reader::from_str(header);
+    let element = match reader.read_event().ok()? {
+        quick_xml::events::Event::Start(element) | quick_xml::events::Event::Empty(element) => {
+            element
+        }
+        _ => return None,
+    };
+    let mut width = None;
+    let mut height = None;
+    let mut view_box = None;
+    for attr in element.attributes().flatten() {
+        let value = attr.value.as_ref();
+        match attr.key.as_ref() {
+            "width" => width = value.parse::<f64>().ok(),
+            "height" => height = value.parse::<f64>().ok(),
+            "viewBox" => {
+                let values = value
+                    .split(|c: char| c.is_ascii_whitespace() || c == ',')
+                    .filter(|v| !v.is_empty())
+                    .map(str::parse::<f64>)
+                    .collect::<Result<Vec<_>, _>>()
+                    .ok()?;
+                if values.len() == 4 && values.iter().all(|v| v.is_finite()) {
+                    view_box = Some((values[2], values[3]));
+                }
+            }
+            _ => {}
+        }
+    }
+    width
+        .zip(height)
+        .or(view_box)
+        .filter(|(w, h)| w.is_finite() && h.is_finite() && *w > 0.0 && *h > 0.0)
+}
 
 // ── 변환 결과 메모 ──
 //
@@ -36,7 +106,7 @@ const MAX_MEMO_BYTES: usize = 16 * 1024 * 1024;
 const MAX_MEMO_ENTRIES: usize = 64;
 
 /// 변환 종류. 같은 바이트라도 어떤 변환을 거쳤느냐에 따라 결과가 다르다.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash)]
 enum Conversion {
     Bmp,
     CmykJpeg,
@@ -46,6 +116,28 @@ enum Conversion {
     WatermarkJpeg,
     RealPictureTone,
     RealPictureFillTone,
+    BlackWhite,
+    PictureAdjustment {
+        effect: u8,
+        brightness: i8,
+        contrast: i8,
+    },
+    WmfPictureTone {
+        brightness: i8,
+        contrast: i8,
+        grayscale: bool,
+    },
+    Hancom2024Bitmap,
+    PrintJpeg {
+        quality: u8,
+        expand: bool,
+    },
+    PrintJpegWindow {
+        bounds: [u32; 4],
+    },
+    Hancom2024BitmapPalette {
+        bounds: [u32; 4],
+    },
 }
 
 #[derive(Default)]
@@ -122,15 +214,175 @@ fn conversion_key(conversion: Conversion, data: &[u8]) -> u64 {
     use std::hash::{Hash, Hasher};
 
     let mut hasher = DefaultHasher::new();
-    (conversion as u8).hash(&mut hasher);
+    conversion.hash(&mut hasher);
     data.hash(&mut hasher);
     hasher.finish()
 }
 
+/// 원본 해상도에서 흑백을 확정할 수 있는 무보정 raster 그림이다.
+pub(crate) fn is_baked_blackwhite_image(image: &ImageNode) -> bool {
+    image.effect == ImageEffect::BlackWhite
+        && image.brightness == 0
+        && image.contrast == 0
+        && image.data.as_deref().is_some_and(|data| {
+            matches!(
+                detect_image_mime_type(data),
+                "image/bmp" | "image/png" | "image/jpeg" | "image/tiff"
+            )
+        })
+}
+
+fn blackwhite_bytes_to_png_bytes(data: &[u8]) -> Option<Vec<u8>> {
+    memoized(Conversion::BlackWhite, data, || {
+        let format = match detect_image_mime_type(data) {
+            "image/bmp" => image::ImageFormat::Bmp,
+            "image/png" => image::ImageFormat::Png,
+            "image/jpeg" => image::ImageFormat::Jpeg,
+            "image/tiff" => image::ImageFormat::Tiff,
+            _ => return None,
+        };
+        let mut image = decode_image_with_format_limited(data, format)?.to_rgba8();
+        for pixel in image.pixels_mut() {
+            let luma =
+                (299 * u32::from(pixel[0]) + 587 * u32::from(pixel[1]) + 114 * u32::from(pixel[2]))
+                    / 1000;
+            let value = if luma <= 128 { 0 } else { 255 };
+            pixel[0] = value;
+            pixel[1] = value;
+            pixel[2] = value;
+        }
+        let mut output = Vec::new();
+        image::DynamicImage::ImageRgba8(image)
+            .write_to(&mut Cursor::new(&mut output), image::ImageFormat::Png)
+            .ok()?;
+        Some(output)
+    })
+}
+
+/// 신원 key로 조회한 바이트도 실제 paint와 같은 원본 효과 변환을 사용한다.
+pub(crate) fn emitted_source_image_bytes(
+    data: &[u8],
+    variant: crate::paint::SourceImageVariant,
+) -> (&'static str, std::borrow::Cow<'_, [u8]>) {
+    if let crate::paint::SourceImageVariant::PictureTone {
+        brightness,
+        contrast,
+        effect,
+    } = variant
+    {
+        // 원본 포맷 변환도 inline과 같은 순서다. TIFF/PCX 등의 원본을 CSS에
+        // 넘기거나, 이미 bake한 RGB에 frontend가 다시 효과를 적용하지 않는다.
+        let (mime, converted) = emitted_image_bytes(data, false);
+        if let Some(bytes) = picture_adjustments::picture_tone_effect(effect)
+            .and_then(|effect| adjusted_picture_bytes(&converted, effect, brightness, contrast))
+        {
+            return ("image/png", std::borrow::Cow::Owned(bytes));
+        }
+        return (mime, converted);
+    }
+    if let crate::paint::SourceImageVariant::WmfPictureTone {
+        brightness,
+        contrast,
+        grayscale,
+    } = variant
+    {
+        if let Some(bytes) =
+            wmf_picture::adjusted_wmf_picture_svg(data, brightness, contrast, grayscale)
+        {
+            return ("image/svg+xml", std::borrow::Cow::Owned(bytes));
+        }
+    }
+    if variant == crate::paint::SourceImageVariant::Hancom2024Bitmap {
+        if let Some(bytes) = print_tone::bitmap_bytes_to_png(data) {
+            return ("image/png", std::borrow::Cow::Owned(bytes));
+        }
+    }
+    if variant == crate::paint::SourceImageVariant::BakedBlackWhitePng {
+        if let Some(bytes) = blackwhite_bytes_to_png_bytes(data) {
+            return ("image/png", std::borrow::Cow::Owned(bytes));
+        }
+    }
+    emitted_image_bytes(data, variant.bakes_watermark())
+}
+
+/// 이미지 신원과 inline 바이트가 같은 출력 변형을 선택한다.
+pub(crate) fn source_image_variant(image: &ImageNode) -> crate::paint::SourceImageVariant {
+    use crate::paint::SourceImageVariant;
+    if is_baked_blackwhite_image(image) {
+        SourceImageVariant::BakedBlackWhitePng
+    } else if print_tone::requires_print_bitmap_transfer(image) {
+        SourceImageVariant::Hancom2024Bitmap
+    } else if image.data.as_deref().is_some_and(|data| {
+        detect_image_mime_type(data) == "image/jpeg" && is_watermark_image(image)
+    }) {
+        SourceImageVariant::BakedWatermarkPng
+    } else if let Some((brightness, contrast, grayscale)) = wmf_picture_parameters(image) {
+        SourceImageVariant::WmfPictureTone {
+            brightness,
+            contrast,
+            grayscale,
+        }
+    } else if let Some((brightness, contrast, effect)) = picture_tone_parameters(image) {
+        SourceImageVariant::PictureTone {
+            brightness,
+            contrast,
+            effect,
+        }
+    } else {
+        SourceImageVariant::Source
+    }
+}
+
+pub(crate) fn emitted_image_node_bytes<'a>(
+    image: &ImageNode,
+    data: &'a [u8],
+) -> (&'static str, std::borrow::Cow<'a, [u8]>) {
+    let variant = source_image_variant(image);
+    if variant == crate::paint::SourceImageVariant::Hancom2024Bitmap {
+        emitted_source_image_bytes(data, variant)
+    } else {
+        emitted_image_bytes(data, is_watermark_image(image))
+    }
+}
+
+/// 이미 바이트에 적용한 효과는 출력 필터에서 다시 적용하지 않는다.
+pub(crate) fn resolved_image_effects(
+    image: &ImageNode,
+    resolved: Option<&ResolvedImagePayload>,
+) -> (ImageEffect, i8, i8) {
+    if resolved.is_some_and(|payload| payload.suppress_effects) {
+        (ImageEffect::RealPic, 0, 0)
+    } else {
+        (image.effect, image.brightness, image.contrast)
+    }
+}
+
 pub(crate) fn resolve_image_payload(image: &ImageNode) -> Option<ResolvedImagePayload> {
+    let base = resolve_unadjusted_image_payload(image);
+    let mut resolved = picture_adjustments::resolve_picture_tone(image, base);
+    if let (Some(source), Some(payload)) = (image.data.as_deref(), resolved.as_mut()) {
+        png_sampling::preserve(source, &mut payload.data);
+    }
+    resolved
+}
+
+fn resolve_unadjusted_image_payload(image: &ImageNode) -> Option<ResolvedImagePayload> {
+    if let Some(payload) = print_bitmap_payload(image) {
+        return Some(payload);
+    }
     let data = image.data.as_deref()?;
     let mime = detect_image_mime_type(data);
 
+    if is_baked_blackwhite_image(image) {
+        if let Some(data) = blackwhite_bytes_to_png_bytes(data) {
+            return Some(ResolvedImagePayload {
+                data,
+                mime: "image/png",
+                kind: ResolvedImageKind::FormatConverted,
+                suppress_effects: true,
+            });
+        }
+    }
     match mime {
         "image/bmp" => bmp_bytes_to_png_bytes(data).map(|data| ResolvedImagePayload {
             data,
@@ -155,6 +407,18 @@ pub(crate) fn resolve_image_payload(image: &ImageNode) -> Option<ResolvedImagePa
         // `<img>` 경로(`getSourceImageBytes`·layer tree base64)는 여기를 지나므로 변환이
         // 여기에도 있어야 한다.
         "image/x-wmf" => {
+            if let Some((brightness, contrast, grayscale)) = wmf_picture_parameters(image) {
+                if let Some(data) =
+                    wmf_picture::adjusted_wmf_picture_svg(data, brightness, contrast, grayscale)
+                {
+                    return Some(ResolvedImagePayload {
+                        data,
+                        mime: "image/svg+xml",
+                        kind: ResolvedImageKind::FormatConverted,
+                        suppress_effects: true,
+                    });
+                }
+            }
             crate::renderer::svg::convert_wmf_to_svg(data).map(|data| ResolvedImagePayload {
                 data,
                 mime: "image/svg+xml",
@@ -268,9 +532,17 @@ pub(crate) fn image_node_with_resolved_payload(
     image: &ImageNode,
     resolved: Option<&ResolvedImagePayload>,
 ) -> ImageNode {
+    let fallback = resolved
+        .is_none()
+        .then(|| resolve_image_payload(image))
+        .flatten();
+    let resolved = resolved.or(fallback.as_ref());
     let mut image = image.clone();
+    image.original_size_hu = image_crop_reference(&image);
     if let Some(payload) = resolved {
         image.data = Some(payload.data.clone());
+        // payload는 이미 출력 색을 가진다. 내부 재생에서 다시 확장하지 않는다.
+        image.hancom2024_print_bitmap = false;
         if payload.suppress_effects {
             image.effect = ImageEffect::RealPic;
             image.brightness = 0;
@@ -280,12 +552,37 @@ pub(crate) fn image_node_with_resolved_payload(
     image
 }
 
+/// 공통 producer와 지연 로딩 키가 같은 WMF 실사 효과를 선택하는 단일 판정.
+pub(crate) fn wmf_picture_parameters(image: &ImageNode) -> Option<(i8, i8, bool)> {
+    (matches!(image.effect, ImageEffect::RealPic | ImageEffect::GrayScale)
+        && detect_image_mime_type(image.data.as_deref()?) == "image/x-wmf")
+        .then_some((
+            image.brightness,
+            image.contrast,
+            image.effect == ImageEffect::GrayScale,
+        ))
+}
+
+/// 형식 변환 전에 원본 메타파일의 자르기 좌표 범위를 확정한다.
+/// 변환된 SVG 바이트만 받는 paint·DOM 소비자도 같은 범위를 받는다.
+pub(crate) fn image_crop_reference(image: &ImageNode) -> Option<(u32, u32)> {
+    if image
+        .data
+        .as_deref()
+        .is_some_and(|data| detect_image_mime_type(data) == "image/x-wmf")
+    {
+        super::metafile_geometry::wmf_crop_reference(image.original_size_hu)
+    } else {
+        image.original_size_hu
+    }
+}
+
 /// 워터마크 bake 대상 판정. `paint::source_image_key` 의 variant 결정과 같은 술어를 써야
 /// 키가 가리키는 바이트와 실제로 내보내는 바이트가 어긋나지 않는다 (Task #3315).
 ///
 /// mime 검사는 포함하지 않는다 — 호출부가 JPEG 분기 안에서 쓴다.
 pub(crate) fn is_watermark_image(image: &ImageNode) -> bool {
-    !matches!(image.effect, ImageEffect::RealPic) && (image.brightness != 0 || image.contrast != 0)
+    !matches!(image.effect, ImageEffect::RealPic) && image.is_watermark()
 }
 
 /// BMP 바이트를 PNG 바이트로 재인코딩한다. 실패 시 None 반환.
@@ -1041,7 +1338,7 @@ pub fn is_displayable_image_data(data: &[u8]) -> bool {
     }
 }
 
-fn decode_image_with_format_limited(
+pub(crate) fn decode_image_with_format_limited(
     data: &[u8],
     format: image::ImageFormat,
 ) -> Option<image::DynamicImage> {
@@ -1615,9 +1912,10 @@ mod emitted_bytes_key_agreement_tests {
     }
 
     fn watermarked(mut image: ImageNode) -> ImageNode {
-        // `is_watermark_image` 가 참이 되는 최소 조건.
+        // 일반 색조와 구분되는 두 비영 값의 워터마크 대조군.
         image.effect = ImageEffect::GrayScale;
         image.brightness = 20;
+        image.contrast = -50;
         image
     }
 

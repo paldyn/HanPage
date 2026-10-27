@@ -1,5 +1,6 @@
 import {
   canUseOpenFilePicker,
+  documentFileInputAccept,
   pickOpenFileHandle,
   readFileFromHandle,
   type FileSystemFileHandleLike,
@@ -9,6 +10,7 @@ import type { DesktopOpenHandler } from '../core/desktop-bridge.ts';
 import { t } from '../i18n/index.ts';
 
 export interface OpenFilePickerDependencies {
+  pdfImportEnabled?: boolean;
   canReplace: () => Promise<boolean>;
   desktopOpen?: DesktopOpenHandler | null;
   windowLike: FileSystemWindowLike;
@@ -34,7 +36,7 @@ export async function openDocumentViaPicker(deps: OpenFilePickerDependencies): P
     try {
       await deps.desktopOpen((bytes, fileName) => {
         deps.emitOpenDocument({ bytes, fileName, fileHandle: null, skipUnsavedGuard: true });
-      });
+      }, { pdfImportEnabled: deps.pdfImportEnabled === true });
     } catch (error) {
       reportOpenError(error, deps.alert);
     }
@@ -45,7 +47,7 @@ export async function openDocumentViaPicker(deps: OpenFilePickerDependencies): P
   let handle: FileSystemFileHandleLike | null = null;
   if (nativeOpenPickerAvailable) {
     try {
-      handle = await pickOpenFileHandle(deps.windowLike);
+      handle = await pickOpenFileHandle(deps.windowLike, deps.pdfImportEnabled);
     } catch (error) {
       // 교차 출처 서브프레임 등에서 showOpenFilePicker 자체가 거부되는 경우(SecurityError 등).
       deps.warn('[file:open] File System Access API 실패, 폴백:', error);
@@ -58,6 +60,7 @@ export async function openDocumentViaPicker(deps: OpenFilePickerDependencies): P
     if (nativeOpenPickerAvailable) return;
     const fileInput = deps.findFileInput();
     if (fileInput) {
+      fileInput.accept = documentFileInputAccept(deps.pdfImportEnabled);
       fileInput.dataset.skipUnsavedGuard = 'true';
       fileInput.click();
     }

@@ -50,8 +50,12 @@ function tauriListen(): TauriListen | null {
 // ─── 열기 ──────────────────────────────────────────────────────────────────
 /** 네이티브 열기로 받은 바이트를 기존 문서 오픈 흐름(eventBus)에 흘려보내는 콜백. */
 export type EmitOpenDocument = (bytes: Uint8Array, fileName: string) => void;
+/** 네이티브 열기 옵션. PDF 는 웹뷰 WASM 이 가져오기를 지원할 때만 대화상자에서 고를 수 있다. */
+export interface DesktopOpenOptions {
+  pdfImportEnabled?: boolean;
+}
 /** `file:open` 에서 호출. 네이티브 dialog → 바이트 → `emit` 으로 문서 오픈. */
-export type DesktopOpenHandler = (emit: EmitOpenDocument) => Promise<void>;
+export type DesktopOpenHandler = (emit: EmitOpenDocument, options?: DesktopOpenOptions) => Promise<void>;
 
 interface OpenedFile {
   name: string;
@@ -113,8 +117,8 @@ export async function initDesktopBridge(deps?: DesktopBridgeDeps): Promise<void>
     return;
   }
 
-  openHandler = async (emit) => {
-    const res = await invoke<OpenedFile | null>('cmd_open_document');
+  openHandler = async (emit, options) => {
+    const res = await invoke<OpenedFile | null>('cmd_open_document', { allowPdf: options?.pdfImportEnabled === true });
     if (!res) return; // 사용자 취소
     emit(new Uint8Array(res.data), res.name);
   };
