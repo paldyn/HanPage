@@ -1,0 +1,4968 @@
+{
+ "base_sha": "02530b9ed567a44663edb26c65fb565c4a79f00d",
+ "upstream_sha": "faa885e8b54ffc7cdf4196cd43a3103f362499a2",
+ "local_sha": "9b4f20a69c5eec46ce8b3f2235b8ecc0b93375a0",
+ "ownership_rule": "only differences between the previous upstream pin (base) and HanPage devel count as HanPage delta; paths under pdf-large/ are excluded (Task #51 history policy)",
+ "counts": {
+  "both_added_different": 5,
+  "both_modified": 33,
+  "local_added_only": 490,
+  "local_modified_upstream_unchanged": 22
+ },
+ "upstream_deleted_untouched_by_hanpage": 475,
+ "paths_base": 37300,
+ "paths_upstream": 57452,
+ "paths_local": 37795,
+ "files": [
+  {
+   "path": ".github/CODE_OF_CONDUCT.md",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "fe4546d11784385d5821ee9164fd33562fdacf56",
+   "upstream": "fe4546d11784385d5821ee9164fd33562fdacf56",
+   "local": "bc7862a6b22cc05c998ae7740df81de6002734e2",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": ".github/SECURITY.md",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "9be6306453037f70755d2229b189e6f1f3f1abca",
+   "upstream": "9be6306453037f70755d2229b189e6f1f3f1abca",
+   "local": "cff85ce8fba96afdce79e24c34e24c8db08f9201",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": ".github/workflows/ci.yml",
+   "kind": "both_modified",
+   "base": "4917f94f19e8d6a885e0c4c1e6e832bc969f0887",
+   "upstream": "043727d3e13c613eb7d24faee9e4c4f3237d9822",
+   "local": "b816f46bb6271611521d8b4bb2244da5e3fd0458",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": ".github/workflows/deploy-pages.yml",
+   "kind": "both_modified",
+   "base": "01ade4283cb3a0d5ff66942f25d80a98b56eb741",
+   "upstream": "ba5291f9d25a6b8eda641937a6721d129e8c3e58",
+   "local": "036047b9f46ae5668a947aa659d964d607fb6fbe",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": ".github/workflows/desktop-release.yml",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "986781da51734d6e1ef416212cb304bcad9bea02",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": ".gitignore",
+   "kind": "both_modified",
+   "base": "39e01a43226536e25ad5a5af703934acce2500d4",
+   "upstream": "95584505ccd70618a69fe43c1efe05d435e4477c",
+   "local": "14fcecc4e2bca8c4236485b3678819e67dff038a",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "CONTRIBUTING.md",
+   "kind": "both_modified",
+   "base": "e5e521203f187b566ad994b3d700ac7d440981eb",
+   "upstream": "ddf3e75a4ec614631097dea810e4ef5392b02cdb",
+   "local": "eb8a99e087ec787028bde9c36e3167024cca3f6d",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "Cargo.toml",
+   "kind": "both_modified",
+   "base": "0e5c32a9822fd1ce89ba2b20dcab7ff2f6652f4e",
+   "upstream": "d07404eb654175fcc8b264c70d3db3956d8d6641",
+   "local": "a59676c5a854cdc31245113f06739c6b7ee1f32e",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "HanPage-Desktop/.gitignore",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f06235c460c2de3d97efc8371125594b7b761b08",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/CHANGELOG.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c93b267e7969d53d06fab9293538d8c17a2fe65e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/README.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "3446e149040d8afc4ed7a2a27ccead32ccb5e702",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/package-lock.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "e2b77d37c3cbca3c7ac89d4aa42bee48e2b84a4b",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/package.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c4807338846908d08d6ef42ca5bc8c6627671faa",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/resources/branding/HanPage-previous-icons-20261001.zip",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "dc10fcadd2f4695e45582fd90eea2aa8cac833bd",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/.gitignore",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "6b9867d68a3639529891c3aecc4fcf124c2b8d39",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/Cargo.lock",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "7eae8fcf67bf25bc3338d984efc14aee1e799235",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/Cargo.toml",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "e235c8d27f9c10ef28d1fb9c149efc4ee56fed43",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/build.rs",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d860e1e6a7cac333c3cc0bc9cb67faf286b07d69",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/capabilities/default.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f001e27b6653fa0303e420796fa6e8ab38597870",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/128x128.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "91add57c0602fcac27758074edf66aa0b309c00c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/128x128@2x.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "328011cd1ec3adab88d6f07a7476ca23be557625",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/16x16.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "090a3cd36226e7dfcb19aacbf209cb2a53faf9f1",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/24x24.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "b3279644849ecc108807fc9e63c0431289ef76a6",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/256x256.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "328011cd1ec3adab88d6f07a7476ca23be557625",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/32x32.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "bce4226389addc45f1f75bbf8948562e9d7e6061",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/48x48.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "4c62541241dc5b01db0b1f8e6b6177ea4dcc21f2",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/512x512.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "852916a3e07615446609694d6126d41f551b67b5",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/64x64.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8e2ef740f308b1381aa4bcb327938010dd3a4fee",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/Square107x107Logo.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "db910df0b68024abc541e3354d8fc80d686ebf3a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/Square142x142Logo.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ddacb8e327d05507d21eed10d171ed54e5e15c6a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/Square150x150Logo.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "0bda90c35014377e6995264eccf0fd56c41b9405",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/Square284x284Logo.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "29caa76889d2d74fd11e0ad11dadcd4689311a0c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/Square30x30Logo.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "084ee47ecad12496a45ec797a9e9cdfb7a770ab9",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/Square310x310Logo.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "05bee9c7fd2b5819afec15436cab9f6b75b5348f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/Square44x44Logo.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8313d9eeb4c9c2ee882593d1b65a4cf4b4df1998",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/Square71x71Logo.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9dce7e4653637e651d61a4e299207b695a17d69a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/Square89x89Logo.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d1382ec1abbd602b62718588277927fc9838f58d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/StoreLogo.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "801a022883494aef713c4fc5aa09f10f916ee823",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage.icns",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "991782b25ce2663995a208127ba63d728147f0a8",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage.ico",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f4e61e6d2e0d3b482ac91df5359744e2644f6ec5",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_1024.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c222254138a53313e757deea7af3d7c57b32c0bd",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_128.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "91add57c0602fcac27758074edf66aa0b309c00c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_16.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "090a3cd36226e7dfcb19aacbf209cb2a53faf9f1",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_24.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "b3279644849ecc108807fc9e63c0431289ef76a6",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_256.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "328011cd1ec3adab88d6f07a7476ca23be557625",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_32.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "bce4226389addc45f1f75bbf8948562e9d7e6061",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_48.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "4c62541241dc5b01db0b1f8e6b6177ea4dcc21f2",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_512.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "852916a3e07615446609694d6126d41f551b67b5",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_icon_64.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8e2ef740f308b1381aa4bcb327938010dd3a4fee",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_symbol_blue_transparent_1024.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "fe19c49d7d1f579719cf74fa4c34df213c19f3db",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/HanPage_symbol_white_transparent_1024.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f259160a0a15831ec95e905bc5313ceaabadf927",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/hanpage-04/README.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d07b5bcd2149ca0ad22025aa845e33a5eba007b3",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/icon.icns",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "991782b25ce2663995a208127ba63d728147f0a8",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/icon.ico",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "13538e116a915301287d6a81e0270b137f0032b9",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/icons/icon.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c222254138a53313e757deea7af3d7c57b32c0bd",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/src/lib.rs",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "493b2e30827fd1f7c0226be0b55c2a68f7884db4",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/src/main.rs",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f956691bb906a99320be3206b873354fd171276d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/src/update_state.rs",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "285040aa0705a1c7cc102d4af64f467d9f80f2fe",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "HanPage-Desktop/src-tauri/tauri.conf.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "4a1016454bb20a9a89965325528bfefb75c99fe5",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "README.md",
+   "kind": "both_modified",
+   "base": "52e4d6f8eaff0bafc9178d78fbc912166a432b0c",
+   "upstream": "1955077fa69e2d4b39e4c2f1183fcb87ededa8bb",
+   "local": "81021c427744d5350fffe91d0d69b0abd08901b2",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "README_EN.md",
+   "kind": "both_modified",
+   "base": "43cd871c2a8a6d6ad801f1e38dc8f4980af1e0df",
+   "upstream": "2b9935e903f74ba3e22f10e09c0f228e9cfc9916",
+   "local": "5c5cd5a8d4e691f217bbc921c93574cee2d44902",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "assets/logo/favicon.ico",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "6e917438847fb9e671c4925282e39b2f97835f01",
+   "upstream": "6e917438847fb9e671c4925282e39b2f97835f01",
+   "local": "13538e116a915301287d6a81e0270b137f0032b9",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "assets/logo/logo-1024.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ea0eb322915a89a5f33b85e6aafb9a72e2a1fd22",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "assets/logo/logo-128.png",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "3cff968460921883dc14861f870db335d4a36078",
+   "upstream": "3cff968460921883dc14861f870db335d4a36078",
+   "local": "d0938dab67b79368e1a862f0b467f0cbb6d0401e",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "assets/logo/logo-256.png",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "e669f5908b9fb1b0949c37f21a06ef99943a9c8b",
+   "upstream": "e669f5908b9fb1b0949c37f21a06ef99943a9c8b",
+   "local": "bce924c69b01ba5cf5d2998a50f9008931ca3351",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "assets/logo/logo-300.png",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "6aecbb36012548beee3f78fbd1fd21cb03d24285",
+   "upstream": "6aecbb36012548beee3f78fbd1fd21cb03d24285",
+   "local": "f6402749390755169f1647bbdd1a901cb69ed7ad",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "assets/logo/logo-512.png",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "8f5cca2390e093022b93745f9660981c055be588",
+   "upstream": "8f5cca2390e093022b93745f9660981c055be588",
+   "local": "aed18c7b161c51df058b67df9c373f76c14450f6",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "assets/logo/logo-64.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "7f15f9f1a55ea00886dee28ad109fc6443167ad8",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "assets/logo/logo-original-554x562.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "bd1bca6f8a09681d6381c3b19e069d4e458ec8d4",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/README.md",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "2df42dc0d6a6ed74e4c17a359492e49f266b3131",
+   "upstream": "2df42dc0d6a6ed74e4c17a359492e49f266b3131",
+   "local": "2e43fc1b4021e076580bd2bcb71665cee528b7a0",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "mydocs/manual/README.md",
+   "kind": "both_modified",
+   "base": "b24f8537fa681a38b27acf685884d13594f6fecc",
+   "upstream": "17ed2d9f2b72c8212b0617b5731c543d6a582f8f",
+   "local": "2ab097246f92fdf681c156b6e72f7a1b6756da7c",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "mydocs/manual/desktop_auto_update.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "772f1a05af3be6e4e740f90f24f7fcd00fc072b7",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/manual/rhwp_studio_ui_conventions.md",
+   "kind": "both_modified",
+   "base": "5b4708ae32752e08859e640f5267555ee110715f",
+   "upstream": "a284e93fcf9db0d9ff19f3cde9eba91c3c93be7d",
+   "local": "23a0af8f9bc13a139bf15c3c8b237dbd54ef994a",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "mydocs/orders/20261001.md",
+   "kind": "both_modified",
+   "base": "1d2c604303b7c02527e7fbdfe9bc07e97f7e3238",
+   "upstream": "4113b1ada536e3a884de68adbc5ec3c30e57bfd0",
+   "local": "ca50905c388acc3b8b7a947782c4f540eac37090",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "mydocs/orders/20261002.md",
+   "kind": "both_added_different",
+   "base": null,
+   "upstream": "0e1979ccd13441c5e78d77ee0b8db5bf00d2ac75",
+   "local": "c00fe1065e1f94f26814f85e60f0c1dcd6afa8d2",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "mydocs/orders/20261003.md",
+   "kind": "both_added_different",
+   "base": null,
+   "upstream": "fcd219a03c0d722081b086001dae4271b30bcbf9",
+   "local": "e890c48a56ac948867c27779bd11705008297745",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "mydocs/orders/20261007.md",
+   "kind": "both_added_different",
+   "base": null,
+   "upstream": "7be269691a86af077ea0b5da7bb126195ae02ae6",
+   "local": "55303e462c01aee470b4f4ab079868509b839819",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "mydocs/orders/20261008.md",
+   "kind": "both_added_different",
+   "base": null,
+   "upstream": "79242f9bb50a4cc91b9691d662a691a8d50d3df9",
+   "local": "53937e8dada84b592167f02e741595d075fa0d6e",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "mydocs/orders/20261010.md",
+   "kind": "both_added_different",
+   "base": null,
+   "upstream": "d36168fbc1a0c2919eacbaea7a75586efc4b4ebe",
+   "local": "b39102abcaad01c202af60bb0cc6012272a4bf62",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "mydocs/orders/archives/20260710_hanpage.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "1360822524abfa40389ed86a9238773803e8fe6c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/orders/archives/20260804_hanpage.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "20d9d1f39f6287b2af5bd36998e0ce4379276408",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_1.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c4f5c2d388f55ea48931c942bbac68839421d8da",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_1_impl.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "3f2affa456850f95eb2b9f9aa702766c5cbe0c04",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_1_impl_v2.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8094eb1d631cfee2032b855de07a0b5b82782f1a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp110.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "fac747e43b1f400ab894eec72d257d0cf57f33ff",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp112.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "cf92c2d4c721e0c233a965a7aeff42724bf2945f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp12.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "959f751b0548e8b618096eb02d4d5a8327c072dd",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp121.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d61d39a7487ec190b7d75eccf7640e2fea236937",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp122.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ddf1bdb1571aa068d6200b0a35a93d7555fe0437",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp126.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "952b7c32fd9355983e247a7f39e78727497b28a6",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp13.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "7e07f3eed11787ae42b13539ed79cf3703a008b4",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp18.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8f5db1e028aebc76defcc62923c14180036bf95f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp23.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "082c4b850d38b6a71f2a7c0c3b0f290ae29e7670",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp23_impl.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "fb6b5ffaa7f747c66ad6fc8f68b65ced52b0d93a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp26.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f588b4bc6edd5c9449aed9faa94bb5ea04ce98f3",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp26_impl.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "1455c0a4d82ae2d583742cbcf809f0d2d7146a7f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp28.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a9b3e3dd5d5ae60a42cac51330691e1cd94f6051",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp29.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8527ff8b37354d675e8691cf02addd60bfed431e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp38.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "6f671d42b7a6c0fcd501fc250a279913447d744c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp40.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "2cc0416353805c1136c0f0f5435bee9929ba9eb3",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp5.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "2c867fe610e76ca828742b7878fd6bcf6450a1f5",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp51.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "048f9883e2ec11cdbe8372144271efc221246e98",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp59.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9a566e3d4105fcea85bdce7f5dc9333ad33c2cbe",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/plans/task_m100_hp7.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f407037a69ef6fea5c8b1611376e2817564f1a2a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/archives/pr_111_review.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "285f2a5fa62794ba500ea07c755896c1f3a9525d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/archives/pr_111_review_impl.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "6cdcc0d370237593fdc8de58c8affc6e1451341c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/archives/pr_113_review.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c31da045f04860325909020f0648ee732dbec0e0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/archives/pr_113_review_impl.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "74f8451a82c873eb6fad255ba6ccaa794463294b",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/archives/pr_114_review.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c95d7cbb5e0fcf44fd688945cd9ead0c671acba2",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/archives/pr_114_review_impl.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8b26dc29e22d0adf7af281993605ea6f5f8b79af",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/archives/pr_115_review.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ec444097ca1cf4e56e364e5464566cb3526a4c2e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/archives/pr_116_review.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d806835427a697de1af594d56a2ac4efbc32652c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/archives/pr_117_review.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "e05aa45a139dfa00f376eeb5b4f79eb441b622d4",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/archives/pr_118_review.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d2d99c86a1871051cebc0b997d42b7c4d45a943e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/archives/pr_123_review.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "feb426cf19e258751db305aa6b9c2ad4f7498b17",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/archives/pr_124_review.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "b4282d16acb7969a34e1b00b227f078177711488",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/archives/pr_127_review.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ed1fe599545f2784ace0efb34c459b1f352793c2",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v0810_release/audit-draft.mjs",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "65fd668c199a4533b2e2112476725259b44314dc",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v0810_release/draft-audit.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d40be1f5bae8b7cede2079d288ceb1cf6e565b15",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v0810_release/latest.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d84a708d3197107c9b0a34660451127701da0acb",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v0810_release/release-notes.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "6cbde6eab787a0327cd0157a98b3da2caf218109",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v0811_release/audit-draft.mjs",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "65fd668c199a4533b2e2112476725259b44314dc",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v0811_release/draft-audit.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8d38d75feb362224315a1c35d811b0fe0bd7f877",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v0811_release/latest.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d3d040185dccb63c439cc09d52a0e0d9e7bc7479",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v0811_release/macos-local.sh",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "bdd1ec95556398254e351c66fd671cff51ea13e9",
+   "local_mode": "100755",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v0811_release/macos-local.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f792ba536d2b3a23e260a21c5bc08bad2cc72254",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v0811_release/release-notes.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "14dac48baa5584c1711e07cd0f8429cb20f81139",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/after-apply-error.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "cf8b8bc8a5f6d3afa51899696ecb1d07ba932a9b",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/after-applying.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "b71c7a7c76e4f2d1671813199338dd961c4f75d4",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/after-downloading-known.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "abcd476a380d267bb39b409463ace9c8bfb7c6cb",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/after-downloading-unknown.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "55f4aa3b9d62d7c0ea3be82a3a02064369f23bd1",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/after-macos-ready-dark.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "b3edb759e7f610a50fff012f2a7ffacb41e9a1dd",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/after-macos-ready-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "1d2fc243d3a4db65aee016aa2dcd037a78278527",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/after-ready-small-dark.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "46058d8f4bec7c86a3b3a66dc3d99b97be8ef7fe",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/after-unsaved-small.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "2400d3985881d8c076ef89908ba947a4dcde6200",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/after-windows-ready-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "55b08c3d1b1042f4785fbfeded64a48db9a395d8",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/applying-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "69e4ae02a7f9da0a233921e05d6b0091eaf1060a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/before-v087-windows-ready.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "3f189cd997cc83e52e5b04be4b4066b0d8015336",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/browser-results.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "86dc83473fec254dbf59d6ef04639c301051e3fb",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/ci-code-candidate.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "838fc799d30165df55b6726873a5e78ec09f597d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/ci-postmerge.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "cc08d4f941830e6553dcad586c0eec95fe5c72de",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/ci-review-tail.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "5f0a0caa47f3fde42392c16c56c118562ada88aa",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/cleanup.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "cf3fdde662e13a595a23d060361914e86065ae3f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/desktop-v088-dmg.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "816bc4ab038e7270d406c01f3647e2bcaa24509d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/desktop-v088-draft-inventory.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "224995d802bbf275a05691f0cface170b370d5c5",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/desktop-v088-macos-bundle.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "b631518aace0dac2383978164021c0af4218ee0d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/desktop-v088-public-verification.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "b42c25b9c9bc43a499ccbd0bfb36f6e15c22e8f4",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/desktop-v088-release-workflow.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "b187ecc2b225b8c008ad16ae77c5e17c5015e5c8",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/desktop-v088-updater-signatures.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a5f24c4e1eabfce0ca7d4621889858e586ab57c3",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/desktop-v088-windows-icon.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "94239f5a2bcf91dcfb2af54545217881e0f6fa28",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/local-bundle.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "48b55863b7c2ba4d14856a4c0ba62b3c5ddfaa38",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/local-validation.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "e21292772ea3051ebfddc1b843057486cf7a8b9f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/primary-preservation.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "63493177970099addffe4dc34b1df4153ceaf3f8",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/ready-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "1c3d7f4948ec5a1b78cd746ac09c71fe02de9dfb",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v088_release/release-primary-preservation.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "acb06826b8fb51f03f9c20a6ff11a31b0521eb07",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/after-latest-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "2524fd20a3f6357f77221febe98151896c656b67",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/after-ready-short-height.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8147262d414d4588b40f38ea7d7baa4aa9b175c8",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/after-unsaved-small.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "3ed613525bdd5674a6f403d4936daa5dd8bd8d1a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/artifact-audit.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9168baa640f7009fdc57ad7ec16a7d74824b9d38",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/artifact-audit.py",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a4bd0a33f4f03c4a8d672a210a87cdc70d8f682e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/audit-helper-hashes.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "5bee6c48ae59104f0cd03f14b5241fecce57516c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/browser-font-delivery-wrapper.mjs",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9e290626d9bdf28699b5eed8b03a9d8e0fe79f3a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/browser-results.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f172d7d6f27da69778fc149f181cc671ef26ffec",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/ci-code-candidate.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ed4091738cc21122b1b372ac905c1f86c3e74d89",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/ci-postmerge.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "df7add5e9945a067ec9a8ce74869ad456f541017",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/ci-review-tail.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "97a83b704d1c4bcefe93208fc693b0db3d1a4260",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/cleanup-inventory.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c7c2cd2f8e82675a69b586c8af893dfe201d4ff3",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/cleanup-result.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9507936df3d200d9de553ca85a4db882c8de1d13",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/dmg.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "12b0517305ccddad22b2e457fb015c8f1ddaef48",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/draft-release.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "6a5fbd58662d234122967d7e8464bfb8f099b7af",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/font-delivery-diagnostic.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "2e6dd9dbf09c66f6d082254532b3199eafa91ea5",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/latest-dark-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8eec92a43026e406630ea9a7296bae78d4179a5d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/latest-light-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "633af497734bbecd3b132df2f2c27a7669ee99e4",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/latest.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "6a89725e6fd0da8765aab6814aa930f5d721a925",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/local-bundle.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d34e140a7e5e2c712bcf7c7d342850fc06839fe1",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/macos-audit.py",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "3b0781fe72ae397fa2b3aa677fdb1f29bad1f862",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/macos-bundle.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "1f9b6f8caa984175c5bbacf648a145e63e442d17",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/primary-preservation.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "5f0ff4605e6f833a10422f67c8a846f215024a30",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/public-audit.py",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "1cbb3e81afce59551b04a9680863883b1b9a2a56",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/public-release.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "96fcf80c830063c3b227287b657fca519d128ef7",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/public-verification.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "b506809b6487ce043e17abbd78ea8a44ac2c832e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/ready-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "eb612f5aa382d3fd5d648708038f2832a9e596ed",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/release-notes.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "b280fe80c93c676ab9b41b3bc8229bce0f6bc3f5",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/desktop_v089_release/release-workflow.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c39a517c426ed57cdbca6425976d47882aae39d3",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_browser_checks.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "44987709aaf4735cfa92207c0538e6b96b25a3fa",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_ci_contracts.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "cc15a8ef590dfad330de0881ebd188214a726741",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_ci_gym_inputs.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c0f32fd19f32d419595f41337e84e494b4ab15d8",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_filtered_bootstrap.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "021e9d807bad5babbfedff381d184ac85193f0b2",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/artifact-map.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "3ba3726a0739929a3bf448399278e913094ee736",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/compatibility-pdf-font-gap.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "29f1f6ee5f777250babd09055fe1236d4593fbb0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/duration-refresh-result.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "3ca278b5bcd4ea7bfa774cd67d602dbfe2f7c1af",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/final-ci-audit.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c1e0b724c28519efebb3991b36fb8363c0362d65",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/final-tree-footprint.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "18632f6a3f3afb72539520088396d1a46ca77b7b",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/issue-final.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "382add45f8ae345bf3472cd856b39617d1d9ea5e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/local-devel-ref-sync.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "e30b82cdc204946a6d28c9dce8b412f2d74825e0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/merged-pr.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "755db91e20c7c8eb6434fbacb3df2c333c2aa215",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/primary-sync-result.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d95735dff63b9283dd39f5c92623b62d5f023157",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/render-artifact-root-verification.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "dcd7c1133f0b2e8842ac4c963d4a56d1c6b4c525",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/render-workflow-audit.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "0d633007f92a40b377e62bed21fd98db58f3358b",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/render/output/renderer-baseline/canvaskit-readiness/baseline-report.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "e98246c223dec029dc187bfd9b5ef324b29fdb65",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/render/output/renderer-baseline/canvaskit-readiness/browser/table-border-style/canvaskit-default-screen.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8d373282fc63eb417cc3927e1d846b058a0d2630",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/render/output/renderer-baseline/canvaskit-readiness/performance-summary.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "0061fb386e12fe4988526d86b899d1be4bce90de",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/render/rhwp-studio/e2e/screenshots/render-diff/basic_KTX.hwp-ce76d1d6-p01-layer.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a7477aaf3458c5f05a6a242bf5496a5de25df15f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/render/rhwp-studio/e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-direct-raster.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "75bb2f9536892956cb428a0c31f70352d7f5b626",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/render/rhwp-studio/e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-direct-vs-compat-diff.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a99d22b679cb5ab8d5373346ea55b5b246f6e035",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/render/rhwp-studio/e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-direct.pdf",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "86c4df4ae69c62412e9ab055ee8486af5a4c86a3",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/render/rhwp-studio/e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01-pdf-raster.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a293d93eb2ea0dcf06a0946dc1a1d0d0a56b673f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/render/rhwp-studio/e2e/screenshots/render-diff/biz_plan.hwp-618f6a38-p01.pdf",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a70507cc8d05762fa06d643e74058b9313792161",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/render/rhwp-studio/e2e/screenshots/render-diff/pdf-results.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "880e54ca5ba16a1fbbe3a4f1adf3a8cdf268ae84",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/render/rhwp-studio/e2e/screenshots/render-diff/pdf-summary.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "195a1c20b1d142724b0cbfe6662f6d7d80f23454",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/render/rhwp-studio/e2e/screenshots/render-diff/results.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "e82bc674a58a813408728d0e234c3c5ac051a069",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/render/rhwp-studio/e2e/screenshots/render-diff/summary.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f31524174988bf395701452be2e2a2e374935cf0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/root-final-merge-gate.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d4d52c482cb6ba8f37a811d7a6c7f088a3ee568e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_final_ci/worktree-cleanup-result.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "94f7ca26f2987416696d94f31332076ece4982b3",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_font-pending-edited.hwp",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "41eb0c9034956e75d8cfe020c41ecfca1cd8b1ff",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_font-pending-hwp-reopened.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "0752aa6b8d8d1c6c10f46c12dd0ccdb76c8dcb82",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_input_manifest.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "cb4cdb22f65ea90e89da24ea44f05b0f615d80ac",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_native-start.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "3b02dbb13ab0557ccdc3ee25ac3ff2861ecda6a9",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_responsive/artifact-map.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "81604f56219911c1892ff255efc60f709a2e95b0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_responsive/responsive-download-before-control.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "04ce0b0385bdf09528dbd7dec168d82e6e4d8ab4",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_responsive/responsive-download-final-results.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "6ce5e17fe3ffde77a9939d298df31c9761b3506b",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_responsive/responsive-download-icon-header-en-600.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "5df18919801851a5c05b3a17bd7a49beda2b2afa",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_responsive/responsive-download-icon-header-ko-1280.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "fdea0f97cdde8ce1eb36400a51d0ce39a1ec842f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_responsive/responsive-download-icon-header-ko-480.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "13fcd35b72e69d66524d34e66b2a4f6c7ee0016c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_responsive/responsive-download-icon-ui-probe.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d56b5c24a51256384cb653e3e4ca7b4907aac195",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_responsive/responsive-first-focus-probe.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "acd90d91db72d36d4c70d08c20e8aaaf8528b2e1",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_responsive/responsive-first-focus-ready-delayed-probe.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9b6031fac8dc630fb40ba722f478535ac844450b",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_responsive/responsive-first-focus-ready-probe.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "4b3b14c9d9e5f9ccf6f1db2274dbacf2cdf4f4fe",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/30098/30098_float_host_split_lineseg-hidden-text.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "6213ff2460e70daab397d68fb39d41116122ff08",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/30098/30098_indent_over_stored_cs-hidden-text.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9c8a5bfa8d22d835b4d2af441e00d4666301de2e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/30098/30098_indent_over_stored_cs_014.svg",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f714f9da99a40c2c35b7ed32db647cb68834bf89",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/30098/30098_resident_registration_reform-hidden-text.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "4e81942e421b6bac47daaad98113d3d98be234bf",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/30098/browser-white-glyphs.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "69ca9f7db418d6f01da64f6efa22bdb8d5a390ae",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/30098/export-manifest.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "02df7fcf98a03b6ce7d9b9d2411f1395f9b4a01e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/30098/hidden-text.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9c8a5bfa8d22d835b4d2af441e00d4666301de2e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/30098/page.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d0f2033d97f86613cc932a2849d5d8ec61ca502d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/30098/region-marked.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8317700e74d7b9f1d9b295a12edbd6c28f93202a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/30098/region.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a46be75fb998d729117099482ccce93f0d5287df",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/coanchored/browser-white-glyphs.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "edb9d759bfca924177f36aed0379496091b5dd83",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/coanchored/coanchored_square_pair_center_slack.svg",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "87485c9358e06cb96df6cca1c7d2595e6f319f3a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/coanchored/export-manifest.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d3f96f5ef3925b24ab57c8a9092be542b8cd38b0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/coanchored/hidden-text.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "02acbfab104eaf26bba6554c52c3d58500738e1f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/coanchored/original-xml-extract.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "3afca63b5ed65aa515fc7fca19d13ace39679baa",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/coanchored/page.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "28f6856621171eaadfead7d4d4dfc6fd4934d4c2",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/coanchored/region-marked.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9846b3d25d46869414358a19f237c801bc86b18f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/coanchored/region.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d4e40e7375041f64d6fe6c6f8463de4f8a1a2a96",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_security_genuine/genuine-hidden-evidence.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "843e14d12ef1e51faba25cf1d8708d5004d8211c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_validation.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "e84d71c2b9aa81aa186168d80d137eef9d977587",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/artifact-map.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "e990cee68725e9c91e8d86b9d322880f7b9275c1",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/business/font-mismatch-evidence-official.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "543d5ed2522c847fa779781b484f40ddaac32473",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/business/hancom-actual-fonts-and-spans.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "27ec4a12aa369508297686b1a03fe328fed08571",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/business/official-actual-font-programs.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "aa98dcbc3fc6d958c642efc66d52a73111577066",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/business/official-chrome-actual-platform-fonts.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c0d6d3cfb2540adce690ec493d6aa4c2b1472f3b",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/business/same-coordinate-paragraph-anchors.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "2f03c79cf0dba701290cec1556c24223eac636ef",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/business/same-coordinate-rule-geometry.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "22c9f69a295a6751e9344150c2a925f3216d9c83",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/committed-provenance.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "94e4b719a9cdca52d0724b605af6765f4fbc3164",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/direct-probe-result.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "40ec75acc665bbe44fe514ecaba002419ba24e74",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/latin/native-compatibility.pdf",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "4601d4aac03399c6118212f5dd800a4e3a7ff203",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/latin/native-pdf-export-result.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "4ca81c7038d68eb638f4a532518b65f2455dbec6",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/latin/native-pdf-overlay-metrics.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "b738494557a4ab1c81411145f138afcae1cce23d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/latin/native-pdf-overlay-p001-96dpi.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "7aaa3fb55ea79a86520fe611a8fe53adec0af6d1",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/official-sweep-final/hp110-business-p1/manifest.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "0da2ddf8aa972c18b0fbf5e818901d01486b2ca1",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/official-sweep-final/hp110-business-p1/overlay/overlay_001.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "99a0a9aad9b54be8c34a20f7bacee0651be7168c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/official-sweep-final/hp110-business-p1/overlay/overlay_metrics.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "5162bea0a5ac976eaedd0ce808b52094c6c8b274",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/official-sweep-final/hp110-business-p1/review/review_001.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "db3ce1258c9d0b4a9e8fde3dbfb4141a46d29f1c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/official-sweep-final/hp110-business-p1/run_manifest.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "82d360ae641081980bbf501f2c73dee92e4098b2",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/official-sweep-latin/hp110-latin-p1/manifest.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c4f36a470bf9bf33679dfaac1177562a76962d9d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/official-sweep-latin/hp110-latin-p1/overlay/overlay_001.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "bdf42eb53dd72051c86823d757e3760ec73eff5e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/official-sweep-latin/hp110-latin-p1/overlay/overlay_metrics.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "99496bf015fb69de6a5baf0cb1f6d266daae9d50",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/official-sweep-latin/hp110-latin-p1/review/review_001.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "e4916f9291d03d85713e1d03b30b026853c67b8d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/official-sweep-latin/hp110-latin-p1/run_manifest.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ce58335529be1876cae4a3bb7b4bf544cc68483f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/selected-assets.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d021dc90a910438901f72cd7aa2478e3ea8d8f47",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp110_visual/validation-summary.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "da9f546b94e7caee5623dc290b26d7fbbb03447c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-local-app-bundle.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d03e6ea8530e0da9f7416779ed5742f32a25e1ee",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-local-build-node22.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "7876767dde47a5d67b770ce8b394d69bdc918202",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-local-build.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "1d9674132bb80823d36fae9a453f6603dae7faad",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v086-failed-release.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "e71ec2d41229b6eb0e39c16404a45e9e96325567",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v086-macos-failure-excerpt.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "4e0ae1b062452dd408aa9a42f9466a5335d4bcbc",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-attempt1-contract-hold.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9c55815ac7dcf8cceffffe08d284a8e57ee3e8fd",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-attempt2-ci-audit.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d49dd59499627c8466f51f602fa0179d6d5a0968",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-attempt2-macos-log-excerpt.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "bcb629774a8db24a9eb99db63e4ae3da0b3cfa24",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-dmg-verify.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "90ea279d96c284f7edbb45ce890c9874fcdc1d93",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-draft-inventory.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "19f9e40540d3fbaf955923a2b8a5a20f6e72ac02",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-draft-release.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "4490c89b159e4de529d73dca64ee31014835f725",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-local-validation.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "bfb63a4ded728e6116ce8dadf971f8bf6dfe4691",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-macos-bundle.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9702713646c801b321c522117ed1b77379379f08",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-macos-contract-excerpt.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f7f2ff9b8edc45c78dcf390965323c7dabe2dac8",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-macos-retry-request.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "4b3cb46f491e2eaba467ef9f27600d5304ab67f7",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-postpublication-boundary.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c2785864de2bdc5b19ceb769a5a989633e7fd5f0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-public-release.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "5537445d322f5b5c295218718c9c8efd55fd1973",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-public-verification.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "be327a00134d975f753c32f42a6886a575d9f1eb",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-source-contract.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "275e33900751e03803c642b1976794cbf3b106b6",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-updater-signatures.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "eb5a0c96c99360de76569af59a0b24a17d93136e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-validation-controls.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "033460b101c6129a99ee9d5523085b39e8a78404",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-windows-icon.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "95a17c7bd015cbcbdffe56c2c3312f05013dd42c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-windows-only-latest.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "41271d131c64028189f29d6794a7391b200b7935",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-windows-signature.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "5717a0af665c2308313a778293fd9f6202bc6572",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-windows-wasm-contract.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "69135e6f0d1c11df0e95817970087ef1d785eda0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/desktop-v087-workflow-yaml.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c9e8af08b3c73fcfa1732d4f4115181f272938b9",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/local-package-verification.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "0967934edec6ecc6b0e332e6b2edd0282a0325e3",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/local-validation.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ff10a82d8493cf35ce6fc02d36013f593cf09ca3",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/logo-input-snapshot.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "2166089a32009296116d8ba1d9f450362d8a0cf6",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/macos-v083-validation-control.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c4a6e50a6e4eeb6acb9aa5833b84b6c9bf41fbd6",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/pr113-final-ci-summary.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "46d14f99ebff2db7b15aca8b03f2a8e5d1f46abe",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/pr113-postmerge-duration.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "db4c9f66dee1386f7eb1b4ac79a1f7bf874de74c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/pr114-final-ci-summary.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "2ed0c6891e37c74481b316a920a170a10f1d09c9",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/primary-preservation-after-v087-publication.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "3be1b37132112cd59ea84bb07fef1ce04bff5ed1",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/primary-preservation-final.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "00d9da02efb2f4057507de98d3278f014a11b605",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/public-latest-after-v087-hold.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9402b14ad65fb2e199a477488ead810a93c03b16",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/public-latest-v087.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "5dffbfa8a0b4dfbcd793ec430e0ab1f8cf15b08f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/verify-macos-bundle.py.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "b19339533c9a05185b4d80c0e35317994d6fd529",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/verify-public-release.py.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ac1c1d545e2868f8c18f1c40357ce527eef73d46",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/verify-release-assets.py.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "6343f5e6b8494a8c471bd63b8bffda57f0917c56",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/verify-updater-signatures.py.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "fc02eed6391dbf4a32c6075622f556b752eb20d0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/verify-windows-installer-icon.py.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "2b7ab0fc34e33d9652bb0516534cff79544ba6f5",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/workflow-contract-tests-python313.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d0bb7484dfbeb2d9f0d6c03b91af35e97e0c612b",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/workflow-contract-tests.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a8cb2a64f5a0c1cf11a536918b58f9a8e937a861",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp112_release/workflow-yaml-validation.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "458b8440056374defb95d946d44f08952fb90ad0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp126_update_nudge/after-ready-nudge-dark.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "30ff9e43b16cb711aa2de0828a55931db8504f6c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/task_m100_hp126_update_nudge/after-ready-nudge-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a66bde701624c9d3b82c58ed7e46d2291a8ff366",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_20261003/ci-117-tail.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "94d7215df9361d25d2e05e118f0327ada75285cd",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_20261003/ci-117.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "cb1744f03b46228f711a746261cb929b4bbb6834",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_20261003/postmerge-117.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "0e2e6a080c4d3df75c253c078eb478dc452e3221",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_20261003/primary-preservation.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "3e04bb4f57d862144caa72ab4f16f43dfe74e145",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_20261003/public-browser-after.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8c4bb6aafdcc1edd004b8495b9a5c307501a658c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_20261003/public-browser-before.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "735b21bb596b1ed23206c121c8379316e8b0aeef",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_20261003/public-browser-cleanup.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f0dddda17f1e52ccbc59f0354506c6b053194a35",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_20261003/public-browser-upgrade-probe.mjs",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d161853a05d3516918c220283ca66b63b00dd5ef",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_20261003/public-http-after.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "fe16d053abee83fb7409e2130ebdeab66aa2d4b4",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_20261003/public-http-probe.py",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "7d68bdb8f05d54841aa4f4fc59753b5ecdcb0e93",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_20261003/release-scope.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "bdad94513668ec4aed0b7e9ef58f59995ce500bd",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/browser-probe.mjs",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "66e181c4af05e0f131470cf5b8b7be7bbd0fd296",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/browser-results.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f15b4b0821013bb547a1b30d970219c54d14e5c0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/candidate-scope.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "37bdcf469f1a7bc216d3ed32ad20bc853309ce08",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/ci-118-tail.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "dd475de8691f43ad932ed57aaff614911751a527",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/ci-code-candidate.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "855561f55559ae508cae1afe05efb9fb52f5c24b",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/cleanup.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "948561d6c6de50490c85e52acd1fd04105446f45",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/fresh-wasm.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "28e5415511b23172887da2f56f19b6d0eedbdccb",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/local-ownership.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a07c789f45424709daf24b9b46be6d4e822e011f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/new-logo-preview.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ade552d4b349f8e5d049c7eb531741ba3b27730a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/ownership-final.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a07c789f45424709daf24b9b46be6d4e822e011f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/ownership-start.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "57fa3e88367cccdab4aef214dc828a28ee75ad66",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/postmerge-118.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "764fbe7ae5a70a38b3ae62feff3493aab6254e76",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/prepared-assets.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "6ee8c0d9a8940c3834a1481fa8c2a80dcbd5e885",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/public-browser-before.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "735b21bb596b1ed23206c121c8379316e8b0aeef",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/release-scope.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "4a329e88ba1f9b8fa35364bf31a595844d2913a0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/source-assets.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "0e132b9e51be5b3c6759321b0cd3aa2bdcece0e3",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/assets/web_favicon_main_20261003/validation.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "485ae89cb4df72bf4094e818ea641c6d9a73ee37",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/pr/pr_1366_review.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ebba836249ba778e81679d7d64e582f9c54d8652",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/archives/task_m100_hp1_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "779aea18456b3c556a869dce31877cee0e9e63c1",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp110_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d3c1290eb9445b9ce76bc271522800e0123fbb2a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp112_release_retry.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "bc079f8b2462857c23025e758007eb61a5d38836",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp112_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "5e9f8fe542af05fa8a420f2beffb436a4e445401",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp121_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "29f47c4e7295f5e528b6019194cb9d6ee42847d8",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp122_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "fe1b8416952f76163dc9cc2554bcd1a6a7592a4f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp126_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "6da3b6de570121d40e830e542eb4e7af6b4eaf78",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp12_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "72a3182799e86bda5c4ccfaa144c151f4045f855",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp13_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "c673de9d4c31edb2e0e31a683566f195c2492951",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp18_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "b5be4ea9684f9a41433b6d68d2c203b11669fce6",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp23_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "929dabf9b5e66c961bb715cab603c95496da40b0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp26_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "aec7439a97ba1eac93c8999b12642fb3d2cd1526",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp28_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8b885a4040575f1240dbe77b55e335ca7465b8be",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp29_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "68389aaf68386cf4a509f11b84165da49a681073",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp38_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f2f943af03ed1af351db1a4c3e325e20412776d7",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp40_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "4599249821c26a895e691a31215dfc000508bd63",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp41_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "febe8045470f1c829e240bf0fecd91c0d7ed3a05",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp4_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a2c18acf79be2ef7010335e59410b1d90e65f1fa",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp51_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "1f8bf26ddfb90f04079dad546c9c77f7b8c73db9",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp59_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "2c33fbb9c08d38aa5ca13d6960849c2cb5b2dd86",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp5_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "fa3bc6d27740cb4f30275c0fac59fca9dc2ed46a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/report/task_m100_hp7_report.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "abf7af37d5e2680b304f6b0063f28cfdab59e253",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-about-en-paldyn.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ba2e6205c1d296653b5147037642c4ac1f2ca772",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-about-ko-paldyn.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a0ef1e2ccef51158bc8be1b09e6b87c713cdf49a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-apply-error.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "71b9e7d7c2ebcc66da2aea998e7337267f0cd83d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-applying.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "2d2cd1416f61280cfdab0c7949022a4bb7e2149f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-downloading-known.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ac6c8ea67528e1c9c3bce73c3f3c8b5bafbf7a3e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-downloading-unknown.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "aac4bd895448382a8c057605bba292d7751b46d6",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-latest-dark.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "84ec6d25200283f37e7d1af0abb8707740ce13e8",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-latest-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "2524fd20a3f6357f77221febe98151896c656b67",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-macos-ready-dark.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "fac2c330e248a14697c1fee9ab363343ce48c2ac",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-macos-ready-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "48e1095535d814419aaac3f6e88108b01e492089",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-ready-dark.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "dde9aef63f5eb0f25675107552abbd7800e3ee4a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-ready-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "68d88b72d64498f68dc8349e5ef1a7e30fac97cc",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-statusbar-dark-entry.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d255942c9b8ea70ad7dea39b7683933ba1ae4c13",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-statusbar-dark.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "1d5d17f7e95a3a59a487cef9e0bc064e7a57965a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-statusbar-light-entry.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "7d96c2190a9a71bccf11633c39e1817eb5005e2f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-quiet-statusbar-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d30179207ca8328bb9ad1dfca95c9a4bea08e2af",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-ready-short-height.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "796d7ec368f50450f52f45cf44d70342cbd6bce0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-ready-small-dark.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "4268cbf4e236546ce2b795bee79ab341eaaf5817",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-unsaved-small.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "25a451c04e859eb65ea69def5ec6a0b63d8fedb5",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/after-windows-ready-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "4c1959dc2688acd0b255bd25ffb75a5f0edf8954",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/applying-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a0781df3b6e627cad2840388ad7588c8c7d0e122",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/before-v088-ready-auto-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "adbc70d919eeadfdd5c550062706eae91b4c6911",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/browser-results.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "bce9060eadd583892a89e2889d4143807ada6602",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/latest-dark-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8eec92a43026e406630ea9a7296bae78d4179a5d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/latest-light-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "633af497734bbecd3b132df2f2c27a7669ee99e4",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/ready-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "eb612f5aa382d3fd5d648708038f2832a9e596ed",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_dialog_style_20261002/validation.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "6f5687c2962ab4c91e087f05453e553e89710472",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-about-en-paldyn.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ba2e6205c1d296653b5147037642c4ac1f2ca772",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-about-ko-paldyn.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a0ef1e2ccef51158bc8be1b09e6b87c713cdf49a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-apply-error.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "3d421493aeac6a808c3f708de516500bf8a6cd3b",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-applying.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "dff50ce75d28467ebd58867660f540738cd2063b",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-downloading-known.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "670ab42612b5648147f25b31ffbc33215a23a516",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-downloading-unknown.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "4ac51885e001683e30d236b7aa01dbbcdac261b3",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-macos-ready-dark.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d4f6fcd65fe2ae59380265b47f2d67019938db77",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-macos-ready-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "7d1b42f121a6b9be675c6402160ee7c9aca67b0a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-ready-dark.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "dde9aef63f5eb0f25675107552abbd7800e3ee4a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-ready-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "68d88b72d64498f68dc8349e5ef1a7e30fac97cc",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-statusbar-dark-entry.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d255942c9b8ea70ad7dea39b7683933ba1ae4c13",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-statusbar-dark.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "1d5d17f7e95a3a59a487cef9e0bc064e7a57965a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-statusbar-light-entry.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "7d96c2190a9a71bccf11633c39e1817eb5005e2f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-quiet-statusbar-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d30179207ca8328bb9ad1dfca95c9a4bea08e2af",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-ready-small-dark.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "221671e1c2ac13925adfe45ad882b4e1471ac5c6",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-unsaved-small.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9f2463245e208d2737625d90d7939c8e9d11d2cd",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/after-windows-ready-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "bc37f89e9c1bfda878552049bbf60a4d3081537f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/applying-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "69e4ae02a7f9da0a233921e05d6b0091eaf1060a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/before-v088-ready-auto-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9ca0e9e19e50a0578881931618d73418123bc429",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/browser-results.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d0aeacfa5f31a8bf00ae96038632af4e0dbaf4bf",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/ready-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "1c3d7f4948ec5a1b78cd746ac09c71fe02de9dfb",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_quiet_brand_20261002/validation.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ee630e9e23173e85e352fb065fddcd7da5fa9541",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/after-apply-error.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "656835a3d48a980d3bd8d45c2bd095098b79871e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/after-applying.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "af54ccf14631a463b761ad8f21297f85694c41ef",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/after-downloading-known.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "e2748b125f101e4c35efc345f7eb10469bdda425",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/after-downloading-unknown.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "470f6a8ff91a46298026e16d76d29a25f927468f",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/after-macos-ready-dark.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "3a3889876641015d0a2a4a472df7c58452e6551d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/after-macos-ready-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "15dc5ddb9abd88b3d34a19d3c16ba72d61e665e6",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/after-ready-small-dark.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "69967d102db9d2b016d4ad7bb57c7eade16b969d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/after-unsaved-small.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "905168a3c02ac10f01017885d41c2a634e2c5a50",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/after-windows-ready-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "924f8caef83a1050673c02b07b3a9000a4230ffc",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/applying-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "52b87720ef23c3d28a7053eb5b236cd7b4926412",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/before-v087-windows-ready.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "fb8b6985a31a138104cb5ed22afbf5881d4a90a4",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/browser-results.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "b4b2db41ff96aee30b6e02032ac929a50ec88298",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/module-probe-Cargo.lock.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "302d5ad0b9f6b18369c93d3a38255463b7aa16e0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/module-probe-Cargo.toml.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "286b5943463c2c0223158886f645dd7aaf29d0d4",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/negative-controls.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "348734d646d8bdad4dce7e9fd1177ebe5fbcd57b",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/negative-probes.py.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "e8031425aa26dc6deb137913a332a49cdfae382c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/primary-preservation.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "26060be0caffe7b3c4d7d25bda3150c6e8a5b089",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/ready-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "362e0a3a07e0231b4dbf43a0b3fbff62f6efe142",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_20261002/validation.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ab615164a7d839cb6da772d1ec55b99e6630a050",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_copy_20261002/after-apply-error.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "cf8b8bc8a5f6d3afa51899696ecb1d07ba932a9b",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_copy_20261002/after-applying.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "385cc0e26ee0bb0ade5ce45ebd718f92093597e0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_copy_20261002/after-downloading-known.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "bec76521db91caf759d91567cd056452b27d7926",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_copy_20261002/after-downloading-unknown.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "55f4aa3b9d62d7c0ea3be82a3a02064369f23bd1",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_copy_20261002/after-macos-ready-dark.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "b3edb759e7f610a50fff012f2a7ffacb41e9a1dd",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_copy_20261002/after-macos-ready-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "1d2fc243d3a4db65aee016aa2dcd037a78278527",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_copy_20261002/after-ready-small-dark.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "46058d8f4bec7c86a3b3a66dc3d99b97be8ef7fe",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_copy_20261002/after-unsaved-small.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d1f29c794c30157e1718c1752eb9d6ebd0bcf739",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_copy_20261002/after-windows-ready-light.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "55b08c3d1b1042f4785fbfeded64a48db9a395d8",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_copy_20261002/applying-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "69e4ae02a7f9da0a233921e05d6b0091eaf1060a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_copy_20261002/before-v087-windows-ready.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "fb8b6985a31a138104cb5ed22afbf5881d4a90a4",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_copy_20261002/browser-results.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "74058ddd569eab69a7c6491b97008f7f75710178",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_copy_20261002/ready-card.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "1c3d7f4948ec5a1b78cd746ac09c71fe02de9dfb",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/desktop_update_ui_copy_20261002/validation.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "45cb2dabb0f6137bfab5cddab9c4a3353b83d470",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/web_favicon_20261003/browser-probe.mjs",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a0bea957d5386465e89ee274e3263c1ba4cb2dda",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/web_favicon_20261003/browser-results.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8962a98ed6cae99beda22d5bea0e164a3fbcc0c6",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/web_favicon_20261003/extension-favicon-check.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a387564032aed404432a52e6224aedc1e6a76416",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/web_favicon_20261003/new-logo-preview.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ade552d4b349f8e5d049c7eb531741ba3b27730a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/web_favicon_20261003/prepared-assets.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "6ee8c0d9a8940c3834a1481fa8c2a80dcbd5e885",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/web_favicon_20261003/public-before.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "33c4bd7c9c21b46303f655e8443ea09767213857",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/assets/web_favicon_20261003/validation.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "5416f6aeb9f1aab225c5c648378e284117fa8d63",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/desktop_release_v0810_20261008.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "771b2d5c010355b41e3651ea5911bef4e625318c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/desktop_release_v0811_20261010.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f787d1631766ed56f48db9545689ee07796e8c77",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/desktop_release_v088_20261002.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9b99f1c10555cde8e10948bb068cbc1fa0f2e573",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/desktop_release_v089_20261002.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "61737552fffcf47cf836f264de11d1b56b32f1cb",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/desktop_update_quiet_brand_20261002.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "434a698257f70b6a9c1e70be5f31c7ca233a4c51",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/desktop_update_ui_20261002.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ae2f420ed97889795fbe283630894616580cb63b",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/desktop_update_ui_copy_20261002.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "fbade49d3870a406152033a907bb1ed8a739bbf4",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_1_stage1.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "66218f40ddfaeb42307ee9fec14745c5c0ac25e0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_1_stage2.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ae608a99a4455d909d3a9205e048889a03f58b51",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_1_stage3.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8c0072f4783199233017056a9e047b1e09afc1cc",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_1_stage4.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "513034eaff019e0556a5c277cc30b69cd016922d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp110_ownership.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "286b732c5dbbc71a87aef0fcce229fed52dadab6",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp110_sync_manifest.json",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "66b8a95da2b39caf7e4658b8736aad1194ee5722",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp12_stage1.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a5cc7eb5be7d5408ebbd2599ed0adb8bb6d73360",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp12_stage2.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "083c1d0fbecd3bda234f38293c22414aeae5687e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp13_stage1.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "68f24d6dc39fbc445c415c70bb789366f7818692",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp13_stage2.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "f50a470002027d26eb8080cfcb406c905c85d5fd",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp18_stage1.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "94d17031453dfdd481c6036faa14ed2d111806f5",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp23_stage1.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "718a7bcb4edbf84c919a569c7d4711de72aa68b6",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp23_stage2.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ce6c7b4c6fbc059ab1564ec495c78141778f4b72",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp23_stage3.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a255ddb1f4ada4b87c91bbae6a3991ec8ec7be75",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp23_stage4.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "8bab9bee007e448979028ceb90ed4a1f3431ec39",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp26_stage1.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "92787c6dd3186d0f446488a62e9ef881836db6c7",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp26_stage2.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "754c097b8b11bf02b819cb93b1fdce47ec323218",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp26_stage3.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "baf7a7bf6cd6f5134dccf9ce63bf4b3d5c403113",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp40_stage2.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "e226b48800c2859d65609aa6d33175d3224e32f4",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp51_stage2.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "cea00ebf346f87c50a922ac658d917b387031f27",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp5_stage2.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "b376fad9d1703acec0a80028c3ddb16c45338fb8",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/task_m100_hp7_stage1.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "7c6423b334a4f1a11e626d7af216f6bf3fb11811",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "mydocs/working/web_favicon_hanpage_20261003.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "e104692c591b52015df7d7cec7c6cd27c44cf9a0",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "npm/README.md",
+   "kind": "both_modified",
+   "base": "7cfbee52793df88891b67ac062f5484906c203d8",
+   "upstream": "89b055de749fdeed4d78cf09f86f1be9ff8f39dd",
+   "local": "f66cb5546d4e1eb0f6fbc59bd3986e4b3d472f64",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "npm/editor/README.md",
+   "kind": "both_modified",
+   "base": "239fc7cf2540029ace413a519e130eb8ef4a5f74",
+   "upstream": "4a623c7c16f26d16d9dd43e7ba770a1fa83556fa",
+   "local": "d1aebd6245fcace2dd28fe264df971a92459847d",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "npm/editor/index.d.ts",
+   "kind": "both_modified",
+   "base": "6b35540e676d4850fb91e4b186282955c6f45d74",
+   "upstream": "9ee1935e531c6449f7695f48b5c1495d78cac249",
+   "local": "2e8a59a5d9a8bb117ab6fc9c60b7bd530cd842d9",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "npm/editor/index.js",
+   "kind": "both_modified",
+   "base": "f4ed3c6c1be0a1cca7c6095ce91faaefdecc1d1c",
+   "upstream": "4637059eef13b50aec86e680d763291b6363388b",
+   "local": "11fc7e8096a22b7340869c0ecb8718e40f25e845",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "npm/editor/package.json",
+   "kind": "both_modified",
+   "base": "2b8346ed446aa44422b1020fb55760dd67b969e1",
+   "upstream": "6bebc900051f1b4c1d3c0d64c39d86a5a48dcae8",
+   "local": "39577f734ec5c648605e6befd37ab2ec762d014a",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-chrome/PRIVACY.md",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "d27b3fed5d88bff9d4a1b3a2d8d63aa281ec09f0",
+   "upstream": "d27b3fed5d88bff9d4a1b3a2d8d63aa281ec09f0",
+   "local": "ab0b1af545f5a70664bfc392ea1d4ef35691fa75",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-firefox/PRIVACY.md",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "3c57b9121f0798285495f73c2c8f0c79dfd1408c",
+   "upstream": "3c57b9121f0798285495f73c2c8f0c79dfd1408c",
+   "local": "38052cf5d7703a6039a08640d96b362d57de86cf",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/e2e/MANIFEST.md",
+   "kind": "both_modified",
+   "base": "e2ca02058767d5b81b01da62e9955e7ce7401ad2",
+   "upstream": "5e15f19180e196ecfebd93d627569fe68de4e365",
+   "local": "8b02e0e27f19f301884aec6b2acbea3c94f079b7",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/e2e/desktop-update-ui.test.mjs",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "a1d2c89504aa23f8c0c42a9ad5df03b09e9ad569",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/e2e/document-title-issue6566.test.mjs",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "fa0c3e4627d295bd9ed7dc44f246141ba064af4e",
+   "upstream": "fa0c3e4627d295bd9ed7dc44f246141ba064af4e",
+   "local": "029cdad8f1b183fd76545252750ed6469c5749e2",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/e2e/responsive.test.mjs",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "726a748f46d54127ddf01efe91203e8d239246cb",
+   "upstream": "726a748f46d54127ddf01efe91203e8d239246cb",
+   "local": "aed97d95ae67c8cd86c1ef92a44439f5bd6399e2",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/index.html",
+   "kind": "both_modified",
+   "base": "16f230b547fe7ddc3d5c5e788a82bb05c2d51900",
+   "upstream": "72c5142ec981f8d2e73615eed4cc5d18a72a558b",
+   "local": "536d26e22bed6d02bd1e24e5d9863d7282d633c3",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/package-lock.json",
+   "kind": "both_modified",
+   "base": "7a4fc8912bf97a52338ccc1e07c13a9112f434e9",
+   "upstream": "f1749ce90e980257b1fc562d1091f54b40427e54",
+   "local": "76e0d2cbdb30fdfe60ef5d332d06066e12c8b9ec",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/package.json",
+   "kind": "both_modified",
+   "base": "aa746561801c8be84de4c0097aec85c46539011b",
+   "upstream": "aa02fae220cdb855a1d885130a4354df759a8d8d",
+   "local": "8ef7f5bb4bc0b5e6ba04fc0bb587e98b2abbc10c",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/public/CNAME",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "410f8eea3eb26bcdc16f5e59e33daa923e168caa",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/public/LICENSE",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "30cff7403da04711c46979a06f6bf8eb10ee088a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/public/favicon.ico",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "6e917438847fb9e671c4925282e39b2f97835f01",
+   "upstream": "6e917438847fb9e671c4925282e39b2f97835f01",
+   "local": "13538e116a915301287d6a81e0270b137f0032b9",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/public/icons/hanpage-04-128.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "91add57c0602fcac27758074edf66aa0b309c00c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/public/icons/hanpage-04-192.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "ade552d4b349f8e5d049c7eb531741ba3b27730a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/public/icons/hanpage-04-256.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "328011cd1ec3adab88d6f07a7476ca23be557625",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/public/icons/hanpage-04-512.png",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "852916a3e07615446609694d6126d41f551b67b5",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/public/icons/icon-128.png",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "3cff968460921883dc14861f870db335d4a36078",
+   "upstream": "3cff968460921883dc14861f870db335d4a36078",
+   "local": "91add57c0602fcac27758074edf66aa0b309c00c",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/public/icons/icon-192.png",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "ee32aa7780f57ab077893d055981f4b3445d13a3",
+   "upstream": "ee32aa7780f57ab077893d055981f4b3445d13a3",
+   "local": "ade552d4b349f8e5d049c7eb531741ba3b27730a",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/public/icons/icon-256.png",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "e669f5908b9fb1b0949c37f21a06ef99943a9c8b",
+   "upstream": "e669f5908b9fb1b0949c37f21a06ef99943a9c8b",
+   "local": "328011cd1ec3adab88d6f07a7476ca23be557625",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/public/icons/icon-512.png",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "8f5cca2390e093022b93745f9660981c055be588",
+   "upstream": "8f5cca2390e093022b93745f9660981c055be588",
+   "local": "852916a3e07615446609694d6126d41f551b67b5",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/src/assets/hanpage-favicon.ico",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "13538e116a915301287d6a81e0270b137f0032b9",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/src/command/commands/file.ts",
+   "kind": "both_modified",
+   "base": "d87673e7296a979cfc3362267baf241b7fd4a57d",
+   "upstream": "d39c6f953ceeb29c343c5bb25daa273cff785959",
+   "local": "62ecf624edf89a51d5a35e12076d1be382ceabbd",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/src/command/desktop-file-save.ts",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "45135e95e5c94c533e3ce8f5ec5087f2b3bcfd66",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/src/command/file-open-picker.ts",
+   "kind": "both_modified",
+   "base": "b132184baad37c75610d1622adbff35dcf1d5cff",
+   "upstream": "f5be84e38834fd3e26c77361959f3ee2672ab11a",
+   "local": "2ff509cee98b9024f702ac3930ed8abe4a1b2883",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/src/core/desktop-bridge.ts",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "14c4986bd30b8a8e39aed03cb9109de4f784ca0d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/src/core/font-loader.ts",
+   "kind": "both_modified",
+   "base": "5ede08c3df66cd48bab352702aeb38222ed00e12",
+   "upstream": "674a011b84f20c2565e43a2dcc288c4525f54000",
+   "local": "91997ec25f3d0ac2fa4474dc2934e46a4d265903",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/src/i18n/locales/en.ts",
+   "kind": "both_modified",
+   "base": "dd0c3df6353b215fa70441f655ecffb9887ad42e",
+   "upstream": "c946863ad4e205fcb63087f3a87f9cdd876d8825",
+   "local": "08756c31996ce0cb1654bd4f663b3c07352ef031",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/src/i18n/locales/ko.ts",
+   "kind": "both_modified",
+   "base": "232e24b716a942318e32c0a89f1cd7be73b47005",
+   "upstream": "91a6e1cb2fd261f762c3f8d0e4154e1a0d74ee9f",
+   "local": "cea13baf95d7138da34d0d1ed6351b9d6e62157a",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/src/main.ts",
+   "kind": "both_modified",
+   "base": "91923c5cf0211fc6faf143ea269ec1b189b0fc24",
+   "upstream": "da0ad09382578752d251c7c8f058131739181bab",
+   "local": "54409c2cc271efe0d4575fa90ac49f756a8ea7b1",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/src/style.css",
+   "kind": "both_modified",
+   "base": "fec98dfafa3a94b027697d8d53ee140ec4b308d8",
+   "upstream": "8d08dbfa5dc998374d3d6fb6f44cdf26ca52337f",
+   "local": "05f1dc461290543090a729a7f041def8ff1fdb58",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/src/styles/menu-bar.css",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "4dd6bcb53eb09ff54d82489e1de7ec893feb6a92",
+   "upstream": "4dd6bcb53eb09ff54d82489e1de7ec893feb6a92",
+   "local": "21b5833134df06a0b25a9501ae628d5020f6546c",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/src/styles/update-notice.css",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "0af01992598c2aeea77756d1da4d8bf4d7cb4441",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/src/ui/about-dialog.ts",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "a3aba4e3c12144fb97500613412dd2c7b9e2f8eb",
+   "upstream": "a3aba4e3c12144fb97500613412dd2c7b9e2f8eb",
+   "local": "dc628237dc80dc1218706af39086f662380561ff",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/src/ui/app-download.ts",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "fd8f188ab09a4768f41dd3ab13e0730791e9040e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/src/ui/document-title.ts",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "b55dfd64fc834142f1109e0e8baf0436c0c3f7fb",
+   "upstream": "b55dfd64fc834142f1109e0e8baf0436c0c3f7fb",
+   "local": "ae1ababeba6e8aab340b3d6355a9d14e23f8fbd7",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/src/ui/update-notice-text.ts",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "aee85124570ce6643858a5d07124d5eeb6a9cf29",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/src/ui/update-notice.ts",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "96b42ae168a21a9466e0e7e879b7078ff3acf316",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/tests/desktop-bridge.test.ts",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "1c74581462d2557d39ffa8323354443a688df48d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/tests/desktop-file-save.test.ts",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "762ca4ca0dc351b161b88cd833ed8871eca653cd",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/tests/file-open-picker-fallback.test.ts",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "171e3d395b435f90d37f1af1d45dc23b28aeaaed",
+   "upstream": "171e3d395b435f90d37f1af1d45dc23b28aeaaed",
+   "local": "cd08268ec9261dc104319567276417a3ec1cdf1b",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-studio/tests/font-loader-timeout.test.ts",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9153711ef9eed39742d437bf87589f26914d9c3a",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/tests/update-notice-message.test.ts",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "56101f5d12bc06ed1b79c0b34079830313887a70",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "rhwp-studio/vite.config.ts",
+   "kind": "both_modified",
+   "base": "f860fb8fa46b057482c54a4fcef702d7d8a3c37f",
+   "upstream": "1f281c0ddc56dfc9bd22e016799e9bb05a30bdf3",
+   "local": "2f18db772440daa582dac2225fcfad37e524b954",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-vscode/README.md",
+   "kind": "local_modified_upstream_unchanged",
+   "base": "683cc6ef1ee7f6909bb35cafe837ea34996eaf8d",
+   "upstream": "683cc6ef1ee7f6909bb35cafe837ea34996eaf8d",
+   "local": "4c770a48528741af8378ec82f2268819fe5a3e24",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "rhwp-vscode/package.json",
+   "kind": "both_modified",
+   "base": "d2903c9317e4b75a2260325687f35ec88fd4580d",
+   "upstream": "79322d3de02f261c6fda39aa60e893304c4fdf8d",
+   "local": "e01329ba2a3a607d8de38bf0f8aaefbd16cc267f",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "scripts/ci-impact-policy.cjs",
+   "kind": "both_modified",
+   "base": "a98e62a315bbc1659d0924028ad949571e82ea69",
+   "upstream": "22ebfa66234181ef96c8556ea73a57f401bf9d0e",
+   "local": "66ba4614fb005a9ef0fd0c13968ac38f452b7206",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "scripts/hanpage-upstream-test-policy-bootstrap.mjs",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "9b335611fafe0e2bcb58cd30b7efdce5b5cdb5bb",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "scripts/tests/hanpage-upstream-test-policy-bootstrap.test.mjs",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "5a87e2c5e877f76a4e2566fc1684c2ccb3eb467e",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "scripts/tests/rust-test-suite-manifest.test.mjs",
+   "kind": "both_modified",
+   "base": "56413928f12c702371a8a3e45e44193afbccc18e",
+   "upstream": "a460ade5f3e7a6511b66b3eafac150ab640929d7",
+   "local": "79646e4fa3d4939c0c886b03163d8e81e5f97a73",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "scripts/tests/test_workflow_promotion_preflight.py",
+   "kind": "both_modified",
+   "base": "21ec83774e88e92b85d09aafb4a70562a81d6695",
+   "upstream": "f7d11e4dfa23061aa935cfb89d205bf0207dfeff",
+   "local": "3e5b18aa9839e34dc1de65011660dbac69d6e9d9",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "tests/cases/hanpage_desktop_update_state.rs",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "88ae4e2894c3825b5ad9679b87bcf12cc7e44f0d",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "tests/security_corpus_regression.rs",
+   "kind": "both_modified",
+   "base": "fd8f9f41702bc1bc089e8d91c48d2543a6032dc5",
+   "upstream": "bd60ef333b975eac09e87636373487812e92c797",
+   "local": "abdc942c49e49f72264ad02ac4796a90c752eb15",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "tests/suites/suite-policy.json",
+   "kind": "both_modified",
+   "base": "cccea0aec2208e713fa60c18d0034f61e3041489",
+   "upstream": "d2250adcdb65c9a96bd117eff183e91434bc13f0",
+   "local": "6cb5897eec54708c9250786c769790c2f172923c",
+   "local_mode": "100644",
+   "upstream_mode": "100644"
+  },
+  {
+   "path": "web/fonts/LICENSES.md",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "03415c011a5263a818b138a2a7ac06294c8a3423",
+   "local_mode": "100644",
+   "upstream_mode": null
+  },
+  {
+   "path": "web/fonts/OFL.txt",
+   "kind": "local_added_only",
+   "base": null,
+   "upstream": null,
+   "local": "d9382bde41574d8dbd6ca86bcff6d44a03718a8c",
+   "local_mode": "100644",
+   "upstream_mode": null
+  }
+ ]
+}

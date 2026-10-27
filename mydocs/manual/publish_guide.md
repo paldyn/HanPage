@@ -75,6 +75,24 @@ stable v* tag push → Release Binary 시작
 > 각 채널의 exact version 상태 판정이 이미 게시된 채널을 건너뛴다.
 > Chrome/Edge/Firefox 브라우저 확장은 스토어 심사 흐름이 달라 현재 수동 업로드한다.
 
+### 배포 WASM의 검사와 재사용 (#7473)
+
+Pages와 package publish는 `measure_render_diff_wasm.py --profile release --build-mode standard`로
+최적화 WASM을 한 번 만든다. 개발용 cdylib opt-in은 배포에서 자동 선택하지 않는다.
+`verify-release-wasm` action이 그 패키지로 기존 대표 Canvas/direct PDF 검사를 실행하고,
+source SHA·실제 브라우저 응답·패키지 JS/WASM 해시를 확인한 후에만 업로드한다.
+검사 실패·입력 누락·환경 준비 실패 시 업로드와 후속 배포는 진행하지 않는다.
+
+npm/VSIX는 검사를 통과한 `wasm-pkg`를 기존 download-artifact 경로로 재사용한다.
+Pages는 같은 패키지를 Vite로 묶고 `dist/rhwp.js`, `dist/rhwp_bg.wasm`이 검사한 바이트와 같은지
+다시 확인한다. WASM 재빌드 없이 검증과 게시 사이의 파일 교체를 검출한다.
+`release-wasm-validation` artifact에 빌드·소비 기록과 대표 이미지가 30일 보존된다.
+이는 대표 문서 검사이며 전체 문서 sweep이나 독립 한컴 정확도 판정을 대신하지 않는다.
+
+작업 branch에서 `deploy-pages.yml`의 수동 실행은 기존대로 Deploy를 건너뛴다.
+`npm-publish.yml`의 `publish=false` 수동 실행은 네 외부 게시 채널을 건너뛰면서 동일 검증 경로를 실행한다.
+기존 exact tag/source guard·게시 권한·production trigger는 변경하지 않는다.
+
 ### Gym 운영 경계
 
 Gym은 AI 에이전트가 rhwp CLI/API를 조합해 과제를 수행하는 기술을 학습·평가하는
@@ -96,9 +114,13 @@ Gym은 AI 에이전트가 rhwp CLI/API를 조합해 과제를 수행하는 기�
 | --- | --- | --- | --- |
 | Linux x86_64 | `x86_64-unknown-linux-gnu` | `ubuntu-latest` | `linux-x86_64` |
 | Linux AArch64 | `aarch64-unknown-linux-gnu` | `ubuntu-24.04-arm` | `linux-aarch64` |
-| macOS x86_64 | `x86_64-apple-darwin` | `macos-14` | `macos-x86_64` |
-| macOS AArch64 | `aarch64-apple-darwin` | `macos-14` | `macos-aarch64` |
+| macOS x86_64 | `x86_64-apple-darwin` | `macos-15` | `macos-x86_64` |
+| macOS AArch64 | `aarch64-apple-darwin` | `macos-15` | `macos-aarch64` |
 | Windows x86_64 | `x86_64-pc-windows-msvc` | `windows-latest` | `windows-x86_64` |
+
+macOS 두 target은 Apple Silicon `macos-15`에서 빌드한다. Intel target은 교차 빌드하고,
+두 target 모두 같은 runner에서 `rhwp --version`을 확인한다. Cargo cache key와 restore prefix는
+Rust target과 runner label을 함께 포함해 이전 macOS SDK의 `target/`를 복원하지 않는다.
 
 Linux AArch64는 cross compile이나 self-hosted runner가 아니라 GitHub 표준 native ARM64 runner에서
 빌드하고 같은 runner에서 `rhwp --version`을 실행한다. runner label의 현재 지원 여부는
@@ -236,8 +258,12 @@ cd dist
 zip -r ../rhwp-firefox-{version}.zip .
 
 cd ../..
-git archive --format=zip --prefix=rhwp-source/ --output=rhwp-firefox/rhwp-source-{version}-amo.zip HEAD Cargo.toml Cargo.lock rust-toolchain.toml rustfmt.toml Dockerfile docker-compose.yml .env.docker.example LICENSE README.md README_EN.md CHANGELOG.md CHANGELOG_EN.md THIRD_PARTY_LICENSES.md llms.txt src rhwp-studio rhwp-firefox rhwp-shared assets/fonts assets/logo/logo-32.png saved/blank2010.hwp ttfs/opensource/NotoSansKR-Regular.ttf scripts npm/README.md npm/editor bindings/Native tools/rhwp-subsecond tools/batch-convert mydocs/manual/agent_knowledge_map.md mydocs/manual/agent_troubleshooting_guide.md mydocs/manual/recipes
-zip -d rhwp-firefox/rhwp-source-{version}-amo.zip "rhwp-source/rhwp-studio/public/samples/*"
+git archive --format=zip --prefix=rhwp-source/ --output=rhwp-firefox/rhwp-source-{version}-amo.zip HEAD Cargo.toml Cargo.lock build.rs rust-toolchain.toml rustfmt.toml Dockerfile docker-compose.yml .env.docker.example LICENSE README.md README_EN.md CHANGELOG.md CHANGELOG_EN.md THIRD_PARTY_LICENSES.md llms.txt src crates vendor rhwp-studio rhwp-firefox rhwp-shared assets/fonts assets/logo/logo-32.png saved/blank2010.hwp ttfs/opensource/NotoSansKR-Regular.ttf ttfs/opensource/NotoSansKR-OFL.txt scripts npm/README.md npm/editor npm/hwpctrl-ocx bindings/Native tools/rhwp-subsecond tools/batch-convert tools/llm_verifier/verdict_protocol tools/llm_verifier/claim_bind tools/llm_verifier/criteria_decomp mydocs/manual/agent_knowledge_map.md mydocs/manual/agent_troubleshooting_guide.md mydocs/manual/recipes mydocs/manual/gym_optional_tool.md mydocs/tech/agent_roadmap/atlas_r1_r200.md mydocs/tech/agent_runtime/version_policy.md
+zip -d rhwp-firefox/rhwp-source-{version}-amo.zip \
+  "rhwp-source/rhwp-studio/public/samples/*" \
+  "rhwp-source/tools/llm_verifier/*/fixtures/*" \
+  "rhwp-source/scripts/tests/*"
+# 압축 해제한 별도 폴더에서 locked WASM → Firefox build를 실행해 재빌드 범위를 확인한다.
 ```
 
 Firefox AMO 제출 시에는 확장 패키지와 함께 검토용 source zip을 업로드한다.
@@ -410,6 +436,16 @@ git push origin v0.7.3
 tag push 직후 별도의 `gh release create`를 동시에 실행하지 않는다. `Release Binary`가 다섯 플랫폼을
 모두 통과한 뒤 GitHub Release를 생성·첨부하고, 같은 workflow run에서 `npm-publish.yml`을 직접 호출한다.
 Release job이 성공한 뒤 준비된 release note를 반영한다.
+
+공식 CLI archive는 다섯 target 모두 `--locked --features native-skia`로 빌드한다.
+Linux runner에는 fontconfig·FreeType 개발 패키지를 설치한다. 첨부 전에
+`scripts/verify_release_binary.py`가 실제 archive에서 CLI를 꺼내 버전·`export-png` capability와
+공개 소형 입력의 첫 쪽 PNG 생성을 검사한다. `--version` 성공만으로 PNG 지원을 판정하지 않는다.
+이 검사는 배포 기능의 smoke gate이며 한컴 출력과의 시각 일치를 대신하지 않는다.
+
+v0.8.7의 기존 공식 archive에는 Native Skia가 빠져 있다. 해당 tag의 workflow 재실행만으로는
+빌드 옵션이 바뀌지 않는다. 수정은 devel PR과 정규 devel → main 통합을 거치며, 기존 Release
+asset 교체나 새 tag 배포는 별도 릴리즈 승인 범위에서 수행한다.
 
 ```bash
 gh release edit v0.7.3 \

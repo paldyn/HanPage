@@ -5,7 +5,7 @@
 - 브랜치: `codex/upstream-sync-20261001`
 - 기존 HanPage: `cecaf1bbfec9a10778484d30ebb747280e7a02af`
 - 가져온 upstream/devel: `02530b9ed567a44663edb26c65fb565c4a79f00d`
-- 기록 성격: [PR #111](https://github.com/paldyn/HanPage/pull/111)에 제출한 source·입력·로컬 검증의 이력이다. 병합 이후 확정되는 SHA·CI·issue·정리 상태는 [오늘할일](../orders/20261001.md)과 PR에서 확인한다. 2026-10-01 사용자 "승인"으로 전체 검증·push·Open PR·최신 CI 통과 뒤 merge를 승인받았다.
+- 기록 성격: [PR #111](https://github.com/paldyn/HanPage/pull/111)에 제출한 source·입력·로컬 검증의 이력이다. 병합 이후 확정되는 SHA·CI·issue·정리 상태는 [오늘할일](../orders/archives/20261001_hanpage.md)과 PR에서 확인한다. 2026-10-01 사용자 "승인"으로 전체 검증·push·Open PR·최신 CI 통과 뒤 merge를 승인받았다.
 
 ## 통합과 기능 겹침
 
