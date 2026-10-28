@@ -1,0 +1,87 @@
+name: Desktop check
+
+# [#158] HanPage 데스크톱 앱 크레이트(HanPage-Desktop/src-tauri)의 포맷·Clippy·단위 테스트.
+#
+# 이 크레이트는 루트 workspace 밖의 독립 크레이트라 CI(ci.yml)의 Rust 검사가 닿지 않고,
+# desktop-release.yml 은 태그·수동 실행에서 번들만 만든다. 그래서 창 라우팅·닫기·종료
+# (src/windows.rs) 같은 단위 테스트가 PR 병합을 막지 못했다.
+#
+# - 데스크톱 크레이트를 바꾼 PR 에서만 실행한다. 이 크레이트의 툴체인·포맷 규칙을 정하는 저장소 루트의
+#   rust-toolchain.toml·rustfmt.toml 을 바꾼 PR 도 포함한다. push 트리거는 두지 않는다(검증 CI 는 branch push
+#   에서 시작하지 않는다 — scripts/tests/test_postmerge_duration_workflow.py 의 허용 목록).
+# - macOS 와 Windows 에서 각각 Clippy·테스트를 돌린다. 플랫폼 전용(cfg) 코드가 서로 다르다.
+#   포맷은 플랫폼과 무관해 macOS 에서만 본다.
+# - 프런트엔드(WASM·Studio) 빌드는 필요 없다. 개발 빌드는 tauri.conf.json 의 devUrl 을 쓰고
+#   frontendDist 를 포함하지 않는다.
+# - PR 은 캐시를 복원만 한다. 저장은 devel 에서 수동 실행(workflow_dispatch)할 때만 한다.
+
+on:
+  pull_request:
+    branches: [main, devel]
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'HanPage-Desktop/src-tauri/**'
+      - 'rust-toolchain.toml'
+      - 'rustfmt.toml'
+      - '.github/workflows/desktop-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 같은 PR 의 새 push 만 진행 중인 실행을 취소한다. 브랜치 이름은 fork PR 끼리 겹칠 수 있어 PR 번호로 묶는다.
+concurrency:
+  group: desktop-check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Desktop check (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    # 러너 hang 을 실패로 드러내는 상한. 캐시 없는 Windows 빌드도 이 안에 끝난다.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            runner: macos-14
+          - platform: Windows
+            runner: windows-latest
+    defaults:
+      run:
+        working-directory: HanPage-Desktop/src-tauri
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # 실제 툴체인은 저장소 루트의 rust-toolchain.toml 이 정한다(작업 디렉터리에서 위로 찾는다). 이 action 은
+      # RUSTUP_TOOLCHAIN 을 두지 않으며, 같은 버전과 clippy·rustfmt 를 미리 설치할 뿐이다.
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable 브랜치 (2026-08-01 시점)
+        with:
+          toolchain: 1.93.1
+          components: clippy, rustfmt
+
+      - name: Rust build cache
+        uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2.9.3
+        with:
+          workspaces: HanPage-Desktop/src-tauri
+          shared-key: desktop-check
+          save-if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/devel' }}
+
+      - name: Format
+        if: runner.os == 'macOS'
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Unit tests
+        run: cargo test --locked
