@@ -47,6 +47,7 @@ async function installNativeMock(page, { platform = 'MacIntel', state = { state:
       calls,
       pendingApply,
       pendingDocuments: [],
+      nudgeClaimed: null,
       emit(event, payload) {
         for (const handler of listeners.get(event) || []) handler({ payload });
       },
@@ -90,6 +91,15 @@ async function installNativeMock(page, { platform = 'MacIntel', state = { state:
         if (command === 'cmd_save_document') {
           if (mock.saveResult.error) return Promise.reject(new Error(mock.saveResult.error));
           return Promise.resolve(mock.saveResult);
+        }
+        // [#156] 앱 전체에서 버전당 한 번: 다른 창이 먼저 띄운 버전이면 거절한다.
+        if (command === 'cmd_claim_update_nudge') {
+          if (mock.nudgeClaimed === args?.version) return Promise.resolve(false);
+          mock.nudgeClaimed = args?.version;
+          return Promise.resolve(true);
+        }
+        if (['cmd_set_window_title', 'cmd_report_window_state', 'cmd_close_ack', 'cmd_close_window', 'cmd_open_in_new_window'].includes(command)) {
+          return Promise.resolve(null);
         }
         throw new Error(`대역에서 허용하지 않은 네이티브 명령: ${command}`);
       } },
@@ -684,6 +694,34 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
   await page.click('#desktop-update-nudge .dialog-update-nudge-later').catch(() => {});
   await otherTab.close();
   await page.bringToFront();
+  await page.evaluate(() => { window.__inputHandler.focus(); window.__quietUpdateFocus = document.activeElement; });
+
+  setTestCase('[#156] 여러 창: 다른 창이 띄운 준비 알림은 다시 띄우지 않고, 다른 창의 적용은 이 창도 보호한다');
+  await page.mouse.move(5, 5);
+  // 다른 창이 이 버전의 준비 알림을 먼저 띄웠다.
+  await page.evaluate(() => { window.__updateMock.nudgeClaimed = '0.9.12'; });
+  await page.evaluate(() => window.__updateMock.ready('0.9.12'));
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 300)));
+  check(!(await nudgeState(page)).visible && !(await snapshot(page)).visible, '다른 창이 이미 띄운 버전은 이 창에서 다시 알리지 않는다');
+  check((await snapshot(page)).entryLabel === '업데이트 준비됨', '하단 상태 표시는 그대로 준비됨이다');
+  await page.evaluate(() => window.__updateMock.ready('0.9.13'));
+  await page.waitForSelector('#desktop-update-nudge:not([hidden])', { timeout: 3000 }).catch(() => {});
+  check((await nudgeState(page)).visible, '이 실행에서 처음 띄우는 창이면 알린다');
+  await page.click('#desktop-update-nudge .dialog-update-nudge-later').catch(() => {});
+  // 다른 창에서 업데이트를 적용했다 — 이 창도 곧 닫히므로 적용 카드와 입력 보호를 보인다.
+  const applyCountBefore = (await snapshot(page)).applyCount;
+  await page.evaluate(() => window.__updateMock.setState({ state: 'applying', version: '0.9.13' }));
+  await waitState(page, 'applying');
+  const otherApply = await snapshot(page);
+  const blocked = await page.evaluate(() => Boolean(document.querySelector('.dialog-update-blocker'))
+    && document.getElementById('studio-root')?.inert === true);
+  check(otherApply.visible && otherApply.state === 'applying' && blocked && otherApply.applyCount === applyCountBefore,
+    '다른 창의 적용 중에는 이 창도 적용 카드와 입력 보호를 보이고 직접 적용을 요청하지 않는다');
+  await page.evaluate(() => window.__updateMock.setState({ state: 'error', message: '다른 창 적용 실패', retryable: true }));
+  await waitState(page, 'error');
+  check(await page.evaluate(() => !document.querySelector('.dialog-update-blocker') && document.getElementById('studio-root')?.inert !== true),
+    '다른 창의 적용이 끝나지 못하면 이 창의 입력 보호도 푼다');
+  await page.click('.dialog-update-later');
   await page.evaluate(() => { window.__inputHandler.focus(); window.__quietUpdateFocus = document.activeElement; });
 
   setTestCase('Desktop 최소·일반 크기에서 하단 업데이트와 확대 제어의 경계');

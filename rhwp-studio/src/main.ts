@@ -57,7 +57,18 @@ import { addRecentDoc, listRecentDocs } from '@/recent/recent-store';
 import { showDropConfirmDialog } from '@/ui/drop-confirm-dialog';
 import { showHwpPasswordDialog } from '@/ui/hwp-password-dialog';
 import { installAppDownloadButton } from '@/ui/app-download';
-import { initDesktopBridge, isDesktopRuntime, MENU_CHECK_UPDATE } from '@/core/desktop-bridge';
+import {
+  initDesktopBridge,
+  isDesktopRuntime,
+  isSecondaryDesktopWindow,
+  markDesktopWindowReady,
+  MENU_CHECK_UPDATE,
+  noteDesktopBlankDocument,
+  noteDesktopDirtyChanged,
+  noteDesktopDocumentSwapped,
+  openInNewDesktopWindow,
+  shouldOpenInNewDesktopWindow,
+} from '@/core/desktop-bridge';
 import { handleManualUpdateCheck, installUpdateNotice, isApplyingUpdate } from '@/ui/update-notice';
 import {
   EMBED_HIDDEN_EDIT_COMMAND_IDS,
@@ -904,6 +915,11 @@ async function initialize(): Promise<void> {
     setupEventListeners();
     setupModalFocusRestore();
     setupGlobalShortcuts();
+    if (isDesktopRuntime()) {
+      // [#156] 문서마다 창 하나 — 문서 교체·변경 여부를 네이티브 창 목록에 알린다(첫 문서를 열기 전에 등록).
+      eventBus.on('document-swapped', () => noteDesktopDocumentSwapped());
+      eventBus.on('document-dirty-changed', () => noteDesktopDirtyChanged());
+    }
     const desktopReady = initDesktopBridge({
       async openDocument(bytes, fileName) {
         if (isApplyingUpdate()) return;
@@ -931,6 +947,8 @@ async function initialize(): Promise<void> {
           confirmLabel: '확인',
         });
       },
+      isDirty: () => documentState.isDirty(),
+      confirmClose: confirmBeforeWindowClose,
     });
     installUpdateNotice({ beforeApply: confirmBeforeUpdateApply });
     // 시작 진입점은 순서를 지켜야 한다 — ?url= 로드와 자동저장 복구가 문서를 열 기회를
@@ -942,6 +960,7 @@ async function initialize(): Promise<void> {
       // 없는 문서 교체 경로이므로 띄우지 않는다 (드래프트 기록 자체는 유지).
       if (chromeMode !== 'embed') await offerAutosaveRecoveryIfIdle();
       await openBlankDocumentIfIdle();
+      markDesktopWindowReady();
     })();
     // embed 프로파일: PWA launch queue로 문서를 넘겨받는 진입도 문서 교체 경로이므로
     // 설치하지 않는다.
@@ -1178,6 +1197,15 @@ function setupFileInput(): void {
     // Finder/Explorer drop에서는 File System Access handle을 capture하지
     // 않는다. macOS Chromium에서 encrypted HWPX drag/drop 시 해당 IPC가 renderer를 종료시키는
     // 사례가 있어, 열기에 충분한 File bytes만 사용한다. 저장은 이후 save-as 경로로 진행한다.
+    if (shouldOpenInNewDesktopWindow()) {
+      // [#156] 데스크톱: 손대지 않은 빈 창이 아니면 끌어다 놓은 문서는 새 창에서 연다.
+      try {
+        await openInNewDesktopWindow(new Uint8Array(await file.arrayBuffer()), file.name);
+      } catch (error) {
+        showLoadErrorUnlessCancelled(error);
+      }
+      return;
+    }
     await loadFile(file);
   });
 }
@@ -1883,7 +1911,8 @@ async function renderRecentSubmenu(): Promise<void> {
 
 function shouldSkipInitialAutosaveRecovery(): boolean {
   const params = new URLSearchParams(window.location.search);
-  return params.has('url');
+  // [#156] 데스크톱에서 나중에 연 문서 창은 복구를 제안하지 않는다 — 다른 창이 편집 중인 임시 저장본도 보인다.
+  return params.has('url') || isSecondaryDesktopWindow();
 }
 
 async function offerAutosaveRecoveryIfIdle(): Promise<void> {
@@ -1939,6 +1968,7 @@ async function createNewDocument(): Promise<void> {
         { discardPreviousDraft: true },
       );
       await initializeDocument(docInfo, t('ui.sbMessage.newDocPages', { p1: docInfo.pageCount }));
+      noteDesktopBlankDocument();
     });
   } catch (error) {
     msg.textContent = `새 문서 생성 실패: ${error}`;
@@ -2156,6 +2186,17 @@ void initPromise.then(() => {
     plugins.load('ai-assistant').catch((error) => console.error('[main] AI 도우미 로드 실패', error));
   }
 });
+
+/**
+ * [#156] HanPage Desktop 창 닫기·종료 전 확인. 저장하지 않은 문서가 있을 때만 네이티브가 부른다.
+ * '저장 안 함'으로 닫으면 그 문서의 임시 저장본도 지운다 — 다음 실행에서 버린 문서를 복구하라고 묻지 않는다.
+ */
+async function confirmBeforeWindowClose(): Promise<boolean> {
+  if (isApplyingUpdate()) return false;
+  if (!await canReplaceCurrentDocument()) return false;
+  if (documentState.isDirty()) await autosaveManager.discardCurrentDraft('window-close-discard');
+  return true;
+}
 
 /**
  * HanPage Desktop 업데이트 적용 전 확인. AI 도우미가 자동 적용으로 문서를 고치는 중일 수 있으므로,

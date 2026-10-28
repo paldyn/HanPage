@@ -3,7 +3,7 @@
  * 백그라운드 준비 완료는 큰 카드를 자동으로 열지 않고, 구석의 작은 알림을 버전마다 한 번 띄운다.
  */
 import {
-  applyUpdate, checkUpdate, getUpdateStatus, isDesktopRuntime, MENU_CHECK_UPDATE, onUpdateReady, onUpdateStatus,
+  applyUpdate, checkUpdate, claimUpdateNudge, getUpdateStatus, isDesktopRuntime, MENU_CHECK_UPDATE, onUpdateReady, onUpdateStatus,
   type DesktopUpdateReady, type DesktopUpdateStatus,
 } from '@/core/desktop-bridge';
 import { formatMb, updateProgress, updateReadyMessage, updateStatusMessage } from '@/ui/update-notice-text';
@@ -265,13 +265,25 @@ function ensureNudge(): HTMLElement {
  */
 function maybeNudge(version: string): void {
   if (acknowledgedVersion === version || busy()) return;
-  if (card && !card.hidden) { acknowledgedVersion = version; return; }
+  if (card && !card.hidden) {
+    acknowledgedVersion = version;
+    void claimUpdateNudge(version);
+    return;
+  }
   if (modalOpen() || !windowAttended()) {
     deferredNudgeVersion = version;
     if (modalOpen()) watchModalsForDeferredNudge();
     return;
   }
   acknowledgedVersion = version;
+  // [#156] 창이 여러 개면 이 실행에서 처음 띄우는 창 하나만 보인다. 확인하는 사이 상태가 바뀌었으면 띄우지 않는다.
+  void claimUpdateNudge(version).then((first) => {
+    if (!first || status.state !== 'ready' || status.version !== version || busy() || (card && !card.hidden)) return;
+    showNudge(version);
+  });
+}
+
+function showNudge(version: string): void {
   const el = ensureNudge();
   el.querySelector('.dialog-update-nudge-title')!.textContent = `새 버전 ${version} 준비됨`;
   el.querySelector('.dialog-update-nudge-body')!.textContent = `${isWindows() ? '업데이트하면 설치 프로그램이 열립니다.' : '업데이트하면 앱이 다시 시작됩니다.'}
@@ -285,7 +297,11 @@ function showCard(manual = false): void {
   hideNudge();
   deferredNudgeVersion = null;
   stopWatchingModals();
-  if (status.state === 'ready') acknowledgedVersion = status.version;
+  if (status.state === 'ready') {
+    acknowledgedVersion = status.version;
+    // 카드에서 본 버전은 다른 창에서도 작은 알림으로 다시 알리지 않는다.
+    void claimUpdateNudge(status.version);
+  }
   const panel = ensureCard();
   if (panel.hidden) priorFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   panel.hidden = false;
@@ -390,6 +406,8 @@ function receiveStatus(next: DesktopUpdateStatus): void {
   // 파일 적용이 시작된 뒤 늦게 도착한 준비/다운로드 이벤트로 화면을 되돌리지 않는다.
   if (status.state === 'applying' && next.state !== 'applying' && next.state !== 'error') return;
   status = next;
+  // [#156] 다른 창에서 업데이트를 적용하면 이 창도 곧 닫힌다. 적용 중 카드와 입력 보호를 함께 보인다.
+  if (next.state === 'applying' && (!card || card.hidden)) showCard();
   if (next.state === 'ready') {
     if (readyInfo?.version !== next.version) readyInfo = { version: next.version, currentVersion: '', notes: null };
     // 백그라운드 완료는 큰 카드를 열지 않는다. 상태 표시줄을 갱신하고 작은 알림을 버전마다 한 번 띄운다.
