@@ -3,7 +3,8 @@
  * 백그라운드 준비 완료는 큰 카드를 자동으로 열지 않고, 구석의 작은 알림을 버전마다 한 번 띄운다.
  */
 import {
-  applyUpdate, checkUpdate, getUpdateStatus, isDesktopRuntime, MENU_CHECK_UPDATE, onUpdateReady, onUpdateStatus,
+  applyUpdate, checkUpdate, claimUpdateNudge, getUpdateStatus, isDesktopRuntime, MENU_CHECK_UPDATE, onUpdateReady, onUpdateStatus,
+  updatePreflight,
   type DesktopUpdateReady, type DesktopUpdateStatus,
 } from '@/core/desktop-bridge';
 import { formatMb, updateProgress, updateReadyMessage, updateStatusMessage } from '@/ui/update-notice-text';
@@ -15,6 +16,8 @@ let readyInfo: DesktopUpdateReady | null = null;
 let installed = false;
 let applying = false;
 let beforeApply: () => Promise<boolean> = async () => true;
+/** [#156] 적용이 실패했을 때(다른 창 때문에 거절 포함). 저장 확인 중 내린 AI 도우미를 다시 올린다. */
+let onApplyFailed: () => void = () => {};
 let card: HTMLElement | null = null;
 let entry: HTMLButtonElement | null = null;
 let eventCount = 0;
@@ -265,13 +268,31 @@ function ensureNudge(): HTMLElement {
  */
 function maybeNudge(version: string): void {
   if (acknowledgedVersion === version || busy()) return;
-  if (card && !card.hidden) { acknowledgedVersion = version; return; }
+  if (card && !card.hidden) {
+    // [#156] 열린 카드는 이 창을 보고 있을 때만 본 것으로 친다. 보지 않는 창의 카드가 앱 전체에서 한 번뿐인
+    // 작은 알림을 가져가면, 사용자가 보는 다른 창에는 알림이 뜨지 않는다. 돌아오면 다시 판단한다.
+    if (!windowAttended()) {
+      deferredNudgeVersion = version;
+      return;
+    }
+    acknowledgedVersion = version;
+    void claimUpdateNudge(version);
+    return;
+  }
   if (modalOpen() || !windowAttended()) {
     deferredNudgeVersion = version;
     if (modalOpen()) watchModalsForDeferredNudge();
     return;
   }
   acknowledgedVersion = version;
+  // [#156] 창이 여러 개면 이 실행에서 처음 띄우는 창 하나만 보인다. 확인하는 사이 상태가 바뀌었으면 띄우지 않는다.
+  void claimUpdateNudge(version).then((first) => {
+    if (!first || status.state !== 'ready' || status.version !== version || busy() || (card && !card.hidden)) return;
+    showNudge(version);
+  });
+}
+
+function showNudge(version: string): void {
   const el = ensureNudge();
   el.querySelector('.dialog-update-nudge-title')!.textContent = `새 버전 ${version} 준비됨`;
   el.querySelector('.dialog-update-nudge-body')!.textContent = `${isWindows() ? '업데이트하면 설치 프로그램이 열립니다.' : '업데이트하면 앱이 다시 시작됩니다.'}
@@ -285,7 +306,11 @@ function showCard(manual = false): void {
   hideNudge();
   deferredNudgeVersion = null;
   stopWatchingModals();
-  if (status.state === 'ready') acknowledgedVersion = status.version;
+  if (status.state === 'ready') {
+    acknowledgedVersion = status.version;
+    // 카드에서 본 버전은 다른 창에서도 작은 알림으로 다시 알리지 않는다.
+    void claimUpdateNudge(status.version);
+  }
   const panel = ensureCard();
   if (panel.hidden) priorFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   panel.hidden = false;
@@ -390,6 +415,8 @@ function receiveStatus(next: DesktopUpdateStatus): void {
   // 파일 적용이 시작된 뒤 늦게 도착한 준비/다운로드 이벤트로 화면을 되돌리지 않는다.
   if (status.state === 'applying' && next.state !== 'applying' && next.state !== 'error') return;
   status = next;
+  // [#156] 다른 창에서 업데이트를 적용하면 이 창도 곧 닫힌다. 적용 중 카드와 입력 보호를 함께 보인다.
+  if (next.state === 'applying' && (!card || card.hidden)) showCard();
   if (next.state === 'ready') {
     if (readyInfo?.version !== next.version) readyInfo = { version: next.version, currentVersion: '', notes: null };
     // 백그라운드 완료는 큰 카드를 열지 않는다. 상태 표시줄을 갱신하고 작은 알림을 버전마다 한 번 띄운다.
@@ -417,6 +444,12 @@ async function primaryAction(): Promise<void> {
   applying = true; // 저장 확인 중의 연속 클릭도 한 번으로 묶는다.
   render();
   try {
+    // [#156] 다른 창에 저장하지 않은 문서가 있으면 이 창의 저장 확인·AI 도우미 정리 전에 멈춘다.
+    const blocked = await updatePreflight();
+    if (blocked) {
+      receiveStatus({ state: 'error', message: blocked, retryable: true });
+      return;
+    }
     card?.classList.add('dialog-update-awaiting-save');
     let approved: boolean;
     try { approved = await beforeApply(); }
@@ -427,9 +460,13 @@ async function primaryAction(): Promise<void> {
     // IPC 시작 전에 상태가 실제로 paint되도록 다음 프레임까지 기다린다.
     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     const result = await applyUpdate();
-    if (!result.ok) receiveStatus({ state: 'error', message: result.message ?? '업데이트 적용에 실패했습니다.', retryable: true });
+    if (!result.ok) {
+      receiveStatus({ state: 'error', message: result.message ?? '업데이트 적용에 실패했습니다.', retryable: true });
+      onApplyFailed();
+    }
   } catch (error) {
     receiveStatus({ state: 'error', message: String(error), retryable: true });
+    onApplyFailed();
   } finally {
     applying = false;
     render();
@@ -438,10 +475,11 @@ async function primaryAction(): Promise<void> {
 }
 
 /** Desktop만 상시 진입점을 만들고, 이벤트 등록 완료 후 현재 상태를 복구한다. */
-export function installUpdateNotice(options?: { beforeApply?: () => Promise<boolean> }): void {
+export function installUpdateNotice(options?: { beforeApply?: () => Promise<boolean>; onApplyFailed?: () => void }): void {
   if (!isDesktopRuntime() || installed) return;
   installed = true;
   beforeApply = options?.beforeApply ?? beforeApply;
+  onApplyFailed = options?.onApplyFailed ?? onApplyFailed;
   entry = document.createElement('button');
   entry.id = 'desktop-update-entry';
   entry.className = 'stb-update-button';

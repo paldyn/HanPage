@@ -30,7 +30,8 @@ export interface OpenFilePickerDependencies {
  * 전환한다. `AbortError`는 사용자가 picker를 취소한 경우이므로 fallback을 열지 않는다.
  */
 export async function openDocumentViaPicker(deps: OpenFilePickerDependencies): Promise<void> {
-  if (!await deps.canReplace()) return;
+  // [#156] 데스크톱은 손대지 않은 빈 창이 아니면 새 창에서 열어 지금 문서를 바꾸지 않는다 — 저장 확인이 필요 없다.
+  if (!deps.desktopOpen && !await deps.canReplace()) return;
 
   if (deps.desktopOpen) {
     try {

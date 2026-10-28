@@ -50,7 +50,8 @@ test('편집기 입력·비편집 명령·포커스 없음은 그대로 문서 �
 test('main.ts 는 네이티브 메뉴 보호와 업데이트 적용 전 AI 정지를 연결한다', () => {
   const source = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
   assert.match(source, /if \(routeNativeEditToTextInput\(id\)\) return;\s*dispatcher\.dispatch\(id\);/);
-  assert.match(source, /installUpdateNotice\(\{ beforeApply: confirmBeforeUpdateApply \}\)/);
+  // [#156] 적용 실패 시 AI 복구 훅(onApplyFailed)은 desktop-multi-window.test.ts 가 확인한다.
+  assert.match(source, /installUpdateNotice\(\{ beforeApply: confirmBeforeUpdateApply[,} ]/);
   const fn = source.slice(source.indexOf('async function confirmBeforeUpdateApply'));
   const first = fn.indexOf('canReplaceCurrentDocument()');
   const unload = fn.indexOf("plugins.unload('ai-assistant')");

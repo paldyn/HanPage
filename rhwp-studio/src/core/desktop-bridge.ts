@@ -11,11 +11,16 @@
  */
 
 /** Tauri `invoke` 시그니처(필요한 부분만 로컬 선언 — @tauri-apps/api 의존 회피). */
-type TauriInvoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
-/** Tauri 이벤트 `listen` 시그니처(필요한 부분만 로컬 선언). */
+type TauriInvoke = <T>(
+  cmd: string,
+  args?: Record<string, unknown> | Uint8Array,
+  options?: { headers?: Record<string, string> },
+) => Promise<T>;
+/** Tauri 이벤트 `listen` 시그니처(필요한 부분만 로컬 선언). `target` 이 문자열이면 그 레이블의 창 이벤트만 받는다. */
 type TauriListen = <T>(
   event: string,
   handler: (e: { payload: T }) => void,
+  options?: { target?: string },
 ) => Promise<() => void>;
 
 interface TauriGlobal {
@@ -28,6 +33,10 @@ const EVT_MENU = 'hanpage://menu';
 const EVT_DOCS_READY = 'hanpage://documents-ready';
 const EVT_UPDATE_READY = 'hanpage://update-ready';
 const EVT_UPDATE_STATUS = 'hanpage://update-status';
+const EVT_CLOSE_REQUESTED = 'hanpage://close-requested';
+
+/** 설정 파일이 만드는 첫 창. 실행 중에 만드는 문서 창은 `doc-N` 이다(#156). */
+const MAIN_WINDOW_LABEL = 'main';
 
 /** [#59] 네이티브 메뉴의 "업데이트 확인" 항목 id. 스튜디오 커맨드가 아니라 브리지가 처리한다. */
 export const MENU_CHECK_UPDATE = 'app:check-update';
@@ -45,6 +54,140 @@ function tauriInvoke(): TauriInvoke | null {
 function tauriListen(): TauriListen | null {
   const g = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
   return g?.event?.listen ?? null;
+}
+
+/** 이 웹뷰가 들어 있는 창의 레이블. 브라우저에서는 `null`. */
+export function currentDesktopWindowLabel(): string | null {
+  if (!isDesktopRuntime()) return null;
+  const metadata = (window as unknown as {
+    __TAURI_INTERNALS__?: { metadata?: { currentWindow?: { label?: string }; currentWebview?: { windowLabel?: string } } };
+  }).__TAURI_INTERNALS__?.metadata;
+  return metadata?.currentWindow?.label ?? metadata?.currentWebview?.windowLabel ?? null;
+}
+
+/**
+ * [#156] 실행 중에 새로 만든 문서 창인지. 자동 저장 복구 제안은 처음 뜬 창에서만 한다 — 다른 창이
+ * 편집 중인 임시 저장본까지 복구 후보로 보이기 때문이다.
+ */
+export function isSecondaryDesktopWindow(): boolean {
+  const label = currentDesktopWindowLabel();
+  return label !== null && label !== MAIN_WINDOW_LABEL;
+}
+
+// ─── 창 상태 (#156 문서마다 창 하나) ────────────────────────────────────────
+/**
+ * 이 창이 지금 문서를 받을 수 있는지와 Rust 에 보고할 상태. 문서는 손대지 않은 빈 창일 때만 이 창에서
+ * 열고, 아니면 새 창으로 넘긴다. Rust 도 같은 규칙으로 창을 고르지만, 보고가 늦은 사이 도착한 문서는
+ * 여기서 한 번 더 걸러 편집 중인 문서를 덮지 않는다.
+ */
+type WindowPhase = 'booting' | 'startup' | 'ready';
+let windowPhase: WindowPhase = 'booting';
+let documentLoaded = false;
+/** 한 번이라도 편집하거나 저장한 창. 새 빈 문서를 만들 때만 풀린다 — 저장해 깨끗해져도 빈 창이 아니다. */
+let touched = false;
+/** 이 창에서 문서를 여는 중인 수(`loadBytes`). 여는 동안 도착한 문서는 받지 않는다. */
+let loading = 0;
+/** 지금 문서를 네이티브에서 넘겨받았거나 네이티브로 저장했으면 그 파일 경로(같은 파일 재열기 판단). */
+let nativePath: string | null = null;
+/** 네이티브 문서를 여는 중이면 그 경로. 문서 교체 신호를 받으면 `nativePath` 로 옮긴다. */
+let openingNativePath: string | null = null;
+let isDocumentDirty: () => boolean = () => false;
+
+function windowIsPristine(): boolean {
+  return !documentLoaded && !touched && loading === 0 && openingNativePath === null && !isDocumentDirty();
+}
+
+function windowAcceptsDocument(): boolean {
+  if (windowPhase === 'booting') return !documentLoaded && loading === 0;
+  return windowPhase === 'ready' && windowIsPristine();
+}
+
+/** 데스크톱이면서 이 창이 문서를 받을 수 없으면 `true` — 호출자는 새 창으로 넘긴다. */
+export function shouldOpenInNewDesktopWindow(): boolean {
+  return isDesktopRuntime() && tauriInvoke() !== null && !windowAcceptsDocument();
+}
+
+function reportWindowState(): void {
+  if (windowPhase !== 'ready') return;
+  const invoke = tauriInvoke();
+  if (!invoke) return;
+  void invoke('cmd_report_window_state', {
+    pristine: windowIsPristine(),
+    dirty: isDocumentDirty(),
+    nativePath,
+    // 여는 중인 파일 — 그사이 같은 파일을 다시 열면 네이티브가 새 창 대신 이 창을 앞으로 가져온다.
+    openingPath: openingNativePath,
+  }).catch((error) => console.warn('[desktop-bridge] 창 상태 보고 실패:', error));
+}
+
+/** 문서를 열기 시작했다(`loadBytes` 진입). 여는 동안은 이 창에 문서를 받지 않는다. */
+export function noteDesktopLoadStarted(): void {
+  loading += 1;
+  reportWindowState();
+}
+
+/** 문서 열기가 끝났다(성공·실패·취소). 실패하거나 취소했으면 다시 손대지 않은 창으로 보고한다. */
+export function noteDesktopLoadSettled(): void {
+  loading = Math.max(0, loading - 1);
+  reportWindowState();
+}
+
+/** 문서를 바이트로 연 직후(`document-swapped`). 네이티브에서 넘겨받은 문서면 그 경로를 기억한다. */
+export function noteDesktopDocumentSwapped(): void {
+  documentLoaded = true;
+  nativePath = openingNativePath;
+  openingNativePath = null;
+  reportWindowState();
+}
+
+/** 새 빈 문서를 만든 직후. 다시 손대지 않은 창이 된다. */
+export function noteDesktopBlankDocument(): void {
+  documentLoaded = false;
+  touched = false;
+  nativePath = null;
+  reportWindowState();
+}
+
+/** 문서 변경 여부가 바뀌었을 때. 한 번 편집한 창은 저장해도 다시 빈 창이 되지 않는다. */
+export function noteDesktopDirtyChanged(): void {
+  if (isDocumentDirty()) touched = true;
+  reportWindowState();
+}
+
+/** 시작 흐름(자동 저장 복구 제안, 빈 문서)이 끝났다. 이제 Rust 가 이 창에 문서를 보낼 수 있다. */
+export function markDesktopWindowReady(): void {
+  if (!isDesktopRuntime()) return;
+  windowPhase = 'ready';
+  reportWindowState();
+}
+
+/** 손대지 않은 창이 아니라서 받을 수 없는 문서를 새 창에서 연다(끌어다 놓기 등). */
+export async function openInNewDesktopWindow(bytes: Uint8Array, fileName: string, path: string | null = null): Promise<void> {
+  const invoke = tauriInvoke();
+  if (!invoke) throw new Error('데스크톱 앱에서만 사용할 수 있습니다.');
+  // 바이트는 요청 본문 그대로 보낸다(JSON 숫자 배열은 큰 문서에서 느리고 128 MiB 를 넘으면 만들 수도 없다).
+  // HTTP 헤더에는 한글·공백을 그대로 넣을 수 없어 이름과 경로는 퍼센트 인코딩한다.
+  await invoke('cmd_open_in_new_window', bytes, {
+    headers: {
+      'x-hanpage-name': encodeURIComponent(fileName),
+      'x-hanpage-path': encodeURIComponent(path ?? ''),
+    },
+  });
+}
+
+/** 네이티브 창 제목을 문서 제목(`document.title`)에 맞춘다. 창 전환·작업 표시줄에서 문서를 구분한다. */
+function syncWindowTitle(invoke: TauriInvoke): void {
+  if (typeof document === 'undefined') return;
+  const titleElement = document.querySelector('title');
+  let last = '';
+  const sync = () => {
+    const title = document.title;
+    if (!title || title === last) return;
+    last = title;
+    void invoke('cmd_set_window_title', { title }).catch(() => undefined);
+  };
+  if (titleElement) new MutationObserver(sync).observe(titleElement, { childList: true, characterData: true, subtree: true });
+  sync();
 }
 
 // ─── 열기 ──────────────────────────────────────────────────────────────────
@@ -96,6 +239,10 @@ export interface DesktopBridgeDeps {
   dispatchCommand: (commandId: string) => void;
   /** 파일 연결·최근 문서로 넘어온 파일을 네이티브가 읽지 못했을 때 사용자에게 알린다. */
   notifyOpenFailure?: (fileName: string, message: string) => void;
+  /** [#156] 지금 문서에 저장하지 않은 변경이 있는지(창 상태 보고·문서 수용 판단). */
+  isDirty?: () => boolean;
+  /** [#156] 저장하지 않은 창을 닫으려 할 때 사용자에게 묻는다. `true` 면 창을 닫는다. */
+  confirmClose?: () => Promise<boolean>;
 }
 
 /**
@@ -117,10 +264,10 @@ export async function initDesktopBridge(deps?: DesktopBridgeDeps): Promise<void>
     return;
   }
 
-  openHandler = async (emit, options) => {
-    const res = await invoke<OpenedFile | null>('cmd_open_document', { allowPdf: options?.pdfImportEnabled === true });
-    if (!res) return; // 사용자 취소
-    emit(new Uint8Array(res.data), res.name);
+  openHandler = async (_emit, options) => {
+    // [#156] 고른 문서는 파일 연결과 같은 길로 간다: 이 창이 손대지 않은 빈 창이면 이 창의 대기 문서로,
+    // 아니면 새 창(또는 그 파일을 연 창)으로. 이 창은 문서 도착 알림을 받아 대기 문서를 연다.
+    await invoke('cmd_open_document', { allowPdf: options?.pdfImportEnabled === true });
   };
 
   saveHandler = async (req) => {
@@ -130,28 +277,55 @@ export async function initDesktopBridge(deps?: DesktopBridgeDeps): Promise<void>
         data: Array.from(req.bytes),
       });
       if (res.status === 'cancelled') return { status: 'cancelled' };
+      nativePath = res.path;
+      touched = true;
+      reportWindowState();
       return { status: 'saved', fileName: res.name };
     } catch (e) {
       return { status: 'failed', message: e instanceof Error ? e.message : String(e) };
     }
   };
 
+  syncWindowTitle(invoke);
   if (!deps) return;
+  if (deps.isDirty) isDocumentDirty = deps.isDirty;
 
   // 큐 읽기부터 문서 열기 완료까지 같은 체인에 둔다. 등록 중 이벤트가 큐를 먼저
   // 비웠더라도 초기 drain은 그 열기를 기다리며, 미저장 확인·문서 교체도 경합하지 않는다.
   let pendingDrain: Promise<void> = Promise.resolve();
+  let initialDrain = true;
   const drainPending = (): Promise<void> => {
     pendingDrain = pendingDrain.then(async () => {
       try {
-        const docs = await invoke<OpenedFile[]>('cmd_take_pending_documents');
-        for (const d of docs) {
-          if (d.error !== undefined) {
-            console.error(`[desktop-bridge] 파일 열기 실패: ${d.path}: ${d.error}`);
-            deps.notifyOpenFailure?.(d.name, d.error);
-            continue;
+        // [#156] 대기 문서는 창마다 따로 있다. 첫 호출은 페이지가 (다시) 시작했음을 함께 알린다.
+        const initial = initialDrain;
+        initialDrain = false;
+        const docs = await invoke<OpenedFile[]>('cmd_take_pending_documents', { initial });
+        try {
+          for (const d of docs) {
+            if (d.error !== undefined) {
+              console.error(`[desktop-bridge] 파일 열기 실패: ${d.path}: ${d.error}`);
+              deps.notifyOpenFailure?.(d.name, d.error);
+              continue;
+            }
+            // 한 번에 여러 문서가 왔거나 보고가 늦은 사이 이 창이 문서를 열었으면 새 창으로 넘긴다.
+            if (!windowAcceptsDocument()) {
+              await openInNewDesktopWindow(new Uint8Array(d.data), d.name, d.path || null);
+              continue;
+            }
+            openingNativePath = d.path || null;
+            try {
+              await deps.openDocument(new Uint8Array(d.data), d.name);
+            } finally {
+              // 열지 못했거나 취소했으면 이 창의 예약을 푼다(문서를 열었으면 이미 교체 신호로 보고했다).
+              openingNativePath = null;
+              reportWindowState();
+            }
           }
-          await deps.openDocument(new Uint8Array(d.data), d.name);
+        } finally {
+          // 가져간 것이 실패 알림뿐이어도 다시 보고한다. 네이티브는 대기 항목이 남아 있는 동안 이 창을
+          // 빈 창으로 보지 않으므로, 비운 뒤의 보고가 있어야 손대지 않은 창으로 돌아온다.
+          if (docs.length > 0) reportWindowState();
         }
       } catch (e) {
         console.error('[desktop-bridge] 펜딩 문서 처리 실패:', e);
@@ -160,22 +334,49 @@ export async function initDesktopBridge(deps?: DesktopBridgeDeps): Promise<void>
     return pendingDrain;
   };
   const listen = tauriListen();
+  const label = currentDesktopWindowLabel();
+  // [#156] 창 전용 이벤트(문서 도착·메뉴·닫기)는 이 창 것만 받는다. 레이블을 모르면(이전 런타임) 전역으로 받는다.
+  const windowOnly = label ? { target: label } : undefined;
   if (listen) {
     // 웜 스타트: 이미 실행 중인 창에 새 문서가 큐잉되면 알림 받아 드레인.
     // [#50] listen() 등록 전에 도착한 EVT_DOCS_READY는 유실될 수 있다.
     // 등록 뒤 초기 drain으로 큐를 다시 읽어 콜드 스타트 파일도 빠짐없이 연다.
     try {
-      await listen(EVT_DOCS_READY, () => { void drainPending(); });
+      await listen(EVT_DOCS_READY, () => { void drainPending(); }, windowOnly);
     } catch (error) {
       console.warn('[desktop-bridge] 문서 알림 구독 실패, 초기 큐는 계속 엽니다:', error);
     }
     // 네이티브 메뉴 → 스튜디오 커맨드.
     void listen<string>(EVT_MENU, (e) => {
       deps.dispatchCommand(e.payload);
-    });
+    }, windowOnly);
+    // 저장하지 않은 창을 닫으려 한다 → 사용자에게 묻고 답을 돌려준다.
+    let closing = false;
+    void listen(EVT_CLOSE_REQUESTED, () => {
+      // 묻는 중 다시 온 요청: 살아 있다고만 다시 알린다(네이티브가 멈춘 창과 구분한다).
+      if (closing) {
+        void invoke('cmd_close_ack').catch(() => undefined);
+        return;
+      }
+      closing = true;
+      void (async () => {
+        try {
+          await invoke('cmd_close_ack');
+          const confirmed = deps.confirmClose ? await deps.confirmClose() : true;
+          await invoke('cmd_close_window', { confirmed });
+        } catch (error) {
+          console.error('[desktop-bridge] 창 닫기 확인 실패:', error);
+          await invoke('cmd_close_window', { confirmed: false }).catch(() => undefined);
+        } finally {
+          closing = false;
+        }
+      })();
+    }, windowOnly);
   }
   // 새 upstream의 시작 빈 문서가 파일 연결 문서를 덮지 않도록 초기 오픈 완료까지 기다린다.
   await drainPending();
+  // 이제 시작 흐름(복구 제안·빈 문서)이 이어진다. 끝날 때까지 이 창에 문서를 받지 않는다.
+  if (windowPhase === 'booting') windowPhase = 'startup';
 }
 
 // ─── 업데이트 (#59) ────────────────────────────────────────────────────────
@@ -236,6 +437,34 @@ export async function applyUpdate(): Promise<{ ok: boolean; message?: string }> 
     return { ok: true };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * [#156] 다른 창에 저장하지 않은 문서가 있어 업데이트를 적용할 수 없으면 그 안내 문구(네이티브가 그 창을
+ * 앞으로 가져온다). 적용할 수 있거나 확인할 수 없으면 `null`.
+ */
+export async function updatePreflight(): Promise<string | null> {
+  const invoke = tauriInvoke();
+  if (!invoke) return null;
+  try {
+    return (await invoke<string | null | undefined>('cmd_update_preflight')) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * [#156] 업데이트 준비 알림을 이 실행에서 처음 띄우는 창인지 네이티브에 확인한다. 창이 여러 개여도 한 번만
+ * 띄운다. 확인할 수 없으면(이전 런타임, 시험 대역) 띄운다.
+ */
+export async function claimUpdateNudge(version: string): Promise<boolean> {
+  const invoke = tauriInvoke();
+  if (!invoke) return true;
+  try {
+    return (await invoke<boolean | undefined>('cmd_claim_update_nudge', { version })) !== false;
+  } catch {
+    return true;
   }
 }
 
