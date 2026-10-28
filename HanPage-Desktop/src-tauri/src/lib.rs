@@ -608,20 +608,187 @@ fn build_document_window(
         .unwrap_or_default();
     config.label = label.to_string();
     config.center = false;
-    if let Some((x, y)) = cascade_position(app, label, config.width, config.height) {
-        config.x = Some(x);
-        config.y = Some(y);
+    let space = Space::current();
+    let size = (config.width, config.height);
+    let mut move_to = None;
+    let placement = match cascade_position(app, label, space, size) {
+        Some(position) if space == Space::Physical => {
+            windows_placement(position, size, &displays(app))
+        }
+        Some(position) => Some(WindowsPlacement::Direct(position)),
+        None => None,
+    };
+    match placement {
+        Some(WindowsPlacement::Direct((x, y))) => {
+            config.x = Some(x);
+            config.y = Some(y);
+        }
+        // [#159] 숨긴 채 대상 모니터에서 만든 뒤 같은 모니터 안에서 옮긴다(배율 변경이 일어나지 않는다).
+        Some(WindowsPlacement::Moved { create, target }) => {
+            config.x = Some(create.0);
+            config.y = Some(create.1);
+            config.visible = false;
+            move_to = Some(target);
+        }
+        None => {}
     }
-    tauri::WebviewWindowBuilder::from_config(app, &config)?.build()
+    let window = tauri::WebviewWindowBuilder::from_config(app, &config)?.build()?;
+    if let Some((x, y)) = move_to {
+        let _ = window.set_position(tauri::PhysicalPosition::new(
+            x.round() as i32,
+            y.round() as i32,
+        ));
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+    Ok(window)
 }
 
+/// Windows 모니터 하나의 물리 영역과 배율(나열 순서가 tao 와 같다).
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Display {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    scale: f64,
+}
+
+impl Display {
+    fn contains(&self, p: (f64, f64)) -> bool {
+        self.x <= p.0 && p.0 < self.x + self.width && self.y <= p.1 && p.1 < self.y + self.height
+    }
+}
+
+fn displays(app: &tauri::AppHandle) -> Vec<Display> {
+    app.available_monitors()
+        .unwrap_or_default()
+        .iter()
+        .map(|m| Display {
+            x: f64::from(m.position().x),
+            y: f64::from(m.position().y),
+            width: f64::from(m.size().width),
+            height: f64::from(m.size().height),
+            scale: m.scale_factor(),
+        })
+        .collect()
+}
+
+/// tao 0.35.3 의 Windows 창 생성이 논리 위치로 고르는 모니터: 나열 순서대로 그 모니터의 배율로 바꾼 물리 위치가
+/// 그 모니터 안에 드는 첫 모니터(`platform_impl/windows/window.rs`). 창 크기도 그 모니터의 배율로 정한다.
+/// tao 는 그림자 테두리만큼 왼쪽 경계를 넓혀 보므로 넉넉한 여유로 판단한다.
+fn tao_creation_display(logical: (f64, f64), displays: &[Display]) -> Option<usize> {
+    const FRAME_SLACK: f64 = 32.0;
+    displays.iter().position(|d| {
+        let (x, y) = (logical.0 * d.scale, logical.1 * d.scale);
+        d.x <= x + FRAME_SLACK && x <= d.x + d.width && d.y <= y && y <= d.y + d.height
+    })
+}
+
+/// Windows 에서 새 창을 물리 위치에 띄우는 방법.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum WindowsPlacement {
+    /// 창 설정의 x/y(논리)로 바로 만든다. macOS 와, 그 논리 좌표가 대상 모니터만 가리키는 Windows.
+    Direct((f64, f64)),
+    /// 대상 위치의 논리 좌표가 먼저 나열된 다른 모니터를 가리킨다. 대상 모니터 안에서 논리 좌표가 그 모니터만
+    /// 가리키는 자리(`create`, 논리)에 숨긴 채 만들어 그 모니터의 배율로 크기를 정한 뒤 `target`(물리)으로 옮긴다.
+    Moved {
+        create: (f64, f64),
+        target: (f64, f64),
+    },
+}
+
+/// [#159] 창 설정의 논리 좌표는 배율이 다른 모니터 사이에서 여러 모니터에 해당할 수 있고, tao 는 그중 먼저 나열된
+/// 모니터에 창을 만들고 그 배율로 크기를 정한다. 만든 뒤 다른 배율의 모니터로 옮기면 크기가 맞지 않을 수 있으므로
+/// (배율 변경 처리는 창이 주로 걸친 모니터와 Windows 설정에 달렸다) 처음부터 대상 모니터에서 만든다.
+fn windows_placement(
+    target: (f64, f64),
+    size: (f64, f64),
+    displays: &[Display],
+) -> Option<WindowsPlacement> {
+    let t = displays
+        .iter()
+        .position(|d| d.contains(target))
+        .or_else(|| {
+            // 계산한 자리가 어느 모니터에도 들지 않으면(작업 영역보다 큰 창 등) 가장 가까운 모니터를 대상으로 본다.
+            let distance = |d: &Display| {
+                let dx = (d.x - target.0).max(target.0 - (d.x + d.width)).max(0.0);
+                let dy = (d.y - target.1).max(target.1 - (d.y + d.height)).max(0.0);
+                dx * dx + dy * dy
+            };
+            (0..displays.len())
+                .min_by(|&a, &b| distance(&displays[a]).total_cmp(&distance(&displays[b])))
+        })?;
+    let d = displays[t];
+    let logical = |p: (f64, f64)| (p.0 / d.scale, p.1 / d.scale);
+    if tao_creation_display(logical(target), displays) == Some(t) {
+        return Some(WindowsPlacement::Direct(logical(target)));
+    }
+    // 대상 모니터 안에서 창이 들어가는 자리를 왼쪽 위부터 고르게 훑는다.
+    let span_x = (d.width - size.0 * d.scale).max(0.0);
+    let span_y = (d.height - size.1 * d.scale).max(0.0);
+    for i in 0..=4 {
+        for j in 0..=4 {
+            let p = (
+                d.x + span_x * f64::from(i) / 4.0,
+                d.y + span_y * f64::from(j) / 4.0,
+            );
+            if tao_creation_display(logical(p), displays) == Some(t) {
+                return Some(WindowsPlacement::Moved {
+                    create: logical(p),
+                    target,
+                });
+            }
+        }
+    }
+    Some(WindowsPlacement::Direct(logical(target)))
+}
+
+/// 창 위치를 계산하는 전역 좌표계. 모든 창이 한 좌표계를 함께 써야 비켜 놓기·작업 영역 비교가 맞는다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Space {
+    /// macOS: point(논리 좌표)가 모든 화면에 하나뿐이다.
+    Logical,
+    /// Windows: 가상 화면의 물리 픽셀이 하나뿐이다. 논리 좌표는 배율이 다른 모니터 사이에서 겹친다(#159).
+    Physical,
+}
+
+impl Space {
+    fn current() -> Self {
+        if cfg!(windows) {
+            Space::Physical
+        } else {
+            Space::Logical
+        }
+    }
+
+    /// 배율 `scale` 인 화면의 물리 좌표를 이 좌표계로.
+    fn point(self, physical: (f64, f64), scale: f64) -> (f64, f64) {
+        match self {
+            Space::Physical => physical,
+            Space::Logical => (physical.0 / scale, physical.1 / scale),
+        }
+    }
+
+    /// 배율 `scale` 인 화면에서의 논리 길이를 이 좌표계로.
+    fn length(self, logical: f64, scale: f64) -> f64 {
+        match self {
+            Space::Physical => logical * scale,
+            Space::Logical => logical,
+        }
+    }
+}
+
+/// 창이나 작업 영역의 물리 위치와 그 화면의 배율.
+type Placed<T> = (T, f64);
+
 /// 가장 최근 창에서 오른쪽 아래로 비스듬히 띄운다. 이미 창이 있는 자리는 한 칸씩 더 비키고,
-/// 화면 작업 영역을 넘으면 왼쪽 위로 돌아간다.
+/// 화면 작업 영역을 넘으면 왼쪽 위로 돌아간다. 좌표는 `space` 단위다.
 fn cascade_position(
     app: &tauri::AppHandle,
     new_label: &str,
-    width: f64,
-    height: f64,
+    space: Space,
+    size: (f64, f64),
 ) -> Option<(f64, f64)> {
     // 최소화·숨김 창은 기준으로 쓰지 않는다(Windows 는 최소화 창 위치가 -32000 이다).
     let labels = registry().labels();
@@ -630,63 +797,88 @@ fn cascade_position(
         .filter(|label| label.as_str() != new_label)
         .filter_map(|label| app.get_webview_window(label))
         .find(|w| !w.is_minimized().unwrap_or(false) && w.is_visible().unwrap_or(true))?;
-    let scale = window.scale_factor().ok()?;
-    let position = window.outer_position().ok()?.to_logical::<f64>(scale);
-    let occupied: Vec<(f64, f64)> = app
+    let placed = |w: &tauri::WebviewWindow| -> Option<Placed<(f64, f64)>> {
+        let p = w.outer_position().ok()?;
+        Some(((f64::from(p.x), f64::from(p.y)), w.scale_factor().ok()?))
+    };
+    let anchor = placed(&window)?;
+    let others: Vec<Placed<(f64, f64)>> = app
         .webview_windows()
         .values()
         .filter(|w| w.label() != new_label)
-        .filter_map(|w| {
-            let s = w.scale_factor().ok()?;
-            let p = w.outer_position().ok()?.to_logical::<f64>(s);
-            Some((p.x, p.y))
-        })
+        .filter_map(placed)
         .collect();
-    let area = window.current_monitor().ok().flatten().map(|monitor| {
+    let work_area = window.current_monitor().ok().flatten().map(|monitor| {
         let a = monitor.work_area();
-        let s = monitor.scale_factor();
-        let left = f64::from(a.position.x) / s;
-        let top = f64::from(a.position.y) / s;
+        let left = f64::from(a.position.x);
+        let top = f64::from(a.position.y);
         (
-            left,
-            top,
-            left + f64::from(a.size.width) / s,
-            top + f64::from(a.size.height) / s,
+            (
+                left,
+                top,
+                left + f64::from(a.size.width),
+                top + f64::from(a.size.height),
+            ),
+            monitor.scale_factor(),
         )
     });
-    Some(next_cascade_position(
-        (position.x, position.y),
-        &occupied,
-        (width, height),
-        area,
-    ))
+    Some(plan_cascade(space, anchor, &others, work_area, size))
 }
 
-/// 기준 위치에서 비스듬히 비켜 빈 자리를 찾는다(창 위치 계산만 따로 시험한다).
+/// 물리 위치·배율로 읽은 창들을 `space` 로 바꿔 새 창 자리를 정한다. 간격과 창 크기는 논리 px 이며 새 창이 뜰
+/// 기준 창 화면의 배율을 따른다.
+fn plan_cascade(
+    space: Space,
+    anchor: Placed<(f64, f64)>,
+    others: &[Placed<(f64, f64)>],
+    work_area: Option<Placed<(f64, f64, f64, f64)>>,
+    size: (f64, f64),
+) -> (f64, f64) {
+    let (position, scale) = anchor;
+    let occupied: Vec<(f64, f64)> = others.iter().map(|&(p, s)| space.point(p, s)).collect();
+    let area = work_area.map(|((left, top, right, bottom), s)| {
+        let (left, top) = space.point((left, top), s);
+        let (right, bottom) = space.point((right, bottom), s);
+        (left, top, right, bottom)
+    });
+    next_cascade_position(
+        space.point(position, scale),
+        &occupied,
+        (space.length(size.0, scale), space.length(size.1, scale)),
+        area,
+        space.length(CASCADE_OFFSET, scale),
+    )
+}
+
+/// 기준 위치에서 `step` 씩 비스듬히 비켜 빈 자리를 찾는다(창 위치 계산만 따로 시험한다). 모든 값은 같은
+/// 좌표 단위다.
 fn next_cascade_position(
     anchor: (f64, f64),
     occupied: &[(f64, f64)],
     size: (f64, f64),
     area: Option<(f64, f64, f64, f64)>,
+    step: f64,
 ) -> (f64, f64) {
+    // 같은 자리로 보는 허용 오차(논리 4px).
+    let near = step / 7.0;
     let taken = |x: f64, y: f64| {
         occupied
             .iter()
-            .any(|(ox, oy)| (ox - x).abs() < 4.0 && (oy - y).abs() < 4.0)
+            .any(|(ox, oy)| (ox - x).abs() < near && (oy - y).abs() < near)
     };
-    let (mut x, mut y) = (anchor.0 + CASCADE_OFFSET, anchor.1 + CASCADE_OFFSET);
+    let (mut x, mut y) = (anchor.0 + step, anchor.1 + step);
     for _ in 0..32 {
         if let Some((left, top, right, bottom)) = area {
             if x < left || y < top || x + size.0 > right || y + size.1 > bottom {
-                x = left + CASCADE_OFFSET;
-                y = top + CASCADE_OFFSET;
+                x = left + step;
+                y = top + step;
             }
         }
         if !taken(x, y) {
             break;
         }
-        x += CASCADE_OFFSET;
-        y += CASCADE_OFFSET;
+        x += step;
+        y += step;
     }
     (x, y)
 }
@@ -1577,18 +1769,159 @@ mod tests {
         // main 을 다시 앞으로 가져온 뒤 새 창: doc-1 자리를 피한다.
         let main = (424.0, 88.0);
         assert_eq!(
-            next_cascade_position(main, &[main, (452.0, 116.0)], size, area),
+            next_cascade_position(main, &[main, (452.0, 116.0)], size, area, CASCADE_OFFSET),
             (480.0, 144.0)
         );
         // 오른쪽 아래가 넘치면 작업 영역 왼쪽 위로 돌아간다.
         assert_eq!(
-            next_cascade_position((500.0, 260.0), &[], size, area),
+            next_cascade_position((500.0, 260.0), &[], size, area, CASCADE_OFFSET),
             (CASCADE_OFFSET, 25.0 + CASCADE_OFFSET)
         );
         assert_eq!(
-            next_cascade_position((100.0, 100.0), &[], size, None),
+            next_cascade_position((100.0, 100.0), &[], size, None, CASCADE_OFFSET),
             (128.0, 128.0)
         );
+    }
+
+    #[test]
+    fn windows_cascade_stays_on_the_anchor_monitor_with_mixed_scale_factors() {
+        // 주 모니터 1920x1080 100%, 오른쪽에 3840x2160 150%(작업 표시줄 40px). 앞 창은 보조 모니터에 있다.
+        let primary = Display {
+            x: 0.0,
+            y: 0.0,
+            width: 1920.0,
+            height: 1080.0,
+            scale: 1.0,
+        };
+        let secondary = Display {
+            x: 1920.0,
+            y: 0.0,
+            width: 3840.0,
+            height: 2160.0,
+            scale: 1.5,
+        };
+        let displays = [primary, secondary];
+        let anchor = ((2000.0, 100.0), 1.5);
+        let work_area = Some(((1920.0, 0.0, 5760.0, 2120.0), 1.5));
+        let size = (1200.0, 840.0);
+        // 논리 좌표로 계산해 창 설정에 넘기면 tao 가 먼저 나열된 주 모니터를 고른다.
+        let logical = plan_cascade(Space::Logical, anchor, &[anchor], work_area, size);
+        assert_eq!(tao_creation_display(logical, &displays), Some(0));
+        // 물리 좌표로 계산하면 보조 모니터 안이다.
+        let physical = plan_cascade(Space::Physical, anchor, &[anchor], work_area, size);
+        assert_eq!(physical, (2042.0, 142.0));
+        // 그 자리의 논리 좌표는 주 모니터를 가리키므로, 보조 모니터에서 만든 뒤 같은 모니터 안에서 옮긴다.
+        let Some(WindowsPlacement::Moved { create, target }) =
+            windows_placement(physical, size, &displays)
+        else {
+            panic!("옮겨야 한다");
+        };
+        assert_eq!(target, physical);
+        assert_eq!(tao_creation_display(create, &displays), Some(1));
+        let created = (create.0 * 1.5, create.1 * 1.5);
+        assert!(secondary.contains(created));
+        assert!(secondary.contains((created.0 + 1800.0 - 1.0, created.1 + 1260.0 - 1.0)));
+        // 같은 자리 판단의 허용 오차도 배율을 따른다(논리 4px = 물리 6px).
+        assert_eq!(
+            plan_cascade(
+                Space::Physical,
+                anchor,
+                &[anchor, ((2047.0, 147.0), 1.5)],
+                work_area,
+                size,
+            ),
+            (2084.0, 184.0)
+        );
+        // 오른쪽·아래가 작업 영역을 넘치면 물리 단위의 창 크기로 판단해 작업 영역 왼쪽 위로 돌아간다.
+        for near_edge in [((4500.0, 100.0), 1.5), ((3900.0, 1000.0), 1.5)] {
+            assert_eq!(
+                plan_cascade(Space::Physical, near_edge, &[], work_area, size),
+                (1962.0, 42.0)
+            );
+        }
+        // macOS(point 좌표)에서는 각 창의 배율로 point 로 바꿔 지금과 같이 계산한다.
+        let retina = ((848.0, 176.0), 2.0);
+        assert_eq!(
+            plan_cascade(
+                Space::Logical,
+                retina,
+                &[retina, ((904.0, 232.0), 2.0)],
+                Some(((0.0, 50.0, 3456.0, 2234.0), 2.0)),
+                size,
+            ),
+            (480.0, 144.0)
+        );
+    }
+
+    #[test]
+    fn windows_placement_creates_directly_when_the_logical_position_is_unambiguous() {
+        // 200% 노트북(주 모니터) 왼쪽에 100% 외부 모니터. 앞 창은 외부 모니터에 있다. 음수 좌표의 논리 위치는
+        // 외부 모니터만 가리키므로 바로 만든다 — 위치 없이 숨겨 만들면 주 모니터 배율의 두 배 크기 창이 된다.
+        let laptop = Display {
+            x: 0.0,
+            y: 0.0,
+            width: 2880.0,
+            height: 1800.0,
+            scale: 2.0,
+        };
+        let external = Display {
+            x: -1920.0,
+            y: 0.0,
+            width: 1920.0,
+            height: 1080.0,
+            scale: 1.0,
+        };
+        for displays in [[laptop, external], [external, laptop]] {
+            assert_eq!(
+                windows_placement((-1222.0, 108.0), (1200.0, 840.0), &displays),
+                Some(WindowsPlacement::Direct((-1222.0, 108.0)))
+            );
+            assert_eq!(
+                windows_placement((452.0, 116.0), (1200.0, 840.0), &displays),
+                Some(WindowsPlacement::Direct((226.0, 58.0)))
+            );
+        }
+        // 모니터 하나.
+        let single = [Display {
+            x: 0.0,
+            y: 0.0,
+            width: 1920.0,
+            height: 1080.0,
+            scale: 1.25,
+        }];
+        assert_eq!(
+            windows_placement((500.0, 100.0), (1200.0, 840.0), &single),
+            Some(WindowsPlacement::Direct((400.0, 80.0)))
+        );
+        // 보조 모니터가 먼저 나열되면 주 모니터 쪽 자리도 겹칠 수 있다 — 주 모니터에서 만든 뒤 옮긴다.
+        let primary = Display {
+            x: 0.0,
+            y: 0.0,
+            width: 1920.0,
+            height: 1080.0,
+            scale: 1.0,
+        };
+        let secondary = Display {
+            x: 1920.0,
+            y: 0.0,
+            width: 3840.0,
+            height: 2160.0,
+            scale: 1.5,
+        };
+        let Some(WindowsPlacement::Moved { create, target }) =
+            windows_placement((1361.0, 95.0), (1200.0, 840.0), &[secondary, primary])
+        else {
+            panic!("옮겨야 한다");
+        };
+        assert_eq!(target, (1361.0, 95.0));
+        assert_eq!(tao_creation_display(create, &[secondary, primary]), Some(1));
+        // 같은 나열 순서에서 보조 모니터 쪽 자리는 그 모니터의 배율로 바꿔야 먼저 나열된 보조 모니터에 든다.
+        assert_eq!(
+            windows_placement((2042.0, 142.0), (1200.0, 840.0), &[secondary, primary]),
+            Some(WindowsPlacement::Direct((2042.0 / 1.5, 142.0 / 1.5)))
+        );
+        // 모니터 목록을 읽지 못하면 위치를 정하지 않는다(운영체제 기본 위치).
+        assert_eq!(windows_placement((10.0, 10.0), (1200.0, 840.0), &[]), None);
     }
 
     #[test]
