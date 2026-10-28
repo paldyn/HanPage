@@ -66,6 +66,8 @@ import {
   noteDesktopBlankDocument,
   noteDesktopDirtyChanged,
   noteDesktopDocumentSwapped,
+  noteDesktopLoadSettled,
+  noteDesktopLoadStarted,
   openInNewDesktopWindow,
   shouldOpenInNewDesktopWindow,
 } from '@/core/desktop-bridge';
@@ -950,7 +952,7 @@ async function initialize(): Promise<void> {
       isDirty: () => documentState.isDirty(),
       confirmClose: confirmBeforeWindowClose,
     });
-    installUpdateNotice({ beforeApply: confirmBeforeUpdateApply });
+    installUpdateNotice({ beforeApply: confirmBeforeUpdateApply, onApplyFailed: reloadAiAfterFailedUpdate });
     // 시작 진입점은 순서를 지켜야 한다 — ?url= 로드와 자동저장 복구가 문서를 열 기회를
     // 먼저 갖고, 아무도 열지 않았을 때만 빈 문서를 연다.
     void (async () => {
@@ -1766,6 +1768,8 @@ async function loadBytes(
 ): Promise<void> {
   // 바이트로 여는 모든 경로(파일 열기 · ?url= · 자동저장 복구 · 호스트 API)의 공통 깔때기다.
   // 파싱·쪽 계산 동안 빈 화면만 보이므로 여기서 대기 커서를 든다.
+  // [#156] 여는 동안은 데스크톱 창이 다른 문서를 받지 않게 알린다(열기에 실패하면 다시 받는다).
+  noteDesktopLoadStarted();
   await withBusyCursor(document.documentElement, async () => {
     // 파싱 전에 먼저 빈 쪽 상태로 만든다 — 이전 문서를 붙잡고 있다가 한 번에 갈아치우면
     // 화면이 튀어 보인다. 파싱이 실패하면 아래 catch가 이전 문서 뷰를 되살린다.
@@ -1815,7 +1819,7 @@ async function loadBytes(
     await initializeDocument(docInfo, t('ui.sbMessage.filePagesTimed', { p1: fileName, p2: docInfo.pageCount, p3: elapsed.toFixed(1) }), {
       suppressDialogs: options.suppressDialogs,
     });
-  });
+  }).finally(noteDesktopLoadSettled);
 }
 
 const RECENT_SUBMENU_COLLAPSED_LIMIT = 8;
@@ -2203,6 +2207,9 @@ async function confirmBeforeWindowClose(): Promise<boolean> {
  * 먼저 저장 확인을 통과한 경우에만 도우미를 내리고 그사이 생긴 편집을 다시 확인한다.
  * 첫 확인에서 취소하면 도우미 대화는 그대로 남는다.
  */
+/** [#156] 업데이트 적용 전 확인에서 내린 AI 도우미. 적용이 실패하면 다시 올린다. */
+let aiUnloadedForUpdate = false;
+
 async function confirmBeforeUpdateApply(): Promise<boolean> {
   if (!await canReplaceCurrentDocument()) return false;
   if (!__RHWP_AI__) return true;
@@ -2214,10 +2221,21 @@ async function confirmBeforeUpdateApply(): Promise<boolean> {
     // 올라와 있지 않거나(PLUGIN_NOT_LOADED) 진행 중 트랜잭션이 끝나지 않았다(TX_TIMEOUT).
   }
   const ok = await canReplaceCurrentDocument();
-  if (!ok && aiUnloaded && sidePanels && window.parent === window) {
-    plugins.load('ai-assistant').catch((error) => console.error('[main] AI 도우미 재로드 실패', error));
-  }
+  if (!ok && aiUnloaded) reloadAiAssistant();
+  aiUnloadedForUpdate = ok && aiUnloaded;
   return ok;
+}
+
+/** [#156] 업데이트 적용이 실패했다(다른 창 때문에 거절 포함). 적용 전 확인에서 내린 AI 도우미를 다시 올린다. */
+function reloadAiAfterFailedUpdate(): void {
+  if (!aiUnloadedForUpdate) return;
+  aiUnloadedForUpdate = false;
+  reloadAiAssistant();
+}
+
+function reloadAiAssistant(): void {
+  if (!__RHWP_AI__ || !sidePanels || window.parent !== window) return;
+  plugins.load('ai-assistant').catch((error) => console.error('[main] AI 도우미 재로드 실패', error));
 }
 
 installEmbedRuntime({

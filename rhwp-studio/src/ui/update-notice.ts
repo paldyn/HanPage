@@ -4,6 +4,7 @@
  */
 import {
   applyUpdate, checkUpdate, claimUpdateNudge, getUpdateStatus, isDesktopRuntime, MENU_CHECK_UPDATE, onUpdateReady, onUpdateStatus,
+  updatePreflight,
   type DesktopUpdateReady, type DesktopUpdateStatus,
 } from '@/core/desktop-bridge';
 import { formatMb, updateProgress, updateReadyMessage, updateStatusMessage } from '@/ui/update-notice-text';
@@ -15,6 +16,8 @@ let readyInfo: DesktopUpdateReady | null = null;
 let installed = false;
 let applying = false;
 let beforeApply: () => Promise<boolean> = async () => true;
+/** [#156] 적용이 실패했을 때(다른 창 때문에 거절 포함). 저장 확인 중 내린 AI 도우미를 다시 올린다. */
+let onApplyFailed: () => void = () => {};
 let card: HTMLElement | null = null;
 let entry: HTMLButtonElement | null = null;
 let eventCount = 0;
@@ -435,6 +438,12 @@ async function primaryAction(): Promise<void> {
   applying = true; // 저장 확인 중의 연속 클릭도 한 번으로 묶는다.
   render();
   try {
+    // [#156] 다른 창에 저장하지 않은 문서가 있으면 이 창의 저장 확인·AI 도우미 정리 전에 멈춘다.
+    const blocked = await updatePreflight();
+    if (blocked) {
+      receiveStatus({ state: 'error', message: blocked, retryable: true });
+      return;
+    }
     card?.classList.add('dialog-update-awaiting-save');
     let approved: boolean;
     try { approved = await beforeApply(); }
@@ -445,9 +454,13 @@ async function primaryAction(): Promise<void> {
     // IPC 시작 전에 상태가 실제로 paint되도록 다음 프레임까지 기다린다.
     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     const result = await applyUpdate();
-    if (!result.ok) receiveStatus({ state: 'error', message: result.message ?? '업데이트 적용에 실패했습니다.', retryable: true });
+    if (!result.ok) {
+      receiveStatus({ state: 'error', message: result.message ?? '업데이트 적용에 실패했습니다.', retryable: true });
+      onApplyFailed();
+    }
   } catch (error) {
     receiveStatus({ state: 'error', message: String(error), retryable: true });
+    onApplyFailed();
   } finally {
     applying = false;
     render();
@@ -456,10 +469,11 @@ async function primaryAction(): Promise<void> {
 }
 
 /** Desktop만 상시 진입점을 만들고, 이벤트 등록 완료 후 현재 상태를 복구한다. */
-export function installUpdateNotice(options?: { beforeApply?: () => Promise<boolean> }): void {
+export function installUpdateNotice(options?: { beforeApply?: () => Promise<boolean>; onApplyFailed?: () => void }): void {
   if (!isDesktopRuntime() || installed) return;
   installed = true;
   beforeApply = options?.beforeApply ?? beforeApply;
+  onApplyFailed = options?.onApplyFailed ?? onApplyFailed;
   entry = document.createElement('button');
   entry.id = 'desktop-update-entry';
   entry.className = 'stb-update-button';

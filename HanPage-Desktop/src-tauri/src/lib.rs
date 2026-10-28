@@ -44,8 +44,9 @@ use serde::Serialize;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_dialog::{MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_store::StoreExt;
-use windows::{CloseDecision, Registry, Route, Target};
+use windows::{CloseDecision, QuitStep, Registry, Route, Target};
 
 /// 최근 문서 store 파일명·키·최대 보관 수.
 const RECENT_STORE: &str = "recent.json";
@@ -474,21 +475,39 @@ fn spawn_document_window(app: &tauri::AppHandle, label: String) {
     let app = app.clone();
     std::thread::spawn(move || {
         wait_for_anchor_window(&app, &label);
-        let result = build_document_window(&app, &label);
-        match &result {
-            Ok(_) => eprintln!("[HanPage] 새 창 {label}"),
-            Err(e) => eprintln!("[HanPage] 새 창을 만들지 못했습니다 {label}: {e}"),
+        let built = build_document_window(&app, &label);
+        // 다른 스레드에서 만들면 Tauri 는 만들기 요청만 보내고 돌아온다. 창에 한 번 물어 실제로
+        // 만들어졌는지 확인한다(요청은 순서대로 처리되므로 만들기 뒤에 답한다).
+        let ok = built
+            .as_ref()
+            .is_ok_and(|window| window.scale_factor().is_ok());
+        let reason = match &built {
+            Ok(_) if ok => None,
+            Ok(_) => Some("창이 만들어지지 않았습니다".to_string()),
+            Err(e) => Some(e.to_string()),
+        };
+        match &reason {
+            None => eprintln!("[HanPage] 새 창 {label}"),
+            Some(reason) => eprintln!("[HanPage] 새 창을 만들지 못했습니다 {label}: {reason}"),
         }
-        let orphans = registry().created(&label, result.is_ok());
-        if let Err(e) = result {
-            for doc in orphans {
-                notify_failure(
-                    &app,
-                    doc.name,
-                    doc.path,
-                    format!("새 창을 열지 못했습니다: {e}"),
-                );
-            }
+        let orphans = registry().created(&label, ok);
+        let Some(reason) = reason else {
+            return;
+        };
+        if let Some(window) = app.get_webview_window(&label) {
+            let _ = window.destroy();
+        }
+        for doc in orphans {
+            notify_failure(
+                &app,
+                doc.name,
+                doc.path,
+                format!("새 창을 열지 못했습니다: {reason}"),
+            );
+        }
+        // 마지막 창이 닫히는 사이 만들기에 실패했으면 보이지 않는 프로세스로 남지 않는다.
+        if app.webview_windows().is_empty() && registry().creating() == 0 {
+            app.exit(0);
         }
     });
 }
@@ -537,8 +556,13 @@ fn cascade_position(
     width: f64,
     height: f64,
 ) -> Option<(f64, f64)> {
-    let anchor = registry().front_except(new_label)?.to_string();
-    let window = app.get_webview_window(&anchor)?;
+    // 최소화·숨김 창은 기준으로 쓰지 않는다(Windows 는 최소화 창 위치가 -32000 이다).
+    let labels = registry().labels();
+    let window = labels
+        .iter()
+        .filter(|label| label.as_str() != new_label)
+        .filter_map(|label| app.get_webview_window(label))
+        .find(|w| !w.is_minimized().unwrap_or(false) && w.is_visible().unwrap_or(true))?;
     let scale = window.scale_factor().ok()?;
     let position = window.outer_position().ok()?.to_logical::<f64>(scale);
     let occupied: Vec<(f64, f64)> = app
@@ -586,7 +610,7 @@ fn next_cascade_position(
     let (mut x, mut y) = (anchor.0 + CASCADE_OFFSET, anchor.1 + CASCADE_OFFSET);
     for _ in 0..32 {
         if let Some((left, top, right, bottom)) = area {
-            if x + size.0 > right || y + size.1 > bottom {
+            if x < left || y < top || x + size.0 > right || y + size.1 > bottom {
                 x = left + CASCADE_OFFSET;
                 y = top + CASCADE_OFFSET;
             }
@@ -600,28 +624,67 @@ fn next_cascade_position(
     (x, y)
 }
 
-/// 저장하지 않은 문서가 있는 창에 닫아도 되는지 묻게 한다.
+/// 저장하지 않은 문서가 있는 창에 닫아도 되는지 묻게 한다(최소화된 창도 앞으로 가져온다).
 fn ask_close(app: &tauri::AppHandle, label: &str) {
     focus_window(app, label);
     let _ = app.emit_to(label, EVT_CLOSE_REQUESTED, ());
+}
+
+/// 웹뷰가 닫기 확인에 답하지 않는다. 묻지 않고 닫지도, 영영 못 닫게 두지도 않도록 네이티브 확인창으로 묻는다.
+fn confirm_close_natively(app: &tauri::AppHandle, label: String) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let Some(window) = app.get_webview_window(&label) else {
+            return;
+        };
+        let confirmed = app
+            .dialog()
+            .message("이 창이 응답하지 않습니다.\n저장하지 않은 변경을 버리고 창을 닫을까요?")
+            .title("HanPage")
+            .kind(MessageDialogKind::Warning)
+            .buttons(MessageDialogButtons::OkCancelCustom(
+                "닫기".to_string(),
+                "취소".to_string(),
+            ))
+            .parent(&window)
+            .blocking_show();
+        registry().close_answered(&label, confirmed);
+        if confirmed {
+            let _ = window.destroy();
+        }
+    });
+}
+
+/// 종료 단계를 실행한다: 저장할 것이 없는 창은 닫고, 저장할 것이 있는 창 하나에 묻는다.
+fn apply_quit_step(app: &tauri::AppHandle, step: QuitStep) {
+    for label in &step.close_now {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.destroy();
+        }
+    }
+    if let Some(label) = step.ask {
+        ask_close(app, &label);
+    }
 }
 
 /// Cmd+Q: 저장할 것이 없는 창은 바로 닫고, 저장할 것이 있는 창은 하나씩 묻는다. 모든 창이
 /// 닫히면 앱이 끝난다. 사용자가 한 번이라도 취소하면 종료를 멈춘다.
 #[cfg(target_os = "macos")]
 fn request_quit(app: &tauri::AppHandle) {
-    let step = registry().begin_quit();
-    let nothing_open = app.webview_windows().is_empty();
-    for label in step.close_now {
-        if let Some(window) = app.get_webview_window(&label) {
-            let _ = window.destroy();
-        }
-    }
-    if let Some(label) = step.ask {
-        ask_close(app, &label);
-    } else if nothing_open {
+    if app.webview_windows().is_empty() {
         app.exit(0);
+        return;
     }
+    // 아직 만들어지는 창이 있으면 종료를 끝낼 수 없다. 창이 뜬 뒤 다시 종료하면 된다.
+    let labels = registry().labels();
+    if labels
+        .iter()
+        .any(|label| app.get_webview_window(label).is_none())
+    {
+        return;
+    }
+    let step = registry().begin_quit();
+    apply_quit_step(app, step);
 }
 
 // ─── 네이티브 메뉴 ────────────────────────────────────────────────────────────
@@ -754,14 +817,14 @@ fn is_pdf_path(path: &Path) -> bool {
 ///
 /// `allow_pdf` 는 웹뷰의 WASM 이 PDF 가져오기를 지원할 때만 참이다. 키가 없는 이전 호출도 받는다.
 ///
-/// [#156] 고른 문서는 부른 창이 손대지 않은 빈 창일 때만 그 창에 돌려준다. 아니면 새 창(또는 그
-/// 파일을 이미 연 창)으로 보내고 `None` 을 돌려준다.
+/// [#156] 고른 문서는 파일 연결과 같은 길로 보낸다: 부른 창이 손대지 않은 빈 창이면 그 창의 대기
+/// 문서로, 아니면 새 창(또는 그 파일을 이미 연 창)으로. 웹뷰는 대기 문서를 가져가 연다.
 #[tauri::command]
 async fn cmd_open_document(
     app: tauri::AppHandle,
     webview_window: tauri::WebviewWindow,
     allow_pdf: Option<bool>,
-) -> Result<Option<OpenedFile>, String> {
+) -> Result<(), String> {
     let (label, exts) = open_dialog_filter(allow_pdf.unwrap_or(false));
     let picked = app
         .dialog()
@@ -770,28 +833,13 @@ async fn cmd_open_document(
         .blocking_pick_file();
 
     let Some(file_path) = picked else {
-        return Ok(None); // 사용자 취소
+        return Ok(()); // 사용자 취소
     };
     let path = file_path.into_path().map_err(|e| e.to_string())?;
     let file = read_document(&path)?;
     record_recent(&app, &file.path, &file.name);
-    let label = webview_window.label().to_string();
-    let key = document_key(&path);
-    let route = registry().route(Some(&key), Target::Window(&label));
-    match route {
-        Route::Into(target) if target == label => Ok(Some(file)),
-        Route::Focus(target) => {
-            focus_window(&app, &target);
-            Ok(None)
-        }
-        Route::Into(target) | Route::New(target) => {
-            let pending = registry().enqueue(&target, file).is_ok();
-            if pending {
-                spawn_document_window(&app, target);
-            }
-            Ok(None)
-        }
-    }
+    deliver(&app, file, Target::Window(webview_window.label()));
+    Ok(())
 }
 
 /// 네이티브 저장 dialog → 선택 경로에 바이트 기록. 취소 시 `SaveOutcome::Cancelled`.
@@ -1066,6 +1114,39 @@ fn start_update_check(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(check_update(app));
 }
 
+/// [#156] 다른 창에 저장하지 않은 문서가 있으면 그 창을 보여 주고 안내 문구를 돌려준다.
+#[cfg(desktop)]
+fn update_blocker(app: &tauri::AppHandle, label: &str) -> Option<String> {
+    let (blocking, title) = {
+        let reg = registry();
+        let blocking = reg.dirty_windows_except(label).first()?.clone();
+        let title = reg
+            .entry(&blocking)
+            .map(|e| e.title.clone())
+            .unwrap_or_default();
+        (blocking, title)
+    };
+    focus_window(app, &blocking);
+    let which = if title.is_empty() {
+        "다른 창".to_string()
+    } else {
+        format!("다른 창({title})")
+    };
+    Some(format!(
+        "{which}에 저장하지 않은 문서가 있습니다. 저장하거나 창을 닫은 뒤 다시 업데이트해 주세요."
+    ))
+}
+
+/// [#156] 업데이트를 누른 창이 저장 확인·AI 도우미 정리를 하기 전에, 다른 창 때문에 적용할 수 없는지 확인한다.
+#[cfg(desktop)]
+#[tauri::command]
+fn cmd_update_preflight(
+    app: tauri::AppHandle,
+    webview_window: tauri::WebviewWindow,
+) -> Option<String> {
+    update_blocker(&app, webview_window.label())
+}
+
 /// [#156] 업데이트 준비 알림은 실행마다 앱 전체에서 버전당 한 번 — 창마다 다시 띄우지 않는다.
 #[cfg(desktop)]
 static NUDGE_CLAIMED: Mutex<Option<String>> = Mutex::new(None);
@@ -1112,28 +1193,8 @@ async fn cmd_update_apply(
     app: tauri::AppHandle,
     webview_window: tauri::WebviewWindow,
 ) -> Result<(), String> {
-    let blocking = {
-        let reg = registry();
-        reg.dirty_windows_except(webview_window.label())
-            .first()
-            .map(|label| {
-                let title = reg
-                    .entry(label)
-                    .map(|e| e.title.clone())
-                    .unwrap_or_default();
-                (label.clone(), title)
-            })
-    };
-    if let Some((label, title)) = blocking {
-        focus_window(&app, &label);
-        let which = if title.is_empty() {
-            "다른 창".to_string()
-        } else {
-            format!("다른 창({title})")
-        };
-        return Err(format!(
-            "{which}에 저장하지 않은 문서가 있습니다. 저장하거나 창을 닫은 뒤 다시 업데이트해 주세요."
-        ));
+    if let Some(message) = update_blocker(&app, webview_window.label()) {
+        return Err(message);
     }
     let (ready, applying_state) = {
         let mut slot = UPDATE_SLOT.lock().map_err(|e| e.to_string())?;
@@ -1193,11 +1254,19 @@ pub fn run() {
                 Ok(mut gate) => gate.admit(paths),
                 Err(_) => paths,
             };
-            // 문서는 받을 창이 앞으로 나온다. 문서 없이 다시 실행했으면 가장 최근 창을 보여 준다.
+            // 문서는 받을 창이 앞으로 나온다. 문서 없이 다시 실행했으면 가장 최근 창을 보여 주고,
+            // 창이 하나도 없으면(만들기 실패 등) 빈 창을 띄운다.
             if ready.is_empty() {
-                let front = registry().front().map(str::to_string);
-                if let Some(label) = front {
-                    focus_window(app, &label);
+                if app.webview_windows().is_empty() {
+                    let route = registry().route(None, Target::NewWindow);
+                    if let Route::New(label) = route {
+                        spawn_document_window(app, label);
+                    }
+                } else {
+                    let front = registry().front().map(str::to_string);
+                    if let Some(label) = front {
+                        focus_window(app, &label);
+                    }
                 }
             }
             for path in ready {
@@ -1296,22 +1365,22 @@ pub fn run() {
                         CloseDecision::Wait => api.prevent_close(),
                         CloseDecision::Ask => {
                             api.prevent_close();
-                            let _ = window.app_handle().emit_to(
-                                label.as_str(),
-                                EVT_CLOSE_REQUESTED,
-                                (),
-                            );
+                            ask_close(window.app_handle(), &label);
+                        }
+                        CloseDecision::ConfirmNative => {
+                            api.prevent_close();
+                            confirm_close_natively(window.app_handle(), label.clone());
                         }
                     }
                 }
                 tauri::WindowEvent::Destroyed => {
-                    let next = {
+                    let step = {
                         let mut reg = registry();
                         reg.remove(&label);
-                        reg.next_quit_ask()
+                        reg.next_quit_step()
                     };
-                    if let Some(next) = next {
-                        ask_close(window.app_handle(), &next);
+                    if let Some(step) = step {
+                        apply_quit_step(window.app_handle(), step);
                     }
                 }
                 _ => {}
@@ -1329,6 +1398,7 @@ pub fn run() {
             cmd_update_status,
             cmd_update_check,
             cmd_update_apply,
+            cmd_update_preflight,
             cmd_claim_update_nudge
         ])
         .build(tauri::generate_context!())
@@ -1339,8 +1409,11 @@ pub fn run() {
                 code: None, api, ..
             } = &event
             {
-                if registry().creating() > 0 {
+                let mut reg = registry();
+                if reg.creating() > 0 {
                     api.prevent_exit();
+                    // 종료는 끝내지 못했다. 새 창이 뜬 뒤 엉뚱하게 이어지지 않게 정리한다.
+                    reg.abandon_quit();
                 }
             }
             // macOS: 파일 연결 더블클릭은 Opened{urls} 로 전달된다.

@@ -57,3 +57,22 @@ test('업데이트 안내: 준비 알림은 처음 띄우는 창만, 적용은 �
   const receive = between(updateNotice, 'function receiveStatus(next: DesktopUpdateStatus): void {', '\n}\n');
   assert.match(receive, /if \(next\.state === 'applying' && \(!card \|\| card\.hidden\)\) showCard\(\);/);
 });
+
+test('문서를 여는 동안(loadBytes)은 창이 다른 문서를 받지 않고, 끝나면(실패 포함) 다시 보고한다', () => {
+  const load = between(main, 'async function loadBytes(', '\n}\n');
+  const started = load.indexOf('noteDesktopLoadStarted();');
+  const busy = load.indexOf('await withBusyCursor(document.documentElement, async () => {');
+  assert.ok(started > 0 && started < busy);
+  assert.match(load, /\}\)\.finally\(noteDesktopLoadSettled\);\s*$/);
+});
+
+test('업데이트: 다른 창 확인은 저장 확인 전에, 적용이 실패하면 내린 AI 도우미를 다시 올린다', () => {
+  const action = between(updateNotice, 'async function primaryAction(): Promise<void> {', '\n}\n');
+  const preflight = action.indexOf('const blocked = await updatePreflight();');
+  const before = action.indexOf('approved = await beforeApply();');
+  assert.ok(preflight > 0 && preflight < before, '다른 창 확인이 이 창의 저장 확인·AI 정리보다 먼저다');
+  assert.equal((action.match(/onApplyFailed\(\);/g) ?? []).length, 2);
+  assert.match(main, /installUpdateNotice\(\{ beforeApply: confirmBeforeUpdateApply, onApplyFailed: reloadAiAfterFailedUpdate \}\)/);
+  const confirm = between(main, 'async function confirmBeforeUpdateApply(): Promise<boolean> {', '\n}\n');
+  assert.match(confirm, /aiUnloadedForUpdate = ok && aiUnloaded;/);
+});

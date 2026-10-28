@@ -15,8 +15,8 @@ use std::time::{Duration, Instant};
 pub const MAIN_LABEL: &str = "main";
 /// 실행 중에 만드는 문서 창 레이블 접두어. 번호는 다시 쓰지 않는다.
 pub const DOC_LABEL_PREFIX: &str = "doc-";
-/// 닫기 확인을 보낸 뒤 웹뷰가 받았다는 응답이 없을 때, 다음 닫기를 그대로 허용하기까지의 시간.
-/// 멈췄거나 다시 불러오다 실패한 창을 영영 닫지 못하게 두지 않는다.
+/// 닫기 확인을 보낸 뒤 웹뷰가 받았다는 응답을 기다리는 시간. 넘기면 다음 닫기에서 네이티브 확인창으로
+/// 묻는다 — 멈췄거나 다시 불러오다 실패한 창을 영영 닫지 못하게도, 묻지 않고 닫지도 않는다.
 pub const CLOSE_ACK_TIMEOUT: Duration = Duration::from_secs(8);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,8 +35,10 @@ enum CloseState {
     Idle,
     /// 닫기 확인을 보냈고 아직 받았다는 응답이 없다.
     Asked(Instant),
-    /// 웹뷰가 받아서 사용자에게 묻는 중이다. 답할 때까지 다시 묻지 않는다.
+    /// 웹뷰가 받아서 사용자에게 묻는 중이다.
     Acknowledged,
+    /// 웹뷰가 답하지 않아 네이티브 확인창으로 묻는 중이다.
+    NativeConfirm,
 }
 
 #[derive(Debug)]
@@ -45,8 +47,11 @@ pub struct WindowEntry<D> {
     /// 손대지 않은 빈 문서라 문서를 받을 수 있다. 문서를 배정하면 바로 거짓이 된다(예약).
     pub pristine: bool,
     pub dirty: bool,
-    /// 이 창에 열린(또는 열 예정인) 파일 경로.
+    /// 웹뷰가 열었다고 보고한(또는 저장한) 파일 경로.
     pub path: Option<PathBuf>,
+    /// 문서를 배정하며 잡아 둔 경로. 문서가 아직 대기 중일 때만 같은 파일 판단에 쓴다 — 열기에
+    /// 실패하거나 취소하면 웹뷰의 다음 보고로 풀린다.
+    reserved: Option<PathBuf>,
     pub title: String,
     pub pending: VecDeque<D>,
     close: CloseState,
@@ -59,6 +64,7 @@ impl<D> WindowEntry<D> {
             pristine,
             dirty: false,
             path: None,
+            reserved: None,
             title: String::new(),
             pending: VecDeque::new(),
             close: CloseState::Idle,
@@ -105,10 +111,12 @@ pub enum CloseDecision {
     Ask,
     /// 이미 묻는 중이다. 이번 요청은 무시한다.
     Wait,
+    /// 웹뷰가 닫기 확인에 답하지 않는다. 네이티브 확인창으로 묻는다.
+    ConfirmNative,
 }
 
-/// Cmd+Q 종료 진행의 다음 단계.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// 종료 진행의 다음 단계.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct QuitStep {
     /// 저장할 것이 없어 바로 닫을 창.
     pub close_now: Vec<String>,
@@ -166,6 +174,11 @@ impl<D> Registry<D> {
         self.windows.contains_key(label)
     }
 
+    /// 등록된 창(가장 최근 순).
+    pub fn labels(&self) -> Vec<String> {
+        self.mru.clone()
+    }
+
     pub fn entry(&self, label: &str) -> Option<&WindowEntry<D>> {
         self.windows.get(label)
     }
@@ -186,15 +199,17 @@ impl<D> Registry<D> {
             if let Some(entry) = self.windows.get_mut(&label) {
                 if entry.accepts_document() {
                     entry.pristine = false;
-                    entry.path = path.map(Path::to_path_buf);
+                    entry.reserved = path.map(Path::to_path_buf);
                     return Route::Into(label);
                 }
             }
         }
+        // 종료 중에 문서를 열면 종료를 멈춘다(사용자가 마음을 바꿨다).
+        self.quitting = false;
         let label = format!("{DOC_LABEL_PREFIX}{}", self.next_id);
         self.next_id += 1;
         let mut entry = WindowEntry::new(Phase::Booting, false);
-        entry.path = path.map(Path::to_path_buf);
+        entry.reserved = path.map(Path::to_path_buf);
         self.windows.insert(label.clone(), entry);
         // 새 창은 곧 포커스를 받는다. 바로 이어 오는 문서도 이 창이 아니라 또 새 창으로 가게 맨 앞에 둔다.
         self.mru.insert(0, label.clone());
@@ -206,10 +221,18 @@ impl<D> Registry<D> {
         self.mru
             .iter()
             .find(|label| {
-                self.windows
-                    .get(*label)
-                    .and_then(|entry| entry.path.as_deref())
-                    .is_some_and(|open| same_document(open, path))
+                self.windows.get(*label).is_some_and(|entry| {
+                    let opened = entry
+                        .path
+                        .as_deref()
+                        .is_some_and(|p| same_document(p, path));
+                    let waiting = !entry.pending.is_empty()
+                        && entry
+                            .reserved
+                            .as_deref()
+                            .is_some_and(|p| same_document(p, path));
+                    opened || waiting
+                })
             })
             .cloned()
     }
@@ -239,8 +262,9 @@ impl<D> Registry<D> {
             entry.phase = Phase::Startup;
             entry.dirty = false;
             entry.close = CloseState::Idle;
+            entry.path = None;
             if entry.pending.is_empty() {
-                entry.path = None;
+                entry.reserved = None;
             }
         }
         entry.pending.drain(..).collect()
@@ -254,9 +278,10 @@ impl<D> Registry<D> {
         };
         entry.phase = Phase::Ready;
         entry.dirty = dirty;
+        entry.path = path;
         if entry.pending.is_empty() {
             entry.pristine = pristine && !dirty;
-            entry.path = path;
+            entry.reserved = None;
         } else {
             entry.pristine = false;
         }
@@ -318,12 +343,17 @@ impl<D> Registry<D> {
             return CloseDecision::Allow;
         }
         match entry.close {
-            CloseState::Acknowledged => CloseDecision::Wait,
+            CloseState::NativeConfirm => CloseDecision::Wait,
             CloseState::Asked(at) if now.saturating_duration_since(at) < CLOSE_ACK_TIMEOUT => {
                 CloseDecision::Wait
             }
-            CloseState::Asked(_) => CloseDecision::Allow,
-            CloseState::Idle => {
+            CloseState::Asked(_) => {
+                entry.close = CloseState::NativeConfirm;
+                CloseDecision::ConfirmNative
+            }
+            // 묻는 중인 창을 다시 닫으려 하면 살아 있는지 다시 확인한다. 살아 있는 웹뷰는 곧바로 다시
+            // 받았다고 답하고, 멈춘 웹뷰는 답이 없어 다음 닫기에서 네이티브 확인창으로 넘어간다.
+            CloseState::Acknowledged | CloseState::Idle => {
                 entry.close = CloseState::Asked(now);
                 CloseDecision::Ask
             }
@@ -337,6 +367,13 @@ impl<D> Registry<D> {
                 entry.close = CloseState::Acknowledged;
             }
         }
+    }
+
+    /// 묻는 중인 창이 있는지(종료 진행에서 한 번에 한 창만 묻는다).
+    fn asking(&self) -> bool {
+        self.windows
+            .values()
+            .any(|e| !matches!(e.close, CloseState::Idle))
     }
 
     /// 사용자가 답했다. 닫지 않기로 했으면 진행 중인 종료도 멈춘다.
@@ -359,41 +396,67 @@ impl<D> Registry<D> {
             .collect()
     }
 
-    /// Cmd+Q: 저장할 것이 없는 창은 바로 닫고, 저장할 것이 있는 창은 하나씩 묻는다.
+    /// Cmd+Q: 저장할 것이 없는 창은 바로 닫고, 저장할 것이 있는 창은 하나씩 묻는다. 이미 묻는 중인
+    /// 창이 있으면(Cmd+Q 를 다시 눌렀다) 새로 묻지 않는다 — 그 답 뒤에 다음 창으로 넘어간다.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub fn begin_quit(&mut self) -> QuitStep {
         self.quitting = true;
         let close_now = self
             .mru
             .iter()
-            .filter(|l| self.windows.get(*l).is_some_and(|e| !e.dirty))
+            .filter(|l| {
+                self.windows
+                    .get(*l)
+                    .is_some_and(|e| !e.dirty && e.close == CloseState::Idle)
+            })
             .cloned()
             .collect();
-        QuitStep {
-            close_now,
-            ask: self.next_dirty_to_ask(),
-        }
+        let ask = if self.asking() {
+            None
+        } else {
+            self.next_dirty_to_ask()
+        };
+        QuitStep { close_now, ask }
     }
 
-    /// 종료 중 한 창이 닫힌 뒤 다음으로 물을 창. 종료 중이 아니거나 이미 묻는 중이면 없다.
-    pub fn next_quit_ask(&mut self) -> Option<String> {
-        if !self.quitting {
+    /// 종료 중 한 창이 닫힌 뒤의 다음 단계. 저장할 것이 있는 창을 하나 묻고, 없으면 남은 창을 모두
+    /// 닫는다. 남은 창이 없거나 종료 중이 아니면 `None` 이고 종료 상태를 정리한다.
+    pub fn next_quit_step(&mut self) -> Option<QuitStep> {
+        if !self.quitting || self.asking() {
             return None;
         }
-        let busy = self
-            .windows
-            .values()
-            .any(|e| !matches!(e.close, CloseState::Idle));
-        if busy {
+        if let Some(label) = self.next_dirty_to_ask() {
+            return Some(QuitStep {
+                close_now: Vec::new(),
+                ask: Some(label),
+            });
+        }
+        let close_now: Vec<String> = self.mru.clone();
+        if close_now.is_empty() {
+            self.quitting = false;
             return None;
         }
-        self.next_dirty_to_ask()
+        Some(QuitStep {
+            close_now,
+            ask: None,
+        })
+    }
+
+    /// 종료를 끝낼 수 없게 됐다(아직 만들어지지 않은 창, 새 창을 만드는 중의 종료 요청). 상태를 정리해
+    /// 나중에 엉뚱한 창에 저장 확인을 띄우지 않는다.
+    pub fn abandon_quit(&mut self) {
+        self.quitting = false;
     }
 
     fn next_dirty_to_ask(&mut self) -> Option<String> {
         let label = self
             .mru
             .iter()
-            .find(|l| self.windows.get(*l).is_some_and(|e| e.dirty))
+            .find(|l| {
+                self.windows
+                    .get(*l)
+                    .is_some_and(|e| e.dirty && e.close == CloseState::Idle)
+            })
             .cloned()?;
         if let Some(entry) = self.windows.get_mut(&label) {
             entry.close = CloseState::Asked(Instant::now());
@@ -441,8 +504,30 @@ mod tests {
     #[test]
     fn the_same_file_brings_its_window_forward() {
         let mut r: Registry<&str> = Registry::new();
-        r.route(Some(&p("/a.hwp")), Target::Front);
-        r.route(Some(&p("/b.hwp")), Target::Front);
+        assert_eq!(
+            r.route(Some(&p("/a.hwp")), Target::Front),
+            Route::Into("main".into())
+        );
+        r.enqueue("main", "a").unwrap();
+        assert_eq!(
+            r.route(Some(&p("/b.hwp")), Target::Front),
+            Route::New("doc-1".into())
+        );
+        r.enqueue("doc-1", "b").unwrap();
+        // 아직 가져가지 않은 문서도 같은 파일로 본다.
+        assert_eq!(
+            r.route(Some(&p("/a.hwp")), Target::Front),
+            Route::Focus("main".into())
+        );
+        assert_eq!(
+            r.route(Some(&p("/b.hwp")), Target::Front),
+            Route::Focus("doc-1".into())
+        );
+        // 연 뒤에는 웹뷰가 보고한 경로로 본다.
+        r.take_pending("main", true);
+        r.report("main", false, false, Some(p("/a.hwp")));
+        r.take_pending("doc-1", true);
+        r.report("doc-1", false, false, Some(p("/b.hwp")));
         assert_eq!(
             r.route(Some(&p("/a.hwp")), Target::Front),
             Route::Focus("main".into())
@@ -597,11 +682,13 @@ mod tests {
         assert_eq!(r.close_requested("main", t0), CloseDecision::Ask);
         assert_eq!(r.close_requested("main", t0), CloseDecision::Wait);
         r.close_acknowledged("main");
+        // 묻는 중 다시 닫으면 살아 있는지 다시 묻는다. 살아 있는 웹뷰는 곧바로 다시 받았다고 답해,
         // 사용자가 오래 고민해도 두 번째 닫기로 저장 확인을 건너뛰지 않는다.
-        assert_eq!(
-            r.close_requested("main", t0 + CLOSE_ACK_TIMEOUT * 10),
-            CloseDecision::Wait
-        );
+        let later = t0 + CLOSE_ACK_TIMEOUT * 10;
+        assert_eq!(r.close_requested("main", later), CloseDecision::Ask);
+        r.close_acknowledged("main");
+        assert_eq!(r.close_requested("main", later), CloseDecision::Ask);
+        assert_eq!(r.close_requested("main", later), CloseDecision::Wait);
         r.close_answered("main", false);
         assert_eq!(r.close_requested("main", t0), CloseDecision::Ask);
     }
@@ -617,10 +704,17 @@ mod tests {
             r.close_requested("main", t0 + CLOSE_ACK_TIMEOUT - Duration::from_millis(1)),
             CloseDecision::Wait
         );
+        // 그래도 묻지 않고 닫지는 않는다 — 네이티브 확인창으로 한 번만 묻는다.
         assert_eq!(
             r.close_requested("main", t0 + CLOSE_ACK_TIMEOUT),
-            CloseDecision::Allow
+            CloseDecision::ConfirmNative
         );
+        assert_eq!(
+            r.close_requested("main", t0 + CLOSE_ACK_TIMEOUT * 2),
+            CloseDecision::Wait
+        );
+        r.close_answered("main", false);
+        assert_eq!(r.close_requested("main", t0), CloseDecision::Ask);
     }
 
     #[test]
@@ -656,14 +750,116 @@ mod tests {
         let step = r.begin_quit();
         assert_eq!(step.close_now, vec![b.clone()]);
         assert_eq!(step.ask, Some(c.clone()));
-        assert_eq!(r.next_quit_ask(), None, "묻는 중에는 다음 창을 묻지 않는다");
+        assert_eq!(
+            r.next_quit_step(),
+            None,
+            "묻는 중에는 다음 창을 묻지 않는다"
+        );
+        // Cmd+Q 를 다시 눌러도 묻는 중인 창의 상태를 덮어쓰지 않는다.
+        r.close_acknowledged(&c);
+        let again = r.begin_quit();
+        assert_eq!(again.ask, None);
+        assert_eq!(r.close_requested(&c, Instant::now()), CloseDecision::Ask);
+        r.close_acknowledged(&c);
         r.close_answered(&c, true);
         r.remove(&c);
         r.remove(&b);
-        assert_eq!(r.next_quit_ask(), Some("main".to_string()));
+        assert_eq!(
+            r.next_quit_step(),
+            Some(QuitStep {
+                close_now: Vec::new(),
+                ask: Some("main".to_string())
+            })
+        );
         // 사용자가 취소하면 종료를 멈춘다.
         r.close_answered("main", false);
         assert!(!r.is_quitting());
-        assert_eq!(r.next_quit_ask(), None);
+        assert_eq!(r.next_quit_step(), None);
+    }
+
+    #[test]
+    fn quit_finishes_with_windows_that_became_clean_and_stops_when_nothing_is_left() {
+        let mut r: Registry<&str> = Registry::new();
+        r.take_pending("main", true);
+        r.report("main", false, true, Some(p("/a.hwp")));
+        let Route::New(b) = r.route(Some(&p("/b.hwp")), Target::Front) else {
+            panic!("새 창이어야 한다");
+        };
+        r.take_pending(&b, true);
+        r.report(&b, false, true, Some(p("/b.hwp")));
+        let step = r.begin_quit();
+        assert_eq!(step.ask, Some(b.clone()));
+        // 묻는 사이 main 을 저장해 깨끗해졌다. b 를 닫으면 남은 main 도 닫아 종료를 끝낸다.
+        r.report("main", false, false, Some(p("/a.hwp")));
+        r.close_answered(&b, true);
+        r.remove(&b);
+        assert_eq!(
+            r.next_quit_step(),
+            Some(QuitStep {
+                close_now: vec!["main".to_string()],
+                ask: None
+            })
+        );
+        r.remove("main");
+        assert_eq!(r.next_quit_step(), None);
+        assert!(!r.is_quitting());
+    }
+
+    #[test]
+    fn opening_a_document_during_quit_abandons_the_quit() {
+        let mut r: Registry<&str> = Registry::new();
+        r.take_pending("main", true);
+        r.report("main", false, true, Some(p("/a.hwp")));
+        r.begin_quit();
+        assert!(r.is_quitting());
+        assert!(matches!(
+            r.route(Some(&p("/b.hwp")), Target::Front),
+            Route::New(_)
+        ));
+        assert!(!r.is_quitting());
+        r.close_answered("main", true);
+        assert_eq!(r.next_quit_step(), None);
+    }
+
+    #[test]
+    fn a_failed_or_cancelled_open_releases_the_window_and_the_file() {
+        let mut r: Registry<&str> = Registry::new();
+        r.take_pending("main", true);
+        r.report("main", true, false, None);
+        assert_eq!(
+            r.route(Some(&p("/secret.hwp")), Target::Front),
+            Route::Into("main".into())
+        );
+        r.enqueue("main", "secret").unwrap();
+        // 문서가 아직 대기 중이면 같은 파일은 그 창으로 모은다(빠른 두 번 열기).
+        assert_eq!(
+            r.route(Some(&p("/secret.hwp")), Target::Front),
+            Route::Focus("main".into())
+        );
+        assert_eq!(r.take_pending("main", false), vec!["secret"]);
+        // 암호 입력을 취소해 아무것도 열지 못했다고 보고했다.
+        r.report("main", true, false, None);
+        assert_eq!(
+            r.route(Some(&p("/secret.hwp")), Target::Front),
+            Route::Into("main".into())
+        );
+    }
+
+    #[test]
+    fn a_document_handed_back_by_its_window_is_not_focused_on_that_window() {
+        let mut r: Registry<&str> = Registry::new();
+        r.take_pending("main", true);
+        r.report("main", true, false, None);
+        assert_eq!(
+            r.route(Some(&p("/x.hwp")), Target::Front),
+            Route::Into("main".into())
+        );
+        r.enqueue("main", "x").unwrap();
+        r.take_pending("main", false);
+        // 웹뷰가 그사이 다른 문서를 열어 받을 수 없어 넘겼다.
+        assert!(matches!(
+            r.route(Some(&p("/x.hwp")), Target::NewWindow),
+            Route::New(_)
+        ));
     }
 }

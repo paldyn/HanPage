@@ -48,6 +48,7 @@ async function installNativeMock(page, { platform = 'MacIntel', state = { state:
       pendingApply,
       pendingDocuments: [],
       nudgeClaimed: null,
+      preflightBlocked: null,
       emit(event, payload) {
         for (const handler of listeners.get(event) || []) handler({ payload });
       },
@@ -98,6 +99,8 @@ async function installNativeMock(page, { platform = 'MacIntel', state = { state:
           mock.nudgeClaimed = args?.version;
           return Promise.resolve(true);
         }
+        // [#156] 다른 창에 저장하지 않은 문서가 있으면 그 안내 문구를 돌려준다.
+        if (command === 'cmd_update_preflight') return Promise.resolve(mock.preflightBlocked);
         if (['cmd_set_window_title', 'cmd_report_window_state', 'cmd_close_ack', 'cmd_close_window', 'cmd_open_in_new_window'].includes(command)) {
           return Promise.resolve(null);
         }
@@ -999,6 +1002,37 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
   check(!(await snapshot(page)).dirty && await hasText(page, 'UPDATE_KEEP_UNSAVED'), '기존 제품 저장 경로가 성공한 뒤에만 업데이트를 적용한다');
   const nativeSave = await page.evaluate(() => window.__updateMock.calls.filter(call => call.command === 'cmd_save_document').at(-1));
   check(nativeSave.args.data.length > 0, '저장 요청에는 실제 문서 직렬화 바이트가 전달된다');
+  await page.evaluate(() => window.__updateMock.applyFailure());
+  await waitState(page, 'error');
+
+  setTestCase('[#156] 다른 창의 미저장 문서는 이 창의 저장 확인·적용보다 먼저 막는다');
+  await page.click('#scroll-container canvas', { offset: { x: 160, y: 160 } });
+  await typeText(page, 'PREFLIGHT_KEEP');
+  check((await snapshot(page)).dirty, '이 창에도 저장하지 않은 편집을 만든다');
+  const applyBeforePreflight = (await snapshot(page)).applyCount;
+  const preflightBefore = await page.evaluate(() => window.__updateMock.count('cmd_update_preflight'));
+  await page.evaluate(() => { window.__updateMock.preflightBlocked = '다른 창(보고서.hwp)에 저장하지 않은 문서가 있습니다.'; });
+  await page.click(primary);
+  await page.waitForFunction(() => document.querySelector('#desktop-update-card .dialog-update-detail')?.textContent?.includes('보고서.hwp'));
+  await page.waitForFunction(() => !document.querySelector('.dialog-update-primary').disabled);
+  actual = await snapshot(page);
+  const preflightBlock = {
+    unsavedPrompt: await page.evaluate(() => Boolean(document.querySelector('.modal-overlay .dialog-wrap'))),
+    preflights: await page.evaluate(() => window.__updateMock.count('cmd_update_preflight')),
+    kept: await hasText(page, 'PREFLIGHT_KEEP'),
+  };
+  check(actual.state === 'error' && actual.primary === '다시 업데이트' && !preflightBlock.unsavedPrompt
+    && actual.applyCount === applyBeforePreflight && actual.dirty && preflightBlock.kept
+    && preflightBlock.preflights === preflightBefore + 1,
+    `다른 창이 막으면 이 창의 저장 확인을 띄우지 않고 적용하지 않으며 편집을 그대로 둔다 (${JSON.stringify(preflightBlock)})`);
+  await page.evaluate(() => { window.__updateMock.preflightBlocked = null; });
+  await page.click(primary);
+  await page.waitForSelector('.modal-overlay .dialog-wrap');
+  check((await snapshot(page)).applyCount === applyBeforePreflight, '다른 창이 정리되면 이 창의 저장 확인부터 다시 진행한다');
+  await clickUnsaved(page, '저장');
+  await waitState(page, 'applying');
+  await page.waitForFunction(count => window.__updateMock.count('cmd_update_apply') === count + 1, {}, applyBeforePreflight);
+  check(!(await snapshot(page)).dirty, '이 창의 문서를 저장한 뒤에만 적용한다');
   await page.evaluate(() => window.__updateMock.applyFailure());
   await waitState(page, 'error');
 

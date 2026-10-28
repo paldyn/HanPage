@@ -247,6 +247,8 @@ test('저장하지 않은 창의 닫기 요청은 받았다고 알린 뒤 사용
     assert.equal(asked, 2);
     assert.deepEqual(calls.filter((c) => c.command.startsWith('cmd_close')), [
       { command: 'cmd_close_ack', args: undefined },
+      // 묻는 중 다시 온 요청에는 살아 있다고만 다시 알린다.
+      { command: 'cmd_close_ack', args: undefined },
       { command: 'cmd_close_window', args: { confirmed: false } },
       { command: 'cmd_close_ack', args: undefined },
       { command: 'cmd_close_window', args: { confirmed: true } },
@@ -376,7 +378,6 @@ test('네이티브 열기는 PDF 가져오기 지원 여부를 대화상자 필�
       core: { async invoke(command: string, args?: unknown) {
         calls.push({ command, args });
         if (command === 'cmd_take_pending_documents') return [];
-        if (command === 'cmd_open_document') return { name: '스캔.pdf', path: '/tmp/스캔.pdf', data: [37, 80] };
         return null;
       } },
       event: { async listen() { return () => {}; } },
@@ -388,19 +389,125 @@ test('네이티브 열기는 PDF 가져오기 지원 여부를 대화상자 필�
     bridge.markDesktopWindowReady();
     const open = bridge.getDesktopOpenHandler();
     assert.ok(open);
-    const opened: string[] = [];
-    await open((bytes: Uint8Array, name: string) => { opened.push(`${name}:${bytes[0]}`); }, { pdfImportEnabled: true });
-    await open(() => {});
+    // [#156] 고른 문서는 네이티브가 이 창의 대기 문서(또는 새 창)로 보낸다. 바이트를 직접 넘기지 않는다.
+    await open(() => assert.fail('문서는 대기 문서로 도착해야 한다'), { pdfImportEnabled: true });
+    await open(() => assert.fail('문서는 대기 문서로 도착해야 한다'));
     assert.deepEqual(calls.filter(c => c.command === 'cmd_open_document').map(c => c.args),
       [{ allowPdf: true }, { allowPdf: false }]);
-    assert.deepEqual(opened, ['스캔.pdf:37']);
-    // [#156] 그사이 이 창이 문서를 열었으면 돌려받은 문서를 새 창으로 넘긴다.
-    bridge.noteDesktopDocumentSwapped();
-    await open(() => assert.fail('문서를 연 창에서 다시 열면 안 된다'));
-    assert.deepEqual(calls.at(-1), {
-      command: 'cmd_open_in_new_window',
-      args: { name: '스캔.pdf', path: '/tmp/스캔.pdf', data: [37, 80] },
+    assert.ok(!calls.some((c) => c.command === 'cmd_open_in_new_window'));
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'window', previous);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
+});
+
+test('한 번 편집하거나 저장한 창, 문서를 여는 중인 창은 손대지 않은 창이 아니다', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const calls: Invoked[] = [];
+  let dirty = false;
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: {
+    __TAURI_INTERNALS__: { metadata: { currentWindow: { label: 'main' } } },
+    __TAURI__: {
+      core: { async invoke(command: string, args?: Record<string, unknown>) {
+        calls.push({ command, args });
+        if (command === 'cmd_take_pending_documents') return [];
+        if (command === 'cmd_save_document') return { status: 'saved', path: '/docs/새 보고서.hwp', name: '새 보고서.hwp' };
+        return null;
+      } },
+      event: { async listen() { return () => {}; } },
+    },
+  } });
+  const lastReport = () => calls.filter((c) => c.command === 'cmd_report_window_state').at(-1)?.args;
+  try {
+    const bridge = await freshBridge();
+    await bridge.initDesktopBridge({ async openDocument() {}, dispatchCommand() {}, isDirty: () => dirty });
+    bridge.markDesktopWindowReady();
+    assert.equal(lastReport()?.pristine, true);
+    // 여는 동안은 받지 않고, 열기에 실패하면 다시 받는다.
+    bridge.noteDesktopLoadStarted();
+    assert.equal(bridge.shouldOpenInNewDesktopWindow(), true);
+    assert.equal(lastReport()?.pristine, false);
+    bridge.noteDesktopLoadSettled();
+    assert.equal(bridge.shouldOpenInNewDesktopWindow(), false);
+    assert.equal(lastReport()?.pristine, true, '열기에 실패하면 예약을 풀도록 다시 보고한다');
+    // 편집 없이 바로 저장해도 이제 파일이 있는 창이다.
+    const save = bridge.getDesktopSaveHandler();
+    assert.ok(save);
+    assert.deepEqual(await save({ bytes: new Uint8Array([1]), suggestedName: '새 보고서.hwp', saveAs: true }),
+      { status: 'saved', fileName: '새 보고서.hwp' });
+    assert.deepEqual(lastReport(), { pristine: false, dirty: false, nativePath: '/docs/새 보고서.hwp' });
+    assert.equal(bridge.shouldOpenInNewDesktopWindow(), true);
+    // 새 빈 문서를 만들면 다시 받는다.
+    bridge.noteDesktopBlankDocument();
+    assert.deepEqual(lastReport(), { pristine: true, dirty: false, nativePath: null });
+    // 입력했다가 되돌려(또는 저장해) 깨끗해져도 손댄 창이다.
+    dirty = true;
+    bridge.noteDesktopDirtyChanged();
+    dirty = false;
+    bridge.noteDesktopDirtyChanged();
+    assert.deepEqual(lastReport(), { pristine: false, dirty: false, nativePath: null });
+    assert.equal(bridge.shouldOpenInNewDesktopWindow(), true);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'window', previous);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
+});
+
+test('대기 문서를 열지 못하면(암호 취소·읽기 실패) 이 창의 예약을 풀도록 다시 보고한다', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const calls: Invoked[] = [];
+  const handlers = new Map<string, (event: { payload: unknown }) => void>();
+  const queue: { name: string; path: string; data: number[] }[] = [];
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: {
+    __TAURI_INTERNALS__: { metadata: { currentWindow: { label: 'main' } } },
+    __TAURI__: {
+      core: { async invoke(command: string, args?: Record<string, unknown>) {
+        calls.push({ command, args });
+        return command === 'cmd_take_pending_documents' ? queue.splice(0) : null;
+      } },
+      event: { async listen(name: string, handler: (event: { payload: unknown }) => void) {
+        handlers.set(name, handler);
+        return () => handlers.delete(name);
+      } },
+    },
+  } });
+  try {
+    const bridge = await freshBridge();
+    await bridge.initDesktopBridge({
+      async openDocument() { /* 암호 입력을 취소해 문서를 바꾸지 않았다 */ },
+      dispatchCommand() {},
+      isDirty: () => false,
     });
+    bridge.markDesktopWindowReady();
+    queue.push({ name: 'secret.hwp', path: '/docs/secret.hwp', data: [9] });
+    handlers.get('hanpage://documents-ready')!({ payload: null });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const take = calls.findLastIndex((c) => c.command === 'cmd_take_pending_documents');
+    const reportsAfterOpen = calls.slice(take + 1).filter((c) => c.command === 'cmd_report_window_state');
+    assert.ok(reportsAfterOpen.length > 0, '열기를 시도한 뒤 다시 보고해야 네이티브가 예약을 푼다');
+    assert.deepEqual(reportsAfterOpen.at(-1)?.args, { pristine: true, dirty: false, nativePath: null });
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'window', previous);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
+});
+
+test('업데이트 사전 확인: 다른 창 때문에 적용할 수 없으면 안내 문구, 아니면 null', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const answers: unknown[] = ['다른 창(보고서.hwp)에 저장하지 않은 문서가 있습니다.', null, undefined];
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: {
+    __TAURI__: { core: { async invoke(command: string) {
+      assert.equal(command, 'cmd_update_preflight');
+      if (answers.length === 0) throw new Error('이전 런타임');
+      return answers.shift();
+    } } },
+  } });
+  try {
+    const bridge = await freshBridge();
+    assert.equal(await bridge.updatePreflight(), '다른 창(보고서.hwp)에 저장하지 않은 문서가 있습니다.');
+    assert.equal(await bridge.updatePreflight(), null);
+    assert.equal(await bridge.updatePreflight(), null);
+    assert.equal(await bridge.updatePreflight(), null, '확인할 수 없으면 막지 않는다(네이티브 적용 단계가 다시 확인한다)');
   } finally {
     if (previous) Object.defineProperty(globalThis, 'window', previous);
     else Reflect.deleteProperty(globalThis, 'window');

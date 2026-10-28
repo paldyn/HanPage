@@ -79,15 +79,23 @@ export function isSecondaryDesktopWindow(): boolean {
 type WindowPhase = 'booting' | 'startup' | 'ready';
 let windowPhase: WindowPhase = 'booting';
 let documentLoaded = false;
+/** 한 번이라도 편집하거나 저장한 창. 새 빈 문서를 만들 때만 풀린다 — 저장해 깨끗해져도 빈 창이 아니다. */
+let touched = false;
+/** 이 창에서 문서를 여는 중인 수(`loadBytes`). 여는 동안 도착한 문서는 받지 않는다. */
+let loading = 0;
 /** 지금 문서를 네이티브에서 넘겨받았거나 네이티브로 저장했으면 그 파일 경로(같은 파일 재열기 판단). */
 let nativePath: string | null = null;
 /** 네이티브 문서를 여는 중이면 그 경로. 문서 교체 신호를 받으면 `nativePath` 로 옮긴다. */
 let openingNativePath: string | null = null;
 let isDocumentDirty: () => boolean = () => false;
 
+function windowIsPristine(): boolean {
+  return !documentLoaded && !touched && loading === 0 && !isDocumentDirty();
+}
+
 function windowAcceptsDocument(): boolean {
-  if (windowPhase === 'booting') return !documentLoaded;
-  return windowPhase === 'ready' && !documentLoaded && !isDocumentDirty();
+  if (windowPhase === 'booting') return !documentLoaded && loading === 0;
+  return windowPhase === 'ready' && windowIsPristine();
 }
 
 /** 데스크톱이면서 이 창이 문서를 받을 수 없으면 `true` — 호출자는 새 창으로 넘긴다. */
@@ -100,10 +108,22 @@ function reportWindowState(): void {
   const invoke = tauriInvoke();
   if (!invoke) return;
   void invoke('cmd_report_window_state', {
-    pristine: !documentLoaded && !isDocumentDirty(),
+    pristine: windowIsPristine(),
     dirty: isDocumentDirty(),
     nativePath,
   }).catch((error) => console.warn('[desktop-bridge] 창 상태 보고 실패:', error));
+}
+
+/** 문서를 열기 시작했다(`loadBytes` 진입). 여는 동안은 이 창에 문서를 받지 않는다. */
+export function noteDesktopLoadStarted(): void {
+  loading += 1;
+  reportWindowState();
+}
+
+/** 문서 열기가 끝났다(성공·실패·취소). 실패하거나 취소했으면 다시 손대지 않은 창으로 보고한다. */
+export function noteDesktopLoadSettled(): void {
+  loading = Math.max(0, loading - 1);
+  reportWindowState();
 }
 
 /** 문서를 바이트로 연 직후(`document-swapped`). 네이티브에서 넘겨받은 문서면 그 경로를 기억한다. */
@@ -117,12 +137,14 @@ export function noteDesktopDocumentSwapped(): void {
 /** 새 빈 문서를 만든 직후. 다시 손대지 않은 창이 된다. */
 export function noteDesktopBlankDocument(): void {
   documentLoaded = false;
+  touched = false;
   nativePath = null;
   reportWindowState();
 }
 
-/** 문서 변경 여부가 바뀌었을 때. */
+/** 문서 변경 여부가 바뀌었을 때. 한 번 편집한 창은 저장해도 다시 빈 창이 되지 않는다. */
 export function noteDesktopDirtyChanged(): void {
+  if (isDocumentDirty()) touched = true;
   reportWindowState();
 }
 
@@ -229,17 +251,10 @@ export async function initDesktopBridge(deps?: DesktopBridgeDeps): Promise<void>
     return;
   }
 
-  openHandler = async (emit, options) => {
-    // [#156] 이 창이 손대지 않은 빈 창이 아니면 네이티브가 새 창(또는 그 파일을 연 창)으로 보내고 null 을 준다.
-    const res = await invoke<OpenedFile | null>('cmd_open_document', { allowPdf: options?.pdfImportEnabled === true });
-    if (!res) return; // 사용자 취소 또는 다른 창에서 엶
-    const bytes = new Uint8Array(res.data);
-    if (!windowAcceptsDocument()) {
-      await invoke('cmd_open_in_new_window', { name: res.name, path: res.path, data: res.data });
-      return;
-    }
-    openingNativePath = res.path || null;
-    emit(bytes, res.name);
+  openHandler = async (_emit, options) => {
+    // [#156] 고른 문서는 파일 연결과 같은 길로 간다: 이 창이 손대지 않은 빈 창이면 이 창의 대기 문서로,
+    // 아니면 새 창(또는 그 파일을 연 창)으로. 이 창은 문서 도착 알림을 받아 대기 문서를 연다.
+    await invoke('cmd_open_document', { allowPdf: options?.pdfImportEnabled === true });
   };
 
   saveHandler = async (req) => {
@@ -250,6 +265,7 @@ export async function initDesktopBridge(deps?: DesktopBridgeDeps): Promise<void>
       });
       if (res.status === 'cancelled') return { status: 'cancelled' };
       nativePath = res.path;
+      touched = true;
       reportWindowState();
       return { status: 'saved', fileName: res.name };
     } catch (e) {
@@ -287,7 +303,9 @@ export async function initDesktopBridge(deps?: DesktopBridgeDeps): Promise<void>
           try {
             await deps.openDocument(new Uint8Array(d.data), d.name);
           } finally {
+            // 열지 못했거나 취소했으면 이 창의 예약을 푼다(문서를 열었으면 이미 교체 신호로 보고했다).
             openingNativePath = null;
+            reportWindowState();
           }
         }
       } catch (e) {
@@ -316,7 +334,11 @@ export async function initDesktopBridge(deps?: DesktopBridgeDeps): Promise<void>
     // 저장하지 않은 창을 닫으려 한다 → 사용자에게 묻고 답을 돌려준다.
     let closing = false;
     void listen(EVT_CLOSE_REQUESTED, () => {
-      if (closing) return;
+      // 묻는 중 다시 온 요청: 살아 있다고만 다시 알린다(네이티브가 멈춘 창과 구분한다).
+      if (closing) {
+        void invoke('cmd_close_ack').catch(() => undefined);
+        return;
+      }
       closing = true;
       void (async () => {
         try {
@@ -396,6 +418,20 @@ export async function applyUpdate(): Promise<{ ok: boolean; message?: string }> 
     return { ok: true };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * [#156] 다른 창에 저장하지 않은 문서가 있어 업데이트를 적용할 수 없으면 그 안내 문구(네이티브가 그 창을
+ * 앞으로 가져온다). 적용할 수 있거나 확인할 수 없으면 `null`.
+ */
+export async function updatePreflight(): Promise<string | null> {
+  const invoke = tauriInvoke();
+  if (!invoke) return null;
+  try {
+    return (await invoke<string | null | undefined>('cmd_update_preflight')) ?? null;
+  } catch {
+    return null;
   }
 }
 
