@@ -11,7 +11,11 @@
  */
 
 /** Tauri `invoke` 시그니처(필요한 부분만 로컬 선언 — @tauri-apps/api 의존 회피). */
-type TauriInvoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+type TauriInvoke = <T>(
+  cmd: string,
+  args?: Record<string, unknown> | Uint8Array,
+  options?: { headers?: Record<string, string> },
+) => Promise<T>;
 /** Tauri 이벤트 `listen` 시그니처(필요한 부분만 로컬 선언). `target` 이 문자열이면 그 레이블의 창 이벤트만 받는다. */
 type TauriListen = <T>(
   event: string,
@@ -90,7 +94,7 @@ let openingNativePath: string | null = null;
 let isDocumentDirty: () => boolean = () => false;
 
 function windowIsPristine(): boolean {
-  return !documentLoaded && !touched && loading === 0 && !isDocumentDirty();
+  return !documentLoaded && !touched && loading === 0 && openingNativePath === null && !isDocumentDirty();
 }
 
 function windowAcceptsDocument(): boolean {
@@ -111,6 +115,8 @@ function reportWindowState(): void {
     pristine: windowIsPristine(),
     dirty: isDocumentDirty(),
     nativePath,
+    // 여는 중인 파일 — 그사이 같은 파일을 다시 열면 네이티브가 새 창 대신 이 창을 앞으로 가져온다.
+    openingPath: openingNativePath,
   }).catch((error) => console.warn('[desktop-bridge] 창 상태 보고 실패:', error));
 }
 
@@ -159,7 +165,14 @@ export function markDesktopWindowReady(): void {
 export async function openInNewDesktopWindow(bytes: Uint8Array, fileName: string, path: string | null = null): Promise<void> {
   const invoke = tauriInvoke();
   if (!invoke) throw new Error('데스크톱 앱에서만 사용할 수 있습니다.');
-  await invoke('cmd_open_in_new_window', { name: fileName, path, data: Array.from(bytes) });
+  // 바이트는 요청 본문 그대로 보낸다(JSON 숫자 배열은 큰 문서에서 느리고 128 MiB 를 넘으면 만들 수도 없다).
+  // HTTP 헤더에는 한글·공백을 그대로 넣을 수 없어 이름과 경로는 퍼센트 인코딩한다.
+  await invoke('cmd_open_in_new_window', bytes, {
+    headers: {
+      'x-hanpage-name': encodeURIComponent(fileName),
+      'x-hanpage-path': encodeURIComponent(path ?? ''),
+    },
+  });
 }
 
 /** 네이티브 창 제목을 문서 제목(`document.title`)에 맞춘다. 창 전환·작업 표시줄에서 문서를 구분한다. */
@@ -288,25 +301,31 @@ export async function initDesktopBridge(deps?: DesktopBridgeDeps): Promise<void>
         const initial = initialDrain;
         initialDrain = false;
         const docs = await invoke<OpenedFile[]>('cmd_take_pending_documents', { initial });
-        for (const d of docs) {
-          if (d.error !== undefined) {
-            console.error(`[desktop-bridge] 파일 열기 실패: ${d.path}: ${d.error}`);
-            deps.notifyOpenFailure?.(d.name, d.error);
-            continue;
+        try {
+          for (const d of docs) {
+            if (d.error !== undefined) {
+              console.error(`[desktop-bridge] 파일 열기 실패: ${d.path}: ${d.error}`);
+              deps.notifyOpenFailure?.(d.name, d.error);
+              continue;
+            }
+            // 한 번에 여러 문서가 왔거나 보고가 늦은 사이 이 창이 문서를 열었으면 새 창으로 넘긴다.
+            if (!windowAcceptsDocument()) {
+              await openInNewDesktopWindow(new Uint8Array(d.data), d.name, d.path || null);
+              continue;
+            }
+            openingNativePath = d.path || null;
+            try {
+              await deps.openDocument(new Uint8Array(d.data), d.name);
+            } finally {
+              // 열지 못했거나 취소했으면 이 창의 예약을 푼다(문서를 열었으면 이미 교체 신호로 보고했다).
+              openingNativePath = null;
+              reportWindowState();
+            }
           }
-          // 한 번에 여러 문서가 왔거나 보고가 늦은 사이 이 창이 문서를 열었으면 새 창으로 넘긴다.
-          if (!windowAcceptsDocument()) {
-            await invoke('cmd_open_in_new_window', { name: d.name, path: d.path, data: d.data });
-            continue;
-          }
-          openingNativePath = d.path || null;
-          try {
-            await deps.openDocument(new Uint8Array(d.data), d.name);
-          } finally {
-            // 열지 못했거나 취소했으면 이 창의 예약을 푼다(문서를 열었으면 이미 교체 신호로 보고했다).
-            openingNativePath = null;
-            reportWindowState();
-          }
+        } finally {
+          // 가져간 것이 실패 알림뿐이어도 다시 보고한다. 네이티브는 대기 항목이 남아 있는 동안 이 창을
+          // 빈 창으로 보지 않으므로, 비운 뒤의 보고가 있어야 손대지 않은 창으로 돌아온다.
+          if (docs.length > 0) reportWindowState();
         }
       } catch (e) {
         console.error('[desktop-bridge] 펜딩 문서 처리 실패:', e);

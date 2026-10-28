@@ -36,10 +36,15 @@ function windowDeps(bridge: any, events: string[], hold?: Promise<void>, holdNam
   };
 }
 
-function recordNewWindow(calls: Invoked[], events: string[], command: string, args?: Record<string, unknown>): void {
-  calls.push({ command, args });
+type InvokeOptions = { headers?: Record<string, string> };
+
+function recordNewWindow(calls: Invoked[], events: string[], command: string, args?: unknown, options?: InvokeOptions): void {
+  calls.push({ command, args: args as Record<string, unknown> | undefined });
   if (command === 'cmd_open_in_new_window') {
-    events.push(`new-window:${args?.name}:${(args?.data as number[])[0]}:${args?.path ?? ''}`);
+    // [#156] 바이트는 요청 본문 그대로, 이름·경로는 퍼센트 인코딩한 헤더로 넘긴다.
+    assert.ok(args instanceof Uint8Array, '새 창으로 넘기는 바이트는 JSON 배열이 아니라 요청 본문이다');
+    const header = (name: string) => decodeURIComponent(options?.headers?.[name] ?? '');
+    events.push(`new-window:${header('x-hanpage-name')}:${args[0]}:${header('x-hanpage-path')}`);
   }
 }
 
@@ -54,8 +59,8 @@ test('시작 문서는 이 창에서 열고 함께 온 다음 문서는 새 창�
   Object.defineProperty(globalThis, 'window', { configurable: true, value: {
     __TAURI_INTERNALS__: { metadata: { currentWindow: { label: 'main' } } },
     __TAURI__: {
-      core: { async invoke(command: string, args?: Record<string, unknown>) {
-        recordNewWindow(calls, events, command, args);
+      core: { async invoke(command: string, args?: Record<string, unknown>, options?: InvokeOptions) {
+        recordNewWindow(calls, events, command, args, options);
         if (command === 'cmd_take_pending_documents') {
           events.push(`drain:${args?.initial}`);
           return queue.splice(0);
@@ -93,7 +98,7 @@ test('시작 문서는 이 창에서 열고 함께 온 다음 문서는 새 창�
     // 문서를 연 창에 나중에 온 문서도 새 창으로 넘긴다.
     bridge.markDesktopWindowReady();
     assert.deepEqual(calls.filter((c) => c.command === 'cmd_report_window_state').at(-1)?.args,
-      { pristine: false, dirty: false, nativePath: '/docs/first.hwp' });
+      { pristine: false, dirty: false, nativePath: '/docs/first.hwp', openingPath: null });
     queue.push({ name: 'warm.hwp', path: '/docs/warm.hwp', data: [3] });
     handlers.get('hanpage://documents-ready')!({ payload: null });
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -118,8 +123,8 @@ test('등록 중 이벤트가 먼저 큐를 소비해도 startup과 다음 문�
   Object.defineProperty(globalThis, 'window', { configurable: true, value: {
     __TAURI_INTERNALS__: {},
     __TAURI__: {
-      core: { async invoke(command: string, args?: Record<string, unknown>) {
-        recordNewWindow(calls, events, command, args);
+      core: { async invoke(command: string, args?: Record<string, unknown>, options?: InvokeOptions) {
+        recordNewWindow(calls, events, command, args, options);
         return command === 'cmd_take_pending_documents' ? queue.splice(0) : null;
       } },
       event: { async listen(name: string, handler: (event: { payload: unknown }) => void) {
@@ -169,8 +174,8 @@ test('손대지 않은 준비된 창만 도착한 문서를 열고, 시작 흐�
   Object.defineProperty(globalThis, 'window', { configurable: true, value: {
     __TAURI_INTERNALS__: { metadata: { currentWindow: { label: 'doc-2' } } },
     __TAURI__: {
-      core: { async invoke(command: string, args?: Record<string, unknown>) {
-        recordNewWindow(calls, events, command, args);
+      core: { async invoke(command: string, args?: Record<string, unknown>, options?: InvokeOptions) {
+        recordNewWindow(calls, events, command, args, options);
         return command === 'cmd_take_pending_documents' ? queue.splice(0) : null;
       } },
       event: { async listen(name: string, handler: (event: { payload: unknown }) => void) {
@@ -191,13 +196,13 @@ test('손대지 않은 준비된 창만 도착한 문서를 열고, 시작 흐�
     assert.ok(!calls.some((c) => c.command === 'cmd_report_window_state'), '시작 흐름이 끝나기 전에는 상태를 보고하지 않는다');
 
     bridge.markDesktopWindowReady();
-    assert.deepEqual(calls.at(-1), { command: 'cmd_report_window_state', args: { pristine: true, dirty: false, nativePath: null } });
+    assert.deepEqual(calls.at(-1), { command: 'cmd_report_window_state', args: { pristine: true, dirty: false, nativePath: null, openingPath: null } });
     queue.push({ name: 'a.hwp', path: '/docs/a.hwp', data: [5] }, { name: 'b.hwp', path: '/docs/b.hwp', data: [6] });
     handlers.get('hanpage://documents-ready')!({ payload: null });
     await new Promise<void>((resolve) => setImmediate(resolve));
     assert.deepEqual(events.slice(1), ['start:a.hwp:5', 'finish:a.hwp', 'new-window:b.hwp:6:/docs/b.hwp']);
     assert.deepEqual(calls.filter((c) => c.command === 'cmd_report_window_state').at(-1)?.args,
-      { pristine: false, dirty: false, nativePath: '/docs/a.hwp' });
+      { pristine: false, dirty: false, nativePath: '/docs/a.hwp', openingPath: null });
     assert.equal(bridge.shouldOpenInNewDesktopWindow(), true, '끌어다 놓은 문서도 새 창으로 보낸다');
     bridge.noteDesktopBlankDocument();
     assert.equal(bridge.shouldOpenInNewDesktopWindow(), false, '새 빈 문서가 되면 다시 받는다');
@@ -435,17 +440,17 @@ test('한 번 편집하거나 저장한 창, 문서를 여는 중인 창은 손�
     assert.ok(save);
     assert.deepEqual(await save({ bytes: new Uint8Array([1]), suggestedName: '새 보고서.hwp', saveAs: true }),
       { status: 'saved', fileName: '새 보고서.hwp' });
-    assert.deepEqual(lastReport(), { pristine: false, dirty: false, nativePath: '/docs/새 보고서.hwp' });
+    assert.deepEqual(lastReport(), { pristine: false, dirty: false, nativePath: '/docs/새 보고서.hwp', openingPath: null });
     assert.equal(bridge.shouldOpenInNewDesktopWindow(), true);
     // 새 빈 문서를 만들면 다시 받는다.
     bridge.noteDesktopBlankDocument();
-    assert.deepEqual(lastReport(), { pristine: true, dirty: false, nativePath: null });
+    assert.deepEqual(lastReport(), { pristine: true, dirty: false, nativePath: null, openingPath: null });
     // 입력했다가 되돌려(또는 저장해) 깨끗해져도 손댄 창이다.
     dirty = true;
     bridge.noteDesktopDirtyChanged();
     dirty = false;
     bridge.noteDesktopDirtyChanged();
-    assert.deepEqual(lastReport(), { pristine: false, dirty: false, nativePath: null });
+    assert.deepEqual(lastReport(), { pristine: false, dirty: false, nativePath: null, openingPath: null });
     assert.equal(bridge.shouldOpenInNewDesktopWindow(), true);
   } finally {
     if (previous) Object.defineProperty(globalThis, 'window', previous);
@@ -485,7 +490,7 @@ test('대기 문서를 열지 못하면(암호 취소·읽기 실패) 이 창의
     const take = calls.findLastIndex((c) => c.command === 'cmd_take_pending_documents');
     const reportsAfterOpen = calls.slice(take + 1).filter((c) => c.command === 'cmd_report_window_state');
     assert.ok(reportsAfterOpen.length > 0, '열기를 시도한 뒤 다시 보고해야 네이티브가 예약을 푼다');
-    assert.deepEqual(reportsAfterOpen.at(-1)?.args, { pristine: true, dirty: false, nativePath: null });
+    assert.deepEqual(reportsAfterOpen.at(-1)?.args, { pristine: true, dirty: false, nativePath: null, openingPath: null });
   } finally {
     if (previous) Object.defineProperty(globalThis, 'window', previous);
     else Reflect.deleteProperty(globalThis, 'window');
@@ -508,6 +513,153 @@ test('업데이트 사전 확인: 다른 창 때문에 적용할 수 없으면 �
     assert.equal(await bridge.updatePreflight(), null);
     assert.equal(await bridge.updatePreflight(), null);
     assert.equal(await bridge.updatePreflight(), null, '확인할 수 없으면 막지 않는다(네이티브 적용 단계가 다시 확인한다)');
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'window', previous);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
+});
+
+test('여는 중인 파일을 보고해, 그사이 같은 파일을 다시 열면 네이티브가 이 창으로 모을 수 있게 한다', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const calls: Invoked[] = [];
+  const handlers = new Map<string, (event: { payload: unknown }) => void>();
+  const queue: { name: string; path: string; data: number[] }[] = [];
+  let release!: () => void;
+  let swap = false;
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: {
+    __TAURI_INTERNALS__: { metadata: { currentWindow: { label: 'main' } } },
+    __TAURI__: {
+      core: { async invoke(command: string, args?: Record<string, unknown>) {
+        calls.push({ command, args });
+        return command === 'cmd_take_pending_documents' ? queue.splice(0) : null;
+      } },
+      event: { async listen(name: string, handler: (event: { payload: unknown }) => void) {
+        handlers.set(name, handler);
+        return () => handlers.delete(name);
+      } },
+    },
+  } });
+  const reports = () => calls.filter((c) => c.command === 'cmd_report_window_state').map((c) => c.args);
+  try {
+    const bridge = await freshBridge();
+    await bridge.initDesktopBridge({
+      async openDocument() {
+        bridge.noteDesktopLoadStarted();
+        try {
+          await new Promise<void>((resolve) => { release = resolve; });
+          if (swap) bridge.noteDesktopDocumentSwapped();
+        } finally {
+          bridge.noteDesktopLoadSettled();
+        }
+      },
+      dispatchCommand() {},
+      isDirty: () => false,
+    });
+    bridge.markDesktopWindowReady();
+    // 암호 입력·글꼴 준비로 오래 걸리는 열기.
+    queue.push({ name: 'big.hwp', path: '/docs/big.hwp', data: [1] });
+    handlers.get('hanpage://documents-ready')!({ payload: null });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.deepEqual(reports().at(-1), { pristine: false, dirty: false, nativePath: null, openingPath: '/docs/big.hwp' });
+    // 암호 입력을 취소했다. 열기 신호가 끝나도 대기 문서를 정리하기 전까지는 여는 중이다.
+    const before = reports().length;
+    release();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const after = reports().slice(before);
+    assert.deepEqual(after[0], { pristine: false, dirty: false, nativePath: null, openingPath: '/docs/big.hwp' });
+    assert.deepEqual(after.at(-1), { pristine: true, dirty: false, nativePath: null, openingPath: null });
+    // 연 경우에는 확정 경로로 넘어간다.
+    swap = true;
+    queue.push({ name: 'big.hwp', path: '/docs/big.hwp', data: [1] });
+    handlers.get('hanpage://documents-ready')!({ payload: null });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    release();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.deepEqual(reports().at(-1), { pristine: false, dirty: false, nativePath: '/docs/big.hwp', openingPath: null });
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'window', previous);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
+});
+
+test('실패 알림만 가져간 drain 뒤에도 다시 보고해 손대지 않은 창으로 돌아온다', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const calls: Invoked[] = [];
+  const handlers = new Map<string, (event: { payload: unknown }) => void>();
+  const queue: { name: string; path: string; data: number[]; error?: string }[] = [];
+  const failures: string[] = [];
+  let release!: () => void;
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: {
+    __TAURI_INTERNALS__: { metadata: { currentWindow: { label: 'main' } } },
+    __TAURI__: {
+      core: { async invoke(command: string, args?: Record<string, unknown>) {
+        calls.push({ command, args });
+        return command === 'cmd_take_pending_documents' ? queue.splice(0) : null;
+      } },
+      event: { async listen(name: string, handler: (event: { payload: unknown }) => void) {
+        handlers.set(name, handler);
+        return () => handlers.delete(name);
+      } },
+    },
+  } });
+  try {
+    const bridge = await freshBridge();
+    await bridge.initDesktopBridge({
+      async openDocument() {
+        bridge.noteDesktopLoadStarted();
+        try {
+          await new Promise<void>((resolve) => { release = resolve; });
+        } finally {
+          bridge.noteDesktopLoadSettled();
+        }
+      },
+      dispatchCommand() {},
+      isDirty: () => false,
+      notifyOpenFailure(name: string) { failures.push(name); },
+    });
+    bridge.markDesktopWindowReady();
+    queue.push({ name: 'locked.hwp', path: '/docs/locked.hwp', data: [1] });
+    handlers.get('hanpage://documents-ready')!({ payload: null });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    // 암호 대화상자가 떠 있는 사이 열 수 없는 파일의 알림이 이 창에 쌓였다.
+    queue.push({ name: 'gone.hwp', path: '/docs/gone.hwp', data: [], error: 'No such file or directory' });
+    handlers.get('hanpage://documents-ready')!({ payload: null });
+    release();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.deepEqual(failures, ['gone.hwp']);
+    const lastTake = calls.findLastIndex((c) => c.command === 'cmd_take_pending_documents');
+    const reportsAfter = calls.slice(lastTake + 1).filter((c) => c.command === 'cmd_report_window_state');
+    assert.ok(reportsAfter.length > 0, '대기 항목을 비운 뒤 보고가 있어야 네이티브가 다시 빈 창으로 본다');
+    assert.equal(reportsAfter.at(-1)?.args?.pristine, true);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'window', previous);
+    else Reflect.deleteProperty(globalThis, 'window');
+  }
+});
+
+test('새 창으로 넘기는 문서는 바이트를 요청 본문으로, 이름·경로를 인코딩한 헤더로 보낸다', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const sent: { command: string; args: unknown; options?: InvokeOptions }[] = [];
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: {
+    __TAURI__: { core: { async invoke(command: string, args: unknown, options?: InvokeOptions) {
+      sent.push({ command, args, options });
+      return null;
+    } } },
+  } });
+  try {
+    const bridge = await freshBridge();
+    const bytes = new Uint8Array([7, 8, 9]);
+    await bridge.openInNewDesktopWindow(bytes, '보고서 최종.hwp', 'C:\\Users\\me\\My Docs\\보고서 최종.hwp');
+    await bridge.openInNewDesktopWindow(bytes, 'drop.hwpx');
+    assert.equal(sent.length, 2);
+    assert.equal(sent[0].command, 'cmd_open_in_new_window');
+    assert.equal(sent[0].args, bytes, '배열로 바꾸지 않고 그대로 보낸다');
+    const headers = sent[0].options?.headers ?? {};
+    assert.equal(decodeURIComponent(headers['x-hanpage-name']), '보고서 최종.hwp');
+    assert.equal(decodeURIComponent(headers['x-hanpage-path']), 'C:\\Users\\me\\My Docs\\보고서 최종.hwp');
+    for (const value of Object.values(headers)) assert.match(value, /^[\x21-\x7e]*$/, 'HTTP 헤더에 넣을 수 있는 문자만');
+    assert.equal(sent[1].options?.headers?.['x-hanpage-path'], '');
   } finally {
     if (previous) Object.defineProperty(globalThis, 'window', previous);
     else Reflect.deleteProperty(globalThis, 'window');

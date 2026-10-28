@@ -25,8 +25,8 @@ async function installNativeMock(page, label) {
     };
     window.__TAURI_INTERNALS__ = { metadata: { currentWindow: { label: windowLabel } } };
     window.__TAURI__ = {
-      core: { invoke(command, args) {
-        calls.push({ command, args });
+      core: { invoke(command, args, options) {
+        calls.push({ command, args, options });
         if (command === 'cmd_take_pending_documents') return Promise.resolve([]);
         if (command === 'cmd_update_status') return Promise.resolve({ state: 'upToDate', version: '0.8.11' });
         if (command === 'cmd_claim_update_nudge') return Promise.resolve(true);
@@ -92,11 +92,18 @@ runTest('Desktop 문서마다 창 하나 — 웹뷰 계약', async ({ page }) =>
   const size = await dropSample(page, '143E433F503322BD33.hwp', '둘째 문서.hwp');
   await page.waitForFunction(() => window.__mwMock.count('cmd_open_in_new_window') === 1, { timeout: 10000 });
   const handoff = await page.evaluate(() => {
-    const args = window.__mwMock.last('cmd_open_in_new_window').args;
-    return { name: args.name, path: args.path, length: args.data.length, fileName: window.__wasm.fileName };
+    const call = window.__mwMock.last('cmd_open_in_new_window');
+    const header = (name) => decodeURIComponent(call.options?.headers?.[name] ?? '');
+    return {
+      raw: call.args instanceof Uint8Array,
+      name: header('x-hanpage-name'),
+      path: header('x-hanpage-path'),
+      length: call.args.length,
+      fileName: window.__wasm.fileName,
+    };
   });
-  check(handoff.name === '둘째 문서.hwp' && handoff.path === null && handoff.length === size && handoff.fileName === '첫 문서.hwp',
-    `문서를 연 창에 놓은 문서는 바이트 그대로 새 창으로 넘기고 지금 문서는 그대로 둔다 (${JSON.stringify(handoff)})`);
+  check(handoff.raw && handoff.name === '둘째 문서.hwp' && handoff.path === '' && handoff.length === size && handoff.fileName === '첫 문서.hwp',
+    `문서를 연 창에 놓은 문서는 바이트를 요청 본문 그대로 새 창으로 넘기고 지금 문서는 그대로 둔다 (${JSON.stringify(handoff)})`);
 
   setTestCase('저장하지 않은 창 닫기: 받았다고 알리고, 취소하면 남고, 저장 안 함이면 닫는다');
   await page.evaluate(() => window.__inputHandler.focus());

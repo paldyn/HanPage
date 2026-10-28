@@ -49,8 +49,8 @@ pub struct WindowEntry<D> {
     pub dirty: bool,
     /// 웹뷰가 열었다고 보고한(또는 저장한) 파일 경로.
     pub path: Option<PathBuf>,
-    /// 문서를 배정하며 잡아 둔 경로. 문서가 아직 대기 중일 때만 같은 파일 판단에 쓴다 — 열기에
-    /// 실패하거나 취소하면 웹뷰의 다음 보고로 풀린다.
+    /// 배정했지만 아직 열었다고 확정되지 않은 파일(대기 중이거나 웹뷰가 여는 중). 같은 파일 판단에 쓴다 —
+    /// 웹뷰가 연 뒤에는 `path` 로 옮겨 가고, 열기에 실패하거나 취소하면 웹뷰의 다음 보고로 풀린다.
     reserved: Option<PathBuf>,
     pub title: String,
     pub pending: VecDeque<D>,
@@ -87,8 +87,11 @@ pub enum Target<'a> {
     Front,
     /// 이 창(앱 안 파일 > 열기를 부른 창).
     Window(&'a str),
-    /// 항상 새 창(손대지 않은 창이 아니라서 넘겨받은 문서).
+    /// 항상 새 창(문서 없이 다시 실행했는데 창이 하나도 없을 때).
     NewWindow,
+    /// 이 창이 받을 수 없어 돌려준 문서(끌어다 놓기, 늦게 도착한 문서). 그 창의 예약을 풀고 새 창으로
+    /// 보낸다 — 이미 다른 창에 열렸거나 열리는 중인 파일이면 그 창을 앞으로 가져온다.
+    HandOff(&'a str),
 }
 
 /// 문서를 어디로 보낼지.
@@ -185,6 +188,9 @@ impl<D> Registry<D> {
 
     /// 문서를 받을 창을 정하고 예약한다. 후보 창이 문서를 받을 수 없으면 새 창을 등록한다.
     pub fn route(&mut self, path: Option<&Path>, target: Target<'_>) -> Route {
+        if let (Target::HandOff(from), Some(path)) = (target, path) {
+            self.release(from, path);
+        }
         if let Some(path) = path {
             if let Some(label) = self.label_with_path(path) {
                 return Route::Focus(label);
@@ -193,8 +199,10 @@ impl<D> Registry<D> {
         let candidate = match target {
             Target::Front => self.mru.first().cloned(),
             Target::Window(label) => Some(label.to_string()),
-            Target::NewWindow => None,
+            Target::NewWindow | Target::HandOff(_) => None,
         };
+        // 종료 중에 문서를 열면 종료를 멈춘다(사용자가 마음을 바꿨다).
+        self.quitting = false;
         if let Some(label) = candidate {
             if let Some(entry) = self.windows.get_mut(&label) {
                 if entry.accepts_document() {
@@ -204,8 +212,6 @@ impl<D> Registry<D> {
                 }
             }
         }
-        // 종료 중에 문서를 열면 종료를 멈춘다(사용자가 마음을 바꿨다).
-        self.quitting = false;
         let label = format!("{DOC_LABEL_PREFIX}{}", self.next_id);
         self.next_id += 1;
         let mut entry = WindowEntry::new(Phase::Booting, false);
@@ -226,15 +232,27 @@ impl<D> Registry<D> {
                         .path
                         .as_deref()
                         .is_some_and(|p| same_document(p, path));
-                    let waiting = !entry.pending.is_empty()
-                        && entry
-                            .reserved
-                            .as_deref()
-                            .is_some_and(|p| same_document(p, path));
-                    opened || waiting
+                    let opening = entry
+                        .reserved
+                        .as_deref()
+                        .is_some_and(|p| same_document(p, path));
+                    opened || opening
                 })
             })
             .cloned()
+    }
+
+    /// 창이 돌려준 문서의 예약을 푼다.
+    fn release(&mut self, label: &str, path: &Path) {
+        if let Some(entry) = self.windows.get_mut(label) {
+            if entry
+                .reserved
+                .as_deref()
+                .is_some_and(|p| same_document(p, path))
+            {
+                entry.reserved = None;
+            }
+        }
     }
 
     /// 창의 대기 문서에 넣는다. 창이 없으면(그사이 닫힘) 문서를 돌려준다.
@@ -249,7 +267,8 @@ impl<D> Registry<D> {
     }
 
     /// 웹뷰가 대기 문서를 가져간다. `initial` 은 페이지가 (다시) 시작할 때의 첫 호출이다 —
-    /// 다시 불러온 창은 문서가 사라졌으므로 상태를 처음부터 다시 받는다.
+    /// 다시 불러온 창은 문서가 사라졌으므로 상태를 처음부터 다시 받는다. 가져간 문서의 예약은 웹뷰가
+    /// 열기를 마치고 보고할 때까지 남긴다(여는 중인 파일을 다시 열면 이 창을 앞으로 가져온다).
     pub fn take_pending(&mut self, label: &str, initial: bool) -> Vec<D> {
         let entry = self
             .windows
@@ -257,6 +276,10 @@ impl<D> Registry<D> {
             .or_insert_with(|| WindowEntry::new(Phase::Startup, false));
         if !self.mru.iter().any(|l| l == label) {
             self.mru.push(label.to_string());
+        }
+        // 저장 여부를 묻던 창이 다시 시작해 그 확인이 사라졌다. 답을 받을 수 없으니 종료를 멈춘다.
+        if initial && entry.close != CloseState::Idle {
+            self.quitting = false;
         }
         if initial {
             entry.phase = Phase::Startup;
@@ -270,9 +293,16 @@ impl<D> Registry<D> {
         entry.pending.drain(..).collect()
     }
 
-    /// 웹뷰가 보고한 창 상태. 아직 가져가지 않은 문서가 있으면 예약을 유지한다 — 늦게 도착한
-    /// 이전 상태 보고 때문에 같은 창에 문서가 두 번 배정되지 않게 한다.
-    pub fn report(&mut self, label: &str, pristine: bool, dirty: bool, path: Option<PathBuf>) {
+    /// 웹뷰가 보고한 창 상태. `opening` 은 웹뷰가 지금 여는 중인 파일이다. 아직 가져가지 않은 문서가
+    /// 있으면 예약을 유지한다 — 늦게 도착한 이전 상태 보고 때문에 같은 창에 문서가 두 번 배정되지 않게 한다.
+    pub fn report(
+        &mut self,
+        label: &str,
+        pristine: bool,
+        dirty: bool,
+        path: Option<PathBuf>,
+        opening: Option<PathBuf>,
+    ) {
         let Some(entry) = self.windows.get_mut(label) else {
             return;
         };
@@ -281,7 +311,7 @@ impl<D> Registry<D> {
         entry.path = path;
         if entry.pending.is_empty() {
             entry.pristine = pristine && !dirty;
-            entry.reserved = None;
+            entry.reserved = opening;
         } else {
             entry.pristine = false;
         }
@@ -525,9 +555,9 @@ mod tests {
         );
         // 연 뒤에는 웹뷰가 보고한 경로로 본다.
         r.take_pending("main", true);
-        r.report("main", false, false, Some(p("/a.hwp")));
+        r.report("main", false, false, Some(p("/a.hwp")), None);
         r.take_pending("doc-1", true);
-        r.report("doc-1", false, false, Some(p("/b.hwp")));
+        r.report("doc-1", false, false, Some(p("/b.hwp")), None);
         assert_eq!(
             r.route(Some(&p("/a.hwp")), Target::Front),
             Route::Focus("main".into())
@@ -545,18 +575,18 @@ mod tests {
         // 시작 흐름(복구 제안·빈 문서) 중에는 받지 않는다.
         assert_eq!(r.route(None, Target::Front), Route::New("doc-1".into()));
         r.remove("doc-1");
-        r.report("main", true, false, None);
+        r.report("main", true, false, None, None);
         assert_eq!(
             r.route(Some(&p("/a.hwp")), Target::Front),
             Route::Into("main".into())
         );
         // 문서를 연 창, 편집 중인 빈 창은 받지 않는다.
-        r.report("main", false, false, Some(p("/a.hwp")));
+        r.report("main", false, false, Some(p("/a.hwp")), None);
         assert_eq!(
             r.route(Some(&p("/b.hwp")), Target::Front),
             Route::New("doc-2".into())
         );
-        r.report("main", true, true, None);
+        r.report("main", true, true, None, None);
         r.focus("main");
         assert_eq!(
             r.route(Some(&p("/c.hwp")), Target::Front),
@@ -568,7 +598,7 @@ mod tests {
     fn only_the_front_window_is_considered_for_reuse() {
         let mut r: Registry<&str> = Registry::new();
         r.take_pending("main", true);
-        r.report("main", true, false, None);
+        r.report("main", true, false, None, None);
         assert_eq!(
             r.route(Some(&p("/a.hwp")), Target::Front),
             Route::Into("main".into())
@@ -577,9 +607,9 @@ mod tests {
             panic!("새 창이어야 한다");
         };
         r.take_pending(&doc, true);
-        r.report(&doc, false, false, Some(p("/b.hwp")));
+        r.report(&doc, false, false, Some(p("/b.hwp")), None);
         // 뒤에 손대지 않은 창이 있어도 앞 창이 문서를 열고 있으면 새 창을 만든다.
-        r.report("main", true, false, None);
+        r.report("main", true, false, None, None);
         r.focus(&doc);
         assert!(matches!(
             r.route(Some(&p("/c.hwp")), Target::Front),
@@ -591,12 +621,12 @@ mod tests {
     fn preferred_window_is_used_only_when_pristine() {
         let mut r: Registry<&str> = Registry::new();
         r.take_pending("main", true);
-        r.report("main", true, false, None);
+        r.report("main", true, false, None, None);
         assert_eq!(
             r.route(Some(&p("/a.hwp")), Target::Window("main")),
             Route::Into("main".into())
         );
-        r.report("main", false, false, Some(p("/a.hwp")));
+        r.report("main", false, false, Some(p("/a.hwp")), None);
         assert_eq!(
             r.route(Some(&p("/b.hwp")), Target::Window("main")),
             Route::New("doc-1".into())
@@ -608,11 +638,14 @@ mod tests {
         let mut r: Registry<&str> = Registry::new();
         r.take_pending("main", true);
         // 웹뷰는 손대지 않은 창이 아니라고 판단해 넘겼다. 등록부가 아직 빈 창으로 알아도 되돌려 보내지 않는다.
-        r.report("main", true, false, None);
-        assert_eq!(r.route(None, Target::NewWindow), Route::New("doc-1".into()));
-        r.report("main", false, false, Some(p("/a.hwp")));
+        r.report("main", true, false, None, None);
         assert_eq!(
-            r.route(Some(&p("/a.hwp")), Target::NewWindow),
+            r.route(None, Target::HandOff("main")),
+            Route::New("doc-1".into())
+        );
+        r.report("main", false, false, Some(p("/a.hwp")), None);
+        assert_eq!(
+            r.route(Some(&p("/a.hwp")), Target::HandOff("main")),
             Route::Focus("main".into())
         );
     }
@@ -621,14 +654,14 @@ mod tests {
     fn stale_report_does_not_release_a_reservation_with_pending_documents() {
         let mut r: Registry<&str> = Registry::new();
         r.take_pending("main", true);
-        r.report("main", true, false, None);
+        r.report("main", true, false, None, None);
         assert_eq!(
             r.route(Some(&p("/a.hwp")), Target::Front),
             Route::Into("main".into())
         );
         r.enqueue("main", "a").unwrap();
         // 문서를 가져가기 전에 도착한 이전 보고.
-        r.report("main", true, false, None);
+        r.report("main", true, false, None, None);
         assert_eq!(
             r.route(Some(&p("/a.hwp")), Target::Front),
             Route::Focus("main".into())
@@ -644,7 +677,7 @@ mod tests {
     fn reload_resets_the_window_and_forgets_the_lost_document() {
         let mut r: Registry<&str> = Registry::new();
         r.take_pending("main", true);
-        r.report("main", false, true, Some(p("/a.hwp")));
+        r.report("main", false, true, Some(p("/a.hwp")), None);
         // 페이지가 다시 시작했다 — 문서와 변경은 사라졌다.
         r.take_pending("main", true);
         let entry = r.entry("main").unwrap();
@@ -676,9 +709,9 @@ mod tests {
         let mut r: Registry<&str> = Registry::new();
         let t0 = Instant::now();
         r.take_pending("main", true);
-        r.report("main", false, false, Some(p("/a.hwp")));
+        r.report("main", false, false, Some(p("/a.hwp")), None);
         assert_eq!(r.close_requested("main", t0), CloseDecision::Allow);
-        r.report("main", false, true, Some(p("/a.hwp")));
+        r.report("main", false, true, Some(p("/a.hwp")), None);
         assert_eq!(r.close_requested("main", t0), CloseDecision::Ask);
         assert_eq!(r.close_requested("main", t0), CloseDecision::Wait);
         r.close_acknowledged("main");
@@ -698,7 +731,7 @@ mod tests {
         let mut r: Registry<&str> = Registry::new();
         let t0 = Instant::now();
         r.take_pending("main", true);
-        r.report("main", false, true, None);
+        r.report("main", false, true, None, None);
         assert_eq!(r.close_requested("main", t0), CloseDecision::Ask);
         assert_eq!(
             r.close_requested("main", t0 + CLOSE_ACK_TIMEOUT - Duration::from_millis(1)),
@@ -721,12 +754,12 @@ mod tests {
     fn update_apply_sees_other_dirty_windows() {
         let mut r: Registry<&str> = Registry::new();
         r.take_pending("main", true);
-        r.report("main", false, true, None);
+        r.report("main", false, true, None, None);
         let Route::New(doc) = r.route(Some(&p("/b.hwp")), Target::Front) else {
             panic!("새 창이어야 한다");
         };
         r.take_pending(&doc, true);
-        r.report(&doc, false, false, Some(p("/b.hwp")));
+        r.report(&doc, false, false, Some(p("/b.hwp")), None);
         assert_eq!(r.dirty_windows_except(&doc), vec!["main".to_string()]);
         assert!(r.dirty_windows_except("main").is_empty());
     }
@@ -735,17 +768,17 @@ mod tests {
     fn quit_closes_clean_windows_and_asks_dirty_ones_one_at_a_time() {
         let mut r: Registry<&str> = Registry::new();
         r.take_pending("main", true);
-        r.report("main", false, true, Some(p("/a.hwp")));
+        r.report("main", false, true, Some(p("/a.hwp")), None);
         let Route::New(b) = r.route(Some(&p("/b.hwp")), Target::Front) else {
             panic!("새 창이어야 한다");
         };
         r.take_pending(&b, true);
-        r.report(&b, false, false, Some(p("/b.hwp")));
+        r.report(&b, false, false, Some(p("/b.hwp")), None);
         let Route::New(c) = r.route(Some(&p("/c.hwp")), Target::Front) else {
             panic!("새 창이어야 한다");
         };
         r.take_pending(&c, true);
-        r.report(&c, false, true, Some(p("/c.hwp")));
+        r.report(&c, false, true, Some(p("/c.hwp")), None);
 
         let step = r.begin_quit();
         assert_eq!(step.close_now, vec![b.clone()]);
@@ -781,16 +814,16 @@ mod tests {
     fn quit_finishes_with_windows_that_became_clean_and_stops_when_nothing_is_left() {
         let mut r: Registry<&str> = Registry::new();
         r.take_pending("main", true);
-        r.report("main", false, true, Some(p("/a.hwp")));
+        r.report("main", false, true, Some(p("/a.hwp")), None);
         let Route::New(b) = r.route(Some(&p("/b.hwp")), Target::Front) else {
             panic!("새 창이어야 한다");
         };
         r.take_pending(&b, true);
-        r.report(&b, false, true, Some(p("/b.hwp")));
+        r.report(&b, false, true, Some(p("/b.hwp")), None);
         let step = r.begin_quit();
         assert_eq!(step.ask, Some(b.clone()));
         // 묻는 사이 main 을 저장해 깨끗해졌다. b 를 닫으면 남은 main 도 닫아 종료를 끝낸다.
-        r.report("main", false, false, Some(p("/a.hwp")));
+        r.report("main", false, false, Some(p("/a.hwp")), None);
         r.close_answered(&b, true);
         r.remove(&b);
         assert_eq!(
@@ -809,7 +842,7 @@ mod tests {
     fn opening_a_document_during_quit_abandons_the_quit() {
         let mut r: Registry<&str> = Registry::new();
         r.take_pending("main", true);
-        r.report("main", false, true, Some(p("/a.hwp")));
+        r.report("main", false, true, Some(p("/a.hwp")), None);
         r.begin_quit();
         assert!(r.is_quitting());
         assert!(matches!(
@@ -825,7 +858,7 @@ mod tests {
     fn a_failed_or_cancelled_open_releases_the_window_and_the_file() {
         let mut r: Registry<&str> = Registry::new();
         r.take_pending("main", true);
-        r.report("main", true, false, None);
+        r.report("main", true, false, None, None);
         assert_eq!(
             r.route(Some(&p("/secret.hwp")), Target::Front),
             Route::Into("main".into())
@@ -838,7 +871,7 @@ mod tests {
         );
         assert_eq!(r.take_pending("main", false), vec!["secret"]);
         // 암호 입력을 취소해 아무것도 열지 못했다고 보고했다.
-        r.report("main", true, false, None);
+        r.report("main", true, false, None, None);
         assert_eq!(
             r.route(Some(&p("/secret.hwp")), Target::Front),
             Route::Into("main".into())
@@ -849,17 +882,147 @@ mod tests {
     fn a_document_handed_back_by_its_window_is_not_focused_on_that_window() {
         let mut r: Registry<&str> = Registry::new();
         r.take_pending("main", true);
-        r.report("main", true, false, None);
+        r.report("main", true, false, None, None);
         assert_eq!(
             r.route(Some(&p("/x.hwp")), Target::Front),
             Route::Into("main".into())
         );
         r.enqueue("main", "x").unwrap();
         r.take_pending("main", false);
-        // 웹뷰가 그사이 다른 문서를 열어 받을 수 없어 넘겼다.
+        // 웹뷰가 그사이 다른 문서를 열어 받을 수 없어 넘겼다. 넘긴 창의 예약은 풀리고 새 창이 맡는다.
+        let Route::New(doc) = r.route(Some(&p("/x.hwp")), Target::HandOff("main")) else {
+            panic!("새 창이어야 한다");
+        };
+        r.enqueue(&doc, "x").unwrap();
+        r.focus("main");
+        assert_eq!(
+            r.route(Some(&p("/x.hwp")), Target::Front),
+            Route::Focus(doc.clone())
+        );
+        r.take_pending(&doc, true);
+        assert_eq!(
+            r.route(Some(&p("/x.hwp")), Target::Front),
+            Route::Focus(doc)
+        );
+    }
+
+    #[test]
+    fn a_file_that_is_still_opening_brings_its_window_forward() {
+        let mut r: Registry<&str> = Registry::new();
+        // 콜드 스타트: main 이 첫 문서를 가져가 여는 동안(시작 흐름이 끝나기 전) 같은 파일을 다시 연다.
+        assert_eq!(
+            r.route(Some(&p("/a.hwp")), Target::Front),
+            Route::Into("main".into())
+        );
+        r.enqueue("main", "a").unwrap();
+        assert_eq!(r.take_pending("main", true), vec!["a"]);
+        assert_eq!(
+            r.route(Some(&p("/a.hwp")), Target::Front),
+            Route::Focus("main".into())
+        );
+        assert_eq!(
+            r.route(Some(&p("/a.hwp")), Target::Window("main")),
+            Route::Focus("main".into())
+        );
+        // 새 창도 첫 문서를 가져간 뒤 시작 흐름이 끝날 때까지 같다.
+        let Route::New(doc) = r.route(Some(&p("/b.hwp")), Target::Front) else {
+            panic!("새 창이어야 한다");
+        };
+        r.enqueue(&doc, "b").unwrap();
+        assert_eq!(r.take_pending(&doc, true), vec!["b"]);
+        r.focus("main");
+        assert_eq!(
+            r.route(Some(&p("/b.hwp")), Target::Front),
+            Route::Focus(doc.clone())
+        );
+        // 열었다고 보고하면 확정 경로로 넘어간다.
+        r.report(&doc, false, false, Some(p("/b.hwp")), None);
+        assert_eq!(
+            r.route(Some(&p("/b.hwp")), Target::Front),
+            Route::Focus(doc)
+        );
+    }
+
+    #[test]
+    fn a_pristine_window_opening_a_file_keeps_it_until_the_webview_settles() {
+        let mut r: Registry<&str> = Registry::new();
+        r.take_pending("main", true);
+        r.report("main", true, false, None, None);
+        assert_eq!(
+            r.route(Some(&p("/c.hwp")), Target::Front),
+            Route::Into("main".into())
+        );
+        r.enqueue("main", "c").unwrap();
+        r.take_pending("main", false);
+        // 여는 중(암호 입력·글꼴 준비)이라고 보고하는 동안 같은 파일은 이 창으로 모은다.
+        r.report("main", false, false, None, Some(p("/c.hwp")));
+        assert_eq!(
+            r.route(Some(&p("/c.hwp")), Target::Front),
+            Route::Focus("main".into())
+        );
         assert!(matches!(
-            r.route(Some(&p("/x.hwp")), Target::NewWindow),
+            r.route(Some(&p("/d.hwp")), Target::Front),
             Route::New(_)
         ));
+        // 열지 못했다고(암호 취소) 보고하면 창과 파일을 놓아준다.
+        r.focus("main");
+        r.report("main", true, false, None, None);
+        assert_eq!(
+            r.route(Some(&p("/c.hwp")), Target::Front),
+            Route::Into("main".into())
+        );
+    }
+
+    #[test]
+    fn reloading_the_window_asked_during_quit_abandons_the_quit() {
+        let mut r: Registry<&str> = Registry::new();
+        r.take_pending("main", true);
+        r.report("main", false, true, Some(p("/a.hwp")), None);
+        let Route::New(b) = r.route(Some(&p("/b.hwp")), Target::Front) else {
+            panic!("새 창이어야 한다");
+        };
+        r.take_pending(&b, true);
+        r.report(&b, false, true, Some(p("/b.hwp")), None);
+        assert_eq!(r.begin_quit().ask, Some(b.clone()));
+        r.close_acknowledged(&b);
+        // 묻던 창의 웹뷰가 다시 시작했다 — 저장 확인과 편집이 사라졌다.
+        r.take_pending(&b, true);
+        r.report(&b, true, false, None, None);
+        assert!(!r.is_quitting());
+        assert_eq!(r.close_requested(&b, Instant::now()), CloseDecision::Allow);
+        r.remove(&b);
+        assert_eq!(
+            r.next_quit_step(),
+            None,
+            "나중에 창을 닫아도 옛 종료가 이어지지 않는다"
+        );
+    }
+
+    #[test]
+    fn opening_into_a_pristine_window_during_quit_abandons_the_quit() {
+        let mut r: Registry<&str> = Registry::new();
+        r.take_pending("main", true);
+        r.report("main", false, true, Some(p("/a.hwp")), None);
+        let Route::New(b) = r.route(Some(&p("/b.hwp")), Target::Front) else {
+            panic!("새 창이어야 한다");
+        };
+        r.take_pending(&b, true);
+        r.report(&b, false, true, Some(p("/b.hwp")), None);
+        assert_eq!(r.begin_quit().ask, Some(b.clone()));
+        // 묻는 사이 main 을 새 빈 문서로 바꾸고 다른 파일을 그 창에 열었다.
+        r.report("main", true, false, None, None);
+        r.focus("main");
+        assert_eq!(
+            r.route(Some(&p("/c.hwp")), Target::Front),
+            Route::Into("main".into())
+        );
+        assert!(!r.is_quitting());
+        r.close_answered(&b, true);
+        r.remove(&b);
+        assert_eq!(
+            r.next_quit_step(),
+            None,
+            "방금 문서를 받은 창까지 닫지 않는다"
+        );
     }
 }

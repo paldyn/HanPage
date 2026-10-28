@@ -269,6 +269,12 @@ function ensureNudge(): HTMLElement {
 function maybeNudge(version: string): void {
   if (acknowledgedVersion === version || busy()) return;
   if (card && !card.hidden) {
+    // [#156] 열린 카드는 이 창을 보고 있을 때만 본 것으로 친다. 보지 않는 창의 카드가 앱 전체에서 한 번뿐인
+    // 작은 알림을 가져가면, 사용자가 보는 다른 창에는 알림이 뜨지 않는다. 돌아오면 다시 판단한다.
+    if (!windowAttended()) {
+      deferredNudgeVersion = version;
+      return;
+    }
     acknowledgedVersion = version;
     void claimUpdateNudge(version);
     return;

@@ -25,6 +25,7 @@
 //   추가가 불필요하다(core:default 유지). 프런트 브리지는 web-inert
 //   (`rhwp-studio/src/core/desktop-bridge.ts`)로, 브라우저에서는 완전한 no-op 이다.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex, MutexGuard};
 use std::time::Instant;
@@ -46,6 +47,8 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_dialog::{MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_store::StoreExt;
+#[cfg(target_os = "macos")]
+use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 use windows::{CloseDecision, QuitStep, Registry, Route, Target};
 
 /// 최근 문서 store 파일명·키·최대 보관 수.
@@ -193,10 +196,43 @@ impl StartupGate {
     fn open(&mut self) -> Vec<PathBuf> {
         self.pending.take().unwrap_or_default()
     }
+
+    /// 시작(setup)이 끝나 경로를 바로 통과시키는지.
+    fn is_open(&self) -> bool {
+        self.pending.is_none()
+    }
 }
 
 #[cfg(desktop)]
 static STARTUP_GATE: Mutex<StartupGate> = Mutex::new(StartupGate::new());
+
+/// 다시 실행(두 번째 인스턴스)을 어떻게 처리할지.
+#[derive(Debug, PartialEq, Eq)]
+enum Relaunch {
+    /// 아직 시작(setup) 전이다. 문서는 관문이 맡았고 첫 창도 곧 뜬다 — 여기서 창을 만들면 시작 문서가
+    /// 첫 창 대신 새 창으로 밀려난다.
+    Wait,
+    /// 문서를 받을 창으로 보낸다.
+    Open(Vec<PathBuf>),
+    /// 문서 없이 다시 실행했다. 가장 최근 창을 보여 준다.
+    Focus(String),
+    /// 문서 없이 다시 실행했는데 창이 하나도 없다(만들기 실패 등). 빈 창을 띄운다.
+    Blank,
+}
+
+/// `started` 는 관문이 이미 열렸는지(admit 전), `ready` 는 관문을 통과한 문서, `front` 는 등록부의 가장 최근 창.
+fn plan_relaunch(started: bool, ready: Vec<PathBuf>, front: Option<String>) -> Relaunch {
+    if !started {
+        return Relaunch::Wait;
+    }
+    if !ready.is_empty() {
+        return Relaunch::Open(ready);
+    }
+    match front {
+        Some(label) => Relaunch::Focus(label),
+        None => Relaunch::Blank,
+    }
+}
 
 /// [#121] 업데이트 적용 직전에 남기는 재실행 표식.
 ///
@@ -365,9 +401,36 @@ fn load_recent(app: &tauri::AppHandle) -> Vec<RecentEntry> {
 }
 
 // ─── 문서 전달(파일 연결/최근 문서 → 창) ───────────────────────────────────────
-/// 같은 파일 판단에 쓰는 경로. 심볼릭 링크와 상대 경로 차이를 없앤다.
+/// 네이티브가 넘겨준 경로 문자열 → 같은 파일 판단 키.
+static DOCUMENT_KEYS: LazyLock<Mutex<HashMap<String, PathBuf>>> = LazyLock::new(Default::default);
+
+fn document_keys() -> MutexGuard<'static, HashMap<String, PathBuf>> {
+    DOCUMENT_KEYS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// 같은 파일 판단에 쓰는 경로. 심볼릭 링크와 상대 경로 차이를 없앤다. 웹뷰가 나중에 같은 문자열로
+/// 보고할 때 파일 시스템에 다시 묻지 않도록 결과를 기억한다.
 fn document_key(path: &Path) -> PathBuf {
-    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+    let key = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    document_keys().insert(path.to_string_lossy().into_owned(), key.clone());
+    key
+}
+
+/// 네이티브가 넘겨준 경로 문자열의 키. 상태 보고는 편집할 때마다 UI 스레드에서 오므로 파일 시스템에
+/// 묻지 않는다 — 끊긴 네트워크 공유의 경로를 정규화하다 모든 창이 멈출 수 있다. 모르는 경로는 그대로 쓴다.
+fn known_document_key(raw: &str) -> PathBuf {
+    document_keys()
+        .get(raw)
+        .cloned()
+        .unwrap_or_else(|| PathBuf::from(raw))
+}
+
+/// 등록된 창도, 만드는 중인 창도 없다. Tauri 창 목록에는 다른 스레드에서 만들기를 요청했다가 실패한 창이
+/// 남을 수 있어 등록부로 판단한다.
+fn no_windows_left<D>(reg: &Registry<D>) -> bool {
+    reg.labels().is_empty() && reg.creating() == 0
 }
 
 /// 창을 앞으로 가져온다. 최소화·숨김 창에는 포커스만으로는 듣지 않는다(macOS·Windows 공통).
@@ -381,7 +444,11 @@ fn focus_window(app: &tauri::AppHandle, label: &str) {
 
 /// 문서를 받을 창을 정해 보낸다. 새 창은 문서를 먼저 넣은 뒤 만든다 — 웹뷰가 시작하며 직접 가져간다.
 fn deliver(app: &tauri::AppHandle, file: OpenedFile, target: Target<'_>) -> Route {
-    let key = (!file.path.is_empty()).then(|| document_key(Path::new(&file.path)));
+    // 웹뷰가 돌려준 문서의 경로는 네이티브가 넘겨준 문자열이라 파일 시스템에 다시 묻지 않는다.
+    let key = (!file.path.is_empty()).then(|| match target {
+        Target::HandOff(_) => known_document_key(&file.path),
+        _ => document_key(Path::new(&file.path)),
+    });
     let name = file.name.clone();
     let route = {
         let mut reg = registry();
@@ -491,22 +558,22 @@ fn spawn_document_window(app: &tauri::AppHandle, label: String) {
             Some(reason) => eprintln!("[HanPage] 새 창을 만들지 못했습니다 {label}: {reason}"),
         }
         let orphans = registry().created(&label, ok);
-        let Some(reason) = reason else {
-            return;
-        };
-        if let Some(window) = app.get_webview_window(&label) {
-            let _ = window.destroy();
+        if let Some(reason) = reason {
+            if let Some(window) = app.get_webview_window(&label) {
+                let _ = window.destroy();
+            }
+            for doc in orphans {
+                notify_failure(
+                    &app,
+                    doc.name,
+                    doc.path,
+                    format!("새 창을 열지 못했습니다: {reason}"),
+                );
+            }
         }
-        for doc in orphans {
-            notify_failure(
-                &app,
-                doc.name,
-                doc.path,
-                format!("새 창을 열지 못했습니다: {reason}"),
-            );
-        }
-        // 마지막 창이 닫히는 사이 만들기에 실패했으면 보이지 않는 프로세스로 남지 않는다.
-        if app.webview_windows().is_empty() && registry().creating() == 0 {
+        // 만드는 사이 마지막 창이 닫혔으면(종료는 이 창 때문에 미뤘다) 만들기를 마쳤든 실패했든 남은 창이
+        // 없을 때 끝낸다 — 보이지 않는 프로세스로 남지 않는다.
+        if no_windows_left(&registry()) {
             app.exit(0);
         }
     });
@@ -671,7 +738,7 @@ fn apply_quit_step(app: &tauri::AppHandle, step: QuitStep) {
 /// 닫히면 앱이 끝난다. 사용자가 한 번이라도 취소하면 종료를 멈춘다.
 #[cfg(target_os = "macos")]
 fn request_quit(app: &tauri::AppHandle) {
-    if app.webview_windows().is_empty() {
+    if no_windows_left(&registry()) {
         app.exit(0);
         return;
     }
@@ -683,6 +750,9 @@ fn request_quit(app: &tauri::AppHandle) {
     {
         return;
     }
+    // 창을 destroy 로 닫으면 창 상태 플러그인이 닫기 요청 때 하던 기록을 건너뛴다. 첫 창의 크기·위치·
+    // 확대 상태를 먼저 저장한다.
+    let _ = app.save_window_state(StateFlags::all());
     let step = registry().begin_quit();
     apply_quit_step(app, step);
 }
@@ -901,34 +971,80 @@ fn cmd_take_pending_documents(
 
 /// [#156] 웹뷰가 시작 흐름을 마친 뒤와 문서·변경 상태가 바뀔 때 알린다. `native_path` 는 지금
 /// 문서가 네이티브에서 넘겨받거나 저장한 파일이면 그 경로다(같은 파일 재열기 판단).
+/// `opening_path` 는 지금 여는 중인 네이티브 문서의 경로다(열기를 마칠 때까지 같은 파일 판단에 쓴다).
 #[tauri::command]
 fn cmd_report_window_state(
     webview_window: tauri::WebviewWindow,
     pristine: bool,
     dirty: bool,
     native_path: Option<String>,
+    opening_path: Option<String>,
 ) {
-    let key = native_path
-        .filter(|p| !p.is_empty())
-        .map(|p| document_key(Path::new(&p)));
-    registry().report(webview_window.label(), pristine, dirty, key);
+    let key = |raw: Option<String>| {
+        raw.filter(|p| !p.is_empty())
+            .map(|p| known_document_key(&p))
+    };
+    registry().report(
+        webview_window.label(),
+        pristine,
+        dirty,
+        key(native_path),
+        key(opening_path),
+    );
 }
 
 /// [#156] 손대지 않은 창이 아니라서 받을 수 없는 문서(끌어다 놓기, 늦게 도착한 문서)를 새 창으로 넘긴다.
+/// 바이트는 JSON 숫자 배열이 아니라 요청 본문 그대로 받는다 — 큰 문서에서 웹뷰와 UI 스레드가 직렬화로
+/// 멈추지 않게 한다. 이름과 경로는 퍼센트 인코딩한 헤더로 온다.
 #[tauri::command]
 fn cmd_open_in_new_window(
     app: tauri::AppHandle,
-    name: String,
-    path: Option<String>,
-    data: Vec<u8>,
-) {
+    webview_window: tauri::WebviewWindow,
+    request: tauri::ipc::Request<'_>,
+) -> Result<(), String> {
+    let data = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => bytes.clone(),
+        // 사용자 정의 프로토콜을 쓸 수 없을 때의 postMessage 경로는 바이트를 JSON 배열로 보낸다.
+        tauri::ipc::InvokeBody::Json(value) => {
+            serde_json::from_value(value.clone()).map_err(|e| e.to_string())?
+        }
+    };
+    let header = |name: &str| {
+        request
+            .headers()
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+            .map(percent_decode)
+            .unwrap_or_default()
+    };
     let file = OpenedFile {
-        name,
-        path: path.unwrap_or_default(),
+        name: header("x-hanpage-name"),
+        path: header("x-hanpage-path"),
         data,
         error: None,
     };
-    deliver(&app, file, Target::NewWindow);
+    deliver(&app, file, Target::HandOff(webview_window.label()));
+    Ok(())
+}
+
+/// `encodeURIComponent` 로 보낸 헤더 값을 되돌린다(HTTP 헤더에는 한글·공백을 그대로 넣을 수 없다).
+fn percent_decode(value: &str) -> String {
+    let hex = |b: u8| (b as char).to_digit(16).map(|d| d as u8);
+    let bytes = value.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(high), Some(low)) = (hex(bytes[i + 1]), hex(bytes[i + 2])) {
+                out.push(high << 4 | low);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// [#156] 창 제목을 문서 이름으로 맞춘다(창 전환·작업 표시줄에서 문서를 구분한다).
@@ -1250,27 +1366,25 @@ pub fn run() {
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             let paths = document_paths_from_args(argv, Path::new(&cwd));
-            let ready = match STARTUP_GATE.lock() {
-                Ok(mut gate) => gate.admit(paths),
-                Err(_) => paths,
+            let (started, ready) = match STARTUP_GATE.lock() {
+                Ok(mut gate) => (gate.is_open(), gate.admit(paths)),
+                Err(_) => (true, paths),
             };
-            // 문서는 받을 창이 앞으로 나온다. 문서 없이 다시 실행했으면 가장 최근 창을 보여 주고,
-            // 창이 하나도 없으면(만들기 실패 등) 빈 창을 띄운다.
-            if ready.is_empty() {
-                if app.webview_windows().is_empty() {
+            let front = registry().front().map(str::to_string);
+            match plan_relaunch(started, ready, front) {
+                Relaunch::Wait => {}
+                Relaunch::Open(paths) => {
+                    for path in paths {
+                        open_path(app, path);
+                    }
+                }
+                Relaunch::Focus(label) => focus_window(app, &label),
+                Relaunch::Blank => {
                     let route = registry().route(None, Target::NewWindow);
                     if let Route::New(label) = route {
                         spawn_document_window(app, label);
                     }
-                } else {
-                    let front = registry().front().map(str::to_string);
-                    if let Some(label) = front {
-                        focus_window(app, &label);
-                    }
                 }
-            }
-            for path in ready {
-                open_path(app, path);
             }
         }));
 
@@ -1348,9 +1462,12 @@ pub fn run() {
             }
             // 사용자 정의 항목 id = rhwp-studio 커맨드 id(업데이트 확인 포함) → 웹뷰 브리지가 dispatch.
             // [#156] 메뉴는 앱 전체에 하나라 가장 최근 창에만 보낸다. 모든 창에 보내면 저장·붙이기
-            // 같은 명령이 창마다 실행된다.
-            let front = registry().front().map(str::to_string);
-            if let Some(label) = front {
+            // 같은 명령이 창마다 실행된다. 아직 만들어지는 창은 건너뛴다(명령이 사라진다).
+            let labels = registry().labels();
+            if let Some(label) = labels
+                .iter()
+                .find(|label| app.get_webview_window(label).is_some())
+            {
                 let _ = app.emit_to(label.as_str(), EVT_MENU, id.to_string());
             }
         })
@@ -1563,5 +1680,118 @@ mod tests {
         let cwd = std::env::temp_dir();
         assert!(document_paths_from_args(["HanPage.exe"], &cwd).is_empty());
         assert!(document_paths_from_args(Vec::<String>::new(), &cwd).is_empty());
+    }
+
+    #[test]
+    fn a_second_instance_during_startup_waits_for_the_startup_documents() {
+        // Windows 탐색기에서 A·B 를 함께 열면 B 의 두 번째 실행이 첫 실행의 시작(setup) 중에 온다.
+        let a = std::env::temp_dir().join("A.hwp");
+        let b = std::env::temp_dir().join("B.hwp");
+        let mut gate = StartupGate::new();
+        let mut reg: Registry<OpenedFile> = Registry::new();
+        let started = gate.is_open();
+        let ready = gate.admit(vec![b.clone()]);
+        assert_eq!(
+            plan_relaunch(started, ready, reg.front().map(str::to_string)),
+            Relaunch::Wait
+        );
+        assert_eq!(
+            plan_relaunch(false, Vec::new(), Some("main".into())),
+            Relaunch::Wait,
+            "문서 없는 두 번째 실행도 첫 창을 기다린다"
+        );
+        assert_eq!(reg.labels(), vec!["main".to_string()]);
+        // setup: 첫 실행의 문서, 이어서 관문이 맡은 문서.
+        assert_eq!(
+            reg.route(Some(&a), Target::Front),
+            Route::Into("main".into())
+        );
+        let early = gate.open();
+        assert_eq!(early, vec![b.clone()]);
+        assert_eq!(
+            reg.route(Some(&early[0]), Target::Front),
+            Route::New("doc-1".into())
+        );
+        // 시작 뒤 문서 없이 다시 실행하면 가장 최근 창, 창이 하나도 없으면 빈 창.
+        assert_eq!(
+            plan_relaunch(gate.is_open(), Vec::new(), reg.front().map(str::to_string)),
+            Relaunch::Focus("doc-1".into())
+        );
+        assert_eq!(plan_relaunch(true, Vec::new(), None), Relaunch::Blank);
+        assert_eq!(
+            plan_relaunch(true, vec![a.clone()], None),
+            Relaunch::Open(vec![a])
+        );
+    }
+
+    #[test]
+    fn a_failed_window_leaves_no_window_even_if_tauri_still_lists_it() {
+        let mut reg: Registry<OpenedFile> = Registry::new();
+        reg.route(Some(Path::new("/a.hwp")), Target::Front);
+        let Route::New(doc) = reg.route(Some(Path::new("/b.hwp")), Target::Front) else {
+            panic!("새 창이어야 한다");
+        };
+        reg.remove("main");
+        assert!(!no_windows_left(&reg));
+        reg.created(&doc, false);
+        assert!(no_windows_left(&reg));
+        assert_eq!(reg.front(), None);
+    }
+
+    #[test]
+    fn a_window_closed_while_it_was_being_created_ends_the_app_once_creation_settles() {
+        let mut reg: Registry<OpenedFile> = Registry::new();
+        reg.route(Some(Path::new("/a.hwp")), Target::Front);
+        let Route::New(doc) = reg.route(Some(Path::new("/b.hwp")), Target::Front) else {
+            panic!("새 창이어야 한다");
+        };
+        // 첫 창을 닫고, 막 뜬 새 창도 생성 확인이 끝나기 전에 닫았다.
+        reg.remove("main");
+        reg.remove(&doc);
+        assert!(
+            !no_windows_left(&reg),
+            "만드는 스레드가 아직 생성 확인을 마치지 않았다"
+        );
+        reg.created(&doc, true);
+        assert!(no_windows_left(&reg), "생성 확인 뒤에는 남은 창이 없다");
+    }
+
+    #[test]
+    fn handoff_headers_are_percent_decoded() {
+        assert_eq!(
+            percent_decode("%EB%B3%B4%EA%B3%A0%EC%84%9C%20%EC%B5%9C%EC%A2%85.hwp"),
+            "보고서 최종.hwp"
+        );
+        assert_eq!(
+            percent_decode("C%3A%5CUsers%5Cme%5CMy%20Docs%5Ca.hwp"),
+            r"C:\Users\me\My Docs\a.hwp"
+        );
+        assert_eq!(percent_decode("plain-name.hwpx"), "plain-name.hwpx");
+        assert_eq!(percent_decode("100%G1%"), "100%G1%");
+        assert_eq!(percent_decode(""), "");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reporting_a_known_path_does_not_touch_the_file_system() {
+        let dir = std::env::temp_dir().join(format!("hanpage-key-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let real = dir.join("real.hwp");
+        let other = dir.join("other.hwp");
+        let link = dir.join("link.hwp");
+        std::fs::write(&real, b"a").unwrap();
+        std::fs::write(&other, b"b").unwrap();
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let key = document_key(&link);
+        assert_eq!(key, std::fs::canonicalize(&real).unwrap());
+        // 링크가 다른 파일을 가리키게 바뀌어도 보고는 기억한 키를 쓴다(파일 시스템에 묻지 않는다).
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(&other, &link).unwrap();
+        assert_eq!(known_document_key(&link.to_string_lossy()), key);
+        // 모르는 경로는 정규화하지 않고 그대로 쓴다.
+        let unknown = dir.join("unknown").join("..").join("x.hwp");
+        assert_eq!(known_document_key(&unknown.to_string_lossy()), unknown);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

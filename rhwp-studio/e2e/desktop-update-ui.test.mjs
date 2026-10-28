@@ -695,6 +695,24 @@ runTest('Desktop 업데이트 카드와 안전한 적용 흐름', async ({ page,
   nudgeNow = await nudgeState(page);
   check(nudgeNow.visible && nudgeNow.title.includes('0.9.11'), '그 모달이 닫히면 미뤄 둔 알림을 띄운다');
   await page.click('#desktop-update-nudge .dialog-update-nudge-later').catch(() => {});
+  // [#156] 보지 않는 창에 열린 카드가 앱 전체에서 한 번뿐인 알림을 가져가지 않는다.
+  await page.evaluate(() => window.__updateMock.setState({ state: 'downloading', downloaded: 10485760, total: 104857600 }));
+  await page.click('#desktop-update-entry');
+  await page.waitForSelector(visibleCard);
+  const claimsBefore = await page.evaluate(() => window.__updateMock.count('cmd_claim_update_nudge'));
+  await otherTab.bringToFront();
+  await page.evaluate(() => window.__updateMock.ready('0.9.20'));
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 300)));
+  const unseen = await page.evaluate(() => ({ claims: window.__updateMock.count('cmd_claim_update_nudge'), claimed: window.__updateMock.nudgeClaimed }));
+  check(unseen.claims === claimsBefore && unseen.claimed !== '0.9.20',
+    `보지 않는 창에 카드가 열려 있어도 그 버전의 알림 기회를 가져가지 않는다 (${JSON.stringify(unseen)})`);
+  await page.bringToFront();
+  await page.waitForFunction(() => window.__updateMock.nudgeClaimed === '0.9.20', { timeout: 3000 }).catch(() => {});
+  const seen = await page.evaluate(() => ({ claims: window.__updateMock.count('cmd_claim_update_nudge'), claimed: window.__updateMock.nudgeClaimed }));
+  check(seen.claimed === '0.9.20' && seen.claims === claimsBefore + 1 && !(await nudgeState(page)).visible,
+    `창으로 돌아와 열린 카드를 보면 그때 그 버전을 본 것으로 친다 (${JSON.stringify(seen)})`);
+  await page.click('.dialog-update-later');
+  await page.waitForFunction(() => document.getElementById('desktop-update-card').hidden);
   await otherTab.close();
   await page.bringToFront();
   await page.evaluate(() => { window.__inputHandler.focus(); window.__quietUpdateFocus = document.activeElement; });
