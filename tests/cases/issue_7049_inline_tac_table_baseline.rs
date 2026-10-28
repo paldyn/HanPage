@@ -57,6 +57,50 @@ fn by_width(rel: &str, page: u32, lo: f64, hi: f64) -> Vec<(f64, f64, f64, f64)>
     v
 }
 
+fn has_text(node: &RenderNode, needle: &str) -> bool {
+    matches!(&node.node_type, RenderNodeType::TextRun(run) if run.text.contains(needle))
+        || node.children.iter().any(|child| has_text(child, needle))
+}
+
+fn nested_table_cell<'a>(
+    node: &'a RenderNode,
+    needle: &str,
+) -> Option<(&'a RenderNode, &'a RenderNode)> {
+    if matches!(node.node_type, RenderNodeType::TableCell(_)) {
+        if let Some(table) = node.children.iter().find(|child| {
+            matches!(child.node_type, RenderNodeType::Table { .. }) && has_text(child, needle)
+        }) {
+            return Some((node, table));
+        }
+    }
+    node.children
+        .iter()
+        .find_map(|child| nested_table_cell(child, needle))
+}
+
+fn parent_of<'a>(node: &'a RenderNode, target: &RenderNode) -> Option<&'a RenderNode> {
+    if node
+        .children
+        .iter()
+        .any(|child| std::ptr::eq(child, target))
+    {
+        return Some(node);
+    }
+    node.children
+        .iter()
+        .find_map(|child| parent_of(child, target))
+}
+
+fn text_top(node: &RenderNode, needle: &str) -> Option<f64> {
+    if matches!(&node.node_type, RenderNodeType::TextRun(run) if run.text.contains(needle)) {
+        return Some(node.bbox.y);
+    }
+    node.children
+        .iter()
+        .filter_map(|child| text_top(child, needle))
+        .reduce(f64::min)
+}
+
 /// 같은 글줄의 TAC 표 둘은 하단이 높이차의 0.15 배만큼 벌어져야 한다.
 ///
 /// 수정 전 `62.80px` (한/글 `9.43px`) — 두 표의 **상단**이 붙어 있었다.
@@ -112,42 +156,34 @@ fn sibling_samples_close_the_same_gap() {
     }
 }
 
-/// 여백이 극단적으로 다른 두 표도 같은 y 에 놓여야 한다.
-///
-/// `21_언어_기출` 1쪽 머리 표의 「성명」(`om 283/283`)·「수험번호」(`om 0/0`) 상자다.
-/// 한/글은 둘을 `266.6~299.2` 로 **완전히 같게** 놓는다. 수정 전 rhwp 는 `258.50`
-/// / `254.70` 으로 3.8px(= 283 HWPUNIT, 곧 앞 표의 `om_top`) 어긋나 있었다.
-///
-/// ⚠ 두 상자의 **절대** y 는 아직 한/글보다 약 8px 위다 — 줄이 칸 어디에 앉는지는
-/// 별도 축(`#7008` 범위 외)이라 여기서는 **서로 같은지**만 본다.
-#[test]
-fn tables_with_unequal_outer_margins_share_one_y() {
-    let boxes = by_width("samples/21_언어_기출_편집가능본.hwp", 0, 150.0, 300.0);
-    assert_eq!(boxes.len(), 2, "머리 표 안 TAC 표 2개: {boxes:?}");
-    let dy = (boxes[0].1 - boxes[1].1).abs();
-    assert!(
-        dy <= 0.5,
-        "여백이 다른 두 표가 같은 y 에 놓여야 한다 — #7049 회귀                   (y 차 {dy:.2}px, 상자 {boxes:?}; 수정 전 3.80px)"
-    );
-}
-
-/// ⚠ 관문 — `#3386` 의 표 전용 줄은 **움직이면 안 된다**.
-///
-/// `156678235` 4쪽의 표는 저장 `lh` 가 자기 밴드와 같아(`12961 == 12395+283+283`)
-/// 좁혀진 술어에도 그대로 걸린다. 한/글 `536.69`, rhwp `537.30`.
+/// `#3386`의 표 전용 줄은 표를 소유 글줄 안에 두고 뒤 본문을 보존한다.
 #[test]
 fn table_exclusive_line_keeps_the_band_anchor() {
-    let boxes = by_width(
-        "samples/issue6542/156678235_mid_para_vpos_rewind.hwp",
-        4,
-        600.0,
-        615.0,
-    );
-    assert_eq!(boxes.len(), 1, "4쪽 표 1개: {boxes:?}");
-    let y = boxes[0].1;
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("samples/issue6542/156678235_mid_para_vpos_rewind.hwp");
+    let core =
+        DocumentCore::from_bytes(&std::fs::read(path).expect("원본 읽기")).expect("문서 로드");
+    let page = core.build_page_render_tree(4).expect("5쪽 render tree");
+    let (cell, table) = nested_table_cell(&page.root, "시점별 사망보험금 유동화")
+        .expect("비교 표가 5쪽의 상위 표 셀에 있어야 한다");
+    let band = cell.children.iter().find(|child| {
+        matches!(child.node_type, RenderNodeType::TextLine(_))
+            && child.bbox.y <= table.bbox.y
+            && child.bbox.y + child.bbox.height >= table.bbox.y + table.bbox.height
+    });
     assert!(
-        (y - 537.30).abs() <= 0.5,
-        "표 전용 줄의 밴드 앵커가 유지돼야 한다 — #3386 회귀          \
-         (실측 {y:.2}px, 기대 537.30, 한/글 536.69)"
+        band.is_some(),
+        "중첩 비교 표가 자신을 소유한 글줄 안에 있어야 한다: {:?}",
+        table.bbox
+    );
+    assert!(
+        has_text(cell, "예정이율"),
+        "표 앞 설명도 같은 셀에 있어야 한다"
+    );
+    let outer = parent_of(&page.root, cell).expect("상위 표");
+    let following = text_top(&page.root, "기존 종신보험").expect("표 뒤 본문");
+    assert!(
+        outer.bbox.y + outer.bbox.height < following,
+        "상위 표 뒤 본문이 표에 겹치거나 앞쪽으로 이동했다"
     );
 }

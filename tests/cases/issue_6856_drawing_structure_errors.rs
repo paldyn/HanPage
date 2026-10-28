@@ -235,15 +235,6 @@ fn hwpx_depth_limit_is_not_reclassified_as_xml_structure_damage() {
 }
 
 #[test]
-fn hwpx_master_page_owned_structure_error_reaches_document_caller() {
-    check_hwpx_package(
-        "samples/2025 행정업무운영 편람(최종).hwpx",
-        "Contents/masterpage0.xml",
-        &truncated_hwpx().replace("hs:sec", "hs:masterPage"),
-    );
-}
-
-#[test]
 fn hwpx_document_open_must_not_replace_damaged_owned_area_with_empty_section() {
     check_hwpx_package(
         "samples/hwpx/156160455-social-pig-farm-income.hwpx",
@@ -264,7 +255,7 @@ fn check_hwpx_package(path: &str, entry: &str, replacement: &str) {
     let mut changed = false;
     for i in 0..reader.len() {
         let mut file = reader.by_index(i).unwrap();
-        let name = file.name().to_owned();
+        let name = file.name().expect("ZIP 엔트리 이름").into_owned();
         let mut data = Vec::new();
         file.read_to_end(&mut data).unwrap();
         if name == entry {

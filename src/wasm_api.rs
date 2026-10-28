@@ -27,7 +27,7 @@ use crate::model::path::{path_from_flat, DocumentPath, PathSegment};
 use crate::model::shape::ShapeObject;
 use crate::renderer::canvas::CanvasRenderer;
 use crate::renderer::composer::{
-    compose_paragraph, compose_section, reflow_line_segs, ComposedParagraph,
+    compose_paragraph, compose_section, reflow_line_segs, restamp_indentation, ComposedParagraph,
 };
 use crate::renderer::height_measurer::{HeightMeasurer, MeasuredSection, MeasuredTable};
 use crate::renderer::html::HtmlRenderer;
@@ -42,11 +42,22 @@ use crate::renderer::style_resolver::{
 use crate::renderer::svg::SvgRenderer;
 use crate::renderer::DEFAULT_DPI;
 
+#[cfg(target_arch = "wasm32")]
+mod bitmap_raster;
 mod canvas_metrics;
 mod hyperlink;
+mod layout_generation;
+#[cfg(all(feature = "pdf-import", target_arch = "wasm32"))]
+mod pdf_import;
+#[cfg(target_arch = "wasm32")]
+mod print_image_sampling;
 /// 어떤 렌더 export가 교체 가능한 경계 뒤에 있는지 선언하는 곳 (#4577, #4642).
 mod render_patch_boundary;
+mod table_cell_bboxes;
 mod template_automation;
+
+#[cfg(target_arch = "wasm32")]
+mod layer_export;
 
 impl From<HwpError> for JsValue {
     fn from(err: HwpError) -> Self {
@@ -189,6 +200,7 @@ fn render_page_to_canvas_filtered_with_profile_impl(
     canvas.set_height(scaled_canvas_extent(tree.page_height, scale));
 
     let mut renderer = WebCanvasRenderer::new(canvas)?;
+    renderer.set_hft_outline_fonts(&document.hft_outline_fonts);
     renderer.show_paragraph_marks = document.show_paragraph_marks;
     renderer.show_control_codes = document.show_control_codes;
     renderer.set_scale(scale);
@@ -254,6 +266,7 @@ fn render_page_patch_to_canvas_filtered_with_profile_impl(
     }
 
     let mut renderer = WebCanvasRenderer::new(canvas)?;
+    renderer.set_hft_outline_fonts(&document.hft_outline_fonts);
     renderer.show_paragraph_marks = document.show_paragraph_marks;
     renderer.show_control_codes = document.show_control_codes;
     renderer.set_scale(scale);
@@ -564,6 +577,7 @@ fn source_format_name(format: crate::parser::FileFormat) -> &'static str {
     match format {
         crate::parser::FileFormat::Hwpx => "hwpx",
         crate::parser::FileFormat::Hml => "hml",
+        crate::parser::FileFormat::Pdf => "pdf",
         _ => "hwp",
     }
 }
@@ -590,6 +604,71 @@ impl HwpDocument {
         DocumentCore::from_bytes(data)
             .map(|core| HwpDocument { core })
             .map_err(|e| e.into())
+    }
+
+    /// 현재 WASM 빌드에서 PDF 입력을 사용할 수 있는지 문서 생성 전에 조회한다.
+    #[wasm_bindgen(js_name = supportsPdfImport)]
+    pub fn supports_pdf_import() -> bool {
+        cfg!(target_arch = "wasm32") && crate::pdf_support::pdf_import_support().enabled
+    }
+
+    /// Compile-time support of this artifact, queryable before opening a PDF.
+    #[wasm_bindgen(js_name = getPdfImportSupport)]
+    pub fn get_pdf_import_support() -> String {
+        serde_json::to_string(&crate::pdf_support::pdf_import_support())
+            .expect("compile-time PDF support is serializable")
+    }
+
+    /// Worker가 입력을 복사하기 전에 제품의 실제 요청 한도를 조회한다.
+    #[wasm_bindgen(js_name = getPdfImportPolicy)]
+    pub fn get_pdf_import_policy() -> String {
+        #[cfg(feature = "pdf-import")]
+        {
+            serde_json::to_string(&crate::parser::pdf::PdfImportPolicy::default())
+                .expect("PDF policy serialization cannot fail")
+        }
+        #[cfg(not(feature = "pdf-import"))]
+        {
+            "null".to_owned()
+        }
+    }
+
+    /// PDF 전체 또는 선택 쪽을 공통 IR로 가져온다 (기본 포함 `pdf-import`).
+    /// options.sourcePages는 0-based 증가 배열이며 생략하면 전체 쪽이다.
+    /// 동기 실행이므로 브라우저에서 취소/시간 제한이 필요하면 Worker에서 호출한다.
+    #[wasm_bindgen(js_name = importPdf)]
+    pub fn import_pdf(data: &[u8], options: JsValue) -> Result<HwpDocument, JsValue> {
+        #[cfg(all(feature = "pdf-import", target_arch = "wasm32"))]
+        {
+            let options = pdf_import::options(options)?;
+            DocumentCore::from_pdf_bytes(data, &options)
+                .map(|core| HwpDocument { core })
+                .map_err(JsValue::from)
+        }
+        #[cfg(not(all(feature = "pdf-import", target_arch = "wasm32")))]
+        {
+            let _ = (data, options);
+            Err(JsValue::from_str(if cfg!(feature = "pdf-import") {
+                "PDF_IMPORT_OPTIONS: JS options require a WASM runtime; use DocumentCore::from_pdf_bytes in Rust"
+            } else {
+                "PDF_IMPORT_DISABLED: rebuild with --features pdf-import"
+            }))
+        }
+    }
+
+    /// 가져온 PDF의 원본 쪽/출력 구역 대응·경고·임시 문단 정책을 JSON으로 반환한다.
+    /// 편집 후 현재 쪽수가 아닌 가져오기 시점의 진단이다. 다른 형식은 `null`이다.
+    #[wasm_bindgen(js_name = getPdfImportDiagnostics)]
+    pub fn get_pdf_import_diagnostics(&self) -> String {
+        #[cfg(feature = "pdf-import")]
+        {
+            serde_json::to_string(&self.core.pdf_metadata())
+                .expect("PDF import metadata serialization cannot fail")
+        }
+        #[cfg(not(feature = "pdf-import"))]
+        {
+            "null".to_string()
+        }
     }
 
     /// 비밀번호로 보호된 HWP/HWPX 파일을 비밀번호와 함께 로드한다.
@@ -653,6 +732,78 @@ impl HwpDocument {
             face_index,
         )
         .map_err(JsValue::from)
+    }
+
+    /// 실제 FontFace의 원본 HFT 프로그램을 paint 전용으로 등록한다. 재조판하지 않는다.
+    #[wasm_bindgen(js_name = registerHftOutlineFont)]
+    pub fn register_hft_outline_font(
+        &mut self,
+        family: &str,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, JsValue> {
+        self.register_hft_outline_font_native(family, bytes, face_index)
+            .map_err(JsValue::from)
+    }
+
+    /// 문서 측정 slot과 별도로 SVG/WMF paint에 실제 선택한 font face를 공급한다.
+    #[wasm_bindgen(js_name = registerMetafileFont)]
+    pub fn register_metafile_font(
+        &mut self,
+        family: &str,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, JsValue> {
+        self.register_metafile_font_native(family, bytes, face_index)
+            .map_err(JsValue::from)
+    }
+
+    #[wasm_bindgen(js_name = clearMetafileFonts)]
+    pub fn clear_metafile_fonts(&mut self) {
+        self.clear_metafile_fonts_native();
+    }
+
+    #[wasm_bindgen(js_name = getMetafileFontRequests)]
+    pub fn get_metafile_font_requests(&self) -> Result<String, JsValue> {
+        self.get_metafile_font_requests_native()
+            .map_err(JsValue::from)
+    }
+
+    #[wasm_bindgen(js_name = getNativePuaFontRequests)]
+    pub fn get_native_pua_font_requests(&self) -> Result<String, JsValue> {
+        serde_json::to_string(&self.native_pua_font_requests())
+            .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = registerNativePuaFont)]
+    pub fn register_native_pua_font_wasm(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, JsValue> {
+        self.register_native_pua_font(family, bold, italic, bytes, face_index)
+            .map_err(JsValue::from)
+    }
+
+    #[wasm_bindgen(js_name = registerLiteralFigureSpaceFont)]
+    pub fn register_literal_figure_space_font_wasm(
+        &mut self,
+        family: &str,
+        bold: bool,
+        italic: bool,
+        bytes: &[u8],
+        face_index: u32,
+    ) -> Result<bool, JsValue> {
+        self.register_literal_figure_space_font(family, bold, italic, bytes, face_index)
+            .map_err(JsValue::from)
+    }
+
+    #[wasm_bindgen(js_name = clearNativePuaFonts)]
+    pub fn clear_native_pua_fonts_wasm(&mut self) {
+        self.clear_native_pua_fonts();
     }
 
     /// 이미 등록된 exact font source slot에 명시 variable-font instance 요청을 설정한다.
@@ -826,6 +977,7 @@ impl HwpDocument {
         canvas.set_height(scaled_canvas_extent(tree.page_height, scale));
 
         let mut renderer = WebCanvasRenderer::new(canvas)?;
+        renderer.set_hft_outline_fonts(&self.hft_outline_fonts);
         renderer.show_paragraph_marks = self.show_paragraph_marks;
         renderer.show_control_codes = self.show_control_codes;
         renderer.set_scale(scale);
@@ -865,6 +1017,7 @@ impl HwpDocument {
         canvas.set_height(scaled_canvas_extent(tree.root.bbox.height, scale));
 
         let mut renderer = WebCanvasRenderer::new(canvas)?;
+        renderer.set_hft_outline_fonts(&self.hft_outline_fonts);
         renderer.show_paragraph_marks = self.show_paragraph_marks;
         renderer.show_control_codes = self.show_control_codes;
         renderer.set_scale(scale);
@@ -968,6 +1121,7 @@ impl HwpDocument {
         canvas.set_height(scaled_canvas_extent(tree.root.bbox.height, scale));
 
         let mut renderer = WebCanvasRenderer::new(canvas)?;
+        renderer.set_hft_outline_fonts(&self.hft_outline_fonts);
         renderer.show_paragraph_marks = self.show_paragraph_marks;
         renderer.show_control_codes = self.show_control_codes;
         renderer.set_scale(scale);
@@ -1062,7 +1216,24 @@ impl HwpDocument {
         self.core.rebuild_derived_state();
     }
 
-    /// Set an explicit layout/paint font environment. None restores the default.
+    /// 문서가 선언한 실제 프로그램 후보와 현재 환경을 호스트에 전달한다.
+    #[wasm_bindgen(js_name = getDocumentFontSelectionPlan)]
+    pub fn get_document_font_selection_plan(&self) -> String {
+        self.core.get_document_font_selection_plan()
+    }
+
+    /// 실제 공급된 프로그램으로 측정·표시의 공통 환경을 계산한다.
+    #[wasm_bindgen(js_name = buildFontEnvironmentFromAvailablePrograms)]
+    pub fn build_font_environment_from_available_programs(
+        &self,
+        json: &str,
+    ) -> Result<String, JsValue> {
+        self.core
+            .build_font_environment_from_available_programs(json)
+            .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    /// 명시적인 조판·표시 글꼴 환경을 설정한다. None이면 기본 환경으로 돌아간다.
     #[wasm_bindgen(js_name = setFontEnvironment)]
     pub fn set_font_environment_json(&mut self, json: Option<String>) -> Result<bool, JsValue> {
         let environment = json
@@ -1260,7 +1431,10 @@ impl HwpDocument {
 
     /// 특정 페이지의 텍스트 레이아웃 정보를 JSON 문자열로 반환한다.
     ///
-    /// 각 TextRun의 위치, 텍스트, 글자별 X 좌표 경계값을 포함한다.
+    /// 각 TextRun의 위치, 모델 `text`, 모델 경계 `charX`와 `charStart`를 포함한다.
+    /// 표시 치환이 있는 런에는 `displayText`와 `displayCharX`가 추가된다.
+    /// 두 X 배열은 런 원점 기준 Unicode scalar 경계(N+1개)이며,
+    /// 표시 인덱스는 선택·커서·편집 오프셋으로 사용할 수 없다 (#7909).
     #[wasm_bindgen(js_name = getPageTextLayout)]
     pub fn get_page_text_layout(&self, page_num: u32) -> Result<String, JsValue> {
         self.get_page_text_layout_native(page_num)
@@ -1348,11 +1522,11 @@ impl HwpDocument {
         {
             return Err(JsValue::from_str("인덱스 범위 초과"));
         }
-        let (text_offset, _) = crate::document_core::helpers::logical_to_text_offset(
+        let (text_offset, after_control) = crate::document_core::helpers::logical_to_text_offset(
             &self.document.sections[sec].paragraphs[pi],
             logical_offset as usize,
         );
-        let result = self.insert_text_native(sec, pi, text_offset, text)?;
+        self.insert_text_at_caret_native(sec, pi, text_offset, after_control, text)?;
         // 삽입 후 논리적 오프셋 반환
         let new_text_offset = text_offset + text.chars().count();
         let new_logical = crate::document_core::helpers::text_to_logical_offset(
@@ -3451,6 +3625,12 @@ impl HwpDocument {
             json,
         )
         .map_err(|e| e.into())
+    }
+
+    /// Discard source-border fragments owned by an evicted undo entry.
+    #[wasm_bindgen(js_name = discardBorderPaintUndo)]
+    pub fn discard_border_paint_undo(&mut self, id: u32) {
+        self.discard_border_paint_undo_native(id);
     }
 
     /// [#5959] 이번 apply 가 push 한 BorderFill 꼬리 항목을 절단한다.
@@ -6911,7 +7091,7 @@ impl HwpDocument {
         ))
     }
 
-    /// 원본 파일 형식을 반환한다 ("hwp", "hwpx", 또는 "hml").
+    /// 원본 파일 형식을 반환한다 ("hwp", "hwpx", "hml", 또는 "pdf").
     #[wasm_bindgen(js_name = getSourceFormat)]
     pub fn get_source_format(&self) -> String {
         source_format_name(self.core.source_format).to_string()
@@ -7363,6 +7543,11 @@ impl HwpDocument {
         char_mods_json: &str,
         para_mods_json: &str,
     ) -> bool {
+        use crate::document_core::helpers::{
+            build_tab_def_from_json, json_has_border_keys, json_has_tab_keys,
+            parse_char_shape_mods, parse_json_i16_array, parse_para_shape_mods,
+        };
+
         let styles = &self.core.document.doc_info.styles;
         let style = match styles.get(style_id as usize) {
             Some(s) => s.clone(),
@@ -7374,7 +7559,12 @@ impl HwpDocument {
 
         // CharShape 수정
         if !char_mods_json.is_empty() && char_mods_json != "{}" {
-            let char_mods = crate::document_core::helpers::parse_char_shape_mods(char_mods_json);
+            let mut char_mods = parse_char_shape_mods(char_mods_json);
+            // 테두리/배경은 글자 모양 적용 경로처럼 BorderFill 을 찾거나 만들어 단다.
+            if json_has_border_keys(char_mods_json) {
+                char_mods.border_fill_id =
+                    Some(self.core.create_border_fill_from_json(char_mods_json));
+            }
             if let Some(cs) = self
                 .core
                 .document
@@ -7392,7 +7582,26 @@ impl HwpDocument {
 
         // ParaShape 수정
         if !para_mods_json.is_empty() && para_mods_json != "{}" {
-            let para_mods = crate::document_core::helpers::parse_para_shape_mods(para_mods_json);
+            let mut para_mods = parse_para_shape_mods(para_mods_json);
+            // 탭 정의와 테두리/배경은 문단 모양 적용 경로처럼 찾거나 만들어 달고, 테두리 간격도
+            // 넣는다. 탭은 스타일의 지금 탭 정의에서 바뀐 항목만 덮어쓴다.
+            if json_has_tab_keys(para_mods_json) {
+                let doc_info = &self.core.document.doc_info;
+                let base_tab_def_id = doc_info
+                    .para_shapes
+                    .get(old_psid as usize)
+                    .map_or(0, |ps| ps.tab_def_id);
+                let tab_def =
+                    build_tab_def_from_json(para_mods_json, base_tab_def_id, &doc_info.tab_defs);
+                para_mods.tab_def_id = Some(self.core.document.find_or_create_tab_def(tab_def));
+            }
+            if json_has_border_keys(para_mods_json) {
+                para_mods.border_fill_id =
+                    Some(self.core.create_border_fill_from_json(para_mods_json));
+            }
+            if let Some(spacing) = parse_json_i16_array(para_mods_json, "borderSpacing", 4) {
+                para_mods.border_spacing = Some([spacing[0], spacing[1], spacing[2], spacing[3]]);
+            }
             if let Some(ps) = self
                 .core
                 .document
@@ -7443,6 +7652,9 @@ impl HwpDocument {
         let updated_style = self.core.document.doc_info.styles[style_id as usize].clone();
         let new_csid = updated_style.char_shape_id as u32;
         let new_psid = updated_style.para_shape_id;
+        // [#7490] 셀 문단은 저장 줄 기록을 두고 재조판하므로 bit 20 도 새 들여쓰기로 단다.
+        // 본문 문단은 `reflow_body_paragraph` 가 줄을 비우고 다시 짠다.
+        let (old_indent, new_indent) = self.core.para_shape_indents(old_psid, new_psid);
 
         for (sec_idx, para_idx) in body_targets {
             if let Some(para) = self
@@ -7473,6 +7685,7 @@ impl HwpDocument {
             ) {
                 if style_type == 0 && cpara.para_shape_id == old_psid {
                     cpara.para_shape_id = new_psid;
+                    restamp_indentation(&mut cpara.line_segs, old_indent, new_indent);
                 }
                 cpara.replace_style_char_shape_preserving_overrides(old_csid, new_csid);
             }
@@ -7555,6 +7768,9 @@ impl HwpDocument {
     /// 삭제된 스타일을 사용 중인 문단은 바탕글(ID 0)로 변경된다.
     #[wasm_bindgen(js_name = deleteStyle)]
     pub fn delete_style(&mut self, style_id: u32) -> bool {
+        use crate::model::document::RawRecord;
+        use crate::model::identity::walk::{walk, Node};
+
         if style_id == 0 {
             return false; // 바탕글은 삭제 불가
         }
@@ -7563,31 +7779,51 @@ impl HwpDocument {
             return false;
         }
         let sid = style_id as u8;
-        // 해당 스타일을 사용 중인 문단을 바탕글(0)로 변경
-        for section in &mut self.core.document.sections {
-            for para in &mut section.paragraphs {
-                if para.style_id == sid {
-                    para.style_id = 0;
+        // 스타일 표는 인덱스 기반이다. 지운 스타일을 가리키던 번호는 바탕글(0)로, 그 뒤 번호는
+        // 한 칸씩 당긴다.
+        let remap = |id: u8| match id.cmp(&sid) {
+            std::cmp::Ordering::Less => id,
+            std::cmp::Ordering::Equal => 0,
+            std::cmp::Ordering::Greater => id - 1,
+        };
+        // HWP 원본 바탕쪽은 구역 정의의 원시 레코드로 그대로 저장된다. 그 안 문단 머리의
+        // 스타일 번호(PARA_HEADER 10번째 바이트)도 옮겨야 저장본이 모델과 같다.
+        let remap_raw = |records: &mut [RawRecord]| {
+            for record in records {
+                if record.tag_id == crate::parser::tags::HWPTAG_PARA_HEADER {
+                    if let Some(id) = record.data.get_mut(10) {
+                        *id = remap(*id);
+                    }
                 }
             }
-        }
-        // 스타일 삭제 (인덱스 기반이므로 뒤의 ID가 변경됨에 주의)
+        };
         self.core.document.doc_info.styles.remove(style_id as usize);
-        // 삭제된 ID보다 큰 style_id를 가진 문단들 보정
-        for section in &mut self.core.document.sections {
-            for para in &mut section.paragraphs {
-                if para.style_id > sid {
-                    para.style_id -= 1;
+        // 본문뿐 아니라 표 셀·글상자·머리말/꼬리말·각주/미주·캡션·메모·바탕쪽 문단과 덧말도
+        // 같은 스타일 표를 가리킨다. 하나라도 빠지면 그 문단이 다른 스타일을 가리킨 채 저장된다.
+        let mut visit = |node: &mut Node<'_>| -> Result<(), HwpError> {
+            match node {
+                Node::Paragraph(para) => para.style_id = remap(para.style_id),
+                Node::Control(Control::Ruby(ruby)) => {
+                    if let Ok(id) = u8::try_from(ruby.style_id_ref) {
+                        ruby.style_id_ref = remap(id).into();
+                    }
                 }
+                Node::Control(Control::SectionDef(def)) => remap_raw(&mut def.extra_child_records),
+                _ => {}
             }
+            Ok(())
+        };
+        for section in &mut self.core.document.sections {
+            walk(&mut section.paragraphs, &mut visit).expect("스타일 번호 순회는 실패하지 않는다");
+            // 렌더와 HWPX 저장은 구역의 구역 정의 사본에서 바탕쪽을 읽는다.
+            for master in &mut section.section_def.master_pages {
+                walk(&mut master.paragraphs, &mut visit)
+                    .expect("스타일 번호 순회는 실패하지 않는다");
+            }
+            remap_raw(&mut section.section_def.extra_child_records);
         }
-        // next_style_id 보정
         for s in &mut self.core.document.doc_info.styles {
-            if s.next_style_id == sid {
-                s.next_style_id = 0;
-            } else if s.next_style_id > sid {
-                s.next_style_id -= 1;
-            }
+            s.next_style_id = remap(s.next_style_id);
         }
         // 스타일 캐시 갱신
         self.core.rebuild_resolved_styles();
@@ -7670,32 +7906,40 @@ impl HwpDocument {
         n.start_number = 1;
         n.level_start_numbers = [1; 7];
         // 수준별 번호 형식 코드 설정
+        // [#7418] 한/글 기본 머리 모양은 자동 내어쓰기(속성 bit3)다 — 둘째 줄부터 본문 시작에 맞춘다.
         n.heads[0] = NumberingHead {
             number_format: 0,
+            attr: 1 << 3,
             ..Default::default()
         }; // 1,2,3
         n.heads[1] = NumberingHead {
             number_format: 8,
+            attr: 1 << 3,
             ..Default::default()
         }; // 가,나,다
         n.heads[2] = NumberingHead {
             number_format: 0,
+            attr: 1 << 3,
             ..Default::default()
         }; // 1,2,3
         n.heads[3] = NumberingHead {
             number_format: 8,
+            attr: 1 << 3,
             ..Default::default()
         }; // 가,나,다
         n.heads[4] = NumberingHead {
             number_format: 1,
+            attr: 1 << 3,
             ..Default::default()
         }; // ①②③
         n.heads[5] = NumberingHead {
             number_format: 10,
+            attr: 1 << 3,
             ..Default::default()
         }; // ㄱ,ㄴ,ㄷ
         n.heads[6] = NumberingHead {
             number_format: 5,
+            attr: 1 << 3,
             ..Default::default()
         }; // a,b,c
         self.core.document.doc_info.numberings.push(n);
@@ -7748,6 +7992,7 @@ impl HwpDocument {
                         if let Ok(code) = part.trim().parse::<u8>() {
                             n.heads[level] = NumberingHead {
                                 number_format: code,
+                                attr: 1 << 3, // 자동 내어쓰기 (한/글 기본 머리 모양)
                                 ..Default::default()
                             };
                             level += 1;
@@ -7781,6 +8026,7 @@ impl HwpDocument {
         use crate::model::style::Bullet;
         let b = Bullet {
             bullet_char: bullet_ch,
+            attr: 1 << 3, // 자동 내어쓰기 (한/글 기본 머리 모양)
             text_distance: 50,
             ..Default::default()
         };
@@ -8366,6 +8612,29 @@ impl HwpDocument {
         .map_err(|e| e.into())
     }
 
+    /// 선택 영역을 논리적 오프셋(`insertTextLogical` 과 같은 축)으로 받아 내부 클립보드에 복사한다.
+    ///
+    /// 각주·글자처럼 취급 개체 바로 뒤에서 시작한 선택은 그 개체를 담지 않는다 (#7444).
+    /// 반환값: JSON `{"ok":true,"text":"<plain_text>"}`
+    #[wasm_bindgen(js_name = copySelectionLogical)]
+    pub fn copy_selection_logical(
+        &mut self,
+        section_idx: u32,
+        start_para_idx: u32,
+        start_logical_offset: u32,
+        end_para_idx: u32,
+        end_logical_offset: u32,
+    ) -> Result<String, JsValue> {
+        self.copy_selection_logical_native(
+            section_idx as usize,
+            start_para_idx as usize,
+            start_logical_offset as usize,
+            end_para_idx as usize,
+            end_logical_offset as usize,
+        )
+        .map_err(|e| e.into())
+    }
+
     /// 표 셀 내부 선택 영역을 내부 클립보드에 복사한다.
     #[wasm_bindgen(js_name = copySelectionInCell)]
     pub fn copy_selection_in_cell(
@@ -8717,6 +8986,8 @@ impl HwpDocument {
     }
 
     /// HTML 문자열을 파싱하여 캐럿 위치에 삽입한다 (본문).
+    ///
+    /// `char_offset` 과 반환 `charOffset` 은 논리 위치(`insertTextLogical` 과 같은 축)다.
     #[wasm_bindgen(js_name = pasteHtml)]
     pub fn paste_html(
         &mut self,

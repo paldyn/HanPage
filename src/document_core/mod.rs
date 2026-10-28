@@ -9,6 +9,8 @@ pub(crate) use helpers::*;
 pub mod builders;
 mod canvas_metric_requests;
 mod canvas_metrics;
+mod native_pua_fonts;
+pub use native_pua_fonts::NativePuaFontRequest;
 mod font_environment;
 pub use canvas_metric_requests::{CanvasMetricBatch, CanvasMetricReply, CanvasMetricRequest};
 mod commands;
@@ -25,9 +27,11 @@ pub use commands::paragraph_block::{
 pub use commands::{TableColumnWidths, TableCreationOptions};
 pub mod converters;
 pub(crate) mod html_table_import;
+mod html_table_width;
 /// 한글 클립보드 문서모델(hwpjson) → HWPX 변환
 pub mod hwpjson;
 pub mod hyperlink;
+pub mod native_interaction;
 pub mod queries;
 pub mod table_calc;
 pub mod text_security;
@@ -183,10 +187,15 @@ pub struct DocumentCore {
     pub(crate) pagination: Vec<PaginationResult>,
     /// 해소된 스타일 세트
     pub(crate) styles: ResolvedStyleSet,
+    native_pua_fonts: std::sync::Arc<crate::renderer::native_pua_fonts::NativePuaFonts>,
     pub(crate) canvas_metrics: Option<canvas_metrics::CanvasMetricSession>,
+    pub(crate) hft_outline_fonts: crate::renderer::hft_outline::HftOutlineFonts,
+    pub(crate) metafile_fonts: crate::paint::metafile_fonts::MetafileFonts,
     pub(crate) font_environment: Option<crate::renderer::font_environment::FontEnvironment>,
     /// 구역별 구성된 문단 목록
     pub(crate) composed: Vec<Vec<ComposedParagraph>>,
+    /// 본문 동적 필드의 쪽 소속/표시값이 수렴하지 않으면 출력을 명시적으로 거부한다.
+    pub(crate) body_page_field_error: Option<String>,
     /// [#2308] source IR로부터 재생성되는 revision 기반 render normalization state.
     /// #2004 immutable compatibility projection과 #2195 sparse width overlay를 소유하며,
     /// **원본 `document`는 무손상**이고 deferred edit은 projection을 직접 mirror하지 않는다.
@@ -287,6 +296,8 @@ pub struct DocumentCore {
     pub(crate) section_raw_store: Vec<(u32, commands::section_raw_journal::SectionRawCapture)>,
     /// 다음 구역 raw 캡처 ID
     pub(crate) next_section_raw_id: u32,
+    pub(crate) border_paint_store: Vec<(u32, commands::border_paint_edit::BorderPaintUndo)>,
+    pub(crate) next_border_paint_id: u32,
     /// 그림 크기 변경의 원본 변환 상태. 문서/이미지 전체는 복제하지 않는다.
     pub(crate) picture_transform_store: Vec<(
         u32,
@@ -307,6 +318,9 @@ pub struct DocumentCore {
     pub(crate) source_format: crate::parser::FileFormat,
     /// HML 입력에서만 유지되는 버전·인코딩·손실 진단.
     pub(crate) hml_metadata: Option<crate::parser::HmlImportMetadata>,
+    /// PDF 가져오기 당시의 원본 쪽 대응·미지원 진단. 편집 후 현재 페이지 번호와 구분한다.
+    #[cfg(feature = "pdf-import")]
+    pub(crate) pdf_metadata: Option<crate::parser::pdf::PdfImportMetadata>,
     /// HWPX 비표준 감지 등 문서 검증 경고.
     /// `from_bytes` 에서 자동 생성되며, 사용자 고지·선택적 reflow 에 사용 (#177).
     pub(crate) validation_report: validation::ValidationReport,
@@ -354,14 +368,13 @@ const _: () = {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ActiveFieldInfo {
     pub section_idx: usize,
+    /// 본문 문단 번호. 셀 내부이면 최상위 표/글상자를 담은 본문 부모 문단이다.
     pub para_idx: usize,
     /// field_ranges의 control_idx (controls[] 내 Field 컨트롤 인덱스)
     pub control_idx: usize,
-    /// 셀 내부 필드인 경우의 전체 경로
-    /// 단일 표: vec![(parent_para_idx, ctrl, cell)]
-    /// 중첩 표: vec![(outer_ctrl, outer_cell, ..), (inner_ctrl, inner_cell, ..)]
-    /// parent_para_idx는 별도 필드에 포함하지 않고 첫 번째 요소의 context로 사용
-    pub cell_path: Option<Vec<(usize, usize, usize)>>, // Vec<(parent_para_idx_or_ctrl, ctrl_or_cell, cell_or_para)>
+    /// 셀 내부 필드이면 (컨트롤, 셀, 셀 문단) 번호로 이루어진 전체 경로.
+    /// 본문 부모 문단은 para_idx, 마지막 셀 문단은 경로의 마지막 요소가 구분한다.
+    pub cell_path: Option<Vec<(usize, usize, usize)>>,
 }
 
 impl DocumentCore {
@@ -379,6 +392,12 @@ impl DocumentCore {
         use crate::renderer::style_resolver::lookup_font_name_in_environment;
 
         let mut fonts = std::collections::BTreeSet::new();
+        if let Some(default) =
+            crate::renderer::style_resolver::missing_latin_default(&self.document)
+        {
+            // 표시·측정에 쓰는 기본 face도 같은 브라우저 준비 경로로 공급한다.
+            fonts.insert(default.to_string());
+        }
         let mut font_substitutions = std::collections::BTreeSet::new();
         for (lang_idx, lang_fonts) in self.document.doc_info.font_faces.iter().enumerate() {
             for (font_idx, _) in lang_fonts.iter().enumerate() {
@@ -388,6 +407,9 @@ impl DocumentCore {
                     font_idx as u16,
                     self.font_environment.as_ref(),
                 );
+                // 실제 paint가 소비하는 glyph 공급자도 Studio가 준비해야 한다.
+                // primary만 노출하면 측정한 대체 face를 브라우저가 로드하지 못한다.
+                fonts.extend(decision.css_family_chain.iter().cloned());
                 if let Some(resolved) = decision.normalized_face {
                     fonts.insert(resolved.clone());
                     if decision.environment_profile_id.is_none() {
@@ -396,6 +418,12 @@ impl DocumentCore {
                         }
                     }
                 }
+            }
+        }
+        for section in &self.document.sections {
+            queries::equation_fonts::collect(&section.paragraphs, &mut fonts);
+            for master in &section.section_def.master_pages {
+                queries::equation_fonts::collect(&master.paragraphs, &mut fonts);
             }
         }
         let fonts_json: Vec<String> = fonts
@@ -467,19 +495,36 @@ impl DocumentCore {
     /// normalization. Layout provenance remains in `Document::layout_profile`
     /// and is passed separately to cache-admission consumers.
     pub(crate) fn resolve_render_styles(&self) -> ResolvedStyleSet {
-        crate::renderer::style_resolver::resolve_styles_with_environment(
+        let mut styles = crate::renderer::style_resolver::resolve_styles_with_environment(
             &self.document,
             self.dpi,
             self.font_environment.as_ref(),
-        )
+            self.effective_layout_profile(),
+        );
+        styles.native_pua_fonts = self.native_pua_fonts.clone();
+        styles
     }
 
-    pub(crate) fn rebuild_resolved_styles(&mut self) {
+    pub(crate) fn rebuild_resolved_styles(&mut self) -> bool {
+        let equation_frames_changed = crate::renderer::equation::declared_frame::set_generation(
+            &mut self.document,
+            self.hangul2024_compat,
+        );
+        // 정규화한 줄과 인라인 프레임은 현재 글꼴 메트릭·DPI에서 파생된다.
+        // source revision이 같아도 스타일 재해소 뒤에는 이전 투영을 재사용하지 않는다.
+        self.render_normalization.sections.fill_with(|| None);
         self.styles = self.resolve_render_styles();
         self.styles.supplemental_metrics = self
             .canvas_metrics
             .as_ref()
             .and_then(canvas_metrics::CanvasMetricSession::active_snapshot);
+        // [#7436] 번호 문자열은 문단 모양·번호 정의에서 정해지므로 스타일과 함께 다시 계산한다.
+        // 문서를 열 때의 재조판(저장 줄 없는 문단)도 번호 폭을 알고 줄을 나눈다.
+        crate::renderer::layout::assign_numbering_markers(
+            &mut self.document.sections,
+            &self.styles,
+        );
+        equation_frames_changed
     }
 
     /// 한글 2024 계열 조판 에뮬레이션을 켜거나 끈다.
@@ -487,6 +532,9 @@ impl DocumentCore {
     pub fn set_hangul2024_compat(&mut self, enabled: bool) {
         if self.hangul2024_compat != enabled {
             self.hangul2024_compat = enabled;
+            if self.rebuild_resolved_styles() {
+                self.recompose_all_with_horizontal_shaping();
+            }
             for d in self.dirty_sections.iter_mut() {
                 *d = true;
             }
@@ -508,9 +556,13 @@ impl DocumentCore {
             document: Document::default(),
             pagination: Vec::new(),
             styles: ResolvedStyleSet::default(),
+            native_pua_fonts: Default::default(),
             canvas_metrics: None,
+            hft_outline_fonts: Default::default(),
+            metafile_fonts: Default::default(),
             font_environment: None,
             composed: Vec::new(),
+            body_page_field_error: None,
             render_normalization: RenderNormalizationState::default(),
             dpi: DEFAULT_DPI,
             fallback_font: DEFAULT_FALLBACK_FONT.to_string(),
@@ -549,6 +601,8 @@ impl DocumentCore {
             next_fragment_id: 0,
             section_raw_store: Vec::new(),
             next_section_raw_id: 0,
+            border_paint_store: Vec::new(),
+            next_border_paint_id: 0,
             picture_transform_store: Vec::new(),
             next_picture_transform_id: 0,
             hidden_header_footer: std::collections::HashSet::new(),
@@ -557,6 +611,8 @@ impl DocumentCore {
             para_offset: Vec::new(),
             source_format: crate::parser::FileFormat::Hwp,
             hml_metadata: None,
+            #[cfg(feature = "pdf-import")]
+            pdf_metadata: None,
             validation_report: validation::ValidationReport::new(),
         }
     }
@@ -564,6 +620,12 @@ impl DocumentCore {
     /// HML 열기 메타데이터. 다른 입력 포맷은 `None`이다.
     pub fn hml_metadata(&self) -> Option<&crate::parser::HmlImportMetadata> {
         self.hml_metadata.as_ref()
+    }
+
+    /// PDF를 가져온 시점의 진단. HWP/HWPX 저장본 재열기에서는 `None`이다.
+    #[cfg(feature = "pdf-import")]
+    pub fn pdf_metadata(&self) -> Option<&crate::parser::pdf::PdfImportMetadata> {
+        self.pdf_metadata.as_ref()
     }
 
     /// 문서 검증 리포트에 대한 참조를 반환한다.

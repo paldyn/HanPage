@@ -21,7 +21,7 @@ on:
         required: true
         type: string
       duration_policy_sha:
-        description: Pinned ci-metrics policy commit for integration B/C/D selection.
+        description: Pinned ci-metrics policy commit for integration B/C/D/E selection.
         required: false
         type: string
         default: ''
@@ -53,7 +53,7 @@ jobs:
           esac
 
           case "${TARGET_GROUP}" in
-            lib|integration-b|integration-c|integration-d)
+            lib|integration-b|integration-c|integration-d|integration-e)
               ;;
             *)
               echo "::error::invalid test archive target group: ${TARGET_GROUP}"
@@ -96,7 +96,7 @@ jobs:
           toolchain: 1.93.1
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2.87.31
         with:
           tool: nextest
 
@@ -104,7 +104,7 @@ jobs:
       # 동일하게 devel/main push로 한정한다.
       - name: Rust build cache
         id: rust-cache
-        uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2.9.1
+        uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31 # v2.9.3 이후 workspace root key 보정
         with:
           shared-key: test-archive
           save-if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/devel' || github.ref == 'refs/heads/main') }}
@@ -139,7 +139,7 @@ jobs:
             printf "| cache_save_eligible | \`%s\` |\n" "${CACHE_SAVE_ELIGIBLE}"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-      # [#6251] lib는 별도 archive로, integration target은 B/C/D 세 archive에 시간 기준으로 배정해
+      # [#6251] lib는 별도 archive로, integration target은 B/C/D/E 네 archive에 시간 기준으로 배정해
       # compile/link 임계 경로를 병렬화한다. integration 목록은 파생 suite 준비 뒤
       # metadata에서 구한다.
       - name: Build default-feature test archive
@@ -153,7 +153,7 @@ jobs:
             lib)
               cargo_target_args+=(--lib)
               ;;
-            integration-b|integration-c|integration-d)
+            integration-b|integration-c|integration-d|integration-e)
               duration_policy='tests/suites/nextest-target-duration-policy.json'
               duration_policy_ref='ci-metrics/nextest-target-durations'
               if [[ -n "${{ inputs.duration_policy_sha }}" ]]; then

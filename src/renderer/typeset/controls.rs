@@ -32,7 +32,9 @@ pub(super) mod flow_table;
 pub(super) mod host_wrap;
 pub(super) mod order;
 pub(super) mod paragraph_flow;
+pub(super) mod physical_tac;
 pub(super) mod shape_flow;
+mod square_host_frame;
 pub(super) mod stored_tac;
 pub(super) mod table_entry;
 pub(super) mod tac_fit;
@@ -93,21 +95,62 @@ pub(super) fn place_decoration_table(
     para: &Paragraph,
     table: &Table,
     next_para: Option<&Paragraph>,
+    paragraphs: &[Paragraph],
     dpi: f64,
+    anchor_origin: Option<f64>,
     format: impl FnOnce(bool) -> FormattedTable,
+    engine: &super::TypesetEngine,
+    styles: &ResolvedStyleSet,
 ) {
+    if anchor_origin.is_none()
+        && !st.profile.session_edited()
+        && (st.profile.hwp5_stored_pagination_layout() || st.profile.hwpx_stored_layout())
+        && st.col_count == 1
+        && st.current_zone_y_offset.abs() < f64::EPSILON
+        && st.current_items.iter().skip(1).all(|item| {
+            matches!(item, crate::renderer::pagination::PageItem::FullParagraph { para_index }
+                if st.hidden_empty_paras.contains(para_index))
+        })
+    {
+        let anchor = st.current_items.first().and_then(|item| match item {
+            crate::renderer::pagination::PageItem::PartialTable {
+                para_index,
+                is_continuation: true,
+                ..
+            } => Some(*para_index),
+            _ => None,
+        });
+        let placement = anchor.and_then(|anchor| {
+            crate::renderer::float_placement::ParagraphFloatPlacement::from_stored_overlay_guide_chain(
+                paragraphs, anchor, para_idx, st.current_height,
+                st.layout.body_area.height, styles, dpi,
+            )
+        });
+        if let Some(placement) = placement {
+            st.align_flow_to(placement.anchor_y);
+            let base = para.line_segs.first().map(|line| {
+                line.vertical_pos - crate::renderer::px_to_hwpunit(placement.anchor_y, dpi)
+            });
+            st.record_vpos_lazy_origin(base);
+            st.record_paragraph_float_placement((para_idx, ctrl_idx), placement);
+        }
+    }
     st.emit_decoration_table(para_idx, ctrl_idx);
     // [#4568] 현재 쪽을 넘는 잔여 행만 다음 쪽 대기열에 남긴다.
     // 포맷은 Shape 발행 뒤, 앵커/가용 영역 조회 전에 수행한다.
-    let ft = format(st.decoration_table_flow_height() < 1.0);
+    let origin = anchor_origin.unwrap_or_else(|| st.decoration_table_flow_height());
+    let ft = format(origin < 1.0);
     let continuation = decoration_table::continuation(
         para,
         table,
         next_para,
         &ft,
-        st.decoration_table_flow_height(),
+        origin,
         dpi,
         || st.base_available_height(),
+        |row, available| {
+            decoration_table::partial_row_query(engine, st, table, &ft, styles, row, available)
+        },
     );
     if let Some(ref continuation) = continuation {
         if std::env::var("RHWP_TABLE_DRIFT").is_ok() {
@@ -141,6 +184,28 @@ pub(super) fn prepare_table_control(
     dpi: f64,
     original_hwpx: impl FnOnce() -> bool,
 ) -> bool {
+    let page = st.table_control_page();
+    let follows_tac_frame = !page.profile.session_edited()
+        && (page.profile.hwpx_stored_layout() || page.profile.hwp5_stored_pagination_layout())
+        && crate::renderer::stored_control_frame::following_first_tac_frame(
+            para,
+            (st.base_available_height() * 7200.0 / dpi).round() as i32,
+        )
+        .is_some_and(|frame| {
+            crate::renderer::layout::control_line_seg_index(para, ctrl_idx) == Some(frame.line)
+                && st.coanchored_table_page().1.iter().any(|item| {
+                    use crate::renderer::pagination::PageItem;
+                    matches!(item,
+                        PageItem::Table { para_index, control_index }
+                        | PageItem::PartialTable { para_index, control_index, .. }
+                        | PageItem::Shape { para_index, control_index }
+                        if *para_index == para_idx && *control_index == frame.before_control)
+                })
+        });
+    // 앞 줄 개체가 현재 쪽에 남아 있을 때만 경계를 건넌다. 새 줄 형제는 다시 넘기지 않는다.
+    if follows_tac_frame {
+        st.advance_column_or_new_page();
+    }
     if table_entry::needs_stored_line_advance(
         para,
         table,
@@ -150,6 +215,7 @@ pub(super) fn prepare_table_control(
     ) {
         st.advance_column_or_new_page();
     }
+    let frame = st.inline_flow_input(0.0, false);
     table_entry::uses_decoration_placement(
         para,
         table,
@@ -160,6 +226,8 @@ pub(super) fn prepare_table_control(
         st.table_control_page().col_count,
         has_tac,
         host_col_w,
+        *frame.body,
+        frame.page_height,
         dpi,
         || st.base_available_height(),
         original_hwpx,
@@ -203,10 +271,11 @@ pub(super) fn reconcile_tac_height(
     para: &Paragraph,
     next_para: Option<&Paragraph>,
     fmt: &FormattedParagraph,
+    styles: &ResolvedStyleSet,
     measured_tables: &[MeasuredTable],
     tac_count: usize,
     height_before: f64,
-    session_grown_tac_total: Option<f64>,
+    measured_tac_floor: Option<f64>,
     flow: tac_flow::TacFlowQuery<'_>,
 ) {
     let dpi = flow.dpi();
@@ -221,6 +290,7 @@ pub(super) fn reconcile_tac_height(
         para,
         next_para,
         fmt,
+        styles,
         measured_tables,
         tac_count,
         height_before,
@@ -267,12 +337,21 @@ pub(super) fn reconcile_tac_height(
         st.tac_height_page(),
         dpi,
     );
-    let cap = tac_reconcile::effective_cap(
-        cap,
-        ladder_total,
-        ladder_omits_spacing,
-        session_grown_tac_total,
-    );
+    let cap =
+        tac_reconcile::effective_cap(cap, ladder_total, ladder_omits_spacing, measured_tac_floor);
+    // 현재 조판한 단일 표 줄의 확정 끝점에는 바깥 여백과 후행 간격도 들어 있다.
+    // 셀 실측 본체만으로 다시 상한을 걸면 이미 예약한 물리 공간을 회수하게 된다.
+    let cap = if measured_tac_floor.is_some()
+        && para.controls.iter().any(|control| match control {
+            Control::Table(table) => {
+                flow.single_tac_line_has_unstored_cell_text(para, table, fmt, tac_count)
+            }
+            _ => false,
+        }) {
+        cap.max(st.tac_height_page().current_height - snapped_base)
+    } else {
+        cap
+    };
     if std::env::var("RHWP_DIAG_TACCAP").is_ok() {
         eprintln!(
             "DIAG_TACCAP pi={} tac_seg_total={:.1} cap={:.1} fmt_total={:.1} sb={:.1} cur_h={:.1} snapped_base={:.1} clamp={}",
@@ -310,10 +389,28 @@ pub(super) fn place_table_host_shape(
         return;
     }
     let flow = shape_flow::prepare(ctrl, para, ctrl_idx, dpi);
-    if flow.needs_advance(st.table_host_shape_page(), || st.available_height()) {
+    if st.defer_table_host_ole_to_next_column(para_idx, ctrl_idx, ctrl, dpi) {
+        return;
+    }
+    while flow.needs_advance(st.table_host_shape_page(), || st.available_height()) {
+        // 단 기준 개체가 다음 단에 들어가면 개체만 이월한다. 뒤 본문은 남은
+        // 현재 단을 채우며, 저장 줄의 단 경계에서 예약 개체 뒤로 이어진다.
+        let common = match ctrl {
+            Control::Shape(shape) => Some(shape.common()),
+            Control::Picture(picture) => Some(&picture.common),
+            _ => None,
+        };
+        let column_frame = common.is_some_and(|common| {
+            matches!(common.horz_rel_to, crate::model::shape::HorzRelTo::Column)
+                && common.width as f64 <= st.layout.column_width_hu() as f64
+        });
+        if column_frame && st.defer_table_host_shape_to_next_column(para_idx, ctrl_idx, flow) {
+            return;
+        }
         st.advance_column_or_new_page();
     }
-    st.commit_table_host_shape(para_idx, ctrl_idx, flow);
+    let accepted_frame = flow.accepted_shape_frame(ctrl, st.current_height);
+    st.commit_table_host_shape(para_idx, ctrl_idx, flow, accepted_frame);
     st.register_side_wrap_picture(para_idx, ctrl_idx, para, Some(para_start_height), styles);
 }
 
@@ -327,10 +424,14 @@ pub(super) fn try_place_empty_para_float_table(
     table: &crate::model::table::Table,
     ft: &FormattedTable,
     composed: Option<&ComposedParagraph>,
+    prev_para: Option<&Paragraph>,
     next_para: Option<&Paragraph>,
     styles: &ResolvedStyleSet,
     para_start_height: f64,
     lanes: &mut FloatLaneSet,
+    paragraphs: &[Paragraph],
+    table_reflowed: bool,
+    preceding_fragment_reflowed: bool,
     dpi: f64,
 ) -> bool {
     let Some(placement) = empty_float::prepare(
@@ -340,11 +441,14 @@ pub(super) fn try_place_empty_para_float_table(
         table,
         ft,
         composed,
+        prev_para,
         next_para,
         styles,
         para_start_height,
         lanes,
-        st.empty_float_page(),
+        st.empty_float_page(paragraphs),
+        table_reflowed,
+        preceding_fragment_reflowed,
         || st.empty_float_available_height(ft.table_footnote_height, ft.table_footnote_count),
         dpi,
     ) else {
@@ -372,7 +476,13 @@ pub(super) fn flush_deferred_tables(
             remaining.push(deferred);
             continue;
         }
+        // 지연 표의 원래 host 뒤 문단은 이미 출력됐을 수 있다. 배치 시점의
+        // 실제 문단 cursor를 마지막 조각의 후속 줄 조회에 전달한다.
+        let previous = st.replace_deferred_table_successor_start(Some(
+            flush_point.successor_start(paragraphs.len()),
+        ));
         place(st, deferred);
+        st.replace_deferred_table_successor_start(previous);
     }
     st.restore_deferred_table_controls(remaining);
 }
@@ -402,20 +512,139 @@ pub(super) fn prepare_tac_paragraph(
 }
 
 /// 기존 저장 줄 경로가 문단 전체를 수용한 경우에만 일반 컨트롤 경로를 생략한다.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn try_place_stored_tac_paragraph(
     st: &mut TypesetState,
     para_idx: usize,
     para: &Paragraph,
     fmt: &FormattedParagraph,
     measured_tables: &[MeasuredTable],
-    dpi: f64,
+    engine: &super::TypesetEngine,
+    paragraphs: &[Paragraph],
+    styles: &crate::renderer::style_resolver::ResolvedStyleSet,
+    composed: Option<&ComposedParagraph>,
 ) -> bool {
+    let dpi = engine.dpi;
+    if let Some(placement) = stored_tac::prepare_computed(
+        para_idx,
+        para,
+        paragraphs.get(para_idx + 1),
+        paragraphs
+            .get(para_idx + 1)
+            .and_then(|next| styles.para_styles.get(next.para_shape_id as usize))
+            .map_or(0.0, |style| style.spacing_before),
+        fmt,
+        measured_tables,
+        styles,
+        st.stored_tac_page(paragraphs),
+        || st.available_height(),
+        dpi,
+    ) {
+        // 합성 표 줄의 간격은 확정 끝에 이미 포함된다. 같은 끝점에서 좌표축을
+        // 연결해 다음 문단의 lazy 역산이 그 간격을 다시 더하지 않게 한다.
+        let rebase_line_origin = placement.rebase_line_origin;
+        let lazy_origin = para.line_segs.first().map(|seg| {
+            seg.vertical_pos
+                .saturating_add(seg.line_height)
+                .saturating_add(seg.line_spacing)
+                .saturating_sub(crate::renderer::px_to_hwpunit(placement.end, dpi))
+        });
+        // 일반 표 문단 경로는 장식 개체도 원래 컨트롤 순서대로 발행한다.
+        // 줄 계획의 단축이 그 경로를 생략해도, 흐름을 점유하지 않는 장식의
+        // paint 소유권은 남는다. 표의 저장 pen을 같은 문단 앵커로 전달한다.
+        let owner = placement.control_index;
+        let host_origin = placement.inline.y;
+        let emit_decoration = |st: &mut TypesetState, index: usize, control: &Control| {
+            if let Control::Table(table) = control {
+                place_decoration_table(
+                    st,
+                    para_idx,
+                    index,
+                    para,
+                    table,
+                    paragraphs.get(para_idx + 1),
+                    paragraphs,
+                    dpi,
+                    Some(host_origin),
+                    |is_column_top| {
+                        engine.format_table(
+                            para,
+                            para_idx,
+                            index,
+                            table,
+                            measured_tables,
+                            styles,
+                            composed,
+                            paragraphs.get(para_idx + 1),
+                            is_column_top,
+                        )
+                    },
+                    engine,
+                    styles,
+                );
+            } else {
+                place_table_host_shape(
+                    st,
+                    para_idx,
+                    index,
+                    control,
+                    para,
+                    host_origin,
+                    styles,
+                    dpi,
+                );
+            }
+        };
+        for (index, control) in para.controls.iter().enumerate().take(owner) {
+            emit_decoration(st, index, control);
+        }
+        st.commit_stored_tac_control(para_idx, placement);
+        for (index, control) in para.controls.iter().enumerate().skip(owner + 1) {
+            emit_decoration(st, index, control);
+        }
+        // 원본 저장 줄의 좌표축은 이미 확립돼 있다. 합성 줄의 확정 끝만
+        // lazy 원점으로 역산하며, 실제 저장 표 뒤 사다리는 유지한다.
+        if rebase_line_origin {
+            st.commit_deferred_table_anchor(para_idx, paragraphs);
+            st.record_vpos_lazy_origin(lazy_origin);
+            st.mark_vpos_ladder_dirty();
+        }
+        return true;
+    }
+    // A closed preceding object frame already owns its successor's leading
+    // spacing. The stored TAC plan must use that same origin for fit and paint.
+    let shared_spacing_before =
+        crate::renderer::float_placement::stored_frame_successor_shared_spacing_px(
+            &st.paragraph_float_placements,
+            para_idx,
+            fmt.spacing_before,
+            st.current_height,
+        );
     let Some(plan) = stored_tac::prepare(
         para_idx,
         para,
         fmt,
         measured_tables,
-        st.stored_tac_page(),
+        styles,
+        st.stored_tac_page(paragraphs),
+        shared_spacing_before,
+        para_idx
+            .checked_sub(1)
+            .and_then(|index| paragraphs.get(index)),
+        para_idx
+            .checked_sub(1)
+            .and_then(|index| paragraphs.get(index))
+            .and_then(|previous| styles.para_styles.get(previous.para_shape_id as usize))
+            .map_or(0.0, |shape| shape.spacing_after),
+        paragraphs.get(para_idx + 1),
+        paragraphs
+            .get(para_idx + 1)
+            .and_then(|next| styles.para_styles.get(next.para_shape_id as usize))
+            .map_or(0.0, |shape| shape.spacing_before),
+        styles
+            .para_styles
+            .get(para.para_shape_id as usize)
+            .is_some_and(|style| style.page_break_before),
         || st.available_height(),
         dpi,
     ) else {
@@ -424,6 +653,13 @@ pub(super) fn try_place_stored_tac_paragraph(
     for line in &plan.lines {
         let placement = plan.placement(line, fmt.spacing_after, dpi);
         st.commit_stored_tac_control(para_idx, placement);
+    }
+    if let Some(frame) = plan.source_frame {
+        st.commit_deferred_table_anchor(para_idx, paragraphs);
+        st.record_vpos_page_origin(Some(frame.source_origin_hu));
+        st.record_vpos_column_anchor(frame.column_anchor_y);
+        st.record_vpos_origin_provenance(true);
+        st.record_vpos_lazy_origin(None);
     }
     true
 }

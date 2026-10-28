@@ -47,6 +47,14 @@ pub fn border_width_mm_str(index: u8) -> &'static str {
         .unwrap_or("0.1")
 }
 
+/// 원본 프로그램이 일반 글리프 폭 외에 지닌 조판 계약.
+/// 파서가 확정하며 렌더러는 컨테이너 형식을 다시 판별하지 않는다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum NativeFontProgram {
+    HumanMyeongJo,
+    HanyangSinMyeongJo,
+}
+
 /// 글꼴 정보 (HWPTAG_FACE_NAME)
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct Font {
@@ -71,12 +79,17 @@ pub struct Font {
     pub type_info: Option<[u8; 10]>,
     /// 기본 글꼴 이름
     pub default_name: Option<String>,
-    /// 대체 글꼴 (HWPX `<hh:substFont>`) — 원본 글꼴 부재 시 대체될 글꼴 정보.
-    /// HWP5 의 `alt_name`/`alt_type` 과 달리 type·임베드 정보를 독립적으로 보존한다.
+    /// 문서의 명시 대체 글꼴 — 원본 글꼴 부재 시 대체될 글꼴 정보.
+    /// HWP5 FACE_NAME의 대체 이름/별도 유형과 HWPX `<hh:substFont>`를
+    /// 같은 계약으로 전달한다. HWP3 alt_name의 원 이름 추적과는 구분한다.
     pub subst_font: Option<SubstFont>,
+    /// 원본 프로그램의 조판 출처. 문서의 글꼴 선언·자간을 바꾸거나
+    /// 다른 저장 포맷의 원본 속성으로 직렬화하지 않는다.
+    #[serde(skip)]
+    pub native_program: Option<NativeFontProgram>,
 }
 
-/// 대체 글꼴 (HWPX `<hh:substFont>`)
+/// 문서의 명시 대체 글꼴 (HWP5 FACE_NAME / HWPX `<hh:substFont>`)
 ///
 /// 4개 속성을 모두 보존해 라운드트립 무손실을 보장한다. `font_type`/`is_embedded`/
 /// `bin_item_id_ref` 는 부모 `<hh:font>` 의 같은 이름 속성과 독립적이다
@@ -358,15 +371,42 @@ pub struct ParaShape {
     /// 문단 수준 (0~6 → 1~7수준, attr1 bit 25~27)
     pub para_level: u8,
     /// [#4898] HWPX 원본이 `hp:switch` 없이 여백·줄간격을 평문으로 적었는지 보존한다.
-    /// 한컴은 `hp:case`(HwpUnitChar) 를 우선 읽으므로, 평문 원본을 switch 형태로 되쓰면서
-    /// `case` 에 절반값을 넣으면 한글이 보는 여백이 절반이 된다(쪽수 증가). 파서가 이 표기를
-    /// 남기고 HWPX 직렬화기가 같은 표기로 되돌려 원본 조판을 지킨다.
+    /// 평문 고정 줄간격은 switch와 다른 저장 계약이므로 원본 표기를 유지한다.
+    /// 평문 여백의 패키지 버전별 단위는 아래 출처와 함께 보존한다.
     pub hwpx_plain_para_margin: bool,
+    /// 패키지 xmlVersion 1.4 이상에서 평문 여백이 물리 HWPUNIT인지 보존한다.
+    /// 이전 버전은 저장값이 이미 공통 IR 단위이므로 직렬화에서도 절반으로 줄이지 않는다.
+    pub hwpx_plain_para_margin_physical: bool,
     /// [#1986] HWPX breakSetting@breakLatinWord 원문 보존
     /// (BREAK_WORD/KEEP_WORD/HYPHENATION). 파서 미수집 시 None → 직렬화 기본값
     /// KEEP_WORD. 값이 3가지라 attr1 비트 인코딩 대신 원문 보존으로 무손실 방출.
     /// 꼬리말·표셀 등 재계산 경로에서 줄나눔이 달라져 레이아웃이 갈리는 것을 막는다.
     pub break_latin_word: Option<String>,
+}
+
+/// [#6875] 문단 줄바꿈 방식("한 줄로 입력") — HWP5 ParaShape `attr2` bits 0-1 ↔
+/// OWPML `hh:breakSetting@lineWrap`.
+///
+/// 값 대응은 셀 줄바꿈(#4898, LIST_HEADER bit 19-20)과 같은 열거 순서다:
+/// `0`=BREAK · `1`=SQUEEZE · `2`=KEEP. 한컴 변환본으로 1↔SQUEEZE 를 확인했다.
+pub const PARA_ATTR2_LINE_WRAP_MASK: u32 = 0x03;
+
+/// OWPML `lineWrap` 문자열 → `attr2` bits 0-1 값. 모르는 값은 BREAK(0).
+pub fn para_line_wrap_bits(value: &str) -> u32 {
+    match value {
+        "SQUEEZE" => 1,
+        "KEEP" => 2,
+        _ => 0,
+    }
+}
+
+/// `attr2` bits 0-1 → OWPML `lineWrap` 문자열. 3(정의되지 않음)은 BREAK.
+pub fn para_line_wrap_str(attr2: u32) -> &'static str {
+    match attr2 & PARA_ATTR2_LINE_WRAP_MASK {
+        1 => "SQUEEZE",
+        2 => "KEEP",
+        _ => "BREAK",
+    }
 }
 
 /// ParaShape 비교: raw_data 필드 제외 (라운드트립용 원본 바이트는 논리적 동일성과 무관)
@@ -689,6 +729,21 @@ pub enum BorderLineType {
     Thin3D,
     /// 3D 가는선 반전 (17)
     Thin3DReverse,
+}
+
+/// Native cell dot-border metrics, in PDF points. Hancom 2020 Print quantizes
+/// the repeat on its 600dpi device grid. Keep independently measured widths
+/// explicit: unqualified widths must not authenticate a PDF paint conversion.
+pub(crate) fn cell_dot_metrics_pt(width: u8) -> Option<([f64; 2], f64)> {
+    let ticks = match width {
+        3 => [7., 10., 5.],    // 0.2mm
+        5 => [10., 15., 7.],   // 0.3mm
+        7 => [17., 25., 12.],  // 0.5mm
+        11 => [52., 78., 35.], // 1.5mm
+        _ => return None,
+    };
+    let [ink, gap, stroke] = ticks.map(|v| v * 72. / 600.);
+    Some(([ink, gap], stroke))
 }
 
 /// 대각선 정보

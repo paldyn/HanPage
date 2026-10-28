@@ -14,6 +14,7 @@ pub(in crate::renderer::typeset) struct RowEntryQuery<'a> {
 pub(in crate::renderer::typeset) struct TerminalNoteProbe {
     pub(in crate::renderer::typeset) remaining_band: f64,
     pub(in crate::renderer::typeset) source_cut: RowCutResult,
+    pub(in crate::renderer::typeset) visible_height: f64,
 }
 
 pub(in crate::renderer::typeset) struct RowSplitGate {
@@ -86,10 +87,18 @@ impl RowEntryQuery<'_> {
         let remaining_band = (avail_for_rows - consumed - cs_before).max(0.0);
         let source_cut =
             layout_engine.advance_row_cut(table, r, row_start_cut, remaining_band, styles);
+        let visible_height = layout_engine.row_cut_content_height(
+            table,
+            r,
+            row_start_cut,
+            &source_cut.end_cut,
+            styles,
+        );
 
         TerminalNoteProbe {
             remaining_band,
             source_cut,
+            visible_height,
         }
     }
 
@@ -100,6 +109,7 @@ impl RowEntryQuery<'_> {
         &self,
         can_intra_split: bool,
         intra_row_cut_here: bool,
+        physical_minimum_splittable: bool,
     ) -> RowSplitGate {
         let RowScanQuery { rows, r, .. } = *self.row;
         let RowBlockQuery {
@@ -111,9 +121,23 @@ impl RowEntryQuery<'_> {
         } = *rows;
         let native_short_parent_child_splittable =
             layout_engine.native_short_parent_child_row_is_fragmentable(table, r, styles);
+        // A saved line can own several distinct floating picture units even
+        // though the text-line inventory has only one line. Use the same
+        // authenticated source plan consumed by measurement and actual paint.
+        let stored_picture_cell_splittable = table.col_count == 1
+            && r + 1 == table.row_count as usize
+            && table.cells.iter().any(|cell| {
+                cell.row as usize == r
+                    && layout_engine
+                        .stored_partitioned_picture_cell_is_fragmentable(cell, table, styles)
+            });
         let splittable = can_intra_split
             && intra_row_cut_here
-            && (mt.is_row_splittable(r) || native_short_parent_child_splittable);
+            && (mt.is_row_splittable(r)
+                || physical_minimum_splittable
+                || native_short_parent_child_splittable
+                || stored_picture_cell_splittable
+                || layout_engine.stored_single_line_row_is_fragmentable(table, r, styles));
 
         RowSplitGate {
             native_short_parent_child_splittable,

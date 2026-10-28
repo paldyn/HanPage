@@ -10,6 +10,8 @@ use crate::renderer::pagination::PageItem;
 pub(in crate::renderer::typeset) struct ParagraphFragment {
     pub item: PageItem,
     pub height: f64,
+    /// 줄·문단 뒤 간격을 제외한 점유 높이. 일반 분할의 확정 메트릭에서 생산한다.
+    pub content_height: Option<f64>,
 }
 
 /// None이면 아직 아무 항목도 배치하지 않았으며 다음 단/쪽에서 같은 시작 줄을 재시도한다.
@@ -24,6 +26,7 @@ pub(in crate::renderer::typeset) fn plan_fragment(
     avail_for_lines: f64,
     boundary: SplitBoundary,
     used_saved_tail_vpos_fit: bool,
+    require_full_advance: bool,
     current_items: &[PageItem],
 ) -> Option<ParagraphFragment> {
     let SplitBoundary {
@@ -37,6 +40,17 @@ pub(in crate::renderer::typeset) fn plan_fragment(
         0.0
     };
     let part_height = sp_b + part_line_height + part_sp_after;
+
+    // Whole-fit and its split retry consume the same closing flow contract.
+    // A table's hard trailing reservation cannot disappear merely because
+    // the retry emits the whole paragraph through the fragment planner.
+    if require_full_advance
+        && end_line >= line_count
+        && cumulative + part_sp_after > avail_for_lines
+        && !current_items.is_empty()
+    {
+        return None;
+    }
 
     let item = if cursor_line == 0 && end_line >= line_count {
         // 전체가 배치됨 — overflow 재확인
@@ -69,9 +83,11 @@ pub(in crate::renderer::typeset) fn plan_fragment(
             end_line,
         }
     };
+    let content_height = fmt.line_content_height(cursor_line..end_line, sp_b);
     Some(ParagraphFragment {
         item,
         height: part_height,
+        content_height: Some(content_height),
     })
 }
 

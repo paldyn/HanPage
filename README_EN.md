@@ -42,7 +42,7 @@
 
 ## Engine — rhwp
 
-The parser · renderer · editor engine used by HanPage is the open-source project [rhwp](https://github.com/edwardkim/rhwp). Current engine version **v0.8.6** (MIT License, © 2025-2026 Edward Kim and contributors).
+The parser · renderer · editor engine used by HanPage is the open-source project [rhwp](https://github.com/edwardkim/rhwp). Current engine version **v0.8.7** (MIT License, © 2025-2026 Edward Kim and contributors).
 
 For per-release cycle changes and external contributor credits, see upstream's [CHANGELOG](https://github.com/edwardkim/rhwp/blob/main/CHANGELOG.md) and [Releases](https://github.com/edwardkim/rhwp/releases). This paldyn repository forks the engine and manages the hanpage.paldyn.com hosting and redistribution artifacts.
 
@@ -50,7 +50,7 @@ For per-release cycle changes and external contributor credits, see upstream's [
 
 Build the skeleton solo, grow the muscle together, complete it as a public good.
 
-The project is currently **v0.8.6 — systematizing the v1.0 typesetting engine** while also
+The project is currently **v0.8.7 — systematizing the v1.0 typesetting engine** while also
 growing its v2.0 collaboration foundation with more than 40 external contributors and two
 collaborators. The single [project roadmap](ROADMAP.md) explains what each version aims to achieve,
 how overlapping work is tracked, how completion is judged, and where the detailed AI-agent roadmap

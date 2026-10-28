@@ -116,16 +116,8 @@ impl DocumentCore {
                     suffix_char: '.',
                     ..Default::default()
                 };
-                let mut para = Paragraph::new_empty();
                 // 한컴 그림/OLE 캡션은 AutoNumber 앞에 "그림" 접두어를 함께 표시한다.
-                para.text = "그림  ".to_string();
-                para.char_count = 13;
-                para.char_count_msb = true;
-                para.control_mask = 1u32 << 0x12;
-                para.char_offsets = vec![0, 1, 2, 11];
-                para.controls
-                    .push(crate::model::control::Control::AutoNumber(auto_number));
-                para.ctrl_data_records.push(None);
+                let para = Paragraph::new_auto_number_caption("그림 ", auto_number);
                 caption.paragraphs.push(para);
                 *caption_slot = Some(caption);
                 created = true;
@@ -629,6 +621,8 @@ impl DocumentCore {
             }
         }
 
+        super::common::update_changed_polygon_geometry(shape, transform_before);
+
         if caption_changed {
             crate::parser::assign_auto_numbers(&mut self.document);
         }
@@ -972,6 +966,7 @@ impl DocumentCore {
                 group.shape_attr.raw_rendering = Vec::new();
             }
         }
+        super::common::update_changed_polygon_geometry(shape, transform_before);
         caption_changed
     }
     /// 글상자(Shape) 삭제 (네이티브).
@@ -1059,6 +1054,21 @@ impl DocumentCore {
         para.controls.remove(control_idx);
         if control_idx < para.ctrl_data_records.len() {
             para.ctrl_data_records.remove(control_idx);
+        }
+        // 컨트롤 배열이 줄어도 뒤 누름틀의 범위는 같은 필드를 가리켜야 한다.
+        for range in &mut para.field_ranges {
+            if range.control_idx > control_idx {
+                range.control_idx -= 1;
+            }
+        }
+        if let Some(active) = self.active_field.as_mut() {
+            if active.section_idx == section_idx
+                && active.para_idx == parent_para_idx
+                && active.cell_path.is_none()
+                && active.control_idx > control_idx
+            {
+                active.control_idx -= 1;
+            }
         }
         if para.char_count >= 8 {
             para.char_count -= 8;
@@ -1282,7 +1292,7 @@ impl DocumentCore {
         let has_textbox = shape_type == "textbox";
         let has_fill = shape_type != "line" && !is_connector;
 
-        let drawing = DrawingObjAttr {
+        let mut drawing = DrawingObjAttr {
             shape_attr: ShapeComponentAttr {
                 ctrl_id,
                 is_two_ctrl_id: true,
@@ -1321,8 +1331,10 @@ impl DocumentCore {
             },
             text_box: if has_textbox {
                 Some(TextBox {
+                    paint_clip: None,
                     list_attr: 0x20,
                     vertical_all: false,
+                    text_margin_explicit: false,
                     vertical_align: crate::model::table::VerticalAlign::Top,
                     margin_left: 283,
                     margin_right: 283,
@@ -1339,6 +1351,7 @@ impl DocumentCore {
             inst_id: (instance_id & 0x3FFFFFFF) + 1,
             ..Default::default()
         };
+        drawing.sync_text_box_storage_bit();
 
         let shape_obj = match shape_type {
             "line"
@@ -1450,6 +1463,7 @@ impl DocumentCore {
                     common,
                     drawing,
                     points,
+                    affine_edit_reference: None,
                     raw_trailing: Vec::new(),
                 })
             }
@@ -1507,44 +1521,9 @@ impl DocumentCore {
                 .insert(insert_idx, Control::Shape(Box::new(shape_obj)));
             paragraph.ctrl_data_records.insert(insert_idx, None);
 
-            // char_offsets: 컨트롤은 텍스트축 배열에 원소로 들어가지 않고 "8 code unit 갭"으로
-            // 표현된다. insert_idx 는 controls 축 인덱스이므로, 이를 char_offsets(텍스트축,
-            // 길이 = text.chars().count())에 원소로 끼워넣으면 배열이 1 늘어나 불변이 깨진다
-            // (control_text_positions 등이 char_offsets[i]↔text char i 대응을 가정). 각주/수식
-            // 삽입 경로처럼 텍스트 인덱스 기준으로 삽입 지점 이후만 +8 시프트한다.
-            if !paragraph.char_offsets.is_empty() {
-                let text_len = paragraph.text.chars().count();
-                let safe_offset = char_offset.min(text_len);
-                let insert_pos: u32 = if safe_offset < paragraph.char_offsets.len() {
-                    paragraph.char_offsets[safe_offset]
-                } else {
-                    let last_idx = paragraph.char_offsets.len() - 1;
-                    let last_w = paragraph
-                        .text
-                        .chars()
-                        .nth(last_idx)
-                        .map(|c| if (c as u32) > 0xFFFF { 2 } else { 1 })
-                        .unwrap_or(1);
-                    paragraph.char_offsets[last_idx] + last_w
-                };
-                for co in paragraph.char_offsets[safe_offset..].iter_mut() {
-                    *co += 8;
-                }
-                for cs in &mut paragraph.char_shapes {
-                    if cs.start_pos > insert_pos || (cs.start_pos == insert_pos && cs.start_pos > 0)
-                    {
-                        cs.start_pos += 8;
-                    }
-                }
-                for rt in &mut paragraph.range_tags {
-                    if rt.start >= insert_pos {
-                        rt.start += 8;
-                    }
-                    if rt.end >= insert_pos {
-                        rt.end += 8;
-                    }
-                }
-            }
+            // 컨트롤은 char_offsets 에 원소로 들어가지 않고 8 code unit 갭으로 표현된다.
+            // 각주·수식·그림 경로와 같은 공용 시프트로 갭을 내고 뒤 누름틀 번호도 민다.
+            paragraph.shift_for_inline_control_insert(insert_idx, char_offset);
 
             // char_count 갱신 (확장 컨트롤 = 8 code units)
             paragraph.char_count += 8;
@@ -1555,6 +1534,7 @@ impl DocumentCore {
             paragraph.has_para_text = true;
             insert_ctrl_idx = insert_idx;
         }
+        self.shift_active_field_for_control_insert(section_idx, para_idx, insert_ctrl_idx);
 
         // 리플로우 + 페이지네이션
         self.recompose_section(section_idx);
@@ -2775,6 +2755,7 @@ mod resize_clamp_tests {
                 ..Default::default()
             },
             paragraphs: vec![Paragraph::default()],
+            trailing_lists: None,
             raw_stream: None,
             raw_provenance: None,
         });

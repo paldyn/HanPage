@@ -15,10 +15,18 @@ use super::*;
 /// 마커가 사라져 native HWPX로 취급된다.
 pub const HWP5_ORIGIN_HWPX_MARKER_PATH: &str = "META-INF/rhwp-hwp5-origin";
 
+/// 제어 슬롯을 포함하는 문단 UTF-16 축으로 LineSeg를 저장하는 생산자 계약.
+/// 이전 `1` 산출물의 축 해석은 읽기 호환 경로에서 유지한다.
+pub const HWP5_ORIGIN_HWPX_PARAGRAPH_AXIS: &[u8] = b"2:paragraph-utf16";
+
 /// HWP3 원본에서 HWPX 로 export 한 산출물 마커 — 재열람 시 hwp3_lineage 를
 /// 복원해 직파싱 HWP3 와 같은 레이아웃 계약(저장-스텝 등)을 밟게 한다.
 /// 없으면 render-diff 왕복이 프로파일 차이만큼 갈라진다(hwp3-sample p7 14.9px).
 pub const HWP3_ORIGIN_HWPX_MARKER_PATH: &str = "META-INF/rhwp-hwp3-origin";
+
+/// 원본 HWP3의 외부 생성·재정렬 요청을 저장 왕복에서 보존한다.
+pub const HWP3_EXTERNAL_REALIGN_STREAM_PATH: &str = "/RhwpHwp3ExternalRealign";
+pub const HWP3_EXTERNAL_REALIGN_HWPX_PATH: &str = "META-INF/rhwp-hwp3-external-realign";
 
 /// [Issue #1770] HWPX-origin 마커 스트림 경로.
 ///
@@ -277,6 +285,8 @@ pub struct Section {
     pub section_def: SectionDef,
     /// 문단 리스트
     pub paragraphs: Vec<Paragraph>,
+    /// 본문 문단 뒤에 저장된 바탕쪽·메모 목록. 본문 raw_stream과 수명을 분리한다.
+    pub trailing_lists: Option<crate::model::section_tail::SectionTail>,
     /// 원본 BodyText 레코드 스트림 바이트 (직렬화 시 원본 복원용)
     /// 편집 시 None으로 초기화하여 재직렬화 유도
     pub raw_stream: Option<Vec<u8>>,
@@ -371,14 +381,16 @@ impl Document {
 
     /// [#2403 Stage 1] 레이아웃 호환 정책 질의 표면.
     ///
-    /// 기존 분기의 1:1 파생 — `hwp3_layout` = `is_hwp3_variant`,
+    /// 계보와 실제 저장 포맷을 구분한다. HWP5의 문단 단위·저장 줄은 HWP5 계약을
+    /// 사용하고 `hwp3_lineage`만으로 HWP3 좌표 보정을 켜지 않는다.
     /// `hwpx_stored_layout` = (HWPX 컨테이너 && rhwp HWP5→HWPX 산출물 마커
     /// 없음) || rhwp HWPX→HWP 변환본. HWP5→HWPX 마커는 세션 중 부착될 수
     /// 있어 저장 값이 아닌 현재 문서 상태에서 파생한다. `native_hwp5_layout`은
-    /// 변환 계보가 없는 원본 HWP5 컨테이너에만 true다. HWP5-origin HWPX는
+    /// rhwp HWPX 변환 마커가 없는 실제 HWP5 컨테이너에 true다. HWP5-origin HWPX는
     /// `hwp5_stored_pagination_layout`으로 별도 호환 계약을 적용한다.
     pub fn layout_profile(&self) -> crate::model::provenance::LayoutCompatibilityProfile {
         use crate::model::provenance::SourceFormat;
+        let hwp5_container = self.provenance.format == SourceFormat::Hwp5;
         let hwp5_origin_hwpx = self.hwpx_aux_entry(HWP5_ORIGIN_HWPX_MARKER_PATH).is_some();
         // 원본 HWP3→HWPX 는 hwp3-origin 마커만 있다. lineage 만으로 hwp3_layout
         // 을 켜면 HWP3→HWP5 변환본 전용 계약(spacing_before *2 등)이 직파싱
@@ -389,8 +401,13 @@ impl Document {
         let native_hwp3_hwpx = self.provenance.format == SourceFormat::Hwpx
             && self.hwpx_aux_entry(HWP3_ORIGIN_HWPX_MARKER_PATH).is_some()
             && !hwp5_origin_hwpx;
+        // HWP5-origin HWPX는 같은 HWP5 문단 단위를 보존한다. 컨테이너 변경만으로
+        // HWP3 전용 본문 높이·저장 줄·문단 간격 분기를 다시 켜지 않는다.
         crate::model::provenance::LayoutCompatibilityProfile::new(
-            self.provenance.hwp3_lineage && !native_hwp3_hwpx,
+            self.provenance.hwp3_lineage
+                && !native_hwp3_hwpx
+                && !hwp5_container
+                && !hwp5_origin_hwpx,
             self.provenance.format == SourceFormat::Hwp3 || native_hwp3_hwpx,
             (self.provenance.format == SourceFormat::Hwpx
                 && !hwp5_origin_hwpx
@@ -398,13 +415,19 @@ impl Document {
                 || self.provenance.hwpx_lineage,
             self.provenance.format == SourceFormat::Hwpx && !native_hwp3_hwpx,
             hwp5_origin_hwpx,
-            self.provenance.format == SourceFormat::Hwp5
-                && !self.provenance.hwp3_lineage
-                && !self.provenance.hwpx_lineage,
+            hwp5_container && !self.provenance.hwpx_lineage,
+        )
+        .with_hwp5_container(hwp5_container)
+        .with_hwp3_external_realign(
+            self.extra_streams
+                .iter()
+                .any(|(path, value)| path == HWP3_EXTERNAL_REALIGN_STREAM_PATH && value == b"1")
+                || self.hwpx_aux_entry(HWP3_EXTERNAL_REALIGN_HWPX_PATH) == Some(b"1"),
         )
         .with_hwp3_password_layout(
             self.provenance.format == SourceFormat::Hwp3 && self.header.encrypted,
         )
+        .with_stored_rows_before_hancom_2020(self.provenance.stored_rows_before_hancom_2020)
         // native HWP5 는 로드 시 raw_stream 을 보유한 섹션을 raw_provenance 로
         // 봉인한다(파서 seal_body_raw_provenance). 편집 명령은 raw_stream 만
         // None 으로 지우고 봉인은 남기므로, "봉인은 있는데 raw_stream 이 사라짐"
@@ -699,7 +722,41 @@ impl Document {
 
         for (id, (basename, ext)) in to_load {
             let full_path = base_dir.join(&basename);
-            if let Ok(data) = std::fs::read(&full_path) {
+            let data = (|| {
+                use std::io::Read;
+                let limit = super::bin_data::MAX_BIN_DATA_BYTES;
+                // Reject an existing FIFO/device before opening it; validate the
+                // opened descriptor as well before the bounded read.
+                let metadata = std::fs::metadata(&full_path).ok()?;
+                if !metadata.is_file() || metadata.len() > limit as u64 {
+                    return None;
+                }
+                let file = std::fs::File::open(&full_path).ok()?;
+                let metadata = file.metadata().ok()?;
+                if !metadata.is_file() || metadata.len() > limit as u64 {
+                    return None;
+                }
+                let mut data = Vec::new();
+                file.take(limit as u64 + 1).read_to_end(&mut data).ok()?;
+                if data.len() > limit {
+                    return None;
+                }
+                let mime = crate::renderer::image_resolver::detect_image_mime_type(&data);
+                if mime == "application/octet-stream" {
+                    return None;
+                }
+                // Prefix detection is sufficient for paint routing, but a local
+                // sidecar must actually be an SVG document, not arbitrary XML.
+                if mime == "image/svg+xml" {
+                    let xml = std::str::from_utf8(&data).ok()?;
+                    let svg = roxmltree::Document::parse(xml).ok()?;
+                    if !svg.root_element().has_tag_name("svg") {
+                        return None;
+                    }
+                }
+                Some(data)
+            })();
+            if let Some(data) = data {
                 if !self.inject_external_image_data(id, data, ext) {
                     continue;
                 }

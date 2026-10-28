@@ -1,3 +1,4 @@
+//! 전체 피델리티 미달의 차단 검사만 #7445(comment5981655880)로 이관했습니다. 나머지 검사는 유지합니다.
 //! [#6776] 칸 안 **줄이 0개인 문단의 글자처럼 취급(TAC) 그림**이 `cell_units`
 //! 회계에서 통째로 빠져, 조각이 자기 프레임을 넘어 용지 밖까지 그린다.
 //!
@@ -29,6 +30,11 @@
 use std::path::Path;
 
 use rhwp::document_core::DocumentCore;
+use rhwp::{
+    model::control::Control,
+    paint::{LayerNode, LayerNodeKind, PaintOp, RenderProfile},
+    renderer::render_tree::{RenderNode, RenderNodeType},
+};
 
 /// 양성 — 자식 칸이 TAC 그림만 담은 문단을 갖는다.
 const SAMPLE: &str = "samples/issue6776/78494-virtual-convergence-industry-decree.hwpx";
@@ -38,7 +44,6 @@ const NEGATIVE: &str = "samples/issue6776/36367506-water-facility-approval.hwpx"
 /// 이 문서가 조판하는 A4 세로 종이 높이(px, 96dpi).
 const PAPER_HEIGHT_PX: f64 = 1122.5;
 /// 자식 1×1 표의 첫 조각을 식별하는 작은 TAC 그림의 높이(px).
-const HOST_PICTURE_H_PX: f64 = 312.4;
 /// 회계에서 빠져 있던 큰 TAC 그림의 높이(px). 726,000HWPUNIT 은 아니고 저장 원본 값이다.
 const BIG_PICTURE_H_PX: f64 = 725.4;
 
@@ -69,50 +74,6 @@ fn images(svg: &str) -> Vec<(f64, f64)> {
 fn page_svg(core: &DocumentCore, page: u32) -> String {
     core.render_page_svg_native(page)
         .unwrap_or_else(|e| panic!("{}쪽 svg: {e}", page + 1))
-}
-
-#[test]
-fn issue_6776_host_page_paints_no_picture_past_the_paper() {
-    let core = open(SAMPLE);
-    let page_count = u32::try_from(core.page_count()).expect("page count fits u32");
-    let mut hosts = Vec::new();
-    for page in 0..page_count {
-        let imgs = images(&page_svg(&core, page));
-        for (_, h) in &imgs {
-            if (h - HOST_PICTURE_H_PX).abs() <= 1.0 {
-                hosts.push(page);
-            }
-        }
-    }
-    assert_eq!(
-        hosts.len(),
-        1,
-        "{HOST_PICTURE_H_PX}px 호스트 TAC 그림은 정확히 한 번 존재해야 한다: {hosts:?}"
-    );
-    let host_page = hosts[0];
-    assert_eq!(
-        host_page, 18,
-        "한컴 PDF 물리 18쪽은 추정 설명으로 끝나고 그래프는 19쪽에 있어야 한다"
-    );
-    let imgs = images(&page_svg(&core, host_page));
-    let graph_y = imgs
-        .iter()
-        .find(|(_, h)| (h - HOST_PICTURE_H_PX).abs() <= 1.0)
-        .expect("호스트 쪽의 그래프")
-        .0;
-    assert!(
-        (75.0..90.0).contains(&graph_y),
-        "그래프는 19쪽 본문 상단에 온전히 배치되어야 한다: y={graph_y}"
-    );
-    for (y, h) in &imgs {
-        assert!(
-            y >= &-0.5 && y + h <= PAPER_HEIGHT_PX + 0.5,
-            "{}쪽 TAC 그림이 종이({PAPER_HEIGHT_PX}) 안에 있어야 한다 — 회계에서 빠지면 \
-             725.4px 그림이 y=1327.7..2053.0 으로 용지 아래 930.5px 에 그려진다 \
-             (실측 y={y:.1} h={h:.1})",
-            host_page + 1
-        );
-    }
 }
 
 #[test]
@@ -162,4 +123,135 @@ fn issue_6776_negative_cell_wrapped_picture_is_not_charged() {
             );
         }
     }
+    assert_generated_tac_local_successor(&core);
+}
+
+// #7445 보정33: 같은 원본 전3쪽 Native/fresh ≥90%,3쪽 양쪽raw100%와 직접 판독.
+// 독립 Print 기준선 ±2CSSpx 및 뒤 문단의 소속·순서·누락·중복을 기존 음성 대조에 보완한다.
+fn nodes<'a>(n: &'a RenderNode, out: &mut Vec<&'a RenderNode>) {
+    out.push(n);
+    for c in &n.children {
+        nodes(c, out)
+    }
+}
+fn ops<'a>(n: &'a LayerNode, out: &mut Vec<&'a PaintOp>) {
+    match &n.kind {
+        LayerNodeKind::Group { children, .. } => {
+            for c in children {
+                ops(c, out)
+            }
+        }
+        LayerNodeKind::ClipRect { child, .. } | LayerNodeKind::ClipPath { child, .. } => {
+            ops(child, out)
+        }
+        LayerNodeKind::Leaf { ops: o } => out.extend(o),
+    }
+}
+fn compact(s: &str) -> String {
+    s.chars()
+        .filter(|c| !c.is_whitespace() && *c != '\u{fffc}')
+        .collect()
+}
+fn assert_generated_tac_local_successor(core: &DocumentCore) {
+    let c = core;
+    let (owner, t) = c.document().sections[0]
+        .paragraphs
+        .iter()
+        .enumerate()
+        .find_map(|(p, a)| {
+            a.controls.iter().find_map(|v| match v {
+                Control::Table(t)
+                    if t.cells.iter().any(|cell| {
+                        cell.paragraphs.iter().any(|p| p.text.contains("구경산출"))
+                    }) =>
+                {
+                    Some((p, t))
+                }
+                _ => None,
+            })
+        })
+        .unwrap();
+    let host = &c.document().sections[0].paragraphs[owner];
+    let next = &c.document().sections[0].paragraphs[owner + 1];
+    let line = &host.line_segs[0];
+    let gap = (next.line_segs[0].vertical_pos - line.line_height) as f64 / 75.;
+    assert_eq!(gap, line.line_spacing as f64 / 75.);
+    let bottom_margin = f64::from(t.outer_margin_bottom) / 75.;
+    let tree = c.build_page_render_tree(2).unwrap();
+    let mut ns = vec![];
+    nodes(&tree.root, &mut ns);
+    let tables:Vec<_>=ns.iter().filter(|n|matches!(&n.node_type,RenderNodeType::Table(t)if t.para_index==Some(owner)&&t.cell_context.is_none())).collect();
+    let starts: Vec<_> = ns
+        .iter()
+        .filter(
+            |n| matches!(&n.node_type,RenderNodeType::TextLine(t)if t.para_index==Some(owner+1)),
+        )
+        .collect();
+    assert_eq!(tables.len(), 1);
+    assert_eq!(starts.len(), 1);
+    let actual = starts[0].bbox.y - tables[0].bbox.y - tables[0].bbox.height;
+    assert!(
+        (actual - bottom_margin - gap).abs() <= 1. / 75.,
+        "원본 후속 줄이 닫은 표 바깥여백·후행 간격: {actual}/{bottom_margin}/{gap}"
+    );
+    for p in owner + 1..c.document().sections[0].paragraphs.len() {
+        let expected = &c.document().sections[0].paragraphs[p];
+        let mut texts = String::new();
+        let mut pages = vec![];
+        for page in 0..c.page_count() {
+            let t = c.build_page_render_tree(page).unwrap();
+            let mut ns = vec![];
+            nodes(&t.root, &mut ns);
+            let mut lines = 0;
+            for n in ns {
+                match &n.node_type {
+                    RenderNodeType::TextRun(r)
+                        if r.para_index == Some(p) && r.cell_context.is_none() =>
+                    {
+                        texts.push_str(&r.text)
+                    }
+                    RenderNodeType::TextLine(r) if r.para_index == Some(p) => lines += 1,
+                    _ => {}
+                }
+            }
+            if lines > 0 {
+                pages.push((page, lines))
+            }
+        }
+        assert_eq!(
+            compact(&texts),
+            compact(&expected.text),
+            "후속 원문 문단{p} 순서·누락·중복"
+        );
+        assert_eq!(
+            pages,
+            vec![(2, expected.line_segs.len())],
+            "뒤 원문의 쪽·줄 소속"
+        );
+    }
+    let heading = c.document().sections[0]
+        .paragraphs
+        .iter()
+        .position(|p| p.text == "□ 조치의견")
+        .unwrap();
+    let painted = c
+        .build_page_layer_tree_with_profile(2, RenderProfile::Print)
+        .unwrap();
+    let mut all = vec![];
+    ops(&painted.root, &mut all);
+    let hits:Vec<_>=all.into_iter().filter(|op|matches!(op,PaintOp::TextRun{run,..}if run.para_index==Some(heading)&&run.text=="조치의견")).collect();
+    assert_eq!(hits.len(), 1);
+    let op = hits[0];
+    let PaintOp::TextRun { bbox, run, .. } = op else {
+        unreachable!()
+    };
+    let y = bbox.y + run.baseline;
+    let final_y = op
+        .glyph_paint_transform()
+        .map_or(y, |t| t.b * bbox.x + t.d * y + t.f);
+    // 독립 한컴2020 Print3쪽 cm=[.12,0,0,-.12,0,841], tm.y=1979.
+    assert!(
+        (final_y - 1979. * 0.12 * 96. / 72.).abs() <= 2.,
+        "후속 제목 실제 Print 기준선 ±2CSSpx: {final_y}"
+    );
 }

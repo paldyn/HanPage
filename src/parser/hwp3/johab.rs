@@ -236,6 +236,9 @@ fn decode_hwp3_extra(ch: u16) -> Option<char> {
         // 표준 Unicode로 보존한다. 매핑이 없으면 decode_johab가 '?'를 반환하고
         // HWP3 parser가 미지원 사적 코드를 조용히 건너뛰어 글머리표가 사라진다.
         0x2F67 => 0x25B8, // ▸ BLACK RIGHT-POINTING SMALL TRIANGLE
+        // 국세청 납세담보 확인서 추천기관 세 곳의 원시 hchar 0x2F00 은
+        // 한컴 2020 PDF에서 모두 빈 체크박스(□)로 추출된다.
+        0x2F00 => 0x25A1, // □ 빈 사각형
         // [Task #1105] sample16 글머리 prefix.
         // HWP3 0x3366 은 한컴 HWP5 변환본에서 U+F03C5 로 보존되고, 렌더러가
         // 이를 한컴오피스 표시값인 □(U+25A1)로 확장한다. 여기서 ○로 직접
@@ -247,6 +250,10 @@ fn decode_hwp3_extra(ch: u16) -> Option<char> {
         // 사적 코드라, 통과시키면 ⁚·․·⁘ 라는 다른 글자가 된다(한글 대조 실측 89건).
         // 사적 코드 → 표시 문자의 일반식이 없으므로 실측된 값만 하나씩 싣는다.
         0x203B => 0x203B,
+        // HWP3 입장권 원본의 치수 화살표: 0x2015 반복 구간은 한컴 2020
+        // HWPX 재저장본에서 U+2015(―)로 그대로 남는다. 미지원 문자로
+        // 버리면 화살표 양쪽의 가로선과 그 전진폭이 함께 사라진다.
+        0x2015 => 0x2015,
         // [#5860] 아래는 s36 load/save 전수(한글 2022 오라클)에서 **버려지던** 코드를
         // 계측으로 모으고 오라클 추출 텍스트와 위치 정렬해 짝지은 값이다. 코퍼스
         // HWP3 38문서 중 15문서에서 479자가 이 경로로 사라졌다(07270 은 40쪽→52쪽,
@@ -429,6 +436,7 @@ mod tests {
         assert_eq!(decode_johab(0x3438), '※');
         assert_eq!(decode_johab(0x343B), '○');
         assert_eq!(decode_johab(0x3440), '□');
+        assert_eq!(decode_johab(0x2F00), '□');
         assert_eq!(decode_johab(0x341C), '【');
         assert_eq!(decode_johab(0x341D), '】');
     }

@@ -130,3 +130,20 @@ test('데스크톱 열기 성공은 교체 확인 뒤에 읽은 바이트를 한
   });
   assert.deepEqual(events, ['confirm', 'open', 'emit']);
 });
+
+test('데스크톱 열기에도 PDF 가져오기 지원 여부를 그대로 넘긴다', async () => {
+  for (const pdfImportEnabled of [true, false, undefined]) {
+    const seen: unknown[] = [];
+    await openDocumentViaPicker({
+      pdfImportEnabled,
+      canReplace: async () => true,
+      desktopOpen: async (_emit, options) => { seen.push(options); },
+      windowLike: {},
+      findFileInput: () => assert.fail('데스크톱 열기 뒤에 웹 폴백을 열면 안 된다'),
+      emitOpenDocument: () => {},
+      warn: () => assert.fail('경고가 아니어야 한다'),
+      alert: () => assert.fail('오류 안내가 아니어야 한다'),
+    });
+    assert.deepEqual(seen, [{ pdfImportEnabled: pdfImportEnabled === true }]);
+  }
+});

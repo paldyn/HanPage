@@ -515,10 +515,12 @@ class CiImpactWorkflowTests(unittest.TestCase):
             "BUILD_ARCHIVE_B_RESULT": "skipped",
             "BUILD_ARCHIVE_C_RESULT": "skipped",
             "BUILD_ARCHIVE_D_RESULT": "skipped",
+            "BUILD_ARCHIVE_E_RESULT": "skipped",
             "TEST_ARCHIVE_A_1_RESULT": "skipped",
             "TEST_ARCHIVE_B_1_RESULT": "skipped",
             "TEST_ARCHIVE_C_1_RESULT": "skipped",
             "TEST_ARCHIVE_D_1_RESULT": "skipped",
+            "TEST_ARCHIVE_E_1_RESULT": "skipped",
             "LINT_RESULT": "skipped",
             "NATIVE_SKIA_RESULT": "skipped",
             "FRONTEND_UNIT_RESULT": "success",
@@ -541,7 +543,7 @@ class CiImpactWorkflowTests(unittest.TestCase):
             "frontend_mode": "'package'",
             "render_required": "'true'",
             "native_skia_required": "'true'",
-            "codeql_languages": "'javascript-typescript,python,rust'",
+            "codeql_languages": "'javascript-typescript,python,rust,actions'",
             "classification_status": "'full'",
             "classifier_version": "'unavailable'",
             "impact_reason": "'fail-closed:impact-unavailable'",
@@ -716,6 +718,11 @@ class CiImpactWorkflowTests(unittest.TestCase):
                 "integration-d",
                 "needs: [preflight, resolve-nextest-duration-policy]",
             ),
+            (
+                "build-test-archive-e",
+                "integration-e",
+                "needs: [preflight, resolve-nextest-duration-policy]",
+            ),
         ):
             with self.subTest(archive=archive_name):
                 archive = self._job(archive_name)
@@ -830,7 +837,12 @@ class CiImpactWorkflowTests(unittest.TestCase):
         self.assertTrue(targets)
         for target in targets:
             with self.subTest(target=target):
-                self.assertIn(f"'tests/{target}.rs'", classifier)
+                source = TESTS_DIR / "cases" / f"{target}.rs"
+                if not source.is_file():
+                    source = TESTS_DIR / f"{target}.rs"
+                self.assertTrue(source.is_file(), f"missing Native Skia target source: {target}")
+                source_path = source.relative_to(TESTS_DIR.parent).as_posix()
+                self.assertIn(f"'{source_path}'", classifier)
 
     def test_discovery_finds_the_known_file_gated_native_skia_tests(self) -> None:
         """발견 패턴이 망가지면 아래 테스트가 조용히 무의미해진다.
@@ -1083,6 +1095,7 @@ mod support;
             "Download archive B expected count",
             "Download archive C expected count",
             "Download archive D expected count",
+            "Download archive E expected count",
             "Download shard counts",
             "Verify archive shard totals",
         ):
@@ -1100,10 +1113,12 @@ mod support;
             "BUILD_ARCHIVE_B_RESULT": "success",
             "BUILD_ARCHIVE_C_RESULT": "success",
             "BUILD_ARCHIVE_D_RESULT": "success",
+            "BUILD_ARCHIVE_E_RESULT": "success",
             "TEST_ARCHIVE_A_1_RESULT": "success",
             "TEST_ARCHIVE_B_1_RESULT": "success",
             "TEST_ARCHIVE_C_1_RESULT": "success",
             "TEST_ARCHIVE_D_1_RESULT": "success",
+            "TEST_ARCHIVE_E_1_RESULT": "success",
         }
         cases = {
             "frontend-only": {},

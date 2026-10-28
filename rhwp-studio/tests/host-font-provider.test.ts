@@ -4,8 +4,8 @@ import { HostFontSource, type HostFontProvider, type HostFontSnapshot } from '..
 import { setHostFontProvider, prepareHostFontCatalog, resolveRendererLocalFont, resolveLocalFont,
   loadRendererLocalFont, getLocalFontState } from '../src/core/local-fonts.ts';
 import { fontFamilyChainForDisplay } from '../src/core/font-substitution.ts';
-import { collectHostFontRequests } from '../src/core/host-font-requests.ts';
-import type { PageLayerTree } from '../src/core/types.ts';
+import { collectHostFontRequests, collectDocumentCanvasKitFontUsage, resolveDocumentCanvasKitFontUsage, resolveDocumentCanvasKitFontFamilies } from '../src/core/host-font-requests.ts';
+import type { LayerEquationLayoutBox, PageLayerTree } from '../src/core/types.ts';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -136,6 +136,121 @@ test('paint requests preserve weight and only read the selected faces', async ()
     assert.equal(f.reads(), 0);
     await loadRendererLocalFont(records[0]);
     assert.equal(f.reads(), 1);
+  } finally { await setHostFontProvider(null); }
+});
+
+test('#8109 document substitute candidates reach preparation without changing other source requirements', async () => {
+  const f = fixture();
+  const bounds = { x: 0, y: 0, width: 200, height: 100 };
+  const tree: PageLayerTree = { pageWidth: 200, pageHeight: 100,
+    root: { kind: 'leaf', bounds, ops: [
+      { type: 'textRun', text: 'fallback', bbox: bounds, style: { fontFamily: 'Missing Source, "Host Only"', bold: true } },
+      { type: 'textRun', text: 'original', bbox: bounds, style: { fontFamily: 'Missing Source' } },
+      { type: 'textRun', text: 'primary', bbox: bounds, style: { fontFamily: '"Host Only", Missing Source' } },
+      { type: 'footnoteMarker', text: '1)', bbox: bounds, fontFamily: 'Missing Marker, "Host Only"' },
+    ] } };
+  try {
+    await setHostFontProvider(f.provider);
+    assert.deepEqual(collectHostFontRequests(tree).map(record => record.hostReference?.face.id), ['bold', 'regular']);
+    assert.deepEqual(resolveDocumentCanvasKitFontFamilies(['Missing Source', 'Unrelated', 'Host Only'], [tree]),
+      ['Host Only', 'Missing Source', 'Unrelated']);
+    assert.equal(tree.root.kind === 'leaf' && tree.root.ops[0].type === 'textRun'
+      ? tree.root.ops[0].style?.fontFamily : null, 'Missing Source, "Host Only"', 'source declaration stays intact');
+    assert.equal(f.reads(), 0, 'metadata selection does not read font programs');
+    const usage = collectDocumentCanvasKitFontUsage([tree, tree]);
+    assert.equal(usage.length, 4, 'repeated runs/pages share family/style declarations');
+    await setHostFontProvider(null);
+    assert.deepEqual(resolveDocumentCanvasKitFontUsage(['Missing Source', 'Unrelated', 'Host Only'], usage),
+      ['Missing Source', 'Unrelated', 'Host Only'], 'a detached provider cannot survive in a cached face choice');
+    await setHostFontProvider(f.provider);
+    assert.deepEqual(resolveDocumentCanvasKitFontUsage(['Missing Source', 'Unrelated', 'Host Only'], usage),
+      ['Host Only', 'Missing Source', 'Unrelated'], 'the same declarations resolve a newly available provider');
+
+  } finally { await setHostFontProvider(null); }
+});
+
+test('paint requests prepare declared family fallbacks with the same style and no duplicate reads', async () => {
+  const f = fixture();
+  f.replace({ revision: 'family-chain', faces: [...f.snapshot().faces, {
+    id: 'fallback', family: 'Host Fallback', fullName: 'Host Fallback Bold',
+    postscriptName: 'HostFallback-Bold', style: 'Bold', weight: 700, slant: 'normal',
+  }] });
+  const bounds = { x: 0, y: 0, width: 200, height: 100 };
+  const tree: PageLayerTree = { pageWidth: 200, pageHeight: 100,
+    root: { kind: 'leaf', bounds, ops: [{ type: 'textRun', text: '․', bbox: bounds,
+      style: { fontFamily: '"Host Only", "Host Fallback", "Host Only", "Unavailable"', bold: true },
+    }] } };
+  try {
+    await setHostFontProvider(f.provider);
+    const records = collectHostFontRequests(tree);
+    assert.deepEqual(records.map(record => record.hostReference?.face.id), ['bold', 'fallback']);
+    assert.equal(f.reads(), 0, 'enumeration must remain metadata-only');
+  } finally { await setHostFontProvider(null); }
+});
+
+test('Hancom equation glyphs request their actual regular host face without reading bytes', async () => {
+  const f = fixture();
+  const equationFace = { id: 'equation', family: 'HyhwpEQ', fullName: 'HyhwpEQ',
+    postscriptName: 'HyhwpEQ', style: 'Regular', weight: 400, slant: 'normal' as const };
+  f.replace({ ...f.snapshot(), faces: [...f.snapshot().faces, equationFace] });
+  const bounds = { x: 0, y: 0, width: 200, height: 100 };
+  const glyph: LayerEquationLayoutBox = { ...bounds, baseline: 10,
+    kind: { type: 'hancomGlyphs', glyphs: '1', positions: [0], baselineShift: 0 } };
+  const root: LayerEquationLayoutBox = { ...bounds, baseline: 10,
+    kind: { type: 'row', children: [glyph] } };
+  const plain: LayerEquationLayoutBox = { ...bounds, baseline: 10,
+    kind: { type: 'number', text: '1' } };
+  const tree: PageLayerTree = { pageWidth: 200, pageHeight: 100,
+    root: { kind: 'leaf', bounds, ops: [
+      { type: 'equation', bbox: bounds, layoutBox: root },
+      { type: 'equation', bbox: bounds, layoutBox: glyph },
+    ] } };
+  try {
+    await setHostFontProvider(f.provider);
+    const requests = collectHostFontRequests(tree);
+    assert.equal(requests.length, 1, 'the same equation face is prepared once');
+    assert.equal(requests[0].hostReference?.face.id, 'equation');
+    assert.equal(f.reads(), 0, 'request collection is metadata only');
+    const name: LayerEquationLayoutBox = { ...bounds, baseline: 10,
+      kind: { type: 'hancomGlyphs', glyphs: 'lim', positions: [0, 5, 10], baselineShift: 0 } };
+    const limit: LayerEquationLayoutBox = { ...bounds, baseline: 10,
+      kind: { type: 'limit', isUpper: false, name } };
+    tree.root = { kind: 'leaf', bounds, ops: [
+      { type: 'equation', bbox: bounds, layoutBox: limit },
+    ] };
+    assert.equal(collectHostFontRequests(tree)[0]?.hostReference?.face.id, 'equation',
+      '첨자가 없는 극한도 이름이 소비하는 실제 face를 요청한다');
+    assert.equal(f.reads(), 0, '이름의 요청 수집도 글꼴 바이트를 읽지 않는다');
+    tree.root = { kind: 'leaf', bounds, ops: [
+      { type: 'equation', bbox: bounds, layoutBox: plain },
+      { type: 'equation', bbox: bounds, svgContent: '<svg/>' },
+    ] };
+    assert.equal(collectHostFontRequests(tree).length, 0, 'other equation paint paths do not consume HyhwpEQ');
+  } finally { await setHostFontProvider(null); }
+});
+
+test('서로 다른 한컴 수식 face를 같은 페이지에서 각각 준비하고 기본 face도 보존한다', async () => {
+  const f = fixture();
+  const faces = ['HyhwpEQ', 'HancomEQN'].map((family, index) => ({
+    id: `equation-${index}`, family, fullName: family, postscriptName: family,
+    style: 'Regular', weight: 400, slant: 'normal' as const,
+  }));
+  f.replace({ ...f.snapshot(), faces: [...f.snapshot().faces, ...faces] });
+  const bounds = { x: 0, y: 0, width: 200, height: 100 };
+  const glyph = (fontFamily?: string): LayerEquationLayoutBox => ({
+    ...bounds, baseline: 10,
+    kind: { type: 'hancomGlyphs', fontFamily, glyphs: '\ue007', positions: [0], baselineShift: 0 },
+  });
+  const tree: PageLayerTree = { pageWidth: 200, pageHeight: 100,
+    root: { kind: 'leaf', bounds, ops: [{ type: 'equation', bbox: bounds,
+      layoutBox: { ...bounds, baseline: 10,
+        kind: { type: 'fraction', numer: glyph('HancomEQN'), denom: glyph() } },
+    }] } };
+  try {
+    await setHostFontProvider(f.provider);
+    const requests = collectHostFontRequests(tree);
+    assert.deepEqual(requests.map(r => r.hostReference?.face.id).sort(), ['equation-0', 'equation-1']);
+    assert.equal(f.reads(), 0, '실제 글꼴 바이트를 읽기 전에 두 face를 식별한다');
   } finally { await setHostFontProvider(null); }
 });
 

@@ -98,6 +98,24 @@ def release_binary_matrix() -> dict[str, dict[str, str]]:
 
 
 class ReleaseChannelPolicyWorkflowTests(unittest.TestCase):
+    def test_packaged_cli_has_png_backend_on_every_release_target(self):
+        workflow = RELEASE_BINARY_WORKFLOW.read_text(encoding="utf-8")
+        build = workflow.split("      - name: Build release binary\n", 1)[1].split(
+            "\n      - name:", 1
+        )[0]
+        self.assertIn("--locked", build)
+        self.assertIn("--features native-skia", build)
+        self.assertIn("--target ${{ matrix.target }}", build)
+        self.assertNotIn("if:", build)
+        smoke = workflow.split("      - name: Verify packaged PNG export\n", 1)[1].split(
+            "\n      - name:", 1
+        )[0]
+        self.assertNotIn("if:", smoke, "PNG export must be verified on all five targets")
+        self.assertIn("scripts/verify_release_binary.py", smoke)
+        self.assertIn('--archive "${ARCHIVE_NAME}"', smoke)
+        self.assertIn("--sample samples/issue2527_empty_linesegs.hwpx", smoke)
+        self.assertLess(workflow.index("Verify packaged PNG export"), workflow.index("Upload artifact"))
+
     def test_release_binary_matrix_includes_linux_aarch64(self):
         entries = release_binary_matrix()
         expected_targets = {
@@ -140,7 +158,7 @@ class ReleaseChannelPolicyWorkflowTests(unittest.TestCase):
             "Firefox package": package_version("rhwp-firefox/package.json"),
             "Safari extension": package_version("rhwp-safari/src/manifest.json"),
         }
-        self.assertEqual(release_version, "0.8.6")
+        self.assertRegex(release_version, r"^\d+\.\d+\.\d+$")
         self.assertEqual(
             set(visible_versions.values()),
             {release_version},
@@ -174,10 +192,10 @@ class ReleaseChannelPolicyWorkflowTests(unittest.TestCase):
         self.assertEqual(rhwp_packages[0]["version"], release_version)
 
         release_document_markers = {
-            "README.md": "**v0.8.6 — v1.0 조판 엔진 체계화**",
-            "README_EN.md": "**v0.8.6 — systematizing the v1.0 typesetting engine**",
-            "THIRD_PARTY_LICENSES.md": "`rhwp` v0.8.6",
-            "rhwp-vscode/CHANGELOG.md": "## 0.8.6 — 2026-09-02",
+            "README.md": f"**v{release_version} — v1.0 조판 엔진 체계화**",
+            "README_EN.md": f"**v{release_version} — systematizing the v1.0 typesetting engine**",
+            "THIRD_PARTY_LICENSES.md": f"`rhwp` v{release_version}",
+            "rhwp-vscode/CHANGELOG.md": f"## {release_version} — ",
         }
         stale_release_documents = [
             path

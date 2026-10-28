@@ -31,6 +31,101 @@ pub(crate) fn shape_transform_fingerprint(
     )
 }
 
+/// 다각형의 실제 편집 변환을 저장 행렬에 합성한다.
+/// 위치만 옮기거나 같은 속성을 재적용할 때는 원본 행렬을 보존한다.
+pub(crate) fn update_changed_polygon_geometry(
+    shape: &mut ShapeObject,
+    before: (u32, u32, u32, u32, u32, u32, i16, bool, bool),
+) {
+    let after = shape_transform_fingerprint(shape.common(), shape.shape_attr());
+    let geometry =
+        |f: (u32, u32, u32, u32, u32, u32, i16, bool, bool)| (f.0, f.1, f.4, f.5, f.6, f.7, f.8);
+    if geometry(before) == geometry(after) {
+        return;
+    }
+    let ShapeObject::Polygon(poly) = shape else {
+        return;
+    };
+    let sa = &mut poly.drawing.shape_attr;
+    let source_matrix = [
+        sa.render_sx,
+        sa.render_b,
+        sa.render_tx,
+        sa.render_c,
+        sa.render_sy,
+        sa.render_ty,
+    ];
+    if !sa.has_saved_affine_geometry() || before.0 == 0 || before.1 == 0 || poly.points.is_empty() {
+        sa.raw_rendering.clear();
+        return;
+    }
+    // 변경을 현재 행렬에 누적하면 크기·회전·대칭의 역연산 순서가 달라진다.
+    // 처음 편집한 기준에서 매번 합성해 전체 속성 봉지의 되돌리기도 보존한다.
+    let reference =
+        poly.affine_edit_reference
+            .get_or_insert(crate::model::shape::PolygonAffineEditReference {
+                width: before.0,
+                height: before.1,
+                rotation: before.6,
+                horz_flip: before.7,
+                vert_flip: before.8,
+                matrix: source_matrix,
+            });
+    let sx = f64::from(after.0) / f64::from(reference.width);
+    let sy = f64::from(after.1) / f64::from(reference.height);
+    let base = reference.matrix;
+    let mut m = [
+        base[0] * sx,
+        base[1] * sx,
+        base[2] * sx,
+        base[3] * sy,
+        base[4] * sy,
+        base[5] * sy,
+    ];
+    let mut bounds = (
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    );
+    for p in &poly.points {
+        let x = m[0] * f64::from(p.x) + m[1] * f64::from(p.y) + m[2];
+        let y = m[3] * f64::from(p.x) + m[4] * f64::from(p.y) + m[5];
+        bounds.0 = bounds.0.min(x);
+        bounds.1 = bounds.1.min(y);
+        bounds.2 = bounds.2.max(x);
+        bounds.3 = bounds.3.max(y);
+    }
+    let cx = (bounds.0 + bounds.2) / 2.0;
+    let cy = (bounds.1 + bounds.3) / 2.0;
+    if reference.horz_flip != after.7 {
+        m[0] = -m[0];
+        m[1] = -m[1];
+        m[2] = 2.0 * cx - m[2];
+    }
+    if reference.vert_flip != after.8 {
+        m[3] = -m[3];
+        m[4] = -m[4];
+        m[5] = 2.0 * cy - m[5];
+    }
+    let angle = (f64::from(after.6) - f64::from(reference.rotation)).to_radians();
+    let (sin, cos) = angle.sin_cos();
+    let a = cos * m[0] - sin * m[3];
+    let b = cos * m[1] - sin * m[4];
+    let c = sin * m[0] + cos * m[3];
+    let d = sin * m[1] + cos * m[4];
+    let tx = cx + cos * (m[2] - cx) - sin * (m[5] - cy);
+    let ty = cy + sin * (m[2] - cx) + cos * (m[5] - cy);
+    sa.render_sx = a;
+    sa.render_b = b;
+    sa.render_tx = tx;
+    sa.render_c = c;
+    sa.render_sy = d;
+    sa.render_ty = ty;
+    // 저장·재로드도 출력과 같은 합성 행렬을 소비한다.
+    sa.raw_rendering = crate::serializer::control::serialize_affine_rendering(sa);
+}
+
 impl DocumentCore {
     const COMMON_OBJ_ATTR_KNOWN_MASK: u32 = 0x01
         | (0x03 << 3)
@@ -59,6 +154,25 @@ impl DocumentCore {
                 .controls
                 .iter()
                 .all(|ctrl| matches!(ctrl, Control::SectionDef(_) | Control::ColumnDef(_)))
+    }
+    /// 본문 문단 `controls[control_idx]` 에 컨트롤을 넣었을 때 같은 문단의 활성 누름틀 번호를 민다.
+    ///
+    /// 셀 활성 주소에는 본문 부모 문단 번호가 없어 같은 문단인지 가릴 수 없으므로 그대로 둔다.
+    pub(crate) fn shift_active_field_for_control_insert(
+        &mut self,
+        section_idx: usize,
+        para_idx: usize,
+        control_idx: usize,
+    ) {
+        if let Some(active) = self.active_field.as_mut() {
+            if active.section_idx == section_idx
+                && active.para_idx == para_idx
+                && active.cell_path.is_none()
+                && active.control_idx >= control_idx
+            {
+                active.control_idx += 1;
+            }
+        }
     }
     /// 컨트롤 삭제 후 문단의 line_segs를 재계산한다.
     ///
@@ -429,10 +543,11 @@ impl crate::document_core::DocumentCore {
             .insert(insert_idx, Control::NewNumber(new_number));
         paragraph.ctrl_data_records.insert(insert_idx, None);
 
-        paragraph.shift_for_inline_control_insert(char_offset);
+        paragraph.shift_for_inline_control_insert(insert_idx, char_offset);
         paragraph.char_count += 8;
         paragraph.control_mask |= 1u32 << 0x0012;
         paragraph.has_para_text = true;
+        self.shift_active_field_for_control_insert(section_idx, para_idx, insert_idx);
 
         self.reflow_paragraph(section_idx, para_idx);
         self.recompose_section(section_idx);

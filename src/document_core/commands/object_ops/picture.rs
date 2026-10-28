@@ -509,6 +509,12 @@ impl DocumentCore {
         control_idx: usize,
         props_json: &str,
     ) -> Result<String, HwpError> {
+        let stored_end_before = self
+            .document
+            .sections
+            .get(section_idx)
+            .and_then(|section| section.paragraphs.get(parent_para_idx))
+            .and_then(crate::renderer::composer::paragraph_flow_end);
         // JSON 파싱 (serde_json 사용 대신 수동 파싱 — 기존 패턴)
         // [Task #825] 픽쳐 속성 mutation 은 helper 로 분리 (머리말/꼬리말 path 와 공유).
         // [Issue #6204] 개체의 **배제 밴드 기하**를 변경 전에 찍어 둔다. 위치·크기가
@@ -621,17 +627,9 @@ impl DocumentCore {
                 doc_hwp3_layout,
             );
         }
-        // 캡션 생성/삭제 시 AutoNumber 재할당. 생성 path 는 문단 placeholder 도 보강한다.
+        // 캡션 생성/삭제 시 자동번호를 재할당한다.
         if caption_created || caption_removed {
             crate::parser::assign_auto_numbers(&mut self.document);
-        }
-        if caption_created {
-            let pic_mut =
-                self.resolve_picture_control_mut(section_idx, parent_para_idx, control_idx)?;
-            let para = &mut pic_mut.caption.as_mut().unwrap().paragraphs[0];
-            para.text = "그림  ".to_string();
-            para.char_offsets = vec![0, 1, 2, 11];
-            para.char_count = 13;
         }
         // [Issue #6204] 배제 밴드 기하가 바뀌었으면 그 밴드에 되감긴 문단들의 저장
         // `LINE_SEG` 를 새 위치 기준으로 다시 새긴다.
@@ -653,6 +651,25 @@ impl DocumentCore {
             // 재투영 실패는 이 편집의 실패가 아니다 — 밴드를 만들 수 없는 형상이면
             // 종전대로 recompose 에 맡긴다.
             let _ = self.apply_body_edit_through_picture_band(section_idx, parent_para_idx, |_| {});
+            // TAC 개체의 크기·바깥 여백 편집도 저장 줄을 다시 발행해야 한다.
+            // 화면만 recompose하면 이전 줄 높이가 저장되어 재열기와 Print가 갈린다.
+            if parent_para_idx < self.document.sections[section_idx].paragraphs.len()
+                && self
+                    .resolve_picture_control_ref(section_idx, parent_para_idx, control_idx)
+                    .is_ok_and(|picture| picture.common.treat_as_char)
+            {
+                self.reflow_paragraph(section_idx, parent_para_idx);
+                let hwp3_layout = self.document.layout_profile().hwp3_layout();
+                crate::renderer::composer::recalculate_section_vpos(
+                    &mut self.document.sections[section_idx].paragraphs,
+                    parent_para_idx,
+                    None,
+                    stored_end_before,
+                    &self.styles,
+                    self.dpi,
+                    hwp3_layout,
+                );
+            }
         }
 
         // 리플로우
@@ -816,7 +833,7 @@ impl DocumentCore {
         // (treatAsChar=1 + PAPER 모순 → 한글 렌더 깨짐, Issue #3781 실측).
         crate::serializer::control::sync_anchor_bits(&mut pic.common);
 
-        let picture_height_hu = pic.common.height as i32;
+        let picture_height_hu = crate::renderer::composer::inline_picture_occupied_size_hu(pic).1;
         let baseline = (picture_height_hu as f64 * 0.85).round() as i32;
         if let Some(seg) = line_segs.first_mut() {
             seg.line_height = picture_height_hu;
@@ -1240,16 +1257,13 @@ impl DocumentCore {
                         number_type: crate::model::control::AutoNumberType::Picture,
                         ..Default::default()
                     };
-                    cap.paragraphs
-                        .push(crate::model::paragraph::Paragraph::default());
+                    cap.paragraphs.push(
+                        crate::model::paragraph::Paragraph::new_auto_number_caption("그림 ", an),
+                    );
                     // 캡션 텍스트 최대 폭 = 개체 폭
                     cap.max_width = pic.common.width;
                     pic.caption = Some(cap);
                     caption_created = true;
-                    // 번호 할당을 위해 컨트롤을 임시로 캡션에 추가
-                    pic.caption.as_mut().unwrap().paragraphs[0]
-                        .controls
-                        .push(crate::model::control::Control::AutoNumber(an));
                     // attr bit 29: 캡션 존재 플래그 (한컴 호환성)
                     pic.common.attr |= 1 << 29;
                 }
@@ -1376,6 +1390,21 @@ impl DocumentCore {
         para.controls.remove(control_idx);
         if control_idx < para.ctrl_data_records.len() {
             para.ctrl_data_records.remove(control_idx);
+        }
+        // 컨트롤 배열이 줄어도 뒤 누름틀의 범위는 같은 필드를 가리켜야 한다.
+        for range in &mut para.field_ranges {
+            if range.control_idx > control_idx {
+                range.control_idx -= 1;
+            }
+        }
+        if let Some(active) = self.active_field.as_mut() {
+            if active.section_idx == section_idx
+                && active.para_idx == parent_para_idx
+                && active.cell_path.is_none()
+                && active.control_idx > control_idx
+            {
+                active.control_idx -= 1;
+            }
         }
 
         // char_count 갱신
@@ -1557,9 +1586,10 @@ impl DocumentCore {
     /// 이던 것이 그 탓이다. 수식·각주 경로가 이미 이 꼴이다.
     fn leave_coordinate_trace(
         paragraph: &mut crate::model::paragraph::Paragraph,
+        control_idx: usize,
         char_offset: usize,
     ) {
-        paragraph.shift_for_inline_control_insert(char_offset);
+        paragraph.shift_for_inline_control_insert(control_idx, char_offset);
         paragraph.char_count += 8;
     }
 
@@ -1682,10 +1712,12 @@ impl DocumentCore {
                 //   bits 15-17=width_criterion(4=Absolute),
                 //   bits 18-20=height_criterion(2=Absolute),
                 //   bits 21-23=text_wrap(0=Square)
-                let common_attr: u32 = (2 << 3) | (3 << 8) | (4 << 15) | (2 << 18);
+                let common_attr: u32 = (2 << 3) | (3 << 8) | (4 << 15) | (2 << 18) | (1 << 26);
                 let common = CommonObjAttr {
                     ctrl_id: 0x67736F20,
                     attr: common_attr,
+                    numbering_type: crate::model::shape::ObjectNumberingType::Picture,
+                    hwp5_gen_shape_attr_bit26: true,
                     treat_as_char: false,
                     vert_rel_to: VertRelTo::Para,
                     horz_rel_to: HorzRelTo::Para,
@@ -1724,7 +1756,7 @@ impl DocumentCore {
                         .controls
                         .insert(new_ctrl_idx, Control::Picture(Box::new(pic)));
                     target_para.ctrl_data_records.insert(new_ctrl_idx, None);
-                    target_para.shift_for_inline_control_insert(char_offset);
+                    target_para.shift_for_inline_control_insert(new_ctrl_idx, char_offset);
                     target_para.control_mask |= 0x00000800;
                     let logical_positions =
                         crate::document_core::helpers::find_logical_control_positions(target_para);
@@ -1767,10 +1799,12 @@ impl DocumentCore {
             //   bits 3-4=vert_rel_to(0=Paper), bits 8-10=horz_rel_to(0=Paper),
             //   bits 15-17=width_criterion(4=Absolute), bits 18-20=height_criterion(2=Absolute),
             //   bits 21-23=text_wrap(0=Square)
-            let common_attr: u32 = (4 << 15) | (2 << 18);
+            let common_attr: u32 = (4 << 15) | (2 << 18) | (1 << 26);
             let common = CommonObjAttr {
                 ctrl_id: 0x67736F20,
                 attr: common_attr,
+                numbering_type: crate::model::shape::ObjectNumberingType::Picture,
+                hwp5_gen_shape_attr_bit26: true,
                 treat_as_char: false,
                 vert_rel_to: VertRelTo::Paper,
                 horz_rel_to: HorzRelTo::Paper,
@@ -1847,10 +1881,12 @@ impl DocumentCore {
         //   bits 3-4=vert_rel_to(0=Paper), bits 8-10=horz_rel_to(0=Paper),
         //   bits 15-17=width_criterion(4=Absolute), bits 18-20=height_criterion(2=Absolute),
         //   bits 21-23=text_wrap(0=Square)
-        let common_attr: u32 = (4 << 15) | (2 << 18);
+        let common_attr: u32 = (4 << 15) | (2 << 18) | (1 << 26);
         let common = CommonObjAttr {
             ctrl_id: 0x67736F20, // "gso " — GenShape
             attr: common_attr,
+            numbering_type: crate::model::shape::ObjectNumberingType::Picture,
+            hwp5_gen_shape_attr_bit26: true,
             treat_as_char: false,
             vert_rel_to: VertRelTo::Paper,
             horz_rel_to: HorzRelTo::Paper,
@@ -1884,7 +1920,7 @@ impl DocumentCore {
             .controls
             .insert(new_ctrl_idx, Control::Picture(Box::new(pic)));
         parent.ctrl_data_records.insert(new_ctrl_idx, None);
-        Self::leave_coordinate_trace(parent, char_offset);
+        Self::leave_coordinate_trace(parent, new_ctrl_idx, char_offset);
         let logical_positions =
             crate::document_core::helpers::find_logical_control_positions(parent);
         let logical_after = logical_positions
@@ -1892,6 +1928,7 @@ impl DocumentCore {
             .copied()
             .unwrap_or_else(|| parent.text.chars().count())
             + 1;
+        self.shift_active_field_for_control_insert(section_idx, para_idx, new_ctrl_idx);
 
         self.mark_section_dirty(section_idx);
         self.paginate_if_needed();
@@ -1941,6 +1978,7 @@ mod issue_1151_cell_picture_insert_tests {
                 ..Default::default()
             },
             paragraphs: vec![Paragraph::default()],
+            trailing_lists: None,
             raw_stream: None,
             raw_provenance: None,
         });
@@ -2641,6 +2679,7 @@ mod issue_1151_v2_tac_toggle_tests {
                 ..Default::default()
             },
             paragraphs: vec![Paragraph::default()],
+            trailing_lists: None,
             raw_stream: None,
             raw_provenance: None,
         });
@@ -3721,6 +3760,7 @@ mod issue_1280_textbox_creation_tests {
                 ..Default::default()
             },
             paragraphs: vec![Paragraph::default()],
+            trailing_lists: None,
             raw_stream: None,
             raw_provenance: None,
         });

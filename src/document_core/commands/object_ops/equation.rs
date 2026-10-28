@@ -308,8 +308,7 @@ impl DocumentCore {
         let explicit_height = json_u32(props_json, "height").is_some();
         let size_driver_changed = eq.script != script_before || eq.font_size != font_size_before;
         if size_driver_changed && (!explicit_width || !explicit_height) {
-            let (width, height) =
-                crate::renderer::equation::intrinsic_size_hwp(&eq.script, eq.font_size);
+            let (width, height) = crate::renderer::equation::edited_size_hwp(eq);
             if !explicit_width {
                 eq.common.width = width;
             }
@@ -367,7 +366,61 @@ impl DocumentCore {
             cell_idx,
             cell_para_idx,
         )?;
+        let previous_flow = (
+            eq.common.treat_as_char,
+            crate::renderer::equation::flow_metrics_hwp(eq),
+            (
+                eq.common.margin.left,
+                eq.common.margin.right,
+                eq.common.margin.top,
+                eq.common.margin.bottom,
+            ),
+            eq.common.affect_line_spacing,
+        );
         Self::apply_equation_properties(eq, dpi, props_json);
+        let current_flow = (
+            eq.common.treat_as_char,
+            crate::renderer::equation::flow_metrics_hwp(eq),
+            (
+                eq.common.margin.left,
+                eq.common.margin.right,
+                eq.common.margin.top,
+                eq.common.margin.bottom,
+            ),
+            eq.common.affect_line_spacing,
+        );
+        let inline_flow_changed =
+            (previous_flow.0 || current_flow.0) && previous_flow != current_flow;
+
+        // 편집한 슬롯·기준선은 공통 줄 구성에서도 소비해야 한다. paint만
+        // 재조판하면 저장 LineSeg의 옛 기준선·점유 높이가 그대로 남는다.
+        // 색상·getter 봉지 같은 비기하 편집은 기존 저장 프레임을 유지한다.
+        if inline_flow_changed {
+            if let (Some(cell), Some(paragraph)) = (cell_idx, cell_para_idx) {
+                self.reflow_cell_paragraph(
+                    section_idx,
+                    parent_para_idx,
+                    control_idx,
+                    cell,
+                    paragraph,
+                );
+            } else {
+                let stored_end = crate::renderer::composer::paragraph_flow_end(
+                    &self.document.sections[section_idx].paragraphs[parent_para_idx],
+                );
+                self.reflow_paragraph(section_idx, parent_para_idx);
+                let hwp3_layout = self.document.layout_profile().hwp3_layout();
+                crate::renderer::composer::recalculate_section_vpos(
+                    &mut self.document.sections[section_idx].paragraphs,
+                    parent_para_idx,
+                    None,
+                    stored_end,
+                    &self.styles,
+                    self.dpi,
+                    hwp3_layout,
+                );
+            }
+        }
 
         // 셀 수식은 최외곽 문단의 측정 revision을 무효화한다.
         if cell_idx.is_some() {
@@ -389,14 +442,14 @@ impl DocumentCore {
         font_size_hwpunit: u32,
         color: u32,
     ) -> Result<String, HwpError> {
+        use crate::renderer::equation::document_script::tokenize;
         use crate::renderer::equation::layout::EqLayout;
         use crate::renderer::equation::parser::EqParser;
         use crate::renderer::equation::svg_render::{eq_color_to_svg, render_equation_svg};
-        use crate::renderer::equation::tokenizer::tokenize;
 
         let font_size_px = crate::renderer::hwpunit_to_px(font_size_hwpunit as i32, self.dpi);
         let tokens = tokenize(script);
-        let ast = EqParser::new(tokens).parse();
+        let ast = EqParser::for_document(tokens).parse();
         let layout_box = EqLayout::new(font_size_px).layout(&ast);
         let color_str = eq_color_to_svg(color);
         let svg_fragment = render_equation_svg(&layout_box, &color_str, font_size_px);
@@ -619,10 +672,11 @@ impl DocumentCore {
             .insert(insert_idx, Control::Equation(Box::new(equation)));
         paragraph.ctrl_data_records.insert(insert_idx, None);
 
-        paragraph.shift_for_inline_control_insert(char_offset);
+        paragraph.shift_for_inline_control_insert(insert_idx, char_offset);
         paragraph.char_count += 8;
         paragraph.control_mask |= 1u32 << 11;
         paragraph.has_para_text = true;
+        self.shift_active_field_for_control_insert(section_idx, para_idx, insert_idx);
 
         // 본문 문단 리플로우
         // 본문 문단의 상자는 쪽 폭이 아니라 **열** 폭에서 나온다. 직접 계산하면

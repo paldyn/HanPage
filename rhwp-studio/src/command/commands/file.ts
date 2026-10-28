@@ -11,9 +11,11 @@ import { showConfirm } from '@/ui/confirm-dialog';
 import { showHwpSavePasswordDialog } from '@/ui/hwp-password-dialog';
 import { showUnsavedChangesDialog } from '@/ui/unsaved-changes-dialog';
 import { showHmlSaveFormatDialog } from '@/ui/hml-save-format-dialog';
+import { showPdfSaveFormatDialog } from '@/ui/pdf-save-format-dialog';
 import {
   fileNameForFormat,
   markConvertedHmlSaveHandle,
+  markConvertedPdfSaveHandle,
   requiresSaveFormatChoice,
   resolveSaveTarget,
   type SaveFormat,
@@ -62,6 +64,7 @@ import {
 import { openDocumentViaPicker } from '../file-open-picker';
 import { saveDocumentToDesktop } from '../desktop-file-save';
 import { getDesktopOpenHandler, getDesktopSaveHandler } from '@/core/desktop-bridge';
+import { desktopConvertedPdfSaveFormat, rememberDesktopConvertedPdfSave } from '../desktop-converted-save';
 import { PdfPrintDialog } from '@/ui/pdf-print-dialog';
 import { userSettings } from '@/core/user-settings';
 import { showToast } from '@/ui/toast';
@@ -75,6 +78,7 @@ import { t } from '../../i18n/index.ts';
  */
 async function openFileViaPicker(services: CommandServices): Promise<void> {
   await openDocumentViaPicker({
+    pdfImportEnabled: services.wasm.hasPdfImportCapability?.() === true,
     canReplace: () => confirmSaveBeforeReplacingDocument(services),
     desktopOpen: getDesktopOpenHandler(),
     windowLike: window as FileSystemWindowLike,
@@ -130,6 +134,7 @@ function flushDeferredPaginationBeforeExplicitOutput(
 
 async function chooseSaveAsFormat(services: CommandServices): Promise<SaveFormat | null> {
   const sourceFormat = services.wasm.getSourceFormat();
+  if (sourceFormat === 'pdf') return showPdfSaveFormatDialog();
   if (sourceFormat !== 'hml') return sourceFormat === 'hwpx' ? 'hwpx' : 'hwp';
   const context = getHmlSaveContext(services);
   return showHmlSaveFormatDialog(
@@ -228,6 +233,11 @@ function completeHandleSave(
   passwordProtected = false,
 ): void {
   if (sourceFormat === 'hml') markConvertedHmlSaveHandle(result.handle);
+  if (sourceFormat === 'pdf') markConvertedPdfSaveHandle(result.handle);
+  // HanPage 데스크톱 저장은 handle 이 없어 변환 형식을 문서 인스턴스 단위로 기억한다.
+  if (sourceFormat === 'pdf' && result.handle === null && getDesktopSaveHandler()) {
+    rememberDesktopConvertedPdfSave(services.wasm.documentGeneration, result.fileName, saveFormat);
+  }
   services.wasm.currentFileHandle = result.handle;
   services.wasm.fileName = result.fileName;
   void addRecentDoc({
@@ -323,7 +333,8 @@ async function saveAsFormat(services: CommandServices, format: SaveFormat): Prom
     flushDeferredPaginationBeforeExplicitOutput(services, 'save-as');
     const saveName = options.fileName;
     const payload = createSavePayload(services, format, password ?? undefined);
-    const originalHandle = sourceFormat === 'hml' ? services.wasm.currentFileHandle : null;
+    const originalHandle = sourceFormat === 'hml' || sourceFormat === 'pdf'
+      ? services.wasm.currentFileHandle : null;
     const result = await persistWithContentLoss(
       payload.contentLoss,
       () => tryFileSystemSave(
@@ -393,6 +404,17 @@ export async function saveCurrentDocument(services: CommandServices): Promise<Sa
       services.wasm.fileName,
       services.wasm.currentFileHandle,
     );
+    // HanPage 데스크톱: 이 PDF 를 이미 변환 저장했으면 웹의 handle 기억처럼 같은 형식으로 저장한다.
+    const desktopPdfFormat = sourceFormat === 'pdf' && getDesktopSaveHandler()
+      ? desktopConvertedPdfSaveFormat(services.wasm.documentGeneration)
+      : null;
+    if (desktopPdfFormat) {
+      target = {
+        format: desktopPdfFormat,
+        forceSaveAs: false,
+        suggestedName: fileNameForFormat(services.wasm.fileName, desktopPdfFormat),
+      };
+    }
     const hmlEnabled = target.format !== 'hml' || isHmlSaveEnabled(services);
     if (requiresSaveFormatChoice(target, hmlEnabled)) {
       const format = await chooseSaveAsFormat(services);

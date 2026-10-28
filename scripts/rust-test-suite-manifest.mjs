@@ -245,11 +245,14 @@ export function validateAddedSourcePlacement(addedPaths, sources) {
     );
 }
 
+// 기본 1 MiB 로는 큰 PR(예: upstream 전체 통합, 변경 2만 경로)의 경로 목록이 ENOBUFS 로 실패한다.
+const GIT_OUTPUT_MAX_BUFFER = 64 * 1024 * 1024;
+
 function addedPathsAgainstBase(root, ref) {
   return execFileSync(
     'git',
     ['diff', '--diff-filter=A', '--name-only', ref, 'HEAD', '--'],
-    { cwd: root, encoding: 'utf8' },
+    { cwd: root, encoding: 'utf8', maxBuffer: GIT_OUTPUT_MAX_BUFFER },
   )
     .split('\n')
     .filter(Boolean);
@@ -321,7 +324,7 @@ function changedPathsAgainstBase(root, baseRef, diffFilter = null) {
   return execFileSync(
     'git',
     arguments_,
-    { cwd: root, encoding: 'utf8' },
+    { cwd: root, encoding: 'utf8', maxBuffer: GIT_OUTPUT_MAX_BUFFER },
   ).split('\0').filter(Boolean);
 }
 
@@ -329,6 +332,7 @@ function textAtGitRef(root, ref, relativePath) {
   return execFileSync('git', ['show', `${ref}:${relativePath}`], {
     cwd: root,
     encoding: 'utf8',
+    maxBuffer: GIT_OUTPUT_MAX_BUFFER,
   });
 }
 

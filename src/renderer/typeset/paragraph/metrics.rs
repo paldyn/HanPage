@@ -10,12 +10,22 @@ use crate::model::{paragraph::Paragraph, provenance::LayoutCompatibilityProfile}
 /// 문단 format() 결과: 문단의 실제 렌더링 높이 정보
 #[derive(Debug, Clone)]
 pub(in crate::renderer::typeset) struct FormattedParagraph {
+    /// 구역의 저장 사다리가 무효이면 문단 끝도 저장 좌표로 다시 투영하지 않는다.
+    pub(in crate::renderer::typeset) stored_ladder_is_filler: bool,
+    /// 물리 개체 없는 재조판 줄의 높이·간격을 배치와 동일하게 수용한 결과다.
+    pub(in crate::renderer::typeset) exact_reflow_text_box: bool,
+    /// 같은 폭에서 재구성하고 줄 메트릭까지 확인한 일반 본문 결과.
+    pub(in crate::renderer::typeset) computed_paragraph:
+        Option<crate::renderer::composer::ComposedParagraph>,
     /// Measured remaining inline space on the composed tail line. None means
     /// that this path has no reliable width result (not an implicit overflow).
     pub(in crate::renderer::typeset) tail_line_remaining_width: Option<f64>,
     /// frame이 실제로 재조판한 줄만 보존한다. Some이면 source 줄로 되돌아가지 않는다.
     pub(in crate::renderer::typeset) computed_host_lines:
         Option<Vec<crate::renderer::float_placement::ParagraphHostLine>>,
+    /// Shared physical rows for a no-LineSeg Square table host.
+    pub(in crate::renderer::typeset) square_host_plan:
+        Option<crate::renderer::inline_flow::InlineFlowPlan>,
     /// 총 높이 (spacing 포함)
     pub(in crate::renderer::typeset) total_height: f64,
     /// 줄별 콘텐츠 높이 (line_height만)
@@ -26,7 +36,7 @@ pub(in crate::renderer::typeset) struct FormattedParagraph {
     pub(in crate::renderer::typeset) spacing_before: f64,
     /// spacing_after
     pub(in crate::renderer::typeset) spacing_after: f64,
-    /// trailing line_spacing을 제외한 판단용 높이
+    /// 마지막 줄간격과 문단 뒤 간격을 제외한 물리 점유의 판단용 높이
     pub(in crate::renderer::typeset) height_for_fit: f64,
     /// `total_height` 에 섞어 넣은 TAC 표 바깥 여백(세로). 저장 사다리 지문처럼
     /// **생성기가 쓴 값과 대조하는** 계산에서는 이 몫을 도로 빼야 한다.
@@ -34,6 +44,36 @@ pub(in crate::renderer::typeset) struct FormattedParagraph {
 }
 
 impl FormattedParagraph {
+    pub(in crate::renderer::typeset) fn use_square_host_plan(
+        &mut self,
+        plan: crate::renderer::inline_flow::InlineFlowPlan,
+        dpi: f64,
+    ) {
+        let Some(rows) = plan.text_rows.as_ref() else {
+            return;
+        };
+        self.spacing_before = plan.text_spacing_before.unwrap_or(self.spacing_before);
+        (self.line_heights, self.line_spacings) = rows
+            .iter()
+            .map(|row| {
+                (
+                    crate::renderer::hwpunit_to_px(row.line_height, dpi),
+                    crate::renderer::hwpunit_to_px(row.line_spacing, dpi),
+                )
+            })
+            .unzip();
+        self.total_height = plan.end - plan.start;
+        let text_fit = rows.last().map_or(0.0, |row| {
+            plan.text_spacing_before.unwrap_or(0.0)
+                + crate::renderer::hwpunit_to_px(row.vertical_pos + row.line_height, dpi)
+        });
+        let object_fit = plan
+            .square_host_placement
+            .map_or(0.0, |p| p.occupied_bottom);
+        self.height_for_fit = text_fit.max(object_fit);
+        self.square_host_plan = Some(plan);
+    }
+
     /// 특정 줄의 advance 높이 (콘텐츠 + 줄간격)
     ///
     /// Issue #3780: 연속 페이지 재배치에서 기록된 줄 인덱스가 새 레이아웃 줄 수를
@@ -65,6 +105,23 @@ impl FormattedParagraph {
             .sum()
     }
 
+    /// 구성한 줄의 실제 점유 끝이다. fit 예산의 cap이나 문단 뒤 간격에서 역산하지 않는다.
+    /// 음수 줄간격도 이미 점유한 앞 줄 상자를 지우지 않는다.
+    pub(in crate::renderer::typeset) fn line_content_height(
+        &self,
+        range: std::ops::Range<usize>,
+        leading: f64,
+    ) -> f64 {
+        let end = range.end.min(self.line_count());
+        let mut top = leading;
+        let mut bottom = leading;
+        for line in range.start.min(end)..end {
+            bottom = bottom.max(top + self.line_heights[line]);
+            top += self.line_advance(line);
+        }
+        bottom
+    }
+
     /// [#6753] `flow_advance_height` 가 실제로 트림한 것 중 **`spacing_before` 몫**(px).
     ///
     /// 트림 자체는 "저장 사다리가 이미 담았고 vpos-snap 이 좌표를 복원한다"는 전제 위에
@@ -75,14 +132,14 @@ impl FormattedParagraph {
         para: &Paragraph,
         col_count: u16,
         allow_spacing_before_only: bool,
-        ladder_dirty: bool,
+        spacing_restore_unavailable: bool,
         lazy_base: bool,
     ) -> f64 {
         let advance = self.flow_advance_height(
             para,
             col_count,
             allow_spacing_before_only,
-            ladder_dirty,
+            spacing_restore_unavailable,
             lazy_base,
         );
         if advance + 0.5 >= self.total_height {
@@ -104,9 +161,26 @@ impl FormattedParagraph {
         para: &Paragraph,
         col_count: u16,
         allow_spacing_before_only: bool,
-        ladder_dirty: bool,
+        spacing_restore_unavailable: bool,
         lazy_base: bool,
     ) -> f64 {
+        // 빈 저장 글줄도 물리 슬롯을 소유한다. 글자가 없어 뒤의 가시 줄
+        // 스냅에 맡길 수 없으므로 다단에서도 후행 간격을 매번 버리지 않는다.
+        // 합성·편집·여러 줄은 기존 경로로 남기고 같은 format 결과를 소비한다.
+        if para.text.trim().is_empty()
+            && para.controls.is_empty()
+            && !para.stored_text_partition_is_dirty()
+            && !para.cell_format_vpos_dirty
+            && self.line_count() == 1
+            && self.line_heights[0] > 0.0
+            && matches!(para.line_segs.as_slice(), [line]
+                if line.tag & crate::model::paragraph::LineSeg::TAG_IMPLEMENTATION_PROPERTY == 0
+                    && line.vertical_pos >= 0
+                    && line.line_height > 0
+                    && line.line_spacing >= 0)
+        {
+            return self.total_height;
+        }
         // [#6970] 다단에서도 **합성(reflow) lineseg 문단은 트림하지 않는다** — 아래
         // `#2279 ①` 이 단단 경로에 건 가드와 같은 이유다. 트림은 "저장 ladder 가 spacing 을
         // 이미 반영하고 vpos-snap 이 좌표를 복원한다"는 전제 위에 서는데, 합성 문단에는 그
@@ -123,8 +197,13 @@ impl FormattedParagraph {
         let has_authoritative_seg_for_multicolumn = para.line_segs.iter().any(|seg| {
             seg.tag & crate::model::paragraph::LineSeg::TAG_IMPLEMENTATION_PROPERTY == 0
         });
-        if col_count > 1 && has_authoritative_seg_for_multicolumn {
-            return self.height_for_fit;
+        // 저장 줄이 있어도 다음 빈 float 호스트가 현재 흐름에서 lane을 예약하면
+        // 뒤의 vpos 스냅이 이 줄간격을 복원하지 않는다. 호출자가 인증한
+        // 복원 불가 판정은 단 수와 관계없이 같은 흐름 계약으로 소비한다.
+        if col_count > 1 && has_authoritative_seg_for_multicolumn && !spacing_restore_unavailable {
+            // fit은 마지막 줄의 점유까지만 판정한다. 다음 문단의 원점을
+            // 전진시키는 뒤 간격은 수용된 흐름에서 한 번 보존한다.
+            return (self.height_for_fit + self.spacing_after).min(self.total_height);
         }
         // [#2279 ①] spacing 트림은 **비합성(authoritative) 저장 lineseg** 문단에만.
         // 저장 ladder 가 spacing 을 이미 반영하고 vpos-snap 이 좌표를 복원하는
@@ -141,6 +220,9 @@ impl FormattedParagraph {
         // 복원(스냅)이 성립하지 않는다 — sb-형만 차단, sa-형 트림은 유지
         // (36398700 pi31/35 −13.5px 미복원 실측 vs issue_1853 캡션 문서의
         // sa-형 트림은 정상 복원되어 전면 차단 시 +1쪽 과다 반증).
+        // 아직 page/lazy 원점이 없으면 다음 스냅이 줄간격을 복원한다는
+        // 근거도 없다. 호출자는 원점 미확립을 같은 복원 불가 계약에 포함한다.
+        // 실제 paint가 소비하는 줄·간격을 먼저 보존하고 확립된 축만 트림한다.
         let sa_trim = self.spacing_after > 0.5;
         let sb_trim =
             allow_spacing_before_only && self.spacing_before > 0.5 && !(lazy_base && !sa_trim);
@@ -155,14 +237,30 @@ impl FormattedParagraph {
                 self.spacing_before, self.total_height, self.height_for_fit
             );
         }
+        // Normalization's rebuilt ladder no longer restores the original
+        // outside spacing. Preserve its actual composed advances rather than
+        // trimming against an anchor in a different coordinate frame.
+        let ladder_rebuilt = para
+            .source_line_seg_vertical_pos
+            .as_ref()
+            .is_some_and(|source| {
+                source.len() != para.line_segs.len()
+                    || source
+                        .iter()
+                        .zip(&para.line_segs)
+                        .any(|(vpos, line)| *vpos != line.vertical_pos)
+            });
         if para.controls.is_empty()
             && has_authoritative_seg
-            && !ladder_dirty
+            && !spacing_restore_unavailable
+            && !ladder_rebuilt
             && (sa_trim || sb_trim)
             && self.height_for_fit > 0.0
             && self.height_for_fit + 0.5 < self.total_height
         {
-            return self.height_for_fit.min(self.total_height);
+            // Fit excludes outside after-space; the accepted flow still
+            // carries that band to the successor's origin.
+            return (self.height_for_fit + self.spacing_after).min(self.total_height);
         }
         self.total_height
     }
@@ -198,7 +296,18 @@ pub(in crate::renderer::typeset) fn flow_hints(
     });
     // HWP3-origin 변환본은 spacing_before 누적을 보존해야 dump-pages 요약과
     // 실제 한컴 줄 흐름이 유지된다(#1116).
+    // A rewind starts a different saved coordinate frame. Its first paragraph
+    // still advances from the accepted physical pen; a later lazy origin must
+    // not be derived from an already shortened advance. Keep that paragraph's
+    // complete flow until the new source frame has an actual successor anchor.
+    let starts_new_stored_origin = para_idx
+        .checked_sub(1)
+        .and_then(|previous| paragraphs.get(previous))
+        .is_some_and(|previous| {
+            crate::renderer::height_cursor::paragraph_origin_rewinds(previous, para)
+        });
     let trim_spacing_before_for_flow = !profile.hwp3_layout()
+        && !starts_new_stored_origin
         && !para_near_rowbreak_table(paragraphs, para_idx)
         // [#5801] 저장 사다리가 문단 위 간격을 안 담았으면 트림의 전제가 깨진다 —
         // 트림하면 쪽 채움을 문단마다 sb 만큼 짧게 센다.
@@ -211,7 +320,7 @@ pub(in crate::renderer::typeset) fn flow_hints(
     // [#6753] 트림된 `sb` 되돌리기는 **저장 사다리가 권위인 네이티브 HWP5** 에 한정한다.
     //
     // HWPX 의 `vpos` 리셋은 writer-local 재시작일 수 있어 별도 기계(`#5801` 의 HWPX 전용
-    // dirty 철회 · `#6063` · `hwpx_saved_reset_fragment_matches_current_flow`)가 따로 다룬다.
+    // dirty 철회 · `#6063` · `stored_body_reset_fragment_matches_current_flow`)가 따로 다룬다.
     // 전 포맷에 켠 판은 `samples/` 전수에서 `issue1880_*.hwpx` 2건을 악화시켰다
     // (5쪽 넘침 1 → 4, 최대 +82.65px). 같은 판에서 HWP5 문서는 3건 전부 개선이었다.
     let trimmed_sb_gate = if profile.hwp5_stored_pagination_layout() {

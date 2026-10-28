@@ -278,12 +278,15 @@ fn take_update_relaunch(app: &tauri::AppHandle) -> Option<RelaunchMarker> {
     marker
 }
 
-/// `.hwp`/`.hwpx` 확장자인지(대소문자 무시) — 파일 연결 대상과 같다.
+/// 실행 인자로 받아 여는 문서 확장자인지(대소문자 무시). 파일 연결은 `.hwp`/`.hwpx` 만 등록하지만,
+/// `연결 프로그램`으로 넘긴 `.hml`·`.pdf` 도 macOS(`RunEvent::Opened`)처럼 열고 웹뷰가 형식을 판별한다.
 #[cfg(desktop)]
 fn is_document_path(path: &Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| e.eq_ignore_ascii_case("hwp") || e.eq_ignore_ascii_case("hwpx"))
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+        ["hwp", "hwpx", "hml", "pdf"]
+            .iter()
+            .any(|x| e.eq_ignore_ascii_case(x))
+    })
 }
 
 /// 실행 인자에서 열 문서 경로를 고른다. 첫 항목은 실행 파일이라 건너뛰고, 상대 경로는
@@ -483,17 +486,51 @@ fn build_app_menu(
 }
 
 // ─── 앱 command ──────────────────────────────────────────────────────────────
+/// 열기 대화상자 필터. HML 은 엔진이 원래 여는 형식이고, PDF 는 가져오기를 지원할 때만 넣는다.
+fn open_dialog_filter(allow_pdf: bool) -> (&'static str, &'static [&'static str]) {
+    if allow_pdf {
+        ("문서 (HWP/HWPX/HML/PDF)", &["hwp", "hwpx", "hml", "pdf"])
+    } else {
+        ("한글 문서 (HWP/HWPX/HML)", &["hwp", "hwpx", "hml"])
+    }
+}
+
+/// 저장 대화상자 필터. 제안 파일명의 확장자(웹뷰가 고른 저장 형식)를 따른다. PDF 는 넣지 않는다.
+fn save_dialog_filter(suggested_name: &str) -> (&'static str, &'static [&'static str]) {
+    let ext = Path::new(suggested_name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase);
+    match ext.as_deref() {
+        Some("hwpx") => ("한글 문서 (HWPX)", &["hwpx"]),
+        Some("hml") => ("한글 문서 (HML)", &["hml"]),
+        _ => ("한글 문서 (HWP)", &["hwp"]),
+    }
+}
+
+fn is_pdf_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("pdf"))
+}
+
 /// 네이티브 열기 dialog → 선택 파일 바이트 반환. 취소 시 `Ok(None)`.
 ///
 /// async command 는 메인 스레드가 아닌 async 런타임 워커에서 실행되므로 여기서
 /// `blocking_pick_file()`(내부적으로 dialog 를 메인 스레드에 디스패치)을 호출해도
 /// 데드락이 없다. 메인 스레드에서 직접 호출하면 안 된다.
+///
+/// `allow_pdf` 는 웹뷰의 WASM 이 PDF 가져오기를 지원할 때만 참이다. 키가 없는 이전 호출도 받는다.
 #[tauri::command]
-async fn cmd_open_document(app: tauri::AppHandle) -> Result<Option<OpenedFile>, String> {
+async fn cmd_open_document(
+    app: tauri::AppHandle,
+    allow_pdf: Option<bool>,
+) -> Result<Option<OpenedFile>, String> {
+    let (label, exts) = open_dialog_filter(allow_pdf.unwrap_or(false));
     let picked = app
         .dialog()
         .file()
-        .add_filter("한글 문서 (HWP/HWPX)", &["hwp", "hwpx"])
+        .add_filter(label, exts)
         .blocking_pick_file();
 
     let Some(file_path) = picked else {
@@ -512,22 +549,29 @@ async fn cmd_save_document(
     suggested_name: String,
     data: Vec<u8>,
 ) -> Result<SaveOutcome, String> {
+    // 저장 바이트 형식과 확장자를 맞춘다. macOS 저장 패널은 필터 밖 확장자를 허용하지 않아
+    // HWP 필터만 두면 HWPX 바이트가 `.hwp` 로 저장된다.
+    let (label, exts) = save_dialog_filter(&suggested_name);
     let picked = app
         .dialog()
         .file()
         .set_file_name(&suggested_name)
-        .add_filter("한글 문서 (HWP)", &["hwp"])
+        .add_filter(label, exts)
         .blocking_save_file();
 
     let Some(file_path) = picked else {
         return Ok(SaveOutcome::Cancelled); // 사용자 취소
     };
     let path = file_path.into_path().map_err(|e| e.to_string())?;
+    // Windows 에서는 확장자를 직접 입력해 필터를 넘을 수 있다. 원본 PDF 를 편집 문서로 덮어쓰지 않는다.
+    if is_pdf_path(&path) {
+        return Err("PDF 파일에는 편집 문서를 저장할 수 없습니다.".into());
+    }
     std::fs::write(&path, &data).map_err(|e| e.to_string())?;
     let name = path
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or("document.hwp")
+        .unwrap_or(suggested_name.as_str())
         .to_string();
     Ok(SaveOutcome::Saved {
         path: path.to_string_lossy().into_owned(),
@@ -897,11 +941,35 @@ mod tests {
             doc.clone().into_os_string(),
             cwd.join("note.txt").into_os_string(),
             cwd.join("양식.hwpx").into_os_string(),
+            cwd.join("목록.HML").into_os_string(),
+            cwd.join("스캔.pdf").into_os_string(),
         ];
         assert_eq!(
             document_paths_from_args(args, &cwd),
-            vec![doc, cwd.join("양식.hwpx")]
+            vec![
+                doc,
+                cwd.join("양식.hwpx"),
+                cwd.join("목록.HML"),
+                cwd.join("스캔.pdf")
+            ]
         );
+    }
+
+    #[test]
+    fn open_dialog_offers_pdf_only_when_import_is_available() {
+        assert_eq!(open_dialog_filter(false).1, &["hwp", "hwpx", "hml"]);
+        assert_eq!(open_dialog_filter(true).1, &["hwp", "hwpx", "hml", "pdf"]);
+    }
+
+    #[test]
+    fn save_dialog_matches_the_chosen_format_and_never_offers_pdf() {
+        assert_eq!(save_dialog_filter("보고서.HWPX").1, &["hwpx"]);
+        assert_eq!(save_dialog_filter("목록.hml").1, &["hml"]);
+        assert_eq!(save_dialog_filter("보고서.hwp").1, &["hwp"]);
+        assert_eq!(save_dialog_filter("스캔.pdf").1, &["hwp"]);
+        assert_eq!(save_dialog_filter("이름없음").1, &["hwp"]);
+        assert!(is_pdf_path(Path::new("/tmp/원본.PDF")));
+        assert!(!is_pdf_path(Path::new("/tmp/원본.hwpx")));
     }
 
     #[test]

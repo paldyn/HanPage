@@ -1,6 +1,6 @@
 //! 줄 분할 진입 전 첫 줄/저장 경계 판정. 쪽 전환과 호환성 상태 기록은 호출자가 맡는다.
 use super::super::{
-    is_synthetic_line_seg, page_item_para_index, para_has_visible_text,
+    is_synthetic_line_seg, line_seg_visible_bounds_px, page_item_para_index, para_has_visible_text,
     stored_vpos_restarts_near_body_top,
 };
 use super::metrics::FormattedParagraph;
@@ -25,6 +25,24 @@ pub(in crate::renderer::typeset) struct SplitEntryFit {
     pub hangul2024_split_refit: bool,
 }
 
+/// 저장 첫 줄이 현재 흐름의 같은 쪽에서 본문 하단을 넘는지 조회한다.
+/// 통째 수용과 분할 진입이 같은 저장 줄 끝을 소비한다.
+pub(super) fn stored_first_line_bottom_outside_body(
+    para: &Paragraph,
+    page_vpos_base: i32,
+    current_height: f64,
+    body_height: f64,
+    dpi: f64,
+) -> bool {
+    para.line_segs
+        .first()
+        .filter(|line| !is_synthetic_line_seg(line))
+        .and_then(|line| line_seg_visible_bounds_px(line, page_vpos_base, dpi))
+        .is_some_and(|(top, bottom)| {
+            top + 0.5 >= current_height && top <= body_height && bottom > body_height
+        })
+}
+
 /// 구성된 줄이 있을 때만 호출한다. 플래그 기록 전에 관측한 fit 근거를 반환한다.
 #[allow(clippy::too_many_arguments)]
 pub(in crate::renderer::typeset) fn inspect_entry(
@@ -36,6 +54,7 @@ pub(in crate::renderer::typeset) fn inspect_entry(
     line_count: usize,
     available: f64,
     page: &SplitEntryPage<'_>,
+    stored_frame_prefix_consumed: bool,
     dpi: f64,
 ) -> SplitEntryFit {
     // 남은 공간이 없거나 첫 줄도 못 넣으면 먼저 다음 단/페이지로
@@ -68,10 +87,16 @@ pub(in crate::renderer::typeset) fn inspect_entry(
             .line_segs
             .first()
             .map(|cur| {
-                let bottom_px = crate::renderer::hwpunit_to_px(
-                    cur.vertical_pos.saturating_add(cur.line_height),
-                    dpi,
-                );
+                // [#7702] 쪽 안 위치는 한/글이 저장한 좌표로 잰다. 앞 문단에 저장 줄이 없어
+                // 로드 재구성이 이 문단의 vpos 를 rhwp 누적 좌표로 옮겼으면 원본 값을 쓴다
+                // (HWP5-nopassword pi=228: 원본 64520 → 873.6px ≤ 876.9, 누적 128472).
+                let first_vpos = para
+                    .source_line_seg_vertical_pos
+                    .as_ref()
+                    .and_then(|source| source.first().copied())
+                    .unwrap_or(cur.vertical_pos);
+                let bottom_px =
+                    crate::renderer::hwpunit_to_px(first_vpos.saturating_add(cur.line_height), dpi);
                 bottom_px <= page.body_height + 0.5
             })
             .unwrap_or(false);
@@ -98,9 +123,14 @@ pub(in crate::renderer::typeset) fn inspect_entry(
             });
     let stored_whole_para_reset = page.col_count == 1
         && para_idx > 0
+        && !stored_frame_prefix_consumed
         // 앞 문단의 손상 HWPX 줄을 순차 조판으로 접은 경우, 그 뒤 문단의
         // 작은 vpos는 새 쪽이 아니라 같은 손상 좌표계의 잔여값이다.
         && !current_page_has_stale_hwpx_line_metrics
+        && !super::stored_lines::stored_page_boundary_invalidated_by_reflow(
+            page.profile, page.col_count, page.current_items, paragraphs,
+            para_idx, page.current_height, dpi,
+        )
         && para
             .line_segs
             .first()
@@ -167,19 +197,8 @@ pub(in crate::renderer::typeset) fn should_advance(
     // 그 줄을 이 쪽에 두지 않은 것이다. 이미 있는
     // `hwp_first_line_before_reset_fits`(바닥이 안에 들면 남긴다)의 정확한 거울이며,
     // 추정이 아니라 파일이 적어 놓은 값이다.
-    let stored_first_line_bottom_outside_body = para
-        .line_segs
-        .first()
-        .filter(|ls| !is_synthetic_line_seg(ls))
-        .map(|ls| {
-            let top_px = crate::renderer::hwpunit_to_px(ls.vertical_pos, dpi);
-            let bottom_px =
-                crate::renderer::hwpunit_to_px(ls.vertical_pos.saturating_add(ls.line_height), dpi);
-            let body_bottom = page.body_height;
-            // 저장 좌표가 **지금 조판 위치와 같은 쪽**을 가리킬 때만 증거로 쓴다.
-            top_px + 0.5 >= page.current_height && top_px <= body_bottom && bottom_px > body_bottom
-        })
-        .unwrap_or(false);
+    let stored_first_line_bottom_outside_body =
+        stored_first_line_bottom_outside_body(para, 0, page.current_height, page.body_height, dpi);
     (page.current_height >= available
         || remaining < first_line_h
         || stored_first_line_bottom_outside_body

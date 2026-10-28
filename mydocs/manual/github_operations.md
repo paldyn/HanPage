@@ -20,7 +20,11 @@ roundtrip을 시작하지 않으며, Oracle advisory도 devel push를 구독하�
 없다는 이유로 병합 후 Full CI를 실행하거나 수동으로 재실행하지 않는다.
 
 `devel` push에서는 `Refresh nextest target duration data`가 실행 시간 메타데이터만 갱신한다.
-성공 PR CI의 정확한 head 또는 완전한 linear review-only 후행 변경을 확인한 후보에서 B/C/D
+단, PR CI의 trigger 생략 경로와 `AGENTS.md`, `CLAUDE.md`, `llms.txt`, 일반 `mydocs/**`만
+바뀐 push는 경로 필터로 생략한다. `mydocs/tech/canvaskit-parity-implementation.md`와
+`mydocs/tech/text-ir-v2.md`는 PR CI와 동일하게 렌더링 계약 문서로 분류해 실행한다.
+문서와 코드가 섞인 push 및 `devel`의 명시적인 `workflow_dispatch`는 계속 실행한다.
+성공 PR CI의 정확한 head 또는 완전한 linear review-only 후행 변경을 확인한 후보에서 B/C/D/E
 실측을 읽는다. artifact의 run/repository/head/PR/tested merge와 worker별 실제 attempt를
 검증하므로 lint만 재실행한 attempt 2에서도 성공 worker attempt 1의 실측을 사용할 수 있다.
 증거 누락·만료·불일치는 갱신 보류이며 검증 CI fallback이 아니다. 기록은
@@ -39,6 +43,25 @@ issue close 자동화는 업무 메타데이터 처리로 유지한다. release 
 push trigger 제거와 새 duration workflow는 해당 변경의 devel 병합부터 적용된다. 반면
 CI Impact Policy Controller의 `pull_request_target`/`workflow_run` 배선 변경은 기본 branch
 main에 정상 release된 뒤 활성화된다. policy 모듈은 live base에서 로드하므로 이를 구분해 보고한다.
+
+## Archive 분산과 로컬 실행 (#8267)
+
+기본 Rust CI는 A(lib)와 B/C/D/E(integration)의 다섯 archive를 각각 한 worker에서 실행한다.
+Integration target은 같은 고정 duration policy와 현재 source manifest로 배정하며, 다섯 archive의
+예상 runnable 수를 해당 worker의 실제 실행 수와 각각 대조한다. Worker timeout은 60분이고,
+archive builder는 기존 `release-test:30`·`release:60`분 정책을 유지한다.
+
+로컬 전체 검증은 기존 `cargo nextest run --cargo-profile release-test --target-dir target/pr-review
+--tests --test-threads 12 --no-fail-fast`를 그대로 사용한다. 분할 자체를 재현할 때만
+`node scripts/rust-test-suite-manifest.mjs --prepare` 이후 Cargo metadata를
+`scripts/select-nextest-archive-targets.mjs --group integration-e --policy <policy.json>
+--manifest tests/suites/manifest.json`에 전달한다. B/C/D도 같은 방식이다.
+Duration 갱신기는 새 B/C/D/E 네 실측을 소비하며, 이전 B/C/D 세 실측은 trusted Jobs API에
+E caller가 없는 과거 실행임을 확인한 경우에만 구 layout으로 읽는다. 새 layout에서 E 누락은 실패다.
+
+루트 `AGENTS.md`·`CLAUDE.md`만 added/modified한 PR은 다섯 workflow의 review-only fast-pass와
+trusted policy가 같은 규칙을 사용한다. 코드·workflow와 함께 변경하거나 rename·삭제하면 이
+루트 문서 허용 항목으로 우회할 수 없다. [정확한 허용 범위](pr_review/review_only_fast_pass.md)를 따른다.
 
 ## 1. 목적과 범위
 
@@ -228,6 +251,26 @@ metadata와 ruleset 조회 결과를 함께 남긴다. secret은 목록과 갱�
 일반 변경은 최신 `upstream/devel` 기반 작업 branch에서 수행한다. workflow와 함께 그 계약을 고정하는
 테스트가 있으면 같은 변경에서 갱신한다. 주석만으로 정책을 보증하지 않는다.
 
+### 5.3.1 CI 테스트 호출 추가 기준
+
+테스트를 추가하거나 고칠 때는 기존 실행 경로를 우선 사용한다. `.github/workflows/ci.yml`에
+불필요한 개별 테스트 호출·전용 step·중복 job을 추가하지 않는다.
+
+1. 현재 `upstream/devel`을 fetch하고 기준 SHA의 workflow에서 실제 호출을 확인한다.
+   체리픽 검토에서는 커밋별 추가·삭제와 최종 base 대비 차이를 함께 확인한다. 앞선 PR 커밋이
+   추가한 호출을 후속 커밋이 되돌린 일을 기존 devel 검사의 삭제로 설명하지 않는다.
+2. 기존 자동 수집·생성 suite·논리 테스트 선택기와 필요한 feature/OS의 실행 경로를 확인한다.
+   기본 회귀가 이미 수집하는 case나 기존 Native 통합 검사에 포함된 검사는 그 경로로 실행한다.
+   Native 전용 검사를 default feature에서 수집했다는 사실만으로 실행됐다고 판단하지 않는다.
+3. 테스트 본체와 연결을 먼저 개선하고, 실제 test 목록·건수·결과로 새 검사의 실행을 확인한다.
+   0건 실행·전부 skip을 통과 근거로 쓰거나, 실패를 없애기 위해 workflow 호출·필터·검사를
+   제거하지 않는다. 기대값 보정에는 해당 검사의 독립 근거와 검증 절차를 적용한다.
+4. 기존 경로에서 실행되지 않는 검사가 실제로 확인된 경우에만 필요한 최소 CI 호출을 추가한다.
+   누락된 검사·feature/OS, 기존 경로로 해결할 수 없는 이유, 추가 뒤 실행 건수와 중복·비용을
+   기존 PR 기록에 남긴다. 새 검사를 만들었다는 이유만으로 CI 호출도 추가하지 않는다.
+5. 필요한 job command 변경에는 O3 검증과 fork 신뢰 경계를 적용한다. 기존 필수 검증 범위는
+   유지하며, 같은 검사를 여러 진입점에서 반복 실행하는 배선을 피한다.
+
 ### 5.4 적용 승인
 
 push 전에는 최신 base와 현재 head, diff, 로컬 검증, rollback을 보고한다. 메인테이너의 승인 뒤 push하고,
@@ -343,7 +386,7 @@ API pagination 경계, candidate의 fast-pass 실행, failed·pending run, GHAS 
 전부 Full 실행으로 fallback한다. 상세 허용 범위와 merge bridge 규칙은
 [review-only fast-pass](pr_review/review_only_fast_pass.md#a1-ci-실행-정책을-바꾼-pr의-trusted-재사용)를 따른다.
 
-발행 v6과 세 consumer의 지원 버전은 연결 테스트로 함께 검증한다. main 대상 PR은 trusted reuse
+발행 v7과 세 consumer의 지원 버전은 연결 테스트로 함께 검증한다. main 대상 PR은 trusted reuse
 조회 자체를 생략하며, devel 대상이라도 중복/누락 필드·다른 base·미지원 버전은 재사용하지 않는다.
 
 `workflow_run`의 branch 필터는 PR base가 아니다. 연결 PR이 하나이고 명확한 비devel 대상이면
@@ -392,7 +435,7 @@ mutation이므로 메인테이너 승인 뒤에만 실행한다. inventory에 �
 | --- | --- | --- |
 | Adapter inter-diff | `gh workflow run adapter-diff.yml --ref devel` | direct |
 | CI | `gh workflow run ci.yml --ref devel -f release_grade=false` | direct |
-| CodeQL | `gh workflow run codeql.yml --ref devel` | direct |
+| CodeQL | `gh workflow run codeql.yml --ref devel` | direct, JavaScript/TypeScript·Python·Rust·Actions 네 분석 job success 필수 |
 | Pages | `gh workflow run deploy-pages.yml --ref devel` | verify-only, Deploy job skipped |
 | Gym | `gh workflow run gym-release-gate.yml --ref devel -f mode=contracts` | contracts-only, full benchmark skipped |
 | Oracle advisory | `gh workflow run oracle-public-advisory.yml --ref devel` | verdict artifact 필수 |
@@ -400,6 +443,9 @@ mutation이므로 메인테이너 승인 뒤에만 실행한다. inventory에 �
 | Release Binary | `gh workflow run release-binary.yml --ref devel -f tag=test` | verify-only, Release·외부 publish skipped, 5-platform·package artifact 필수 |
 | Publish All Packages | `gh workflow run npm-publish.yml --ref devel -f publish=false -f publish_extensions=true` | verify-only, 네 외부 채널 skipped, `completed` verdict artifact 필수 |
 | Render Diff | `gh workflow run render-diff.yml --ref devel` | direct, artifact 필수 |
+| Release operations contracts | 위 `gh workflow run ci.yml --ref devel -f release_grade=false`의 reusable job | contracts-only, issue label·duration refresh·trusted reuse의 실제 스크립트/API 실패 계약 |
+
+`build-nextest-archives.yml`과 `run-nextest-archives.yml`은 독립 dispatch 대신 같은 exact SHA의 CI caller run을 증적으로 쓴다. 각각 네 archive build/worker job과 CI preflight·Build & Test의 success를 모두 요구한다. metadata workflow 세 개와 `release-operations-contracts.yml`도 등록된 CI의 manual caller run을 사용하며, `CI preflight`, `Build & Test`, `release-operations-contracts / Release operations contracts`의 success를 모두 요구한다. 새 adapter를 main에 먼저 등록하지 않아도 같은 commit의 local reusable 호출로 검증할 수 있다. PR/push에서는 이 job을 실행하지 않는다. 원래 label/metrics 쓰기 이벤트를 실행하지 않으며, 공유 caller/adapter run에서도 각 변경 파일의 hash·mode·필수 job을 개별 유지한다. contracts-only는 실제 repository metadata 쓰기 성공의 증거와 구분한다. 독립 dispatch 표면은 10개다.
 
 `workflow_dispatch` API의 `ref`는 branch 또는 tag이므로 명령에 commit SHA를 직접 넘겨 exact성을
 보장하지 않는다. 따라서 dispatch 직전의 `candidate_sha`를 기록하고, 생성된 모든 run의

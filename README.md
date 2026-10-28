@@ -40,7 +40,7 @@
 
 ## 엔진 — rhwp
 
-HanPage 가 사용하는 파서·렌더·편집 엔진은 오픈소스 프로젝트 [rhwp](https://github.com/edwardkim/rhwp) 입니다. 현재 엔진 버전 **v0.8.6** (MIT License, © 2025-2026 Edward Kim 및 기여자 다수).
+HanPage 가 사용하는 파서·렌더·편집 엔진은 오픈소스 프로젝트 [rhwp](https://github.com/edwardkim/rhwp) 입니다. 현재 엔진 버전 **v0.8.7** (MIT License, © 2025-2026 Edward Kim 및 기여자 다수).
 
 엔진의 릴리스 사이클별 상세 변경 내역과 외부 기여자 인정은 upstream 의 [CHANGELOG](https://github.com/edwardkim/rhwp/blob/main/CHANGELOG.md) 와 [Releases](https://github.com/edwardkim/rhwp/releases) 를 참조하세요. paldyn 의 본 저장소는 엔진 자체를 fork 하여 hanpage.paldyn.com 호스팅 및 재배포 산출물을 관리합니다.
 
@@ -48,7 +48,7 @@ HanPage 가 사용하는 파서·렌더·편집 엔진은 오픈소스 프로젝
 
 혼자 뼈대를 세우고, 함께 살을 붙이고, 모두의 것으로 완성한다.
 
-현재는 **v0.8.6 — v1.0 조판 엔진 체계화**를 중심으로 작업하면서, 40명이 넘는 외부 기여자와
+현재는 **v0.8.7 — v1.0 조판 엔진 체계화**를 중심으로 작업하면서, 40명이 넘는 외부 기여자와
 두 명의 공동 유지보수자(콜레보레이터)가 참여하는 **v2.0 협업 기반**도 함께 발전시키고 있습니다.
 버전별 목표와 완료 기준, 함께 진행되는 작업, AI 활용 세부 로드맵의 위치는
 [프로젝트 로드맵](ROADMAP.md)에서 설명합니다. rhwp 업스트림에 기여할 기능과 별도 다운스트림

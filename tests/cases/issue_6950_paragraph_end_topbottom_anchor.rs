@@ -31,7 +31,7 @@ fn first_fragment_uses_paragraph_reference_not_text_or_outer_box() {
     let Control::Table(mut table) = para.controls[0].clone() else {
         panic!("table")
     };
-    // Algorithm variations, not generated Hancom oracle documents.
+    // 알고리즘 변형이며 한컴에서 생성한 기준 문서가 아니다.
     for spacing in [0.0, 20.0, 80.0] {
         for margin in [0, 141, 900] {
             table.outer_margin_top = margin;
@@ -40,12 +40,25 @@ fn first_fragment_uses_paragraph_reference_not_text_or_outer_box() {
                 flow: ParagraphFloatFlow::NextLine,
                 anchor_y: 100.0 + spacing,
                 stored_host_origin: None,
+                stored_successor_line_origin: None,
+                table_left: None,
                 table_top: 100.0 + spacing + 4129.0 / 75.0 + f64::from(margin) / 75.0,
                 occupied_bottom: 400.0 + spacing + 4129.0 / 75.0 + f64::from(margin) / 75.0,
             };
-            let fragment = whole.for_first_fragment(&table, spacing, 20.0, 96.0);
+            let fragment = whole.for_first_fragment(&table, 100.0, spacing, 20.0, 96.0);
             let expected = (100.0 + 4129.0 / 75.0_f64).max(100.0 + spacing + 20.0);
             assert!((fragment.table_top - expected).abs() < 1e-8);
+            // 문단 윗변을 앵커로 갖는 생성 경로도 위 간격을 두 번 빼지 않고 같은 첫 조각을 만든다.
+            let paragraph_anchored = ParagraphFloatPlacement {
+                anchor_y: 100.0,
+                ..whole
+            }
+            .for_first_fragment(&table, 100.0, spacing, 20.0, 96.0);
+            assert!(
+                (paragraph_anchored.table_top - expected).abs() < 1e-8,
+                "spacing {spacing}: {} != {expected}",
+                paragraph_anchored.table_top
+            );
             assert_eq!(
                 fragment.anchor_y, whole.anchor_y,
                 "text anchor does not move"
@@ -62,12 +75,14 @@ fn first_fragment_uses_paragraph_reference_not_text_or_outer_box() {
 
 #[test]
 fn paragraph_completion_uses_occupied_end_once_in_either_emission_order() {
-    // Algorithm contract, not a Hancom oracle or fixed sample coordinate.
+    // 알고리즘 계약을 검사하며 한컴 기준 출력이나 고정 샘플 좌표가 아니다.
     for origin in [0.0, 100.0, 300.0] {
         let placement = ParagraphFloatPlacement {
             flow: ParagraphFloatFlow::NextLine,
             anchor_y: origin + 10.0,
             stored_host_origin: None,
+            stored_successor_line_origin: None,
+            table_left: None,
             table_top: origin + 30.0,
             occupied_bottom: origin + 130.0,
         };
@@ -106,6 +121,8 @@ fn floating_band_consumes_flow_only_when_the_tail_line_has_insufficient_space() 
                     flow: ParagraphFloatFlow::Exclusion,
                     anchor_y: 10.0,
                     stored_host_origin: None,
+                    stored_successor_line_origin: None,
+                    table_left: None,
                     table_top: top,
                     occupied_bottom: top + 100.0,
                 };
@@ -122,7 +139,9 @@ fn floating_band_consumes_flow_only_when_the_tail_line_has_insufficient_space() 
                 );
                 assert_eq!(wrapped.paragraph_end(30.0, 5.0), top + 105.0);
                 assert_eq!(
-                    wrapped.for_first_fragment(&table, 0.0, 20.0, 96.0).flow,
+                    wrapped
+                        .for_first_fragment(&table, 10.0, 0.0, 20.0, 96.0)
+                        .flow,
                     wrapped.flow
                 );
                 assert_eq!(
@@ -132,43 +151,6 @@ fn floating_band_consumes_flow_only_when_the_tail_line_has_insufficient_space() 
             }
         }
     }
-}
-
-#[test]
-fn first_fragment_real_fixture_matches_paragraph_offset_without_extra_margins() {
-    let bytes = std::fs::read(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("samples/issue6025/3232693_employment_support_criteria.hwpx"),
-    )
-    .unwrap();
-    let core = DocumentCore::from_bytes(&bytes).unwrap();
-    let doc = core.document();
-    let host = &doc.sections[0].paragraphs[1];
-    let Control::Table(source) = &host.controls[0] else {
-        panic!("table")
-    };
-    let styles = rhwp::renderer::style_resolver::resolve_styles(&doc.doc_info, 96.0);
-    let spacing_before = styles.para_styles[host.para_shape_id as usize].spacing_before;
-    let tree = core.build_page_render_tree(0).unwrap();
-    let mut items = Vec::new();
-    body_items(&tree.root, &mut items);
-    let title = items
-        .iter()
-        .find(|n| {
-            matches!(&n.node_type,
-        RenderNodeType::TextLine(line) if line.para_index == Some(1))
-        })
-        .unwrap();
-    let (top, _) = table(&items, 1, 0);
-    // Actual 0.8.6 export + maintainer observation: paragraph reference precedes
-    // spacing-before. Do not replace the existing #6025 last-line coordinate pin.
-    let expected = title.bbox.y - spacing_before + source.common.vertical_offset as f64 / 75.0;
-    assert!(
-        (top - expected).abs() < 0.02,
-        "table {top}, paragraph-relative {expected}"
-    );
-    assert!(top >= title.bbox.y + title.bbox.height);
-    assert_eq!(core.page_count(), 4);
 }
 
 #[test]
@@ -249,7 +231,7 @@ fn stored_tail_table_paints_border_and_cell_content_from_the_same_origin() {
         RenderNodeType::Table(table) if table.para_index == Some(224))
         })
         .unwrap();
-    // Relative source contract, not a hard-coded Hancom page coordinate.
+    // 상대적인 원본 계약이며 한컴 쪽 좌표를 하드코딩하지 않는다.
     let expected_top = title.bbox.y
         + (source.common.vertical_offset as f64 + source.outer_margin_top as f64) / 75.0;
     assert!(
@@ -343,7 +325,7 @@ fn paragraph_start_controls_are_not_reclassified_as_text_tail_anchors() {
 #[test]
 fn a_control_after_a_hard_break_is_not_a_width_wrapped_text_tail() {
     use rhwp::renderer::float_placement::ParagraphHostLine;
-    // In-memory contract test, not a synthetic Hancom oracle document.
+    // 메모리 안의 계약 검사이며 합성 한컴 기준 문서가 아니다.
     let core = core();
     let mut para = core.document().sections[0].paragraphs[1].clone();
     let Control::Table(table) = &para.controls[0] else {
@@ -404,7 +386,7 @@ fn table(items: &[&RenderNode], pi: usize, ci: usize) -> (f64, f64) {
 }
 
 #[test]
-fn object_only_paragraph_finishes_once_before_a_text_and_table_paragraph() {
+fn object_only_paragraph_preserves_outer_frames_and_finishes_once() {
     let core = core();
     let paragraphs = &core.document().sections[0].paragraphs;
     let host = &paragraphs[0];
@@ -429,8 +411,24 @@ fn object_only_paragraph_finishes_once_before_a_text_and_table_paragraph() {
     let a = table(&items, 0, 2);
     let b = table(&items, 0, 3);
     let c = table(&items, 0, 4);
-    assert!((b.0 - a.1).abs() < 0.02, "no paragraph end between objects");
-    assert!((c.0 - b.1).abs() < 0.02, "no paragraph end between objects");
+    // 동일 원본 PDF의 표 사이 공간은 앞 아래·뒤 위 바깥 여백의 합이다.
+    // 각 개체의 여백과 문단 종료 줄 진행량을 구분하며 종료는 마지막에서만 소비한다.
+    for (previous, following, previous_index, following_index) in [(a, b, 2, 3), (b, c, 3, 4)] {
+        let (Control::Table(previous_source), Control::Table(following_source)) = (
+            &host.controls[previous_index],
+            &host.controls[following_index],
+        ) else {
+            panic!("원본 형제 표")
+        };
+        let expected_gap = (f64::from(previous_source.outer_margin_bottom)
+            + f64::from(following_source.outer_margin_top))
+            / 75.0;
+        assert!(
+            (following.0 - previous.1 - expected_gap).abs() < 0.02,
+            "원본 바깥 여백: 실제{}, 기대{expected_gap}",
+            following.0 - previous.1
+        );
+    }
     let next = items
         .iter()
         .find(|n| {
@@ -566,6 +564,8 @@ fn occupied_bands_move_the_box_not_the_anchor_and_are_order_independent() {
         flow: ParagraphFloatFlow::Exclusion,
         anchor_y: 20.0,
         stored_host_origin: None,
+        stored_successor_line_origin: None,
+        table_left: None,
         table_top: 50.0,
         occupied_bottom: 100.0,
     };
@@ -1061,8 +1061,17 @@ fn split_computed_host_publishes_fragment_local_placements() {
                         .expect("분할 표도 현재 단의 확정 배치를 전달해야 한다");
                     assert!(placement.occupied_bottom > placement.table_top);
                     if *is_continuation {
+                        // [#7685] 행 경계에서 이어지는 조각은 표의 바깥 위 여백을 다시 연다
+                        // (한/글 정본: 1342000 124쪽 표 위끝 = 본문 위 + outMargin.top).
+                        // 이 시험이 막는 것은 이전 앵커 거리의 재적용이므로 그 여백까지만 허용한다.
+                        let Control::Table(target) = &section.paragraphs[0].controls[0] else {
+                            panic!("표");
+                        };
+                        let outer_top =
+                            rhwp::renderer::hwpunit_to_px(target.outer_margin_top as i32, 96.0);
                         assert!(
-                            placement.table_top.abs() < 0.1,
+                            placement.table_top.abs() < 0.1
+                                || (placement.table_top - outer_top).abs() < 0.1,
                             "다음 단에 이전 앵커 거리 재적용 금지: {placement:?}"
                         );
                     } else {
@@ -1152,14 +1161,20 @@ fn split_and_deferred_computed_tables_preserve_host_and_paint_inside_frame() {
                                 panic!("표");
                             };
                             // 첫 조각 전체 이월은 첫 조각의 위 바깥 여백을 유지한다.
-                            // 이미 시작한 표의 연속 조각에는 이 첫 여백도 반복하지 않는다.
-                            let first_margin = if fragments == 1 {
-                                rhwp::renderer::hwpunit_to_px(target.outer_margin_top as i32, 96.0)
+                            // [#7685] 행 경계에서 이어지는 조각도 바깥 위 여백을 다시 연다
+                            // (한/글 정본: 1342000 124쪽 표 위끝 = 본문 위 + outMargin.top).
+                            // 칸 중간에서 이어지는 조각은 열지 않는다. 어느 쪽이든 이전 앵커
+                            // 거리는 다시 적용하지 않는다.
+                            let outer_top =
+                                rhwp::renderer::hwpunit_to_px(target.outer_margin_top as i32, 96.0);
+                            let offset = node.bbox.y - body_top;
+                            let allowed = if fragments == 1 {
+                                (offset - outer_top).abs() < 0.5
                             } else {
-                                0.0
+                                offset.abs() < 0.5 || (offset - outer_top).abs() < 0.5
                             };
-                            assert!((node.bbox.y - body_top - first_margin).abs() < 0.5,
-                                "새 쪽 앵커 거리 재적용 금지: {:?}, 본문 {body_top}, 첫 여백 {first_margin}", node.bbox);
+                            assert!(allowed,
+                                "새 쪽 앵커 거리 재적용 금지: {:?}, 본문 {body_top}, 바깥 위 여백 {outer_top}", node.bbox);
                         }
                     }
                 }
@@ -1168,4 +1183,135 @@ fn split_and_deferred_computed_tables_preserve_host_and_paint_inside_frame() {
             assert_eq!(host_lines, expected_lines, "호스트 누락/중복 금지");
         }
     }
+}
+
+/// 원본 한컴 PDF1쪽의 예산 설명 줄은 별도 쪽으로 이월되지 않는다.
+/// 저장68707HU/높이1200HU와 PDF1010.2556..1026.2426px가 같은 본문 소유를 증명한다.
+#[test]
+fn page_last_line_consumes_the_resolved_source_frame() {
+    let core = core();
+    let para = &core.document().sections[0].paragraphs[5];
+    assert_eq!(para.line_segs.len(), 1);
+    assert_eq!(para.line_segs[0].vertical_pos, 68707);
+    assert_eq!(para.line_segs[0].line_height, 1200);
+    let tree = core.build_page_render_tree(0).expect("한컴 첫 쪽");
+    let mut items = Vec::new();
+    body_items(&tree.root, &mut items);
+    let line = items
+        .iter()
+        .find(|node| {
+            matches!(&node.node_type,
+        RenderNodeType::TextLine(line) if line.para_index == Some(5) && line.line_index == Some(0))
+        })
+        .expect("PDF 첫 쪽의 예산 설명 줄 누락 금지");
+    assert!(
+        (line.bbox.y - (7085.0 + 68707.0) / 75.0).abs() < 0.1,
+        "확정 본문 기준에서 원본 줄 앵커를 소비: {}",
+        line.bbox.y
+    );
+    assert!(
+        line.bbox.y + line.bbox.height <= (7085.0 + 70018.0) / 75.0,
+        "마지막 줄의 실제 점유 끝은 원본 본문 안이다"
+    );
+    assert_eq!(core.page_count(), 3, "원본 PDF의3쪽과 같은 쪽 소유");
+}
+
+/// 한컴 PDF3쪽의 큰 중첩 표는 바깥 셀의 가운데 정렬 공간을 보존한다.
+/// 저장 최소 높이54805HU와 내용52982HU·안 여백282HU가 독립 정렬 근거다.
+#[test]
+fn centered_wrapper_preserves_its_cell_frame_and_nested_table_origin() {
+    fn tables<'a>(node: &'a RenderNode, out: &mut Vec<&'a RenderNode>) {
+        if matches!(node.node_type, RenderNodeType::Table(_)) {
+            out.push(node);
+        }
+        for child in &node.children {
+            tables(child, out);
+        }
+    }
+    let core = core();
+    let Control::Table(outer) = &core.document().sections[0].paragraphs[29].controls[0] else {
+        panic!("외곽 표");
+    };
+    let cell = &outer.cells[0];
+    assert_eq!(cell.height, 54805);
+    assert_eq!(cell.paragraphs[0].line_segs[0].line_height, 52982);
+    let tree = core.build_page_render_tree(2).expect("원본3쪽");
+    let mut nodes = Vec::new();
+    tables(&tree.root, &mut nodes);
+    let wrapper = nodes.iter().find(|n| matches!(&n.node_type,
+        RenderNodeType::Table(t) if t.para_index == Some(29) && t.row_count == 1 && t.col_count == 1))
+        .expect("가운데 정렬과 최소 높이를 소유한 외곽 표 보존");
+    let nested: Vec<_> = nodes
+        .iter()
+        .filter(|n| {
+            matches!(&n.node_type,
+        RenderNodeType::Table(t) if t.row_count == 32 && t.col_count == 10)
+        })
+        .collect();
+    assert_eq!(nested.len(), 1, "안쪽 표 누락·중복 금지");
+    // PDF3쪽의 실제 위 괘선307.823px를 직접 대조한다.
+    // 저장 최소 높이와 내용의 차이는 위치를 맞추는 상수가 아니라 정렬 공간이다.
+    assert!(
+        (nested[0].bbox.y - 307.823).abs() < 0.6,
+        "PDF3쪽 안쪽 표 상단: {:?}",
+        nested[0].bbox
+    );
+    assert!(
+        (wrapper.bbox.height - 54805.0 / 75.0).abs() < 0.1,
+        "외곽 셀 최소 높이 보존: {:?}",
+        wrapper.bbox
+    );
+    assert!(
+        nested[0].bbox.y > wrapper.bbox.y + 8.0,
+        "셀 위 여백만 적용하고 가운데 정렬 공간을 버리지 않는다"
+    );
+    assert!(
+        nested[0].bbox.y + nested[0].bbox.height < wrapper.bbox.y + wrapper.bbox.height,
+        "안쪽 표의 실제 점유 끝이 외곽 셀 안에 남는다"
+    );
+    assert_eq!(core.page_count(), 3);
+}
+
+/// 수동 IR 변형의 정렬 불변식이며 한컴 생성 대조군의 출력 증거가 아니다.
+#[test]
+fn wrapper_alignment_variants_consume_the_cell_space_once() {
+    fn nested_table(node: &RenderNode) -> Option<&RenderNode> {
+        if matches!(&node.node_type, RenderNodeType::Table(t) if t.row_count == 32 && t.col_count == 10)
+        {
+            return Some(node);
+        }
+        node.children.iter().find_map(nested_table)
+    }
+    let source = core();
+    let mut positions = Vec::new();
+    for alignment in [
+        rhwp::model::table::VerticalAlign::Top,
+        rhwp::model::table::VerticalAlign::Center,
+        rhwp::model::table::VerticalAlign::Bottom,
+    ] {
+        let mut core = core();
+        let mut document = source.document().clone();
+        let Control::Table(table) = &mut document.sections[0].paragraphs[29].controls[0] else {
+            panic!("외곽 표");
+        };
+        table.cells[0].vertical_align = alignment;
+        core.set_document(document);
+        let tree = core.build_page_render_tree(2).unwrap();
+        positions.push(nested_table(&tree.root).expect("안쪽 표 보존").bbox.y);
+        assert_eq!(
+            core.page_count(),
+            3,
+            "정렬 공간은 같은 물리 셀 안에서 소비한다"
+        );
+    }
+    // 셀 최소54805에서 내용52982와 안 여백282를 뺀1541HU의 공간이다.
+    let half_space = (54805.0 - 52982.0 - 282.0) / 150.0;
+    assert!(
+        (positions[1] - positions[0] - half_space).abs() < 0.1,
+        "가운데 정렬의 절반 공간: {positions:?}"
+    );
+    assert!(
+        (positions[2] - positions[1] - half_space).abs() < 0.1,
+        "아래 정렬의 나머지 절반 공간: {positions:?}"
+    );
 }
