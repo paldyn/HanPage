@@ -114,11 +114,12 @@ updater 서명(§2)으로 위변조를 검증하므로 이 결정과 무관하�
 2. 태그는 옮길 수 없으므로 PR CI와 함께 PR 브랜치에서 `desktop-release`를 수동 실행해 두 플랫폼 번들과 서명 검증 단계가
    성공하는지 확인한다. 단계가 성공으로 끝났다는 것만으로는 부족하다. 서명 설정이 없으면 수동 실행은 검증을 건너뛰고
    성공으로 끝나므로, 실제 검증 출력이 있는지 본다. job 요약(`### macOS 서명·공증 확인`)은 GitHub에 로그인한 브라우저에서만
-   보이므로, CLI로는 annotation에 `macOS 미서명`이 없고 macOS job 로그에 실행 결과 `The validate action worked!`가 세 번
-   (번들·아카이브·DMG의 `.app`) 있는지 확인한다. 이 문장은 단계 스크립트 원문에 없어 건너뛴 실행에서는 나오지 않는다.
+   보이므로, CLI로는 macOS job의 annotation 제목에 `macOS 미서명`이 없고(`gh run view`는 제목 없이 메시지만 보여 준다) macOS
+   job 로그에 실행 결과 `The validate action worked!`가 세 번(번들·아카이브·DMG의 `.app`) 있는지 확인한다. 이 문장은 단계
+   스크립트 원문에 없어 건너뛴 실행에서는 나오지 않는다.
    ```bash
    gh workflow run desktop-release.yml --repo paldyn/HanPage --ref <PR 브랜치>
-   gh run view <run ID> --repo paldyn/HanPage
+   gh api repos/paldyn/HanPage/check-runs/<macOS job ID>/annotations --jq '.[].title'
    gh run view --job <macOS job ID> --log --repo paldyn/HanPage | grep -c 'The validate action worked!'
    ```
 3. PR을 병합하고, 병합 commit의 tree가 시험한 source와 같은지 또는 차이가 앱에 들어가지 않는 문서뿐인지 확인해 배포 기록에
@@ -130,9 +131,10 @@ updater 서명(§2)으로 위변조를 검증하므로 이 결정과 무관하�
    git push origin hanpage-desktop-v<버전>
    ```
 5. CI(`tauri-action`)가 macOS(app·dmg)·Windows(nsis) 번들, updater 아티팩트, `latest.json`을
-   **초안 릴리스**에 첨부한다. 한 플랫폼 job만 실패하면 태그를 옮기거나 시크릿을 바꾸지 말고 같은 run의 실패 job만 다시
-   실행한다(`gh run rerun <run ID> --failed --repo paldyn/HanPage`). 초안에 이미 올라간 다른 플랫폼 자산은 그대로이고,
-   `latest.json`은 다시 실행한 job이 합친다.
+   **초안 릴리스**에 첨부한다. tauri-action 단계가 실패하면 같은 job 안에서 같은 설정으로 한 번 더 시도한다(macOS 러너의
+   `bundle_dmg.sh` 일시 실패 대비, §8). 그래도 한 플랫폼 job이 실패하면 태그를 옮기거나 시크릿을 바꾸지 말고 같은 run의
+   실패 job만 다시 실행한다(`gh run rerun <run ID> --failed --repo paldyn/HanPage`). 초안에 이미 올라간 다른 플랫폼 자산은
+   그대로이고, `latest.json`은 다시 실행한 job이 합친다.
 6. 공개 전에 확인한다.
    - 두 플랫폼 job과 서명 검증 단계(§3.1·§3.2)가 모두 성공했는지
    - Windows job 요약의 `Windows 설치 파일: ... Authenticode NotSigned (미서명 배포, #122)` — 미서명 배포 중에는
@@ -160,8 +162,9 @@ updater 서명(§2)으로 위변조를 검증하므로 이 결정과 무관하�
 8. 초안을 공개한다. 공개 직후 `releases/latest/download/latest.json`이 1분 정도 이전 태그로 redirect될 수 있으니, 쿼리 없는
    주소가 새 태그로 바뀌고 내용이 감사한 `latest.json`과 같은지 확인한 뒤 끝낸다(`curl -sL <주소> | shasum -a 256`과
    `draft-audit.json`의 `assets["latest.json"].sha256` 비교). 다음 실행부터 기존 사용자 앱이 `latest.json`을 확인해 새 버전을
-   감지한다. 공개한 뒤에는 태그 workflow를 다시 실행하지 않는다. tauri-action이 공개 자산을 다시 올리고, 검증 단계는
-   `초안 자산` 오류로 이를 알린다.
+   감지한다. 공개한 뒤에는 태그 workflow를 다시 실행하지 않는다. tauri-action이 공개 자산을 지우고 다시 올리기 때문이다.
+   다시 실행해도 두 job 모두 tauri-action 전에 `공개 릴리스` 오류로 멈추고(초안은 `releases/tags`로 조회되지 않아 이 확인을
+   지난다), macOS 검증 단계도 릴리스가 초안이 아니면 `초안 자산` 오류를 낸다.
 
 ## 5. latest.json 형식 (tauri-action 자동 생성, 참고)
 
@@ -210,12 +213,13 @@ Authenticode 서명이 updater 서명보다 먼저 끝나야 한다. 릴리스 �
 | "signature 검증 실패" | config `pubkey` ↔ 서명 개인키 불일치(키 교체 후 pubkey 미반영) |
 | CI 빌드가 "A public key has been found, but no private key"로 실패 | updater 시크릿 2개 미설정. config에 공개키가 있으면 개인키 없이 빌드할 수 없다 |
 | macOS 공증 HTTP 403 | Apple Developer Program 약관 미동의(§3.1). 계정 소유자 동의 후 실패 job 재실행 |
-| macOS job이 공증 `Accepted` 뒤 `bundle_dmg.sh` 실패로 끝남 | 러너의 일시 실패일 수 있다(0.8.12 첫 시도, 11초 만에 실패하고 자산은 올리지 않음). 같은 source의 태그 전 시험이 통과했다면 같은 run의 실패 job만 다시 실행한다(§4) |
+| macOS job이 공증 `Accepted` 뒤 `bundle_dmg.sh` 실패로 끝남 | 러너의 일시 실패일 수 있다(0.8.12 첫 시도, 11초 만에 실패하고 자산은 올리지 않음). tauri-action 단계는 같은 job 안에서 한 번 더 시도하고(`Build & bundle (retry)`), macOS 번들은 `--verbose`로 돌아 `bundle_dmg.sh` 출력이 로그에 남는다. 두 번 다 실패하면 그 출력으로 원인을 확인한 뒤 같은 run의 실패 job만 다시 실행한다(§4) |
+| `Refuse to overwrite a published release`의 `공개 릴리스`·`공개 릴리스 확인` 오류 | 그 태그의 릴리스가 이미 공개돼 있다(공개 뒤 태그 workflow 재실행). 번들 전에 멈췄으므로 공개 자산은 그대로다. 다시 실행하지 않는다 / 릴리스 조회를 세 번 시도해 모두 실패했다. 일시 오류면 실패 job만 다시 실행한다 |
 | 검증 단계의 `macOS 미서명` 오류(태그 빌드)·경고(수동 실행) | `APPLE_SIGNING_IDENTITY`가 비어 있다. 태그 빌드는 실패하고, 수동 실행은 서명·공증 검증 없이 성공으로 끝나므로 §4의 2단계로 확인한다 |
 | 검증 단계의 `macOS Team ID` 오류 | `APPLE_SIGNING_IDENTITY` 괄호 안 Team ID가 없거나 배포 Team ID와 다르다(§3.1 표의 형식). 인증서를 바꿨다면 Team ID도 함께 확인한다 |
 | 검증 단계의 `macOS 서명`·`macOS 공증`·`DMG`·`DMG 서명`·`DMG 구성`·`updater 아카이브 구조` 오류 | 해당 `.app`·DMG·아카이브가 §3.1의 조건(배포 Team의 Developer ID 서명, `.app` 공증·stapler, `HanPage.app`만 담은 구성)을 어긴다. 원인을 확인하기 전에는 공개하지 않는다 |
 | 검증 단계의 `macOS 빌드 불일치`·`초안 자산 불일치` 오류 | 번들·아카이브·DMG의 `.app`이 서로 다른 빌드이거나, 초안에 올라간 자산이 검증한 파일과 다르다. 공개하지 않고 원인을 확인한다 |
-| 검증 단계의 `초안 자산`·`초안 자산 조회` 오류 | tauri-action이 알려 준 릴리스에서 자산을 하나로 찾지 못했거나(릴리스 ID 없음·태그 불일치 포함), 그 릴리스가 이미 공개됐거나(공개 뒤 재실행 — 공개 자산이 다시 올라갔으니 감사부터 다시 한다), API 조회를 세 번 시도해 모두 실패했다. 일시 오류면 실패 job만 다시 실행한다(§4) |
+| 검증 단계의 `초안 자산`·`초안 자산 조회` 오류 | tauri-action이 알려 준 릴리스에서 자산을 하나로 찾지 못했거나(릴리스 ID 없음·태그 불일치 포함), 그 릴리스가 초안이 아니거나(위 `공개 릴리스` 확인을 지나 공개된 경우 — 공개 자산이 다시 올라갔을 수 있으니 감사부터 다시 한다), API 조회를 세 번 시도해 모두 실패했다. 일시 오류면 실패 job만 다시 실행한다(§4) |
 | 초안의 태그가 `untagged-…`로 바뀜 | REST API로 초안을 고칠 때 `tag_name`을 빠뜨림(§4). `tag_name=<태그>`를 넣어 다시 고치면 연결된다. Git 태그와 자산은 그대로다 |
 | Windows 사용자 업데이트가 "signature 검증 실패" | 빌드 뒤 설치 파일을 다시 서명해 `.sig`와 내용이 달라짐. 서명은 `tauri build` 안에서만 한다 |
 | Windows 설치 시 "Windows의 PC 보호" | 미서명 배포의 정상 동작(§3.2). 추가 정보 → 실행 |

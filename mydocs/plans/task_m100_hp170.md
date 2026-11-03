@@ -4,7 +4,8 @@
 - **브랜치**: `claude/desktop-release-hardening` (`origin/devel` `144377b688` 기준)
 - **작업지시자 지시(2026-11-03)**: 0.8.12 공개 승인과 함께, 공개 전 독립 검증에서 나온 후속 제안("Harden HanPage Desktop release
   verification")에 "필요한거면해"
-- **등급**: [GitHub 운영 매뉴얼](../manual/github_operations.md) O3(job 명령·matrix 러너). 저장소 설정·secret·branch protection 은 바꾸지 않는다
+- **등급**: [GitHub 운영 매뉴얼](../manual/github_operations.md) O4(runner·Release 게시 게이트) + O3(job 명령). 병합은 별도 명시 승인을 받고,
+  저장소 설정·secret·branch protection 은 바꾸지 않는다
 
 ## 1. 현재 상태 (2026-11-03)
 
@@ -36,6 +37,11 @@
   `github.token` 을 읽기에만 쓴다.
 - workflow_dispatch(초안 없음)는 업로드 대조를 건너뛰고 나머지는 같다.
 - macOS 러너를 `macos-15` 로 올린다(`desktop-check.yml` 도 같이). 같은 저장소의 `release-binary.yml` 이 이미 쓰는 이미지다.
+- tauri-action 단계가 실패하면 같은 설정의 `Build & bundle (retry)` 단계가 한 번 더 시도한다(macOS 러너의 `bundle_dmg.sh` 일시
+  실패 대비). 첫 단계는 `continue-on-error` 이고 두 번 다 실패해야 job 이 실패한다. 검증 단계는 성공한 시도의 `releaseId` 를 쓴다.
+  macOS 번들은 `--verbose` 로 돌려 `bundle_dmg.sh` 출력(tauri 는 verbose 로그에만 남긴다)이 로그에 남게 한다.
+- 태그 빌드는 tauri-action 전에 `releases/tags/<태그>` 를 조회해 공개 릴리스가 있으면 멈춘다(공개 뒤 재실행으로 공개 자산을 덮어쓰지
+  않게). 초안은 이 조회에 나오지 않으므로(404) 초안 상태의 실패 job 재실행은 그대로 된다.
 
 **감사 스크립트**(`HanPage-Desktop/scripts/release-audit.mjs`)
 
@@ -50,8 +56,11 @@
   잘못된 UTF-8 거부, Rust `str::lines` 와 같은 줄 나누기, 주석 줄 접두어, 74·64바이트, `Ed`/`ED`). 앱은 `latest.json` 의
   서명 문자열을 다듬지 않고 쓰기 때문이다.
 - DMG 는 임시 폴더의 복제본을 마운트해 원본이 이미 마운트돼 있어도 충돌하지 않게 한다. 마운트 실패 이유를 결과에 남긴다.
-- 결과는 JSON 한 개(배포 기록의 증적), 실패가 있으면 종료 코드 1. 예외가 나거나 Ctrl-C 를 받아도 남은 검사와 정리를 마치고
-  JSON 을 남긴다. 자산은 실행하지 않는다. 키 ID 는 기존 기록과 같은 바이트 순서와 minisign 표기를 함께 남긴다.
+- 인자는 `node:util` `parseArgs` strict 로 받는다. 모르는 옵션·남는 인자·값 없는 옵션은 사용법 오류(종료 2)이고, `--release=ID`
+  형식도 받는다. 결과에는 릴리스 대조 여부(`release`, 안 했으면 null)를 항상 남긴다. `latest.json` 의 `pub_date` 는 tauri-action 이
+  쓰는 `toISOString()` 형식 그대로인지, 플랫폼 항목은 `signature`·`url` 만 있는지 본다.
+- 결과는 JSON 한 개(배포 기록의 증적), 실패가 있으면 종료 코드 1. 예외가 나거나 Ctrl-C 를 받아도 정리를 하고 JSON 을 남긴다.
+  자식 프로세스가 신호로 끝나면 남은 검사를 건너뛰고 종료 코드 130 으로 끝낸다. 자산은 실행하지 않는다. 키 ID 는 기존 기록과 같은 바이트 순서와 minisign 표기를 함께 남긴다.
 
 **문서**: 운영 가이드 §3.1(검증 단계·러너·인증서 만료 2027-02-01·DMG 컨테이너 미공증), §4(절차 8단계 — 태그 전 시험은 PR 브랜치에서
 병합 전에 하고 CLI 로 실제 검증 출력 확인, 병합 tree 확인과 빌드 입력이 다를 때 devel 재시험, `--release` 감사와 대조군, 공개 직전
@@ -66,11 +75,11 @@ Desktop README 한 줄, 문서 manifest 날짜.
 | 질문 | 답 |
 |---|---|
 | 실행 event | `hanpage-desktop-v*` 태그 push 와 workflow_dispatch 의 macOS job. `desktop-check.yml` 러너 변경은 데스크톱 크레이트를 바꾼 PR 의 macOS 검사 |
-| 새 실패 조건 | 서명 Team ID 불일치, `.app` 이 디렉터리가 아님, 세 `.app` CDHash 불일치, 아카이브에 `HanPage.app` 밖 항목, DMG 컨테이너 서명·볼륨 구성 위반, 초안 자산 없음·digest 불일치, 릴리스가 이미 공개됨(공개 뒤 재실행). 모두 공개하면 안 되는 상태이며 초안은 공개되지 않은 채 남는다 |
+| 새 실패 조건 | 태그의 공개 릴리스가 이미 있음(번들 전), 서명 Team ID 불일치, `.app` 이 디렉터리가 아님, 세 `.app` CDHash 불일치, 아카이브에 `HanPage.app` 밖 항목, DMG 컨테이너 서명·볼륨 구성 위반, 초안 자산 없음·digest 불일치, 릴리스가 이미 공개됨(공개 뒤 재실행). 모두 공개하면 안 되는 상태이며 초안은 공개되지 않은 채 남는다 |
 | 오탐 위험 | API 는 세 번까지 시도하고, 그래도 실패하면 실패 job 재실행으로 복구. 이름 규칙(`HanPage_aarch64.app.tar.gz`, DMG 파일명)과 DMG 볼륨 구성은 0.8.x 자산·tauri-bundler 와 같다. `macos-15` 이미지에서의 빌드·서명·공증·검증은 dispatch 실제 실행으로 확인한다 |
 | 신뢰 경계 | 새 secret 없음. 태그 빌드만 `github.token` 으로 tauri-action 이 알려 준 릴리스 하나를 읽고, digest 가 없으면 그 자산을 받는다(읽기 전용). fork 는 이 workflow 를 쓰지 않는다 |
 | required check | `devel` 보호 규칙 없음 |
-| rollback | 변경 PR revert(러너만 되돌리면 macOS 14 은퇴로 다시 실패할 수 있다). 감사 스크립트는 수동 도구라 workflow 와 독립적이다 |
+| rollback | 검증 단계·재시도·공개 릴리스 확인을 되돌리는 PR. macos-15 러너는 유지한다(되돌리면 macOS 14 은퇴로 실패한다). 감사 스크립트는 수동 도구라 workflow 와 독립적이다 |
 
 ## 4. 검증 계획
 
@@ -79,9 +88,10 @@ Desktop README 한 줄, 문서 manifest 날짜.
   아카이브, 다시 압축한 아카이브(업로드 파일과 다름), 아카이브 여분 항목, 서명 없는 DMG, DMG 볼륨 여분 항목·앱 링크, DMG 없음,
   다른 릴리스의 자산, 공개된 릴리스(초안 아님), 자산 없는 초안, 릴리스 ID 없음·태그 불일치, API 실패(세 번 시도), digest 없음
   (내려받아 계산), dispatch, 미서명 dispatch·태그. 초안 응답이 필요한 경우는 실제 릴리스 응답을 초안으로 바꿔 돌려주는 `gh` 대역을 쓴다.
-- 감사 스크립트: 공개된 0.8.11·0.8.12 자산(양성, `--release` 포함), 변조·버전·공개키·`.sig` 교환·서명 형식·다른 버전 DMG/EXE·
+- `Refuse to overwrite a published release` 단계: 공개된 릴리스(멈춤), 초안·없는 릴리스(통과), API 계속 실패(세 번 시도 뒤 멈춤).
+- 감사 스크립트: 인자 형태(`--release=ID`·값 누락·오타·여분 인자·빈 값), 공개된 0.8.11·0.8.12 자산(양성, `--release` 포함), 변조·버전·공개키·`.sig` 교환·서명 형식·다른 버전 DMG/EXE·
   여분/누락 자산·경로 이탈·읽기 전용 아카이브·서명 없는/구성이 다른 DMG·`latest.json` 키·`pub_date`·다른 릴리스(음성)에서 해당
   검사만 실패하는지, 원본 DMG 가 마운트된 상태와 Ctrl-C 에서도 정리되는지.
-- 독립 반박 검토(워크플로·스크립트·문서) 두 차례.
+- 독립 반박 검토(워크플로·스크립트·문서) 세 차례.
 - PR CI(`Desktop check` 의 `macos-15` 포함), 그리고 PR 브랜치의 workflow_dispatch 실제 실행으로 `macos-15` 에서 빌드·서명·공증과
   새 검증 단계가 통과하는지. 업로드 대조는 dispatch 에서 건너뛰므로 로컬 재현으로 확인하고, 첫 태그 빌드에서 다시 본다.

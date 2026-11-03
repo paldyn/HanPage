@@ -132,6 +132,26 @@ jobs:
         run: |
           echo "$APPLE_API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/apple_api_key.p8"
 
+      # 공개 뒤 태그 빌드를 다시 실행하면 tauri-action 이 공개 자산을 지우고 다시 올린다. 초안은 releases/tags 로
+      # 조회되지 않으므로(404) 공개 릴리스가 보이면 번들 전에 멈춘다. 초안 상태의 실패 job 재실행은 그대로 된다(#170).
+      - name: Refuse to overwrite a published release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for n in 1 2 3; do
+            if out=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq '.id' 2>&1); then
+              echo "::error title=공개 릴리스::$GITHUB_REF_NAME 릴리스(${out})가 이미 공개돼 있어 공개 자산을 덮어쓰지 않도록 멈춥니다."
+              exit 1
+            fi
+            grep -q 'HTTP 404' <<<"$out" && exit 0
+            sleep $((n * 15))
+          done
+          echo "::error title=공개 릴리스 확인::릴리스 조회를 세 번 시도해 모두 실패했습니다: ${out}"
+          exit 1
+
       # --- Tauri 번들 (beforeBuildCommand = build:frontend = copy-wasm + studio build:desktop) ---
       # macOS 러너에서 DMG 를 만드는 bundle_dmg.sh 가 가끔 실패한다(0.8.12 태그 빌드 첫 시도 등, #170).
       # 실패하면 아래 "retry" 단계가 같은 설정으로 한 번 더 시도하고, 둘 다 실패해야 job 이 실패한다.

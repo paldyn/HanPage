@@ -9,13 +9,14 @@
 // - updater 서명은 앱의 updater(tauri-plugin-updater·minisign-verify)처럼 엄격하게 디코딩한다. latest.json 의 서명 문자열을
 //   그대로 쓰므로 .sig 와 바이트 단위로 같아야 한다.
 // - macOS 도구(plutil·lipo·codesign·spctl·xcrun stapler·hdiutil)를 쓴다. DMG 는 읽기 전용으로 마운트한다.
-// 결과 JSON 을 stdout 에 쓰고, 실패한 검사가 있으면 종료 코드 1 로 끝난다.
+// 결과 JSON 을 stdout 에 쓰고, 실패한 검사가 있으면 종료 코드 1, 중단되면 130 으로 끝난다.
 import { readFileSync, readdirSync, readlinkSync, lstatSync, mkdtempSync, mkdirSync, rmSync, copyFileSync, constants as fsc } from 'node:fs';
 import { createHash, createPublicKey, verify } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { basename, dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
 const TAG_PREFIX = 'hanpage-desktop-v';
 const DOWNLOAD_PREFIX = 'https://github.com/paldyn/HanPage/releases/download/';
@@ -24,23 +25,47 @@ const TEAM_ID = '8L78W6D8XF';
 const BUNDLE_ID = 'com.paldyn.hanpage';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-const argv = process.argv.slice(2);
-const flag = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv.splice(i, 2)[1] : undefined; };
-const opts = { release: flag('--release'), prevTag: flag('--prev-tag'), conf: flag('--conf'), prevConf: flag('--prev-conf') };
-const [dir, version] = argv;
-if (!dir || !/^\d+\.\d+\.\d+$/.test(version ?? '') || (opts.release !== undefined && !/^\d+$/.test(opts.release))) {
+// 오타·`--release=ID`·값 없는 옵션이 조용히 무시되면 대조를 건너뛴 채 통과하므로 모르는 옵션과 남는 인자는 거부한다.
+const usage = () => {
   console.error('usage: release-audit.mjs <assetDir> <version> [--release <id>] [--prev-tag <tag>] [--conf <file>] [--prev-conf <file>]');
   process.exit(2);
+};
+let cli;
+try {
+  cli = parseArgs({
+    allowPositionals: true, strict: true,
+    options: { release: { type: 'string' }, 'prev-tag': { type: 'string' }, conf: { type: 'string' }, 'prev-conf': { type: 'string' } },
+  });
+} catch (e) {
+  console.error(e.message);
+  usage();
 }
-// Ctrl-C 기본 동작은 finally 없이 끝나 DMG 마운트·임시 폴더를 남긴다. 처리기를 두면 진행 중인 검사와 정리를 마친 뒤 끝난다.
-for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) process.on(signal, () => process.exit(code));
+const [dir, version] = cli.positionals;
+const opts = { release: cli.values.release, prevTag: cli.values['prev-tag'], conf: cli.values.conf, prevConf: cli.values['prev-conf'] };
+if (cli.positionals.length !== 2 || !/^\d+\.\d+\.\d+$/.test(version) || (opts.release !== undefined && !/^\d+$/.test(opts.release))
+  || Object.values(opts).some((v) => v === '')) usage();
+// 동기 실행 중에는 신호 처리기가 돌지 않는다. 처리기는 Node 가 신호로 바로 죽어 finally(마운트 해제·임시 폴더 정리)를 건너뛰지
+// 않게 할 뿐이다. 터미널 Ctrl-C 는 같은 프로세스 그룹의 자식에도 간다. 자식이 신호로 끝나면 남은 검사를 건너뛰고 130 으로
+// 끝내며, 신호를 받아 스스로 끝나는 도구(hdiutil 등)는 그 검사가 실패로 남는다. 어느 쪽이든 정리는 한다.
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => {});
+let interrupted = null;
 const tag = `${TAG_PREFIX}${version}`;
-const out = { version, tag, checks: [] };
+const out = { version, tag, release: null, checks: [] };
 const check = (name, ok, detail = '') => { out.checks.push({ name, ok: !!ok, detail: String(detail) }); };
-const attempt = (name, fn) => { try { fn(); } catch (e) { check(name, false, e.message.replaceAll(join(dir, '/'), '')); } };
+const attempt = (name, fn) => {
+  if (interrupted) return;
+  try { fn(); } catch (e) {
+    if (e.signal) interrupted = e.signal;
+    check(name, false, e.message.replaceAll(join(dir, '/'), ''));
+  }
+};
 const sha256 = (b) => createHash('sha256').update(b).digest('hex');
 const git = (args) => execFileSync('git', ['-C', repoRoot, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-const run = (cmd, args) => { const r = spawnSync(cmd, args, { encoding: 'utf8' }); return { ok: r.status === 0, text: `${r.stdout ?? ''}${r.stderr ?? ''}`.trim() }; };
+const run = (cmd, args) => {
+  const r = spawnSync(cmd, args, { encoding: 'utf8' });
+  if (r.signal) interrupted = r.signal;
+  return { ok: r.status === 0, text: `${r.stdout ?? ''}${r.stderr ?? ''}`.trim() };
+};
 const cmpVersion = (a, b) => {
   const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) { const d = (pa[i] ?? 0) - (pb[i] ?? 0); if (d) return d; }
@@ -214,17 +239,21 @@ const urlFor = { 'darwin-aarch64': 'HanPage_aarch64.app.tar.gz', 'darwin-aarch64
 attempt('latest.json: readable', () => {
   const manifest = JSON.parse(asset('latest.json').toString('utf8'));
   // updater 는 매니페스트 전체를 RemoteRelease 로 읽는다. name 은 version 의 별칭이라 함께 있으면 거부되고, pub_date 는 RFC 3339 여야 한다.
+  // tauri-action 은 version·notes·pub_date(toISOString)·platforms({signature, url}) 만 쓰므로 그 형태 그대로인지 본다.
   const keys = Object.keys(manifest).sort();
   check('latest.json: top-level keys are notes, platforms, pub_date, version',
     JSON.stringify(keys) === JSON.stringify(['notes', 'platforms', 'pub_date', 'version']), keys.join(', '));
-  check('latest.json: pub_date is an RFC 3339 timestamp', typeof manifest.pub_date === 'string'
-    && /^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$/.test(manifest.pub_date), JSON.stringify(manifest.pub_date));
+  const isoDate = (s) => { try { return new Date(s).toISOString() === s; } catch { return false; } };
+  check('latest.json: pub_date is a valid ISO 8601 UTC timestamp', typeof manifest.pub_date === 'string' && isoDate(manifest.pub_date),
+    JSON.stringify(manifest.pub_date));
   check('latest.json: version', manifest.version === version, manifest.version);
   check('latest.json: notes empty (release notes live on the GitHub release)', manifest.notes === '', JSON.stringify(manifest.notes));
   const platforms = Object.keys(manifest.platforms ?? {}).sort();
   check('latest.json: 4 platform keys', JSON.stringify(platforms) === JSON.stringify(Object.keys(urlFor).sort()), platforms.join(', '));
   for (const [p, file] of Object.entries(urlFor)) {
     const entry = manifest.platforms?.[p];
+    check(`latest.json: ${p} entry has only signature and url`,
+      JSON.stringify(Object.keys(entry ?? {}).sort()) === '["signature","url"]', Object.keys(entry ?? {}).join(', '));
     check(`latest.json: ${p} url`, entry?.url === `${DOWNLOAD_PREFIX}${tag}/${file}`, entry?.url ?? 'missing');
     check(`latest.json: ${p} signature is byte-identical to ${file}.sig`, entry?.signature === asset(`${file}.sig`).toString('utf8'));
   }
@@ -320,8 +349,10 @@ try {
       visible.map((e) => `${e.name}${e.isSymbolicLink() ? '@' : e.isDirectory() ? '/' : ''}`).sort().join(', '));
     out.cdhash = { ...out.cdhash, dmg: inspectApp('DMG .app', join(mnt, 'HanPage.app')) };
   });
-  check('updater .app and DMG .app are the same build (CDHash)',
-    out.cdhash?.updater && out.cdhash.updater === out.cdhash.dmg, `${out.cdhash?.updater} / ${out.cdhash?.dmg}`);
+  if (!interrupted) {
+    check('updater .app and DMG .app are the same build (CDHash)',
+      out.cdhash?.updater && out.cdhash.updater === out.cdhash.dmg, `${out.cdhash?.updater} / ${out.cdhash?.dmg}`);
+  }
   attempt('setup.exe: inspect', () => {
     const exe = peInfo(asset(`HanPage_${version}_x64-setup.exe`));
     const want = [version, `${version}.0`];
@@ -338,11 +369,12 @@ try {
   } catch {
     // 아카이브에 읽기 전용 디렉터리가 있으면 쓰기 권한을 준 뒤 다시 지운다.
     run('chmod', ['-R', 'u+w', tmp]);
-    attempt('cleanup: temporary directory removed', () => rmSync(tmp, { recursive: true, force: true }));
+    try { rmSync(tmp, { recursive: true, force: true }); } catch (e) { check('cleanup: temporary directory removed', false, e.message); }
   }
 }
 
+if (interrupted) check('audit: completed without interruption', false, `stopped by ${interrupted}; remaining checks skipped`);
 out.pass = out.checks.every((c) => c.ok);
 console.log(JSON.stringify(out, null, 2));
 // process.exit 는 파이프로 넘기는 stdout 을 다 쓰기 전에 끝낼 수 있다.
-process.exitCode = out.pass ? 0 : 1;
+process.exitCode = interrupted ? 130 : out.pass ? 0 : 1;
