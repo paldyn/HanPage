@@ -153,9 +153,10 @@ jobs:
           exit 1
 
       # --- Tauri 번들 (beforeBuildCommand = build:frontend = copy-wasm + studio build:desktop) ---
-      # macOS 러너에서 DMG 를 만드는 bundle_dmg.sh 가 가끔 실패한다(0.8.12 태그 빌드 첫 시도 등, #170).
-      # 실패하면 아래 "retry" 단계가 같은 설정으로 한 번 더 시도하고, 둘 다 실패해야 job 이 실패한다.
-      # tauri-action 은 같은 이름의 자산이 이미 있으면 지우고 다시 올린다.
+      # macOS 러너에서 DMG 를 만드는 bundle_dmg.sh 가 가끔 실패한다(0.8.12 태그 빌드 첫 시도, #170 첫 수동 실행).
+      # tauri-action 이 TAURI_BUNDLER_DMG_IGNORE_CI=true 를 기본으로 둬 CI 에서도 Finder AppleScript 로 DMG 창 배치를
+      # 만들기 때문이다(화면 없는 러너에서 불안정). 창 배치는 남기고, 실패하면 아래 "retry" 단계가 같은 설정으로 한 번 더
+      # 시도한다. 둘 다 실패해야 job 이 실패한다. tauri-action 은 같은 이름의 자산이 이미 있으면 지우고 다시 올린다.
       - name: Build & bundle (tauri-action)
         id: tauri
         continue-on-error: true

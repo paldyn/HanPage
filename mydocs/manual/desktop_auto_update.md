@@ -213,7 +213,7 @@ Authenticode 서명이 updater 서명보다 먼저 끝나야 한다. 릴리스 �
 | "signature 검증 실패" | config `pubkey` ↔ 서명 개인키 불일치(키 교체 후 pubkey 미반영) |
 | CI 빌드가 "A public key has been found, but no private key"로 실패 | updater 시크릿 2개 미설정. config에 공개키가 있으면 개인키 없이 빌드할 수 없다 |
 | macOS 공증 HTTP 403 | Apple Developer Program 약관 미동의(§3.1). 계정 소유자 동의 후 실패 job 재실행 |
-| macOS job이 공증 `Accepted` 뒤 `bundle_dmg.sh` 실패로 끝남 | 러너의 일시 실패일 수 있다(0.8.12 첫 시도, 11초 만에 실패하고 자산은 올리지 않음). tauri-action 단계는 같은 job 안에서 한 번 더 시도하고(`Build & bundle (retry)`), macOS 번들은 `--verbose`로 돌아 `bundle_dmg.sh` 출력이 로그에 남는다. 두 번 다 실패하면 그 출력으로 원인을 확인한 뒤 같은 run의 실패 job만 다시 실행한다(§4) |
+| macOS job이 공증 `Accepted` 뒤 `bundle_dmg.sh` 실패로 끝남 | 러너의 일시 실패다(0.8.12 태그 빌드 첫 시도 11초, #170 첫 수동 실행 6초 만에 실패하고 자산은 올리지 않음 — 같은 source의 다른 실행은 통과). tauri-action이 `TAURI_BUNDLER_DMG_IGNORE_CI=true`를 기본으로 둬 CI에서도 Finder AppleScript로 DMG 창 배치를 만드는데, 화면 없는 러너에서 이 단계와 `hdiutil`이 불안정하다. tauri-action 단계는 같은 job 안에서 한 번 더 시도하고(`Build & bundle (retry)`), macOS 번들은 `--verbose`로 돌아 `bundle_dmg.sh` 출력이 로그에 남는다. 두 번 다 실패하면 그 출력으로 원인을 확인한 뒤 같은 run의 실패 job만 다시 실행한다(§4). 계속 실패하면 env에 `TAURI_BUNDLER_DMG_IGNORE_CI: false`를 주어 창 배치 단계를 건너뛸 수 있지만, DMG를 열었을 때 아이콘 배치가 사라진다 |
 | `Refuse to overwrite a published release`의 `공개 릴리스`·`공개 릴리스 확인` 오류 | 그 태그의 릴리스가 이미 공개돼 있다(공개 뒤 태그 workflow 재실행). 번들 전에 멈췄으므로 공개 자산은 그대로다. 다시 실행하지 않는다 / 릴리스 조회를 세 번 시도해 모두 실패했다. 일시 오류면 실패 job만 다시 실행한다 |
 | 검증 단계의 `macOS 미서명` 오류(태그 빌드)·경고(수동 실행) | `APPLE_SIGNING_IDENTITY`가 비어 있다. 태그 빌드는 실패하고, 수동 실행은 서명·공증 검증 없이 성공으로 끝나므로 §4의 2단계로 확인한다 |
 | 검증 단계의 `macOS Team ID` 오류 | `APPLE_SIGNING_IDENTITY` 괄호 안 Team ID가 없거나 배포 Team ID와 다르다(§3.1 표의 형식). 인증서를 바꿨다면 Team ID도 함께 확인한다 |
