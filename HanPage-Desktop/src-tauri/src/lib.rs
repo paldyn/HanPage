@@ -18,20 +18,24 @@
 //     키보드 핸들러가 그대로 소유하므로 메뉴 항목에는 가속기를 달지 않는다.
 //   - 최근 문서: tauri-plugin-store 에 경로 목록을 영속화하고, 시작 시 메뉴에 노출한다.
 //   - 창 상태: tauri-plugin-window-state 로 크기/위치를 저장·복원한다.
+// [#156] 문서마다 창 하나: 문서는 지금 창이 손대지 않은 빈 창일 때만 그 창에서, 아니면 새 창에서
+//   연다. 창 목록·창별 대기 문서·닫기 판단은 `windows.rs` 가 소유하고, 메뉴 명령은 가장 최근
+//   창에만 보낸다. 창 닫기와 Cmd+Q 는 저장하지 않은 문서를 웹뷰에 묻는다.
 //   store/window-state/single-instance 모두 Rust 측에서만 사용하므로 JS ACL 권한
 //   추가가 불필요하다(core:default 유지). 프런트 브리지는 web-inert
 //   (`rhwp-studio/src/core/desktop-bridge.ts`)로, 브라우저에서는 완전한 no-op 이다.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex};
-
-#[cfg(desktop)]
-use std::sync::Arc;
-#[cfg(desktop)]
+use std::sync::{LazyLock, Mutex, MutexGuard};
 use std::time::Instant;
 
 #[cfg(desktop)]
+use std::sync::Arc;
+
+#[cfg(desktop)]
 mod update_state;
+mod windows;
 #[cfg(desktop)]
 use update_state::{should_emit_download_progress, UpdateSlot, UpdateState};
 
@@ -41,7 +45,11 @@ use serde::Serialize;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_dialog::{MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_store::StoreExt;
+#[cfg(target_os = "macos")]
+use tauri_plugin_window_state::{AppHandleExt, StateFlags};
+use windows::{CloseDecision, QuitStep, Registry, Route, Target};
 
 /// 최근 문서 store 파일명·키·최대 보관 수.
 const RECENT_STORE: &str = "recent.json";
@@ -61,6 +69,13 @@ const RELAUNCH_MARKER_TTL_SECS: u64 = 600;
 const EVT_MENU: &str = "hanpage://menu"; // 메뉴 액션 → 스튜디오 커맨드 id
 const EVT_DOCS_READY: &str = "hanpage://documents-ready"; // 펜딩 문서 도착 신호
 const EVT_UPDATE_READY: &str = "hanpage://update-ready"; // 새 버전 내려받기 완료(적용 대기)
+const EVT_CLOSE_REQUESTED: &str = "hanpage://close-requested"; // 저장 안 한 창 닫기 → 웹뷰가 묻는다
+
+/// macOS 앱 메뉴의 종료(Cmd+Q). 기본 종료 항목은 창에 묻지 않고 바로 끝내므로 직접 처리한다.
+#[cfg(target_os = "macos")]
+const MENU_QUIT: &str = "app:quit";
+/// 새 창을 기준 창에서 비스듬히 띄우는 간격(논리 px).
+const CASCADE_OFFSET: f64 = 28.0;
 #[cfg(desktop)]
 const EVT_UPDATE_STATUS: &str = "hanpage://update-status"; // 확인·다운로드·검증·적용 진행
 
@@ -84,16 +99,20 @@ enum SaveOutcome {
     Cancelled,
 }
 
-/// 파일 연결/최근 문서로 열린 문서를 웹뷰가 가져갈 때까지 보관하는 큐.
-/// (콜드 스타트 시 웹뷰가 준비되기 전에 도착한 문서를 잃지 않기 위함.)
+/// [#156] 창 목록과 창별 대기 문서(웹뷰가 가져갈 때까지 보관).
 ///
 /// [#50] Tauri managed state 가 아니라 **프로세스 전역**으로 둔다. macOS 는 파일 연결
 /// 더블클릭을 `RunEvent::Opened` 로 전달하는데, 콜드 스타트에서는 이 이벤트가
 /// `setup()` 의 `app.manage(..)` 보다 먼저 도착할 수 있다(실측: 웹뷰 생성 816ms 전).
-/// 예전 구현은 `try_state()` 가 `None` 이면 문서를 조용히 버려서, 더블클릭으로 연 문서가
-/// 영영 열리지 않았다. 전역 큐는 프로그램 시작 시점부터 존재하므로 순서와 무관하다.
-static PENDING_DOCUMENTS: LazyLock<Mutex<Vec<OpenedFile>>> =
-    LazyLock::new(|| Mutex::new(Vec::new()));
+/// 첫 창(`main`)은 처음부터 등록돼 있어 그때 온 문서도 그 창 몫으로 보관한다.
+static WINDOWS: LazyLock<Mutex<Registry<OpenedFile>>> =
+    LazyLock::new(|| Mutex::new(Registry::new()));
+
+fn registry() -> MutexGuard<'static, Registry<OpenedFile>> {
+    WINDOWS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 /// [#59] 백그라운드로 미리 내려받아 둔 업데이트(설치 대기).
 ///
@@ -177,10 +196,43 @@ impl StartupGate {
     fn open(&mut self) -> Vec<PathBuf> {
         self.pending.take().unwrap_or_default()
     }
+
+    /// 시작(setup)이 끝나 경로를 바로 통과시키는지.
+    fn is_open(&self) -> bool {
+        self.pending.is_none()
+    }
 }
 
 #[cfg(desktop)]
 static STARTUP_GATE: Mutex<StartupGate> = Mutex::new(StartupGate::new());
+
+/// 다시 실행(두 번째 인스턴스)을 어떻게 처리할지.
+#[derive(Debug, PartialEq, Eq)]
+enum Relaunch {
+    /// 아직 시작(setup) 전이다. 문서는 관문이 맡았고 첫 창도 곧 뜬다 — 여기서 창을 만들면 시작 문서가
+    /// 첫 창 대신 새 창으로 밀려난다.
+    Wait,
+    /// 문서를 받을 창으로 보낸다.
+    Open(Vec<PathBuf>),
+    /// 문서 없이 다시 실행했다. 가장 최근 창을 보여 준다.
+    Focus(String),
+    /// 문서 없이 다시 실행했는데 창이 하나도 없다(만들기 실패 등). 빈 창을 띄운다.
+    Blank,
+}
+
+/// `started` 는 관문이 이미 열렸는지(admit 전), `ready` 는 관문을 통과한 문서, `front` 는 등록부의 가장 최근 창.
+fn plan_relaunch(started: bool, ready: Vec<PathBuf>, front: Option<String>) -> Relaunch {
+    if !started {
+        return Relaunch::Wait;
+    }
+    if !ready.is_empty() {
+        return Relaunch::Open(ready);
+    }
+    match front {
+        Some(label) => Relaunch::Focus(label),
+        None => Relaunch::Blank,
+    }
+}
 
 /// [#121] 업데이트 적용 직전에 남기는 재실행 표식.
 ///
@@ -348,40 +400,116 @@ fn load_recent(app: &tauri::AppHandle) -> Vec<RecentEntry> {
         .collect()
 }
 
-// ─── 펜딩 큐(파일 연결/최근 문서 → 웹뷰) ──────────────────────────────────────
-/// 문서를 펜딩 큐에 넣고 최근 목록에 등록한 뒤 웹뷰에 도착 신호를 보낸다.
-fn queue_document(app: &tauri::AppHandle, file: OpenedFile) {
-    record_recent(app, &file.path, &file.name);
-    if let Ok(mut q) = PENDING_DOCUMENTS.lock() {
-        q.push(file);
-    }
-    // 웹뷰가 이미 떠 있으면(웜 스타트) 즉시 알린다. 아직 없으면(콜드 스타트) 웹뷰가
-    // 초기화 시 `cmd_take_pending_documents` 로 직접 가져가므로 유실되지 않는다.
-    let _ = app.emit(EVT_DOCS_READY, ());
+// ─── 문서 전달(파일 연결/최근 문서 → 창) ───────────────────────────────────────
+/// 네이티브가 넘겨준 경로 문자열 → 같은 파일 판단 키.
+static DOCUMENT_KEYS: LazyLock<Mutex<HashMap<String, PathBuf>>> = LazyLock::new(Default::default);
+
+fn document_keys() -> MutexGuard<'static, HashMap<String, PathBuf>> {
+    DOCUMENT_KEYS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// 읽지 못한 문서를 실패 항목으로 큐에 넣고 웹뷰에 도착 신호를 보낸다.
-/// 문서와 같은 큐를 써서 콜드 스타트에서도 유실되지 않고 도착 순서도 지킨다.
-fn queue_failure(app: &tauri::AppHandle, path: &Path, message: String) {
-    if let Ok(mut q) = PENDING_DOCUMENTS.lock() {
-        q.push(OpenedFile {
-            name: display_name(path),
-            path: path.to_string_lossy().into_owned(),
-            data: Vec::new(),
-            error: Some(message),
-        });
-    }
-    let _ = app.emit(EVT_DOCS_READY, ());
+/// 같은 파일 판단에 쓰는 경로. 심볼릭 링크와 상대 경로 차이를 없앤다. 웹뷰가 나중에 같은 문자열로
+/// 보고할 때 파일 시스템에 다시 묻지 않도록 결과를 기억한다.
+fn document_key(path: &Path) -> PathBuf {
+    let key = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    document_keys().insert(path.to_string_lossy().into_owned(), key.clone());
+    key
 }
 
-/// 경로를 읽어 펜딩 큐에 넣는다(파일 연결/최근 문서 클릭/single-instance 공통).
-/// [#121] 읽지 못하면 실패 항목을 넣는다 — 조용히 버리면 사용자는 빈 창만 보고 다시 열어야 한다.
+/// 네이티브가 넘겨준 경로 문자열의 키. 상태 보고는 편집할 때마다 UI 스레드에서 오므로 파일 시스템에
+/// 묻지 않는다 — 끊긴 네트워크 공유의 경로를 정규화하다 모든 창이 멈출 수 있다. 모르는 경로는 그대로 쓴다.
+fn known_document_key(raw: &str) -> PathBuf {
+    document_keys()
+        .get(raw)
+        .cloned()
+        .unwrap_or_else(|| PathBuf::from(raw))
+}
+
+/// 등록된 창도, 만드는 중인 창도 없다. Tauri 창 목록에는 다른 스레드에서 만들기를 요청했다가 실패한 창이
+/// 남을 수 있어 등록부로 판단한다.
+fn no_windows_left<D>(reg: &Registry<D>) -> bool {
+    reg.labels().is_empty() && reg.creating() == 0
+}
+
+/// 창을 앞으로 가져온다. 최소화·숨김 창에는 포커스만으로는 듣지 않는다(macOS·Windows 공통).
+fn focus_window(app: &tauri::AppHandle, label: &str) {
+    if let Some(window) = app.get_webview_window(label) {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+/// 문서를 받을 창을 정해 보낸다. 새 창은 문서를 먼저 넣은 뒤 만든다 — 웹뷰가 시작하며 직접 가져간다.
+fn deliver(app: &tauri::AppHandle, file: OpenedFile, target: Target<'_>) -> Route {
+    // 웹뷰가 돌려준 문서의 경로는 네이티브가 넘겨준 문자열이라 파일 시스템에 다시 묻지 않는다.
+    let key = (!file.path.is_empty()).then(|| match target {
+        Target::HandOff(_) => known_document_key(&file.path),
+        _ => document_key(Path::new(&file.path)),
+    });
+    let name = file.name.clone();
+    let route = {
+        let mut reg = registry();
+        let route = reg.route(key.as_deref(), target);
+        if let Route::Into(label) | Route::New(label) = &route {
+            let _ = reg.enqueue(label, file);
+        }
+        route
+    };
+    // 어느 창으로 보냈는지 남긴다(현장 진단: 창이 엉뚱하게 늘거나 문서가 사라지는 증상).
+    eprintln!("[HanPage] 문서 전달 {name} → {route:?}");
+    match &route {
+        Route::Into(label) => {
+            let _ = app.emit_to(label.as_str(), EVT_DOCS_READY, ());
+            focus_window(app, label);
+        }
+        Route::New(label) => spawn_document_window(app, label.clone()),
+        Route::Focus(label) => focus_window(app, label),
+    }
+    route
+}
+
+/// 읽지 못했거나 열 수 없는 문서를 가장 최근 창에 알린다. 알림 하나 때문에 새 창을 만들지 않는다.
+fn notify_failure(app: &tauri::AppHandle, name: String, path: String, message: String) {
+    let label = {
+        let mut reg = registry();
+        let label = reg.front().map(str::to_string);
+        if let Some(label) = &label {
+            let _ = reg.enqueue(
+                label,
+                OpenedFile {
+                    name,
+                    path,
+                    data: Vec::new(),
+                    error: Some(message),
+                },
+            );
+        }
+        label
+    };
+    if let Some(label) = label {
+        let _ = app.emit_to(label.as_str(), EVT_DOCS_READY, ());
+    }
+}
+
+/// 경로를 읽어 창으로 보낸다(파일 연결/최근 문서 클릭/single-instance 공통).
+/// [#121] 읽지 못하면 사유를 알린다 — 조용히 버리면 사용자는 빈 창만 보고 다시 열어야 한다.
 fn open_path(app: &tauri::AppHandle, path: PathBuf) {
     match read_document(&path) {
-        Ok(file) => queue_document(app, file),
+        Ok(file) => {
+            record_recent(app, &file.path, &file.name);
+            deliver(app, file, Target::Front);
+        }
         Err(e) => {
             eprintln!("[HanPage] 파일 열기 실패 {}: {}", path.display(), e);
-            queue_failure(app, &path, e);
+            notify_failure(
+                app,
+                display_name(&path),
+                path.to_string_lossy().into_owned(),
+                e,
+            );
         }
     }
 }
@@ -391,9 +519,242 @@ fn open_path(app: &tauri::AppHandle, path: PathBuf) {
 fn handle_opened(app: &tauri::AppHandle, urls: &[tauri::Url]) {
     for url in urls {
         if let Ok(path) = url.to_file_path() {
+            // Dock 드롭·연결 프로그램으로 온 열 수 없는 파일 때문에 빈 새 창을 만들지 않는다.
+            #[cfg(desktop)]
+            if !is_document_path(&path) {
+                notify_failure(
+                    app,
+                    display_name(&path),
+                    path.to_string_lossy().into_owned(),
+                    "지원하지 않는 파일 형식입니다.".into(),
+                );
+                continue;
+            }
             open_path(app, path);
         }
     }
+}
+
+// ─── 창 만들기·닫기·종료 ──────────────────────────────────────────────────────
+/// 등록한 레이블로 문서 창을 만든다. Windows 는 동기 command·이벤트 처리기 안에서 창을 만들면
+/// 교착되므로(Tauri 문서) 별도 스레드에서 만든다. 실패하면 그 창 몫의 문서를 최근 창에 알린다.
+fn spawn_document_window(app: &tauri::AppHandle, label: String) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        wait_for_anchor_window(&app, &label);
+        let built = build_document_window(&app, &label);
+        // 다른 스레드에서 만들면 Tauri 는 만들기 요청만 보내고 돌아온다. 창에 한 번 물어 실제로
+        // 만들어졌는지 확인한다(요청은 순서대로 처리되므로 만들기 뒤에 답한다).
+        let ok = built
+            .as_ref()
+            .is_ok_and(|window| window.scale_factor().is_ok());
+        let reason = match &built {
+            Ok(_) if ok => None,
+            Ok(_) => Some("창이 만들어지지 않았습니다".to_string()),
+            Err(e) => Some(e.to_string()),
+        };
+        match &reason {
+            None => eprintln!("[HanPage] 새 창 {label}"),
+            Some(reason) => eprintln!("[HanPage] 새 창을 만들지 못했습니다 {label}: {reason}"),
+        }
+        let orphans = registry().created(&label, ok);
+        if let Some(reason) = reason {
+            if let Some(window) = app.get_webview_window(&label) {
+                let _ = window.destroy();
+            }
+            for doc in orphans {
+                notify_failure(
+                    &app,
+                    doc.name,
+                    doc.path,
+                    format!("새 창을 열지 못했습니다: {reason}"),
+                );
+            }
+        }
+        // 만드는 사이 마지막 창이 닫혔으면(종료는 이 창 때문에 미뤘다) 만들기를 마쳤든 실패했든 남은 창이
+        // 없을 때 끝낸다 — 보이지 않는 프로세스로 남지 않는다.
+        if no_windows_left(&registry()) {
+            app.exit(0);
+        }
+    });
+}
+
+/// 콜드 스타트에서는 문서 창 요청이 첫 창보다 먼저 올 수 있다(#50). 기준 창이 생기고 창 위치 복원이
+/// 끝난 뒤 위치를 정해야 두 창이 같은 자리에 겹치지 않는다. 기준 창이 끝내 없으면 그냥 만든다.
+fn wait_for_anchor_window(app: &tauri::AppHandle, new_label: &str) {
+    let Some(anchor) = registry().front_except(new_label).map(str::to_string) else {
+        return;
+    };
+    for _ in 0..60 {
+        if app.get_webview_window(&anchor).is_some() {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+/// 첫 창 설정을 복제해 레이블과 위치만 바꾼다(크기·최소 크기·드롭 설정이 같다).
+fn build_document_window(
+    app: &tauri::AppHandle,
+    label: &str,
+) -> tauri::Result<tauri::WebviewWindow> {
+    let configs = &app.config().app.windows;
+    let mut config = configs
+        .iter()
+        .find(|w| w.label == windows::MAIN_LABEL)
+        .or_else(|| configs.first())
+        .cloned()
+        .unwrap_or_default();
+    config.label = label.to_string();
+    config.center = false;
+    if let Some((x, y)) = cascade_position(app, label, config.width, config.height) {
+        config.x = Some(x);
+        config.y = Some(y);
+    }
+    tauri::WebviewWindowBuilder::from_config(app, &config)?.build()
+}
+
+/// 가장 최근 창에서 오른쪽 아래로 비스듬히 띄운다. 이미 창이 있는 자리는 한 칸씩 더 비키고,
+/// 화면 작업 영역을 넘으면 왼쪽 위로 돌아간다.
+fn cascade_position(
+    app: &tauri::AppHandle,
+    new_label: &str,
+    width: f64,
+    height: f64,
+) -> Option<(f64, f64)> {
+    // 최소화·숨김 창은 기준으로 쓰지 않는다(Windows 는 최소화 창 위치가 -32000 이다).
+    let labels = registry().labels();
+    let window = labels
+        .iter()
+        .filter(|label| label.as_str() != new_label)
+        .filter_map(|label| app.get_webview_window(label))
+        .find(|w| !w.is_minimized().unwrap_or(false) && w.is_visible().unwrap_or(true))?;
+    let scale = window.scale_factor().ok()?;
+    let position = window.outer_position().ok()?.to_logical::<f64>(scale);
+    let occupied: Vec<(f64, f64)> = app
+        .webview_windows()
+        .values()
+        .filter(|w| w.label() != new_label)
+        .filter_map(|w| {
+            let s = w.scale_factor().ok()?;
+            let p = w.outer_position().ok()?.to_logical::<f64>(s);
+            Some((p.x, p.y))
+        })
+        .collect();
+    let area = window.current_monitor().ok().flatten().map(|monitor| {
+        let a = monitor.work_area();
+        let s = monitor.scale_factor();
+        let left = f64::from(a.position.x) / s;
+        let top = f64::from(a.position.y) / s;
+        (
+            left,
+            top,
+            left + f64::from(a.size.width) / s,
+            top + f64::from(a.size.height) / s,
+        )
+    });
+    Some(next_cascade_position(
+        (position.x, position.y),
+        &occupied,
+        (width, height),
+        area,
+    ))
+}
+
+/// 기준 위치에서 비스듬히 비켜 빈 자리를 찾는다(창 위치 계산만 따로 시험한다).
+fn next_cascade_position(
+    anchor: (f64, f64),
+    occupied: &[(f64, f64)],
+    size: (f64, f64),
+    area: Option<(f64, f64, f64, f64)>,
+) -> (f64, f64) {
+    let taken = |x: f64, y: f64| {
+        occupied
+            .iter()
+            .any(|(ox, oy)| (ox - x).abs() < 4.0 && (oy - y).abs() < 4.0)
+    };
+    let (mut x, mut y) = (anchor.0 + CASCADE_OFFSET, anchor.1 + CASCADE_OFFSET);
+    for _ in 0..32 {
+        if let Some((left, top, right, bottom)) = area {
+            if x < left || y < top || x + size.0 > right || y + size.1 > bottom {
+                x = left + CASCADE_OFFSET;
+                y = top + CASCADE_OFFSET;
+            }
+        }
+        if !taken(x, y) {
+            break;
+        }
+        x += CASCADE_OFFSET;
+        y += CASCADE_OFFSET;
+    }
+    (x, y)
+}
+
+/// 저장하지 않은 문서가 있는 창에 닫아도 되는지 묻게 한다(최소화된 창도 앞으로 가져온다).
+fn ask_close(app: &tauri::AppHandle, label: &str) {
+    focus_window(app, label);
+    let _ = app.emit_to(label, EVT_CLOSE_REQUESTED, ());
+}
+
+/// 웹뷰가 닫기 확인에 답하지 않는다. 묻지 않고 닫지도, 영영 못 닫게 두지도 않도록 네이티브 확인창으로 묻는다.
+fn confirm_close_natively(app: &tauri::AppHandle, label: String) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let Some(window) = app.get_webview_window(&label) else {
+            return;
+        };
+        let confirmed = app
+            .dialog()
+            .message("이 창이 응답하지 않습니다.\n저장하지 않은 변경을 버리고 창을 닫을까요?")
+            .title("HanPage")
+            .kind(MessageDialogKind::Warning)
+            .buttons(MessageDialogButtons::OkCancelCustom(
+                "닫기".to_string(),
+                "취소".to_string(),
+            ))
+            .parent(&window)
+            .blocking_show();
+        registry().close_answered(&label, confirmed);
+        if confirmed {
+            let _ = window.destroy();
+        }
+    });
+}
+
+/// 종료 단계를 실행한다: 저장할 것이 없는 창은 닫고, 저장할 것이 있는 창 하나에 묻는다.
+fn apply_quit_step(app: &tauri::AppHandle, step: QuitStep) {
+    for label in &step.close_now {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.destroy();
+        }
+    }
+    if let Some(label) = step.ask {
+        ask_close(app, &label);
+    }
+}
+
+/// Cmd+Q: 저장할 것이 없는 창은 바로 닫고, 저장할 것이 있는 창은 하나씩 묻는다. 모든 창이
+/// 닫히면 앱이 끝난다. 사용자가 한 번이라도 취소하면 종료를 멈춘다.
+#[cfg(target_os = "macos")]
+fn request_quit(app: &tauri::AppHandle) {
+    if no_windows_left(&registry()) {
+        app.exit(0);
+        return;
+    }
+    // 아직 만들어지는 창이 있으면 종료를 끝낼 수 없다. 창이 뜬 뒤 다시 종료하면 된다.
+    let labels = registry().labels();
+    if labels
+        .iter()
+        .any(|label| app.get_webview_window(label).is_none())
+    {
+        return;
+    }
+    // 창을 destroy 로 닫으면 창 상태 플러그인이 닫기 요청 때 하던 기록을 건너뛴다. 첫 창의 크기·위치·
+    // 확대 상태를 먼저 저장한다.
+    let _ = app.save_window_state(StateFlags::all());
+    let step = registry().begin_quit();
+    apply_quit_step(app, step);
 }
 
 // ─── 네이티브 메뉴 ────────────────────────────────────────────────────────────
@@ -409,11 +770,15 @@ fn build_app_menu(
     // 앱 메뉴(macOS): About / Quit (cross-platform predefined 만 사용).
     // [Task #26] 업데이트 수동 확인 (macOS 네이티브 메뉴).
     let check_update = MenuItemBuilder::with_id("app:check-update", "업데이트 확인").build(app)?;
+    // [#156] 기본 종료 항목은 창에 묻지 않고 끝낸다. 저장하지 않은 창을 묻도록 직접 처리한다.
+    let quit = MenuItemBuilder::with_id(MENU_QUIT, "HanPage 종료")
+        .accelerator("CmdOrCtrl+Q")
+        .build(app)?;
     let app_menu = SubmenuBuilder::new(app, "HanPage")
         .about(None)
         .item(&check_update)
         .separator()
-        .quit()
+        .item(&quit)
         .build()?;
 
     // 파일 메뉴
@@ -521,11 +886,15 @@ fn is_pdf_path(path: &Path) -> bool {
 /// 데드락이 없다. 메인 스레드에서 직접 호출하면 안 된다.
 ///
 /// `allow_pdf` 는 웹뷰의 WASM 이 PDF 가져오기를 지원할 때만 참이다. 키가 없는 이전 호출도 받는다.
+///
+/// [#156] 고른 문서는 파일 연결과 같은 길로 보낸다: 부른 창이 손대지 않은 빈 창이면 그 창의 대기
+/// 문서로, 아니면 새 창(또는 그 파일을 이미 연 창)으로. 웹뷰는 대기 문서를 가져가 연다.
 #[tauri::command]
 async fn cmd_open_document(
     app: tauri::AppHandle,
+    webview_window: tauri::WebviewWindow,
     allow_pdf: Option<bool>,
-) -> Result<Option<OpenedFile>, String> {
+) -> Result<(), String> {
     let (label, exts) = open_dialog_filter(allow_pdf.unwrap_or(false));
     let picked = app
         .dialog()
@@ -534,18 +903,20 @@ async fn cmd_open_document(
         .blocking_pick_file();
 
     let Some(file_path) = picked else {
-        return Ok(None); // 사용자 취소
+        return Ok(()); // 사용자 취소
     };
     let path = file_path.into_path().map_err(|e| e.to_string())?;
     let file = read_document(&path)?;
     record_recent(&app, &file.path, &file.name);
-    Ok(Some(file))
+    deliver(&app, file, Target::Window(webview_window.label()));
+    Ok(())
 }
 
 /// 네이티브 저장 dialog → 선택 경로에 바이트 기록. 취소 시 `SaveOutcome::Cancelled`.
 #[tauri::command]
 async fn cmd_save_document(
     app: tauri::AppHandle,
+    webview_window: tauri::WebviewWindow,
     suggested_name: String,
     data: Vec<u8>,
 ) -> Result<SaveOutcome, String> {
@@ -568,6 +939,7 @@ async fn cmd_save_document(
         return Err("PDF 파일에는 편집 문서를 저장할 수 없습니다.".into());
     }
     std::fs::write(&path, &data).map_err(|e| e.to_string())?;
+    registry().set_path(webview_window.label(), document_key(&path));
     let name = path
         .file_name()
         .and_then(|n| n.to_str())
@@ -579,13 +951,122 @@ async fn cmd_save_document(
     })
 }
 
-/// 펜딩 큐를 비우고 반환한다(웹뷰가 init 시점·도착 신호 수신 시 호출).
+/// 부른 창의 대기 문서를 비우고 반환한다(웹뷰가 init 시점·도착 신호 수신 시 호출).
+/// `initial` 은 페이지가 (다시) 시작할 때의 첫 호출이다.
 #[tauri::command]
-fn cmd_take_pending_documents() -> Vec<OpenedFile> {
-    PENDING_DOCUMENTS
-        .lock()
-        .map(|mut q| std::mem::take(&mut *q))
-        .unwrap_or_default()
+fn cmd_take_pending_documents(
+    webview_window: tauri::WebviewWindow,
+    initial: Option<bool>,
+) -> Vec<OpenedFile> {
+    let docs = registry().take_pending(webview_window.label(), initial.unwrap_or(false));
+    #[cfg(debug_assertions)]
+    eprintln!(
+        "[HanPage] {} 대기 문서 {}개 (initial={})",
+        webview_window.label(),
+        docs.len(),
+        initial.unwrap_or(false)
+    );
+    docs
+}
+
+/// [#156] 웹뷰가 시작 흐름을 마친 뒤와 문서·변경 상태가 바뀔 때 알린다. `native_path` 는 지금
+/// 문서가 네이티브에서 넘겨받거나 저장한 파일이면 그 경로다(같은 파일 재열기 판단).
+/// `opening_path` 는 지금 여는 중인 네이티브 문서의 경로다(열기를 마칠 때까지 같은 파일 판단에 쓴다).
+#[tauri::command]
+fn cmd_report_window_state(
+    webview_window: tauri::WebviewWindow,
+    pristine: bool,
+    dirty: bool,
+    native_path: Option<String>,
+    opening_path: Option<String>,
+) {
+    let key = |raw: Option<String>| {
+        raw.filter(|p| !p.is_empty())
+            .map(|p| known_document_key(&p))
+    };
+    registry().report(
+        webview_window.label(),
+        pristine,
+        dirty,
+        key(native_path),
+        key(opening_path),
+    );
+}
+
+/// [#156] 손대지 않은 창이 아니라서 받을 수 없는 문서(끌어다 놓기, 늦게 도착한 문서)를 새 창으로 넘긴다.
+/// 바이트는 JSON 숫자 배열이 아니라 요청 본문 그대로 받는다 — 큰 문서에서 웹뷰와 UI 스레드가 직렬화로
+/// 멈추지 않게 한다. 이름과 경로는 퍼센트 인코딩한 헤더로 온다.
+#[tauri::command]
+fn cmd_open_in_new_window(
+    app: tauri::AppHandle,
+    webview_window: tauri::WebviewWindow,
+    request: tauri::ipc::Request<'_>,
+) -> Result<(), String> {
+    let data = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => bytes.clone(),
+        // 사용자 정의 프로토콜을 쓸 수 없을 때의 postMessage 경로는 바이트를 JSON 배열로 보낸다.
+        tauri::ipc::InvokeBody::Json(value) => {
+            serde_json::from_value(value.clone()).map_err(|e| e.to_string())?
+        }
+    };
+    let header = |name: &str| {
+        request
+            .headers()
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+            .map(percent_decode)
+            .unwrap_or_default()
+    };
+    let file = OpenedFile {
+        name: header("x-hanpage-name"),
+        path: header("x-hanpage-path"),
+        data,
+        error: None,
+    };
+    deliver(&app, file, Target::HandOff(webview_window.label()));
+    Ok(())
+}
+
+/// `encodeURIComponent` 로 보낸 헤더 값을 되돌린다(HTTP 헤더에는 한글·공백을 그대로 넣을 수 없다).
+fn percent_decode(value: &str) -> String {
+    let hex = |b: u8| (b as char).to_digit(16).map(|d| d as u8);
+    let bytes = value.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(high), Some(low)) = (hex(bytes[i + 1]), hex(bytes[i + 2])) {
+                out.push(high << 4 | low);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// [#156] 창 제목을 문서 이름으로 맞춘다(창 전환·작업 표시줄에서 문서를 구분한다).
+#[tauri::command]
+fn cmd_set_window_title(webview_window: tauri::WebviewWindow, title: String) {
+    let _ = webview_window.set_title(&title);
+    registry().set_title(webview_window.label(), title);
+}
+
+/// [#156] 웹뷰가 닫기 확인을 받아 사용자에게 묻기 시작했다.
+#[tauri::command]
+fn cmd_close_ack(webview_window: tauri::WebviewWindow) {
+    registry().close_acknowledged(webview_window.label());
+}
+
+/// [#156] 닫기 확인의 답. 닫기로 했으면 창을 없애고, 아니면 진행 중인 종료도 멈춘다.
+#[tauri::command]
+fn cmd_close_window(webview_window: tauri::WebviewWindow, confirmed: bool) {
+    registry().close_answered(webview_window.label(), confirmed);
+    if confirmed {
+        let _ = webview_window.destroy();
+    }
 }
 
 /// [Task #26 · #59] 업데이트 확인 → **조용한 백그라운드 다운로드** (desktop 전용).
@@ -749,6 +1230,57 @@ fn start_update_check(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(check_update(app));
 }
 
+/// [#156] 다른 창에 저장하지 않은 문서가 있으면 그 창을 보여 주고 안내 문구를 돌려준다.
+#[cfg(desktop)]
+fn update_blocker(app: &tauri::AppHandle, label: &str) -> Option<String> {
+    let (blocking, title) = {
+        let reg = registry();
+        let blocking = reg.dirty_windows_except(label).first()?.clone();
+        let title = reg
+            .entry(&blocking)
+            .map(|e| e.title.clone())
+            .unwrap_or_default();
+        (blocking, title)
+    };
+    focus_window(app, &blocking);
+    let which = if title.is_empty() {
+        "다른 창".to_string()
+    } else {
+        format!("다른 창({title})")
+    };
+    Some(format!(
+        "{which}에 저장하지 않은 문서가 있습니다. 저장하거나 창을 닫은 뒤 다시 업데이트해 주세요."
+    ))
+}
+
+/// [#156] 업데이트를 누른 창이 저장 확인·AI 도우미 정리를 하기 전에, 다른 창 때문에 적용할 수 없는지 확인한다.
+#[cfg(desktop)]
+#[tauri::command]
+fn cmd_update_preflight(
+    app: tauri::AppHandle,
+    webview_window: tauri::WebviewWindow,
+) -> Option<String> {
+    update_blocker(&app, webview_window.label())
+}
+
+/// [#156] 업데이트 준비 알림은 실행마다 앱 전체에서 버전당 한 번 — 창마다 다시 띄우지 않는다.
+#[cfg(desktop)]
+static NUDGE_CLAIMED: Mutex<Option<String>> = Mutex::new(None);
+
+/// 이 버전의 준비 알림을 처음 띄우는 창이면 `true`.
+#[cfg(desktop)]
+#[tauri::command]
+fn cmd_claim_update_nudge(version: String) -> bool {
+    let mut claimed = NUDGE_CLAIMED
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if claimed.as_deref() == Some(version.as_str()) {
+        return false;
+    }
+    *claimed = Some(version);
+    true
+}
+
 /// 현재 업데이트 상태(웹뷰 초기화·수동 확인 시 조회).
 #[cfg(desktop)]
 #[tauri::command]
@@ -769,9 +1301,17 @@ fn cmd_update_check(app: tauri::AppHandle) {
 /// 받아둔 바이트를 작업 스레드에서 적용한다. 압축 해제·파일 교체가 웹뷰를 막지 않게 하며
 /// macOS 권한 요청도 SDK가 메인 스레드로 전달할 수 있게 둔다. macOS는 적용 후 재시작,
 /// Windows는 설치 프로그램 실행 후 종료하므로 성공 응답은 대개 웹뷰에 도달하지 않는다.
+///
+/// [#156] 재시작은 모든 창을 닫는다. 다른 창에 저장하지 않은 문서가 있으면 적용하지 않고 그 창을 보여 준다.
 #[cfg(desktop)]
 #[tauri::command]
-async fn cmd_update_apply(app: tauri::AppHandle) -> Result<(), String> {
+async fn cmd_update_apply(
+    app: tauri::AppHandle,
+    webview_window: tauri::WebviewWindow,
+) -> Result<(), String> {
+    if let Some(message) = update_blocker(&app, webview_window.label()) {
+        return Err(message);
+    }
     let (ready, applying_state) = {
         let mut slot = UPDATE_SLOT.lock().map_err(|e| e.to_string())?;
         let version = slot
@@ -826,15 +1366,25 @@ pub fn run() {
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             let paths = document_paths_from_args(argv, Path::new(&cwd));
-            let ready = match STARTUP_GATE.lock() {
-                Ok(mut gate) => gate.admit(paths),
-                Err(_) => paths,
+            let (started, ready) = match STARTUP_GATE.lock() {
+                Ok(mut gate) => (gate.is_open(), gate.admit(paths)),
+                Err(_) => (true, paths),
             };
-            for path in ready {
-                open_path(app, path);
-            }
-            if let Some(w) = app.webview_windows().values().next() {
-                let _ = w.set_focus();
+            let front = registry().front().map(str::to_string);
+            match plan_relaunch(started, ready, front) {
+                Relaunch::Wait => {}
+                Relaunch::Open(paths) => {
+                    for path in paths {
+                        open_path(app, path);
+                    }
+                }
+                Relaunch::Focus(label) => focus_window(app, &label),
+                Relaunch::Blank => {
+                    let route = registry().route(None, Target::NewWindow);
+                    if let Route::New(label) = route {
+                        spawn_document_window(app, label);
+                    }
+                }
             }
         }));
 
@@ -846,7 +1396,12 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        // [#156] 첫 창의 크기·위치만 기억한다. 문서 창은 매번 비스듬히 새로 띄운다.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_filter(|label| label == windows::MAIN_LABEL)
+                .build(),
+        )
         .setup(|app| {
             // [#121] 콜드 스타트 파일 연결(Win/Linux): 문서 경로가 이 프로세스의 argv 로 온다.
             // single-instance 콜백은 두 번째 실행에서만 불리므로 첫 실행 argv 는 여기서
@@ -898,26 +1453,86 @@ pub fn run() {
                 if path != "__none__" {
                     open_path(app, PathBuf::from(path));
                 }
-            } else if id == "app:check-update" {
-                // [#59] 메뉴 수동 확인 → 웹뷰와 동일 흐름. 확인/다운로드는 조용히 진행하고
-                // 안내(내려받는 중·준비됨·최신·오류)는 웹뷰 토스트가 담당한다.
-                let _ = app.emit(EVT_MENU, id.to_string());
-            } else {
-                // 사용자 정의 항목 id = rhwp-studio 커맨드 id → 웹뷰 브리지가 dispatch.
-                let _ = app.emit(EVT_MENU, id.to_string());
+                return;
+            }
+            #[cfg(target_os = "macos")]
+            if id == MENU_QUIT {
+                request_quit(app);
+                return;
+            }
+            // 사용자 정의 항목 id = rhwp-studio 커맨드 id(업데이트 확인 포함) → 웹뷰 브리지가 dispatch.
+            // [#156] 메뉴는 앱 전체에 하나라 가장 최근 창에만 보낸다. 모든 창에 보내면 저장·붙이기
+            // 같은 명령이 창마다 실행된다. 아직 만들어지는 창은 건너뛴다(명령이 사라진다).
+            let labels = registry().labels();
+            if let Some(label) = labels
+                .iter()
+                .find(|label| app.get_webview_window(label).is_some())
+            {
+                let _ = app.emit_to(label.as_str(), EVT_MENU, id.to_string());
+            }
+        })
+        .on_window_event(|window, event| {
+            let label = window.label().to_string();
+            match event {
+                tauri::WindowEvent::Focused(true) => registry().focus(&label),
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    let decision = registry().close_requested(&label, Instant::now());
+                    match decision {
+                        CloseDecision::Allow => {}
+                        CloseDecision::Wait => api.prevent_close(),
+                        CloseDecision::Ask => {
+                            api.prevent_close();
+                            ask_close(window.app_handle(), &label);
+                        }
+                        CloseDecision::ConfirmNative => {
+                            api.prevent_close();
+                            confirm_close_natively(window.app_handle(), label.clone());
+                        }
+                    }
+                }
+                tauri::WindowEvent::Destroyed => {
+                    let step = {
+                        let mut reg = registry();
+                        reg.remove(&label);
+                        reg.next_quit_step()
+                    };
+                    if let Some(step) = step {
+                        apply_quit_step(window.app_handle(), step);
+                    }
+                }
+                _ => {}
             }
         })
         .invoke_handler(tauri::generate_handler![
             cmd_open_document,
             cmd_save_document,
             cmd_take_pending_documents,
+            cmd_report_window_state,
+            cmd_open_in_new_window,
+            cmd_set_window_title,
+            cmd_close_ack,
+            cmd_close_window,
             cmd_update_status,
             cmd_update_check,
-            cmd_update_apply
+            cmd_update_apply,
+            cmd_update_preflight,
+            cmd_claim_update_nudge
         ])
         .build(tauri::generate_context!())
         .expect("error while building HanPage desktop application")
         .run(|app_handle, event| {
+            // [#156] 새 창을 만드는 중에 마지막 창이 닫혀도 앱을 끝내지 않는다 — 그 창 몫의 문서를 잃는다.
+            if let tauri::RunEvent::ExitRequested {
+                code: None, api, ..
+            } = &event
+            {
+                let mut reg = registry();
+                if reg.creating() > 0 {
+                    api.prevent_exit();
+                    // 종료는 끝내지 못했다. 새 창이 뜬 뒤 엉뚱하게 이어지지 않게 정리한다.
+                    reg.abandon_quit();
+                }
+            }
             // macOS: 파일 연결 더블클릭은 Opened{urls} 로 전달된다.
             #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
             if let tauri::RunEvent::Opened { urls } = &event {
@@ -952,6 +1567,27 @@ mod tests {
                 cwd.join("목록.HML"),
                 cwd.join("스캔.pdf")
             ]
+        );
+    }
+
+    #[test]
+    fn new_windows_step_past_occupied_spots_and_wrap_inside_the_work_area() {
+        let size = (1200.0, 840.0);
+        let area = Some((0.0, 25.0, 1728.0, 1117.0));
+        // main 을 다시 앞으로 가져온 뒤 새 창: doc-1 자리를 피한다.
+        let main = (424.0, 88.0);
+        assert_eq!(
+            next_cascade_position(main, &[main, (452.0, 116.0)], size, area),
+            (480.0, 144.0)
+        );
+        // 오른쪽 아래가 넘치면 작업 영역 왼쪽 위로 돌아간다.
+        assert_eq!(
+            next_cascade_position((500.0, 260.0), &[], size, area),
+            (CASCADE_OFFSET, 25.0 + CASCADE_OFFSET)
+        );
+        assert_eq!(
+            next_cascade_position((100.0, 100.0), &[], size, None),
+            (128.0, 128.0)
         );
     }
 
@@ -1044,5 +1680,118 @@ mod tests {
         let cwd = std::env::temp_dir();
         assert!(document_paths_from_args(["HanPage.exe"], &cwd).is_empty());
         assert!(document_paths_from_args(Vec::<String>::new(), &cwd).is_empty());
+    }
+
+    #[test]
+    fn a_second_instance_during_startup_waits_for_the_startup_documents() {
+        // Windows 탐색기에서 A·B 를 함께 열면 B 의 두 번째 실행이 첫 실행의 시작(setup) 중에 온다.
+        let a = std::env::temp_dir().join("A.hwp");
+        let b = std::env::temp_dir().join("B.hwp");
+        let mut gate = StartupGate::new();
+        let mut reg: Registry<OpenedFile> = Registry::new();
+        let started = gate.is_open();
+        let ready = gate.admit(vec![b.clone()]);
+        assert_eq!(
+            plan_relaunch(started, ready, reg.front().map(str::to_string)),
+            Relaunch::Wait
+        );
+        assert_eq!(
+            plan_relaunch(false, Vec::new(), Some("main".into())),
+            Relaunch::Wait,
+            "문서 없는 두 번째 실행도 첫 창을 기다린다"
+        );
+        assert_eq!(reg.labels(), vec!["main".to_string()]);
+        // setup: 첫 실행의 문서, 이어서 관문이 맡은 문서.
+        assert_eq!(
+            reg.route(Some(&a), Target::Front),
+            Route::Into("main".into())
+        );
+        let early = gate.open();
+        assert_eq!(early, vec![b.clone()]);
+        assert_eq!(
+            reg.route(Some(&early[0]), Target::Front),
+            Route::New("doc-1".into())
+        );
+        // 시작 뒤 문서 없이 다시 실행하면 가장 최근 창, 창이 하나도 없으면 빈 창.
+        assert_eq!(
+            plan_relaunch(gate.is_open(), Vec::new(), reg.front().map(str::to_string)),
+            Relaunch::Focus("doc-1".into())
+        );
+        assert_eq!(plan_relaunch(true, Vec::new(), None), Relaunch::Blank);
+        assert_eq!(
+            plan_relaunch(true, vec![a.clone()], None),
+            Relaunch::Open(vec![a])
+        );
+    }
+
+    #[test]
+    fn a_failed_window_leaves_no_window_even_if_tauri_still_lists_it() {
+        let mut reg: Registry<OpenedFile> = Registry::new();
+        reg.route(Some(Path::new("/a.hwp")), Target::Front);
+        let Route::New(doc) = reg.route(Some(Path::new("/b.hwp")), Target::Front) else {
+            panic!("새 창이어야 한다");
+        };
+        reg.remove("main");
+        assert!(!no_windows_left(&reg));
+        reg.created(&doc, false);
+        assert!(no_windows_left(&reg));
+        assert_eq!(reg.front(), None);
+    }
+
+    #[test]
+    fn a_window_closed_while_it_was_being_created_ends_the_app_once_creation_settles() {
+        let mut reg: Registry<OpenedFile> = Registry::new();
+        reg.route(Some(Path::new("/a.hwp")), Target::Front);
+        let Route::New(doc) = reg.route(Some(Path::new("/b.hwp")), Target::Front) else {
+            panic!("새 창이어야 한다");
+        };
+        // 첫 창을 닫고, 막 뜬 새 창도 생성 확인이 끝나기 전에 닫았다.
+        reg.remove("main");
+        reg.remove(&doc);
+        assert!(
+            !no_windows_left(&reg),
+            "만드는 스레드가 아직 생성 확인을 마치지 않았다"
+        );
+        reg.created(&doc, true);
+        assert!(no_windows_left(&reg), "생성 확인 뒤에는 남은 창이 없다");
+    }
+
+    #[test]
+    fn handoff_headers_are_percent_decoded() {
+        assert_eq!(
+            percent_decode("%EB%B3%B4%EA%B3%A0%EC%84%9C%20%EC%B5%9C%EC%A2%85.hwp"),
+            "보고서 최종.hwp"
+        );
+        assert_eq!(
+            percent_decode("C%3A%5CUsers%5Cme%5CMy%20Docs%5Ca.hwp"),
+            r"C:\Users\me\My Docs\a.hwp"
+        );
+        assert_eq!(percent_decode("plain-name.hwpx"), "plain-name.hwpx");
+        assert_eq!(percent_decode("100%G1%"), "100%G1%");
+        assert_eq!(percent_decode(""), "");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reporting_a_known_path_does_not_touch_the_file_system() {
+        let dir = std::env::temp_dir().join(format!("hanpage-key-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let real = dir.join("real.hwp");
+        let other = dir.join("other.hwp");
+        let link = dir.join("link.hwp");
+        std::fs::write(&real, b"a").unwrap();
+        std::fs::write(&other, b"b").unwrap();
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let key = document_key(&link);
+        assert_eq!(key, std::fs::canonicalize(&real).unwrap());
+        // 링크가 다른 파일을 가리키게 바뀌어도 보고는 기억한 키를 쓴다(파일 시스템에 묻지 않는다).
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(&other, &link).unwrap();
+        assert_eq!(known_document_key(&link.to_string_lossy()), key);
+        // 모르는 경로는 정규화하지 않고 그대로 쓴다.
+        let unknown = dir.join("unknown").join("..").join("x.hwp");
+        assert_eq!(known_document_key(&unknown.to_string_lossy()), unknown);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

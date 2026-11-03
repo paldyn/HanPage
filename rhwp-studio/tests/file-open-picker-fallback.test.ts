@@ -101,11 +101,24 @@ test('데스크톱 열기 취소는 오류 안내나 웹 폴백 없이 끝난다
   });
 });
 
-test('미저장 문서 교체가 거부되면 데스크톱 picker를 열지 않는다', async () => {
+test('[#156] 데스크톱 열기는 교체 확인 없이 네이티브에 맡긴다 — 손대지 않은 창이 아니면 새 창에서 연다', async () => {
+  let opened = 0;
+  await openDocumentViaPicker({
+    canReplace: async () => assert.fail('편집 중인 창의 문서를 바꾸지 않으므로 저장 확인을 묻지 않는다'),
+    desktopOpen: async () => { opened += 1; },
+    windowLike: {},
+    findFileInput: () => assert.fail('데스크톱 열기 뒤에 웹 폴백을 열면 안 된다'),
+    emitOpenDocument: () => assert.fail('다른 창에서 연 문서를 이 창에 전달하면 안 된다'),
+    warn: () => assert.fail('경고가 아니어야 한다'),
+    alert: () => assert.fail('오류 안내가 아니어야 한다'),
+  });
+  assert.equal(opened, 1);
+});
+
+test('웹 picker 는 그대로 미저장 문서 교체 확인을 먼저 거친다', async () => {
   await openDocumentViaPicker({
     canReplace: async () => false,
-    desktopOpen: async () => assert.fail('미저장 문서 보호를 우회하면 안 된다'),
-    windowLike: {},
+    windowLike: { showOpenFilePicker: async () => assert.fail('미저장 문서 보호를 우회하면 안 된다') },
     findFileInput: () => assert.fail('미저장 문서 보호를 우회하면 안 된다'),
     emitOpenDocument: () => assert.fail('미저장 문서 보호를 우회하면 안 된다'),
     warn: () => assert.fail('교체 거부는 경고가 아니어야 한다'),
@@ -113,7 +126,7 @@ test('미저장 문서 교체가 거부되면 데스크톱 picker를 열지 않�
   });
 });
 
-test('데스크톱 열기 성공은 교체 확인 뒤에 읽은 바이트를 한 번 전달한다', async () => {
+test('데스크톱 열기 성공은 읽은 바이트를 한 번 전달한다', async () => {
   const events: string[] = [];
   const bytes = new Uint8Array([0, 255, 72, 87, 80]);
   await openDocumentViaPicker({
@@ -128,7 +141,7 @@ test('데스크톱 열기 성공은 교체 확인 뒤에 읽은 바이트를 한
     warn: () => assert.fail('성공은 경고가 아니어야 한다'),
     alert: () => assert.fail('성공은 오류 안내가 아니어야 한다'),
   });
-  assert.deepEqual(events, ['confirm', 'open', 'emit']);
+  assert.deepEqual(events, ['open', 'emit']);
 });
 
 test('데스크톱 열기에도 PDF 가져오기 지원 여부를 그대로 넘긴다', async () => {

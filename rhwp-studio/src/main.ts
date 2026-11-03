@@ -57,7 +57,20 @@ import { addRecentDoc, listRecentDocs } from '@/recent/recent-store';
 import { showDropConfirmDialog } from '@/ui/drop-confirm-dialog';
 import { showHwpPasswordDialog } from '@/ui/hwp-password-dialog';
 import { installAppDownloadButton } from '@/ui/app-download';
-import { initDesktopBridge, isDesktopRuntime, MENU_CHECK_UPDATE } from '@/core/desktop-bridge';
+import {
+  initDesktopBridge,
+  isDesktopRuntime,
+  isSecondaryDesktopWindow,
+  markDesktopWindowReady,
+  MENU_CHECK_UPDATE,
+  noteDesktopBlankDocument,
+  noteDesktopDirtyChanged,
+  noteDesktopDocumentSwapped,
+  noteDesktopLoadSettled,
+  noteDesktopLoadStarted,
+  openInNewDesktopWindow,
+  shouldOpenInNewDesktopWindow,
+} from '@/core/desktop-bridge';
 import { handleManualUpdateCheck, installUpdateNotice, isApplyingUpdate } from '@/ui/update-notice';
 import {
   EMBED_HIDDEN_EDIT_COMMAND_IDS,
@@ -904,6 +917,11 @@ async function initialize(): Promise<void> {
     setupEventListeners();
     setupModalFocusRestore();
     setupGlobalShortcuts();
+    if (isDesktopRuntime()) {
+      // [#156] 문서마다 창 하나 — 문서 교체·변경 여부를 네이티브 창 목록에 알린다(첫 문서를 열기 전에 등록).
+      eventBus.on('document-swapped', () => noteDesktopDocumentSwapped());
+      eventBus.on('document-dirty-changed', () => noteDesktopDirtyChanged());
+    }
     const desktopReady = initDesktopBridge({
       async openDocument(bytes, fileName) {
         if (isApplyingUpdate()) return;
@@ -931,8 +949,10 @@ async function initialize(): Promise<void> {
           confirmLabel: '확인',
         });
       },
+      isDirty: () => documentState.isDirty(),
+      confirmClose: confirmBeforeWindowClose,
     });
-    installUpdateNotice({ beforeApply: confirmBeforeUpdateApply });
+    installUpdateNotice({ beforeApply: confirmBeforeUpdateApply, onApplyFailed: reloadAiAfterFailedUpdate });
     // 시작 진입점은 순서를 지켜야 한다 — ?url= 로드와 자동저장 복구가 문서를 열 기회를
     // 먼저 갖고, 아무도 열지 않았을 때만 빈 문서를 연다.
     void (async () => {
@@ -942,6 +962,7 @@ async function initialize(): Promise<void> {
       // 없는 문서 교체 경로이므로 띄우지 않는다 (드래프트 기록 자체는 유지).
       if (chromeMode !== 'embed') await offerAutosaveRecoveryIfIdle();
       await openBlankDocumentIfIdle();
+      markDesktopWindowReady();
     })();
     // embed 프로파일: PWA launch queue로 문서를 넘겨받는 진입도 문서 교체 경로이므로
     // 설치하지 않는다.
@@ -1178,6 +1199,15 @@ function setupFileInput(): void {
     // Finder/Explorer drop에서는 File System Access handle을 capture하지
     // 않는다. macOS Chromium에서 encrypted HWPX drag/drop 시 해당 IPC가 renderer를 종료시키는
     // 사례가 있어, 열기에 충분한 File bytes만 사용한다. 저장은 이후 save-as 경로로 진행한다.
+    if (shouldOpenInNewDesktopWindow()) {
+      // [#156] 데스크톱: 손대지 않은 빈 창이 아니면 끌어다 놓은 문서는 새 창에서 연다.
+      try {
+        await openInNewDesktopWindow(new Uint8Array(await file.arrayBuffer()), file.name);
+      } catch (error) {
+        showLoadErrorUnlessCancelled(error);
+      }
+      return;
+    }
     await loadFile(file);
   });
 }
@@ -1738,6 +1768,8 @@ async function loadBytes(
 ): Promise<void> {
   // 바이트로 여는 모든 경로(파일 열기 · ?url= · 자동저장 복구 · 호스트 API)의 공통 깔때기다.
   // 파싱·쪽 계산 동안 빈 화면만 보이므로 여기서 대기 커서를 든다.
+  // [#156] 여는 동안은 데스크톱 창이 다른 문서를 받지 않게 알린다(열기에 실패하면 다시 받는다).
+  noteDesktopLoadStarted();
   await withBusyCursor(document.documentElement, async () => {
     // 파싱 전에 먼저 빈 쪽 상태로 만든다 — 이전 문서를 붙잡고 있다가 한 번에 갈아치우면
     // 화면이 튀어 보인다. 파싱이 실패하면 아래 catch가 이전 문서 뷰를 되살린다.
@@ -1787,7 +1819,7 @@ async function loadBytes(
     await initializeDocument(docInfo, t('ui.sbMessage.filePagesTimed', { p1: fileName, p2: docInfo.pageCount, p3: elapsed.toFixed(1) }), {
       suppressDialogs: options.suppressDialogs,
     });
-  });
+  }).finally(noteDesktopLoadSettled);
 }
 
 const RECENT_SUBMENU_COLLAPSED_LIMIT = 8;
@@ -1883,7 +1915,8 @@ async function renderRecentSubmenu(): Promise<void> {
 
 function shouldSkipInitialAutosaveRecovery(): boolean {
   const params = new URLSearchParams(window.location.search);
-  return params.has('url');
+  // [#156] 데스크톱에서 나중에 연 문서 창은 복구를 제안하지 않는다 — 다른 창이 편집 중인 임시 저장본도 보인다.
+  return params.has('url') || isSecondaryDesktopWindow();
 }
 
 async function offerAutosaveRecoveryIfIdle(): Promise<void> {
@@ -1939,6 +1972,7 @@ async function createNewDocument(): Promise<void> {
         { discardPreviousDraft: true },
       );
       await initializeDocument(docInfo, t('ui.sbMessage.newDocPages', { p1: docInfo.pageCount }));
+      noteDesktopBlankDocument();
     });
   } catch (error) {
     msg.textContent = `새 문서 생성 실패: ${error}`;
@@ -2158,10 +2192,24 @@ void initPromise.then(() => {
 });
 
 /**
+ * [#156] HanPage Desktop 창 닫기·종료 전 확인. 저장하지 않은 문서가 있을 때만 네이티브가 부른다.
+ * '저장 안 함'으로 닫으면 그 문서의 임시 저장본도 지운다 — 다음 실행에서 버린 문서를 복구하라고 묻지 않는다.
+ */
+async function confirmBeforeWindowClose(): Promise<boolean> {
+  if (isApplyingUpdate()) return false;
+  if (!await canReplaceCurrentDocument()) return false;
+  if (documentState.isDirty()) await autosaveManager.discardCurrentDraft('window-close-discard');
+  return true;
+}
+
+/**
  * HanPage Desktop 업데이트 적용 전 확인. AI 도우미가 자동 적용으로 문서를 고치는 중일 수 있으므로,
  * 먼저 저장 확인을 통과한 경우에만 도우미를 내리고 그사이 생긴 편집을 다시 확인한다.
  * 첫 확인에서 취소하면 도우미 대화는 그대로 남는다.
  */
+/** [#156] 업데이트 적용 전 확인에서 내린 AI 도우미. 적용이 실패하면 다시 올린다. */
+let aiUnloadedForUpdate = false;
+
 async function confirmBeforeUpdateApply(): Promise<boolean> {
   if (!await canReplaceCurrentDocument()) return false;
   if (!__RHWP_AI__) return true;
@@ -2173,10 +2221,21 @@ async function confirmBeforeUpdateApply(): Promise<boolean> {
     // 올라와 있지 않거나(PLUGIN_NOT_LOADED) 진행 중 트랜잭션이 끝나지 않았다(TX_TIMEOUT).
   }
   const ok = await canReplaceCurrentDocument();
-  if (!ok && aiUnloaded && sidePanels && window.parent === window) {
-    plugins.load('ai-assistant').catch((error) => console.error('[main] AI 도우미 재로드 실패', error));
-  }
+  if (!ok && aiUnloaded) reloadAiAssistant();
+  aiUnloadedForUpdate = ok && aiUnloaded;
   return ok;
+}
+
+/** [#156] 업데이트 적용이 실패했다(다른 창 때문에 거절 포함). 적용 전 확인에서 내린 AI 도우미를 다시 올린다. */
+function reloadAiAfterFailedUpdate(): void {
+  if (!aiUnloadedForUpdate) return;
+  aiUnloadedForUpdate = false;
+  reloadAiAssistant();
+}
+
+function reloadAiAssistant(): void {
+  if (!__RHWP_AI__ || !sidePanels || window.parent !== window) return;
+  plugins.load('ai-assistant').catch((error) => console.error('[main] AI 도우미 재로드 실패', error));
 }
 
 installEmbedRuntime({
