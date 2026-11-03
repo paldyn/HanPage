@@ -43,7 +43,8 @@ jobs:
             runner: macos-15
             # [Task #26 후속] app 번들 추가 → updater 아티팩트(.app.tar.gz + .sig) 생성.
             # dmg 만으론 macOS 자동업데이트 아티팩트가 안 만들어져 latest.json darwin 이 누락된다.
-            args: '--bundles app,dmg'
+            # --verbose: tauri 는 bundle_dmg.sh 의 출력을 verbose 로그에만 남긴다(#170, DMG 단계 실패 원인 확인).
+            args: '--bundles app,dmg --verbose'
           - platform: Windows (x64)
             runner: windows-latest
             args: '--bundles nsis'
@@ -132,8 +133,12 @@ jobs:
           echo "$APPLE_API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/apple_api_key.p8"
 
       # --- Tauri 번들 (beforeBuildCommand = build:frontend = copy-wasm + studio build:desktop) ---
+      # macOS 러너에서 DMG 를 만드는 bundle_dmg.sh 가 가끔 실패한다(0.8.12 태그 빌드 첫 시도 등, #170).
+      # 실패하면 아래 "retry" 단계가 같은 설정으로 한 번 더 시도하고, 둘 다 실패해야 job 이 실패한다.
+      # tauri-action 은 같은 이름의 자산이 이미 있으면 지우고 다시 올린다.
       - name: Build & bundle (tauri-action)
         id: tauri
+        continue-on-error: true
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -161,6 +166,29 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }} -- --locked
 
+      # 위 단계와 같은 설정이다. 한쪽을 바꾸면 다른 쪽도 같이 바꾼다.
+      - name: Build & bundle (retry)
+        id: tauri_retry
+        if: steps.tauri.outcome == 'failure'
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/apple_api_key.p8
+        with:
+          projectPath: HanPage-Desktop
+          tagName: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') && github.ref_name || '' }}
+          releaseName: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') && steps.relname.outputs.name || '' }}
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }} -- --locked
+
       # --- 서명 검증: 실패하면 초안 릴리스를 공개하지 않는다 ---
       # 0.8.9 수동 감사(mydocs/pr/assets/desktop_v089_release/macos-audit.py)와 같은 검사를
       # 번들 .app, 실제로 올리는 updater 아카이브(HanPage.app.tar.gz)를 푼 .app, DMG 안의 .app 에
@@ -175,7 +203,7 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           REQUIRE_SIGNED: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') }}
           EXPECTED_TEAM_ID: 8L78W6D8XF
-          RELEASE_ID: ${{ steps.tauri.outputs.releaseId }}
+          RELEASE_ID: ${{ steps.tauri_retry.outputs.releaseId || steps.tauri.outputs.releaseId }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
