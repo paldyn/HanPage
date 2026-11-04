@@ -39,10 +39,12 @@ jobs:
       matrix:
         include:
           - platform: macOS (aarch64)
-            runner: macos-14
+            # macOS 14 이미지는 2026-11-02 에 은퇴했다(actions/runner-images#13518).
+            runner: macos-15
             # [Task #26 후속] app 번들 추가 → updater 아티팩트(.app.tar.gz + .sig) 생성.
             # dmg 만으론 macOS 자동업데이트 아티팩트가 안 만들어져 latest.json darwin 이 누락된다.
-            args: '--bundles app,dmg'
+            # --verbose: tauri 는 bundle_dmg.sh 의 출력을 verbose 로그에만 남긴다(#170, DMG 단계 실패 원인 확인).
+            args: '--bundles app,dmg --verbose'
           - platform: Windows (x64)
             runner: windows-latest
             args: '--bundles nsis'
@@ -130,8 +132,34 @@ jobs:
         run: |
           echo "$APPLE_API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/apple_api_key.p8"
 
+      # 공개 뒤 태그 빌드를 다시 실행하면 tauri-action 이 공개 자산을 지우고 다시 올린다. 초안은 releases/tags 로
+      # 조회되지 않으므로(404) 공개 릴리스가 보이면 번들 전에 멈춘다. 초안 상태의 실패 job 재실행은 그대로 된다(#170).
+      - name: Refuse to overwrite a published release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for n in 1 2 3; do
+            if out=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq '.id' 2>&1); then
+              echo "::error title=공개 릴리스::$GITHUB_REF_NAME 릴리스(${out})가 이미 공개돼 있어 공개 자산을 덮어쓰지 않도록 멈춥니다."
+              exit 1
+            fi
+            grep -q 'HTTP 404' <<<"$out" && exit 0
+            sleep $((n * 15))
+          done
+          echo "::error title=공개 릴리스 확인::릴리스 조회를 세 번 시도해 모두 실패했습니다: ${out}"
+          exit 1
+
       # --- Tauri 번들 (beforeBuildCommand = build:frontend = copy-wasm + studio build:desktop) ---
+      # macOS 러너에서 DMG 를 만드는 bundle_dmg.sh 가 가끔 실패한다(0.8.12 태그 빌드 첫 시도, #170 첫 수동 실행).
+      # tauri-action 이 TAURI_BUNDLER_DMG_IGNORE_CI=true 를 기본으로 둬 CI 에서도 Finder AppleScript 로 DMG 창 배치를
+      # 만들기 때문이다(화면 없는 러너에서 불안정). 창 배치는 남기고, 실패하면 아래 "retry" 단계가 같은 설정으로 한 번 더
+      # 시도한다. 둘 다 실패해야 job 이 실패한다. tauri-action 은 같은 이름의 자산이 이미 있으면 지우고 다시 올린다.
       - name: Build & bundle (tauri-action)
+        id: tauri
+        continue-on-error: true
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -159,50 +187,166 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }} -- --locked
 
+      # 위 단계와 같은 설정이다. 한쪽을 바꾸면 다른 쪽도 같이 바꾼다.
+      - name: Build & bundle (retry)
+        id: tauri_retry
+        if: steps.tauri.outcome == 'failure'
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/apple_api_key.p8
+        with:
+          projectPath: HanPage-Desktop
+          tagName: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') && github.ref_name || '' }}
+          releaseName: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') && steps.relname.outputs.name || '' }}
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }} -- --locked
+
       # --- 서명 검증: 실패하면 초안 릴리스를 공개하지 않는다 ---
       # 0.8.9 수동 감사(mydocs/pr/assets/desktop_v089_release/macos-audit.py)와 같은 검사를
-      # updater 아카이브에 들어가는 .app 과 DMG 안의 .app 에 수행한다.
+      # 번들 .app, 실제로 올리는 updater 아카이브(HanPage.app.tar.gz)를 푼 .app, DMG 안의 .app 에
+      # 수행하고 세 .app 의 CDHash 가 같은지 본다. Team ID 는 서명 시크릿과 별도로 고정한 값과 비교하고,
+      # DMG 컨테이너 서명(공증 대상은 아님)과 볼륨 구성, 아카이브 항목도 확인한다. tauri-action 이 먼저
+      # 초안에 올리므로, 태그 빌드는 그 릴리스에 올라간 macOS 자산이 검증한 파일과 같은지 digest 로
+      # 대조한다(#170).
       - name: Verify macOS signature and notarization
         if: runner.os == 'macOS'
         shell: bash
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           REQUIRE_SIGNED: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') }}
+          EXPECTED_TEAM_ID: 8L78W6D8XF
+          RELEASE_ID: ${{ steps.tauri_retry.outputs.releaseId || steps.tauri.outputs.releaseId }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          fail() {
+            echo "::error title=$1::$2"
+            exit 1
+          }
           bundle=HanPage-Desktop/src-tauri/target/release/bundle
           app="$bundle/macos/HanPage.app"
-          dmg=$(ls "$bundle"/dmg/*.dmg | head -n 1)
+          archive="$bundle/macos/HanPage.app.tar.gz"
+          dmg=$(ls "$bundle"/dmg/*.dmg 2>/dev/null | head -n 1 || true)
           if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
             if [ "$REQUIRE_SIGNED" = true ]; then
-              echo "::error title=macOS 미서명::태그 빌드인데 APPLE_SIGNING_IDENTITY 가 없습니다."
-              exit 1
+              fail "macOS 미서명" "태그 빌드인데 APPLE_SIGNING_IDENTITY 가 없습니다."
             fi
             echo "::warning title=macOS 미서명::Apple 서명 설정이 없어 서명·공증 검증을 건너뜁니다."
             exit 0
           fi
+          [ -n "$dmg" ] || fail "DMG" "bundle/dmg 에 DMG 가 없습니다."
           team=$(sed -nE 's/.*\(([A-Z0-9]{10})\)$/\1/p' <<<"$APPLE_SIGNING_IDENTITY")
-          test -n "$team"
+          if [ "$team" != "$EXPECTED_TEAM_ID" ]; then
+            fail "macOS Team ID" "APPLE_SIGNING_IDENTITY 의 Team ID(${team:-없음})가 배포 Team ID($EXPECTED_TEAM_ID)와 다릅니다."
+          fi
           check_app() {
-            codesign --verify --deep --strict --verbose=2 "$1"
-            info=$(codesign -dv --verbose=4 "$1" 2>&1)
-            grep -qx "TeamIdentifier=$team" <<<"$info"
-            grep -q '^Authority=Developer ID Application:' <<<"$info"
-            spctl --assess --type execute --verbose=4 "$1" 2>&1 | tee "$RUNNER_TEMP/spctl.txt"
-            grep -q 'source=Notarized Developer ID' "$RUNNER_TEMP/spctl.txt"
-            xcrun stapler validate "$1"
+            { [ -d "$1" ] && [ ! -L "$1" ]; } || fail "macOS 서명" "$1 이 디렉터리가 아닙니다."
+            codesign --verify --deep --strict --verbose=2 "$1" || fail "macOS 서명" "$1 의 codesign 검증이 실패했습니다."
+            info=$(codesign -dv --verbose=4 "$1" 2>&1) || fail "macOS 서명" "$1 의 서명 정보를 읽지 못했습니다."
+            grep -qx "TeamIdentifier=$EXPECTED_TEAM_ID" <<<"$info" || fail "macOS 서명" "$1 의 TeamIdentifier 가 $EXPECTED_TEAM_ID 가 아닙니다."
+            grep -q '^Authority=Developer ID Application:' <<<"$info" || fail "macOS 서명" "$1 이 Developer ID Application 으로 서명되지 않았습니다."
+            spctl --assess --type execute --verbose=4 "$1" 2>&1 | tee "$RUNNER_TEMP/spctl.txt" || fail "macOS 공증" "$1 을 Gatekeeper 가 거부했습니다."
+            grep -q 'source=Notarized Developer ID' "$RUNNER_TEMP/spctl.txt" || fail "macOS 공증" "$1 이 Notarized Developer ID 가 아닙니다."
+            xcrun stapler validate "$1" || fail "macOS 공증" "$1 에 공증 티켓이 스테이플되지 않았습니다."
+            cdhash=$(sed -n 's/^CDHash=//p' <<<"$info")
           }
           check_app "$app"
-          hdiutil verify "$dmg"
+          cd_bundle=$cdhash
+          # updater 는 아카이브의 모든 항목을 첫 경로만 떼고 풀므로 HanPage.app 밖 항목이 있으면 안 된다.
+          entries=$(tar -tzf "$archive") || fail "updater 아카이브 구조" "항목 목록을 읽지 못했습니다."
+          if [ -z "$entries" ] || awk -F/ '$1 != "HanPage.app" || /(^|\/)\.\.(\/|$)/ { bad = 1 } END { exit !bad }' <<<"$entries"; then
+            fail "updater 아카이브 구조" "HanPage.app 밖 항목이나 상위 경로가 있습니다."
+          fi
+          upd="$RUNNER_TEMP/updater-archive"
+          rm -rf "$upd"
+          mkdir -p "$upd"
+          tar -xzf "$archive" -C "$upd" || fail "updater 아카이브 구조" "아카이브를 풀지 못했습니다."
+          check_app "$upd/HanPage.app"
+          cd_archive=$cdhash
+          hdiutil verify "$dmg" || fail "DMG" "$(basename "$dmg") 체크섬 검증이 실패했습니다."
+          codesign --verify --strict --verbose=2 "$dmg" || fail "DMG 서명" "$(basename "$dmg") 의 서명 검증이 실패했습니다."
+          dinfo=$(codesign -dv --verbose=4 "$dmg" 2>&1) || fail "DMG 서명" "DMG 의 서명 정보를 읽지 못했습니다."
+          grep -qx "TeamIdentifier=$EXPECTED_TEAM_ID" <<<"$dinfo" || fail "DMG 서명" "DMG 의 TeamIdentifier 가 $EXPECTED_TEAM_ID 가 아닙니다."
+          grep -q '^Authority=Developer ID Application:' <<<"$dinfo" || fail "DMG 서명" "DMG 가 Developer ID Application 으로 서명되지 않았습니다."
           mnt="$RUNNER_TEMP/dmg-mount"
           mkdir -p "$mnt"
-          hdiutil attach -readonly -nobrowse -mountpoint "$mnt" "$dmg"
+          hdiutil attach -readonly -nobrowse -mountpoint "$mnt" "$dmg" || fail "DMG" "$(basename "$dmg") 를 마운트하지 못했습니다."
           trap 'hdiutil detach "$mnt" || true' EXIT
+          visible=$(ls -A "$mnt" | { grep -v '^\.' || true; } | sort | tr '\n' ' ')
+          if [ "$visible" != "Applications HanPage.app " ] || [ "$(readlink "$mnt/Applications" || true)" != /Applications ]; then
+            fail "DMG 구성" "볼륨 최상위가 HanPage.app 과 /Applications 링크만이 아닙니다(${visible:-비어 있음})."
+          fi
           check_app "$mnt/HanPage.app"
+          cd_dmg=$cdhash
+          if [ -z "$cd_bundle" ] || [ "$cd_archive" != "$cd_bundle" ] || [ "$cd_dmg" != "$cd_bundle" ]; then
+            fail "macOS 빌드 불일치" "세 .app 의 CDHash 가 다릅니다(번들 ${cd_bundle:-없음}, 아카이브 ${cd_archive:-없음}, DMG ${cd_dmg:-없음})."
+          fi
+          uploaded="태그 빌드에서만 대조한다"
+          if [ "$REQUIRE_SIGNED" = true ]; then
+            # 일시 오류에 대비해 세 번까지 시도한다. 실패한 시도의 출력은 버린다.
+            api_get() {
+              local n out
+              for n in 1 2 3; do
+                if out=$(gh api "$1"); then
+                  printf '%s' "$out"
+                  return 0
+                fi
+                sleep $((n * 15))
+              done
+              return 1
+            }
+            download() {
+              local n
+              for n in 1 2 3; do
+                gh api -H 'Accept: application/octet-stream' "repos/$GITHUB_REPOSITORY/releases/assets/$1" > "$2" && return 0
+                sleep $((n * 15))
+              done
+              return 1
+            }
+            [ -n "${RELEASE_ID:-}" ] || fail "초안 자산" "tauri-action 이 릴리스 ID 를 주지 않았습니다."
+            release=$(api_get "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID") || fail "초안 자산 조회" "릴리스 $RELEASE_ID 를 읽지 못했습니다."
+            [ "$(jq -r .tag_name <<<"$release")" = "$GITHUB_REF_NAME" ] || fail "초안 자산" "릴리스 $RELEASE_ID 의 태그가 $GITHUB_REF_NAME 이 아닙니다."
+            # 공개 뒤 태그 빌드를 다시 실행하면 tauri-action 이 공개 자산을 다시 올린다. 초안이 아니면 알린다.
+            [ "$(jq -r .draft <<<"$release")" = true ] || fail "초안 자산" "릴리스 $RELEASE_ID 가 초안이 아닙니다. 공개 뒤 다시 실행했다면 공개 자산이 교체됐습니다."
+            listing=$(jq -r '.assets[] | [.name, (.id | tostring), (.digest // "")] | @tsv' <<<"$release") || fail "초안 자산 조회" "릴리스 응답에서 자산 목록을 읽지 못했습니다."
+            # tauri-action 은 아카이브를 DMG 와 같은 아키텍처 이름(aarch64·x64)으로 올린다.
+            arch=$(basename "$dmg" .dmg)
+            arch=${arch##*_}
+            for pair in "HanPage_${arch}.app.tar.gz|$archive" "$(basename "$dmg")|$dmg"; do
+              name=${pair%%|*}
+              file=${pair#*|}
+              rows=$(awk -F'\t' -v n="$name" '$1 == n' <<<"$listing")
+              if [ -z "$rows" ] || [ "$(printf '%s\n' "$rows" | wc -l | tr -d ' ')" != 1 ]; then
+                fail "초안 자산" "릴리스 $RELEASE_ID 에서 $name 을 하나로 찾지 못했습니다."
+              fi
+              got=$(cut -f3 <<<"$rows")
+              if [ -z "$got" ]; then
+                # digest 를 아직 주지 않으면 자산을 받아 직접 계산한다.
+                download "$(cut -f2 <<<"$rows")" "$RUNNER_TEMP/uploaded-asset" || fail "초안 자산 조회" "$name 을 받지 못했습니다."
+                got="sha256:$(shasum -a 256 "$RUNNER_TEMP/uploaded-asset" | cut -d' ' -f1)"
+              fi
+              want="sha256:$(shasum -a 256 "$file" | cut -d' ' -f1)"
+              if [ "$got" != "$want" ]; then
+                fail "초안 자산 불일치" "$name — 초안 $got, 검증한 파일 $want"
+              fi
+            done
+            uploaded="릴리스 $RELEASE_ID 의 \`HanPage_${arch}.app.tar.gz\`·\`$(basename "$dmg")\` digest 가 검증한 파일과 같다"
+          fi
           {
             echo "### macOS 서명·공증 확인"
-            echo "- Team: $team, Developer ID Application, Gatekeeper: Notarized Developer ID, stapler: valid"
-            echo "- 대상: \`macos/HanPage.app\`, \`$(basename "$dmg")\` 안의 HanPage.app"
+            echo "- Team: $EXPECTED_TEAM_ID(고정값과 일치), Developer ID Application, Gatekeeper: Notarized Developer ID, stapler: valid"
+            echo "- 대상: \`macos/HanPage.app\`, \`HanPage.app.tar.gz\` 를 푼 HanPage.app, \`$(basename "$dmg")\` 안의 HanPage.app — CDHash \`$cd_bundle\` 로 같다"
+            echo "- DMG: Developer ID 서명(공증 대상 아님), 볼륨은 HanPage.app 과 /Applications 링크"
+            echo "- 초안 자산: $uploaded"
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Windows 설치 파일은 미서명으로 배포한다(#122). 서명 상태를 요약에 남겨 릴리스 확인 때

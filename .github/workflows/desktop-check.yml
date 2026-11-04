@@ -48,7 +48,8 @@ jobs:
       matrix:
         include:
           - platform: macOS
-            runner: macos-14
+            # 번들(desktop-release.yml)과 같은 러너. macOS 14 이미지는 2026-11-02 에 은퇴했다.
+            runner: macos-15
           - platform: Windows
             runner: windows-latest
     defaults:

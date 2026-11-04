@@ -86,7 +86,8 @@ Tauri가 Windows 창 아이콘으로 첫 프레임을 읽으므로 고해상도 
 검증·병합된 commit에 `hanpage-desktop-v{버전}` 태그를 push하면
 `desktop-release.yml`이 macOS aarch64와 Windows x64를 빌드하여 **초안 릴리스**에
 첨부한다. 두 플랫폼의 설치파일, updater 서명과 `latest.json` 플랫폼 항목, macOS
-서명·공증을 확인하고 릴리스 노트에 아래 Windows 설치 안내를 넣은 뒤 릴리스를 공개한다.
+서명·공증을 확인하고(감사 스크립트 [`scripts/release-audit.mjs`](scripts/release-audit.mjs))
+릴리스 노트에 아래 Windows 설치 안내를 넣은 뒤 릴리스를 공개한다.
 devel 병합만으로 설치된 앱이 갱신되지 않는다. 전체 절차와 서명 설정은
 [Desktop 자동 업데이트·릴리스 운영 가이드](../mydocs/manual/desktop_auto_update.md)를 따른다.
 
