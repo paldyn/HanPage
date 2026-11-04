@@ -176,6 +176,27 @@ jobs:
           chmod +x "$RUNNER_TEMP/xcrun-shim/xcrun"
           echo "$RUNNER_TEMP/xcrun-shim" >> "$GITHUB_PATH"
 
+      # 일회용 브랜치 전용(병합하지 않는다): 운영 가이드 §4.1
+      - name: Rehearsal only - read release lookups with the job token
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for tag in hanpage-desktop-v0.8.12 hanpage-desktop-v0.8.6 hanpage-desktop-v0.0.0; do
+            printf 'lookup %s: ' "$tag"
+            gh api -i "repos/$GITHUB_REPOSITORY/releases/tags/$tag" 2>/dev/null | sed -n 1p || true
+          done
+
+      - name: Rehearsal only - fail the first DMG attempt
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/shim"
+          printf '#!/bin/bash\nrm -f "$0"\necho "rehearsal: forced SetFile failure" >&2\nexit 1\n' > "$RUNNER_TEMP/shim/SetFile"
+          chmod +x "$RUNNER_TEMP/shim/SetFile"
+          echo "$RUNNER_TEMP/shim" >> "$GITHUB_PATH"
+
       # --- Tauri 번들 (beforeBuildCommand = build:frontend = copy-wasm + studio build:desktop) ---
       # macOS 러너에서 DMG 를 만드는 bundle_dmg.sh 가 가끔 실패한다. 어느 단계인지는 아직 모른다(운영 가이드 §8).
       # retryAttempts 는 tauri build 와 자산 업로드만 한 번 더 시도한다. 그 밖의 GitHub API 오류는 실패 job 재실행으로 복구한다.
@@ -393,7 +414,7 @@ jobs:
 
       # --- dispatch 테스트 빌드: 릴리스가 없으므로 아티팩트로 업로드 ---
       - name: Upload bundle (dispatch test)
-        if: github.event_name == 'workflow_dispatch'
+        if: always() && github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: hanpage-${{ matrix.runner }}
