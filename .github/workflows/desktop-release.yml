@@ -153,13 +153,11 @@ jobs:
           exit 1
 
       # --- Tauri 번들 (beforeBuildCommand = build:frontend = copy-wasm + studio build:desktop) ---
-      # macOS 러너에서 DMG 를 만드는 bundle_dmg.sh 가 가끔 실패한다(0.8.12 태그 빌드 첫 시도, #170 첫 수동 실행).
-      # tauri-action 이 TAURI_BUNDLER_DMG_IGNORE_CI=true 를 기본으로 둬 CI 에서도 Finder AppleScript 로 DMG 창 배치를
-      # 만들기 때문이다(화면 없는 러너에서 불안정). 창 배치는 남기고, 실패하면 아래 "retry" 단계가 같은 설정으로 한 번 더
-      # 시도한다. 둘 다 실패해야 job 이 실패한다. tauri-action 은 같은 이름의 자산이 이미 있으면 지우고 다시 올린다.
+      # macOS 러너에서 DMG 를 만드는 bundle_dmg.sh 가 가끔 실패한다. 어느 단계인지는 아직 모른다(운영 가이드 §8).
+      # retryAttempts 는 tauri build 와 자산 업로드만 한 번 더 시도한다. 그 밖의 GitHub API 오류는 실패 job 재실행으로 복구한다.
+      # tauri-action 1.x 는 latest.json 주소를 시간당 60회 제한의 API 주소로 바꿔 올리지 않는다(운영 가이드 §7).
       - name: Build & bundle (tauri-action)
         id: tauri
-        continue-on-error: true
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -186,29 +184,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }} -- --locked
-
-      # 위 단계와 같은 설정이다. 한쪽을 바꾸면 다른 쪽도 같이 바꾼다.
-      - name: Build & bundle (retry)
-        id: tauri_retry
-        if: steps.tauri.outcome == 'failure'
-        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_KEY_PATH: ${{ runner.temp }}/apple_api_key.p8
-        with:
-          projectPath: HanPage-Desktop
-          tagName: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') && github.ref_name || '' }}
-          releaseName: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') && steps.relname.outputs.name || '' }}
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }} -- --locked
+          retryAttempts: 1
 
       # --- 서명 검증: 실패하면 초안 릴리스를 공개하지 않는다 ---
       # 0.8.9 수동 감사(mydocs/pr/assets/desktop_v089_release/macos-audit.py)와 같은 검사를
@@ -224,7 +200,7 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           REQUIRE_SIGNED: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/hanpage-desktop-v') }}
           EXPECTED_TEAM_ID: 8L78W6D8XF
-          RELEASE_ID: ${{ steps.tauri_retry.outputs.releaseId || steps.tauri.outputs.releaseId }}
+          RELEASE_ID: ${{ steps.tauri.outputs.releaseId }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -261,6 +237,16 @@ jobs:
           }
           check_app "$app"
           cd_bundle=$cdhash
+          # 인증서 만료를 미리 알린다. 알림일 뿐이라 이 확인이 실패해도 검증 단계는 실패시키지 않는다.
+          cert_end=""
+          if codesign -d --extract-certificates="$RUNNER_TEMP/signing-cert" "$app" 2>/dev/null; then
+            cert_end=$(openssl x509 -inform DER -in "$RUNNER_TEMP/signing-cert0" -noout -enddate 2>/dev/null | cut -d= -f2 || true)
+          fi
+          if [ -z "$cert_end" ]; then
+            echo "::warning title=Developer ID 인증서::서명 인증서 만료일을 읽지 못했습니다. 운영 가이드 §3.1.1 을 보고 직접 확인하세요."
+          elif ! openssl x509 -inform DER -in "$RUNNER_TEMP/signing-cert0" -noout -checkend $((90 * 86400)) >/dev/null 2>&1; then
+            echo "::warning title=Developer ID 인증서::$cert_end 에 만료됩니다. 운영 가이드 §3.1.1 의 절차로 갱신하세요."
+          fi
           # updater 는 아카이브의 모든 항목을 첫 경로만 떼고 풀므로 HanPage.app 밖 항목이 있으면 안 된다.
           entries=$(tar -tzf "$archive") || fail "updater 아카이브 구조" "항목 목록을 읽지 못했습니다."
           if [ -z "$entries" ] || awk -F/ '$1 != "HanPage.app" || /(^|\/)\.\.(\/|$)/ { bad = 1 } END { exit !bad }' <<<"$entries"; then
@@ -329,15 +315,18 @@ jobs:
                 fail "초안 자산" "릴리스 $RELEASE_ID 에서 $name 을 하나로 찾지 못했습니다."
               fi
               got=$(cut -f3 <<<"$rows")
+              how="GitHub digest"
               if [ -z "$got" ]; then
                 # digest 를 아직 주지 않으면 자산을 받아 직접 계산한다.
                 download "$(cut -f2 <<<"$rows")" "$RUNNER_TEMP/uploaded-asset" || fail "초안 자산 조회" "$name 을 받지 못했습니다."
                 got="sha256:$(shasum -a 256 "$RUNNER_TEMP/uploaded-asset" | cut -d' ' -f1)"
+                how="내려받아 계산"
               fi
               want="sha256:$(shasum -a 256 "$file" | cut -d' ' -f1)"
               if [ "$got" != "$want" ]; then
                 fail "초안 자산 불일치" "$name — 초안 $got, 검증한 파일 $want"
               fi
+              echo "초안 자산 대조 통과: $name ($how)"
             done
             uploaded="릴리스 $RELEASE_ID 의 \`HanPage_${arch}.app.tar.gz\`·\`$(basename "$dmg")\` digest 가 검증한 파일과 같다"
           fi
@@ -346,6 +335,7 @@ jobs:
             echo "- Team: $EXPECTED_TEAM_ID(고정값과 일치), Developer ID Application, Gatekeeper: Notarized Developer ID, stapler: valid"
             echo "- 대상: \`macos/HanPage.app\`, \`HanPage.app.tar.gz\` 를 푼 HanPage.app, \`$(basename "$dmg")\` 안의 HanPage.app — CDHash \`$cd_bundle\` 로 같다"
             echo "- DMG: Developer ID 서명(공증 대상 아님), 볼륨은 HanPage.app 과 /Applications 링크"
+            echo "- Developer ID 인증서 만료: ${cert_end:-확인 못 함}"
             echo "- 초안 자산: $uploaded"
           } >> "$GITHUB_STEP_SUMMARY"
 

@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 // HanPage Desktop 릴리스 자산 감사. 초안 또는 공개 릴리스에서 받은 자산 6개를 실행하지 않고 검사한다.
 //
-//   node HanPage-Desktop/scripts/release-audit.mjs <자산 폴더> <버전> [--release <ID>] [--prev-tag <태그>] [--conf <파일>] [--prev-conf <파일>]
+//   node HanPage-Desktop/scripts/release-audit.mjs <자산 폴더> <버전> [--release <ID>] [--rehearsal <N>] [--prev-tag <태그>] [--conf <파일>] [--prev-conf <파일>]
 //
-// - --release 를 주면 GitHub 릴리스(gh api)의 자산 목록·digest 가 감사한 파일과 같은지 대조한다(공개본 = 감사본).
-// - updater 공개키는 기본으로 태그 hanpage-desktop-v<버전> 의 tauri.conf.json 에서 읽고(git), 출처와 SHA-256 을 남긴다.
+// - --release 를 주면 GitHub 릴리스(gh api)의 자산 목록·digest 가 감사한 파일과 같은지(공개본 = 감사본), 대상 commit 이 로컬 태그와
+//   같은지 대조한다. 그래서 --conf 를 줘도 태그를 받아 둬야 한다.
+// - --rehearsal 은 태그 hanpage-desktop-v<버전> 대신 리허설 태그 hanpage-desktop-v<버전>-rehearsal.<N> 을 감사한다. 태그 이름을
+//   직접 받지 않는 것은 URL 검사와 릴리스 태그 대조가 태그와 자산 버전이 같다는 것까지 입증하기 때문이다.
+// - updater 공개키는 기본으로 그 태그의 tauri.conf.json 에서 읽고(git), 출처와 SHA-256 을 남긴다.
 // - 이전 릴리스(기본: 그보다 낮은 가장 높은 hanpage-desktop-v* 태그)와 공개키가 같아야 기존 설치본이 업데이트를 받아들인다.
 // - updater 서명은 앱의 updater(tauri-plugin-updater·minisign-verify)처럼 엄격하게 디코딩한다. latest.json 의 서명 문자열을
 //   그대로 쓰므로 .sig 와 바이트 단위로 같아야 한다.
 // - macOS 도구(plutil·lipo·codesign·spctl·xcrun stapler·hdiutil)를 쓴다. DMG 는 읽기 전용으로 마운트한다.
+// - 서명 인증서 만료일을 signingCertNotAfter 에 남기고, 90일 안이거나 읽지 못하면 warnings 와 stderr 에 적는다(실패로 치지 않는다).
 // 결과 JSON 을 stdout 에 쓰고, 실패한 검사가 있으면 종료 코드 1, 중단되면 130 으로 끝난다.
 import { readFileSync, readdirSync, readlinkSync, lstatSync, mkdtempSync, mkdirSync, rmSync, copyFileSync, constants as fsc } from 'node:fs';
 import { createHash, createPublicKey, verify } from 'node:crypto';
@@ -27,30 +31,30 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 // 오타·`--release=ID`·값 없는 옵션이 조용히 무시되면 대조를 건너뛴 채 통과하므로 모르는 옵션과 남는 인자는 거부한다.
 const usage = () => {
-  console.error('usage: release-audit.mjs <assetDir> <version> [--release <id>] [--prev-tag <tag>] [--conf <file>] [--prev-conf <file>]');
+  console.error('usage: release-audit.mjs <assetDir> <version> [--release <id>] [--rehearsal <n>] [--prev-tag <tag>] [--conf <file>] [--prev-conf <file>]');
   process.exit(2);
 };
 let cli;
 try {
   cli = parseArgs({
     allowPositionals: true, strict: true,
-    options: { release: { type: 'string' }, 'prev-tag': { type: 'string' }, conf: { type: 'string' }, 'prev-conf': { type: 'string' } },
+    options: { release: { type: 'string' }, rehearsal: { type: 'string' }, 'prev-tag': { type: 'string' }, conf: { type: 'string' }, 'prev-conf': { type: 'string' } },
   });
 } catch (e) {
   console.error(e.message);
   usage();
 }
 const [dir, version] = cli.positionals;
-const opts = { release: cli.values.release, prevTag: cli.values['prev-tag'], conf: cli.values.conf, prevConf: cli.values['prev-conf'] };
+const opts = { release: cli.values.release, rehearsal: cli.values.rehearsal, prevTag: cli.values['prev-tag'], conf: cli.values.conf, prevConf: cli.values['prev-conf'] };
 if (cli.positionals.length !== 2 || !/^\d+\.\d+\.\d+$/.test(version) || (opts.release !== undefined && !/^\d+$/.test(opts.release))
-  || Object.values(opts).some((v) => v === '')) usage();
+  || (opts.rehearsal !== undefined && !/^[1-9]\d*$/.test(opts.rehearsal)) || Object.values(opts).some((v) => v === '')) usage();
 // 동기 실행 중에는 신호 처리기가 돌지 않는다. 처리기는 Node 가 신호로 바로 죽어 finally(마운트 해제·임시 폴더 정리)를 건너뛰지
 // 않게 할 뿐이다. 터미널 Ctrl-C 는 같은 프로세스 그룹의 자식에도 간다. 자식이 신호로 끝나면 남은 검사를 건너뛰고 130 으로
 // 끝내며, 신호를 받아 스스로 끝나는 도구(hdiutil 등)는 그 검사가 실패로 남는다. 어느 쪽이든 정리는 한다.
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => {});
 let interrupted = null;
-const tag = `${TAG_PREFIX}${version}`;
-const out = { version, tag, release: null, checks: [] };
+const tag = `${TAG_PREFIX}${version}${opts.rehearsal ? `-rehearsal.${opts.rehearsal}` : ''}`;
+const out = { version, tag, release: null, signingCertNotAfter: null, warnings: [], checks: [] };
 const check = (name, ok, detail = '') => { out.checks.push({ name, ok: !!ok, detail: String(detail) }); };
 const attempt = (name, fn) => {
   if (interrupted) return;
@@ -64,7 +68,7 @@ const git = (args) => execFileSync('git', ['-C', repoRoot, ...args], { encoding:
 const run = (cmd, args) => {
   const r = spawnSync(cmd, args, { encoding: 'utf8' });
   if (r.signal) interrupted = r.signal;
-  return { ok: r.status === 0, text: `${r.stdout ?? ''}${r.stderr ?? ''}`.trim() };
+  return { ok: r.status === 0, stdout: (r.stdout ?? '').trim(), text: `${r.stdout ?? ''}${r.stderr ?? ''}`.trim() };
 };
 const cmpVersion = (a, b) => {
   const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
@@ -74,7 +78,7 @@ const cmpVersion = (a, b) => {
 
 function loadConf(ref, file) {
   if (file) { const text = readFileSync(file, 'utf8'); return { source: file, sha256: sha256(text), json: JSON.parse(text) }; }
-  const spec = `${ref}:${CONF_PATH}`;
+  const spec = `refs/tags/${ref}:${CONF_PATH}`;
   const text = git(['show', spec]);
   return { source: spec, blob: git(['rev-parse', spec]).trim(), sha256: sha256(text), json: JSON.parse(text) };
 }
@@ -217,6 +221,19 @@ function inspectApp(label, app) {
   return info.match(/^CDHash=([0-9a-f]+)$/m)?.[1] ?? null;
 }
 
+// 만료가 가까우면 경고만 남긴다. 이미 서명한 앱은 보안 타임스탬프로 유효하고, 갱신이 필요한 것은 다음 릴리스다.
+function recordSigningCert(app) {
+  const prefix = join(tmp, 'signing-cert');
+  const read = run('codesign', ['-d', `--extract-certificates=${prefix}`, app]).ok
+    ? run('openssl', ['x509', '-inform', 'DER', '-in', `${prefix}0`, '-noout', '-enddate']) : { ok: false, stdout: '' };
+  const end = read.stdout.replace(/^notAfter=/, '');
+  const expires = read.ok ? Date.parse(end) : NaN;
+  if (Number.isNaN(expires)) { out.warnings.push('could not read the signing certificate expiry'); return; }
+  out.signingCertNotAfter = end;
+  const days = Math.floor((expires - Date.now()) / 86400000);
+  if (days < 90) out.warnings.push(`Developer ID certificate expires on ${end} (${days} days left)`);
+}
+
 // 1) 자산 집합
 const expected = [`HanPage_${version}_aarch64.dmg`, `HanPage_${version}_x64-setup.exe`, `HanPage_${version}_x64-setup.exe.sig`,
   'HanPage_aarch64.app.tar.gz', 'HanPage_aarch64.app.tar.gz.sig', 'latest.json'].sort();
@@ -297,6 +314,9 @@ if (opts.release) {
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
     out.release = { id: release.id, tag: release.tag_name, draft: release.draft, target: release.target_commitish };
     check('release: tag matches', release.tag_name === tag, release.tag_name);
+    const tagCommit = run('git', ['-C', repoRoot, 'rev-parse', `refs/tags/${tag}^{commit}`]);
+    check('release: target is the local tag commit', tagCommit.ok && release.target_commitish === tagCommit.stdout,
+      `${release.target_commitish} / ${tagCommit.text}`);
     const remote = Object.fromEntries((release.assets ?? []).map((a) => [a.name, a.digest ?? '']));
     check('release: holds exactly the 6 expected assets', JSON.stringify(Object.keys(remote).sort()) === JSON.stringify(expected),
       Object.keys(remote).sort().join(', '));
@@ -321,6 +341,7 @@ try {
     mkdirSync(join(tmp, 'upd'));
     execFileSync('tar', ['-xzf', archive, '-C', join(tmp, 'upd')]);
     out.cdhash = { updater: inspectApp('updater .app', join(tmp, 'upd/HanPage.app')) };
+    if (out.cdhash.updater) recordSigningCert(join(tmp, 'upd/HanPage.app'));
   });
   attempt('DMG: inspect', () => {
     const dmg = join(dir, `HanPage_${version}_aarch64.dmg`);
@@ -375,6 +396,8 @@ try {
 
 if (interrupted) check('audit: completed without interruption', false, `stopped by ${interrupted}; remaining checks skipped`);
 out.pass = out.checks.every((c) => c.ok);
+// 결과 JSON 은 파일로 보내므로 경고는 터미널에도 남긴다.
+for (const w of out.warnings) console.error(`warning: ${w}`);
 console.log(JSON.stringify(out, null, 2));
 // process.exit 는 파이프로 넘기는 stdout 을 다 쓰기 전에 끝낼 수 있다.
 process.exitCode = interrupted ? 130 : out.pass ? 0 : 1;
