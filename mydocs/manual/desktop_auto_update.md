@@ -2,7 +2,7 @@
 kind: guide
 status: active
 canonical: mydocs/manual/desktop_auto_update.md
-last_verified: 2026-11-03
+last_verified: 2026-11-04
 ---
 
 # HanPage Desktop 자동 업데이트·릴리스 운영 가이드
@@ -64,12 +64,39 @@ Windows는 updater 서명만 한다.
   아직 초안인지, updater 아카이브·DMG의 digest가 검증한 파일과 같은지 대조한다(API 일시 오류에 대비해 세 번까지 시도,
   #170). 실패하면 원인별 `::error`를 남기고(§8), 태그 빌드에서 Apple 서명 설정이 없으면 실패한다. macOS job은
   `macos-15` 러너에서 돈다(macOS 14 이미지는 2026-11-02에 은퇴했다).
-- Developer ID Application 인증서는 2027-02-01에 만료된다. 이미 서명한 릴리스는 보안 타임스탬프로 유효하지만, 그 뒤
-  릴리스 전에는 인증서를 갱신해 `APPLE_CERTIFICATE`·`APPLE_CERTIFICATE_PASSWORD`를 바꾼다. Team ID가 바뀌면 워크플로의
-  `EXPECTED_TEAM_ID`와 감사 스크립트(§4)의 `TEAM_ID`도 함께 바꾼다.
+- tauri는 빌드 안의 `stapler staple` 종료 코드를 보지 않고 출력도 버린다. macOS job은 `xcrun` 앞에 대역을 두어 이 호출만 다섯 번까지
+  시도하고, 시도 결과를 검증 단계 로그에 남긴다(`stapler staple try <N>: exit <코드>`, §8).
+- 지금 쓰는 Developer ID Application 인증서는 2027-02-01에 만료된다(갱신하면 이 날짜를 고친다). 검증 단계와 감사 스크립트(§4)가
+  만료 90일 전부터 경고한다. 갱신 절차는 §3.1.1을 따른다.
 - DMG 컨테이너는 Developer ID로 서명만 하고 공증·스테이플하지 않는다. 공증·스테이플 대상은 안의 `.app`이다(0.8.x 전체 동일).
 - Apple Developer Program 약관이 갱신되면 계정 소유자가 developer.apple.com에서 다시 동의할 때까지
   공증이 HTTP 403(`agreement missing or expired`)으로 실패한다. 동의 후 같은 태그의 실패 job만 다시 실행한다.
+
+#### 3.1.1 Developer ID 인증서 갱신
+
+근거는 Apple의 [교체 안내](https://developer.apple.com/help/account/certificates/replace-developer-id-certificates/)와
+[2026-10-01 공지](https://developer.apple.com/news/?id=w4atic4c)다.
+
+- 구 `Developer ID Certification Authority`는 2027-02-01에 끝나고, 그 아래에서 나온 인증서는 발급일과 관계없이 그날부터 서명에 쓸 수 없다.
+  2026-06-14에 발급한 인증서도 여기에 묶인다.
+- 이미 서명·공증한 릴리스는 보안 타임스탬프로 계속 동작한다. 그 뒤에 만드는 릴리스만 새 인증서가 필요하다.
+- Apple은 G2에서 나온 인증서가 1년 유효하고 해마다 갱신해야 한다고 안내한다. 실제 만료일은 받은 인증서에서 확인한다.
+- 계정 소유자(Account Holder)만 만들 수 있다. 같은 종류를 5개까지 둘 수 있어 만료 전에 미리 만들어 시험할 수 있다.
+
+1. 키체인 접근 → 인증서 지원 → **인증 기관에서 인증서 요청**으로 CSR을 디스크에 저장한다.
+2. developer.apple.com → Certificates → `+` → **Developer ID Application**을 고른다. 중간 기관을 물으면 **G2 Sub-CA**를 고른다. 다른 항목은
+   2027년에 끝나는 인증서를 줄 수 있다. CSR을 올리고 `.cer`을 받는다.
+3. `.cer`을 더블클릭해 키체인에 넣는다. 내 인증서에 같은 이름이 둘 보이면 발급자 이름의 조직 단위가 `G2`인 항목을 고른다(구 인증서는
+   `Apple Certification Authority`). 둘 다 `G2`면 만료일이 늦은 쪽이다. 개인 키와 함께 `.p12`로 내보낸다(비밀번호 지정).
+4. 시크릿을 바꾼다. 이름과 Team ID가 그대로면 `APPLE_SIGNING_IDENTITY`는 바꾸지 않는다. Team ID가 바뀌면 워크플로의
+   `EXPECTED_TEAM_ID`와 감사 스크립트의 `TEAM_ID`도 함께 바꾼다.
+   ```bash
+   base64 -i <파일>.p12 | gh secret set APPLE_CERTIFICATE --repo paldyn/HanPage
+   gh secret set APPLE_CERTIFICATE_PASSWORD --repo paldyn/HanPage
+   ```
+5. `desktop-release`를 수동 실행해(§4의 2단계) 서명·공증·검증이 통과하고 만료 경고가 사라지는지 확인한다. 이어서 §4.1 리허설로 새 인증서의
+   자산이 감사를 지나는지 본다.
+6. `.p12` 파일을 지우고, §3.1의 만료일을 받은 인증서의 날짜로 고친다.
 
 ### 3.2 Windows — 미서명 배포 (#122 결정, 2026-10-08)
 
@@ -131,10 +158,12 @@ updater 서명(§2)으로 위변조를 검증하므로 이 결정과 무관하�
    git push origin hanpage-desktop-v<버전>
    ```
 5. CI(`tauri-action`)가 macOS(app·dmg)·Windows(nsis) 번들, updater 아티팩트, `latest.json`을
-   **초안 릴리스**에 첨부한다. tauri-action 단계가 실패하면 같은 job 안에서 같은 설정으로 한 번 더 시도한다(macOS 러너의
+   **초안 릴리스**에 첨부한다. tauri-action은 `tauri build`가 실패하면 한 번 더 시도한다(`retryAttempts: 1`, macOS 러너의
    `bundle_dmg.sh` 일시 실패 대비, §8). 그래도 한 플랫폼 job이 실패하면 태그를 옮기거나 시크릿을 바꾸지 말고 같은 run의
    실패 job만 다시 실행한다(`gh run rerun <run ID> --failed --repo paldyn/HanPage`). 초안에 이미 올라간 다른 플랫폼 자산은
-   그대로이고, `latest.json`은 다시 실행한 job이 합친다.
+   그대로이고, `latest.json`은 다시 실행한 job이 합친다. 재시도가 성공하면 job은 성공으로 끝나고 annotation도 남지 않으므로,
+   돌았는지는 로그로 본다(`gh run view <run ID> --log --repo paldyn/HanPage | grep 'Attempt 1 failed'`). 첫 실패의 출력은 그 줄 바로 위에
+   있다. 태그마다 보이면 §8의 DMG 행을 본다.
 6. 공개 전에 확인한다.
    - 두 플랫폼 job과 서명 검증 단계(§3.1·§3.2)가 모두 성공했는지
    - Windows job 요약의 `Windows 설치 파일: ... Authenticode NotSigned (미서명 배포, #122)` — 미서명 배포 중에는
@@ -149,11 +178,16 @@ updater 서명(§2)으로 위변조를 검증하므로 이 결정과 무관하�
      gh release download hanpage-desktop-v<버전> --repo paldyn/HanPage --dir <빈 폴더>
      node HanPage-Desktop/scripts/release-audit.mjs <빈 폴더> <버전> --release <릴리스 ID> > draft-audit.json
      ```
+     경고(`warning:`)는 터미널과 결과 JSON의 `warnings`에 남는다. 실패로 치지 않지만 내용을 보고 조치한다(인증서 만료는 §3.1.1).
+     두 job이 같은 순간에 초안을 만들면 초안이 둘일 수 있으므로(§8) 같은 태그의 릴리스가 하나인지도 본다.
+     ```bash
+     gh api --paginate 'repos/paldyn/HanPage/releases?per_page=100' --jq '.[] | select(.tag_name=="hanpage-desktop-v<버전>") | .id'
+     ```
      자산 6개, `latest.json`(최상위 키·RFC 3339 `pub_date`·버전·빈 `notes`·플랫폼 4개·같은 태그 URL·`.sig`와 바이트 단위로
      같은 서명), 이전 릴리스와 같은 updater 공개키(기존 설치본이 업데이트를 받아들이는 조건), 두 updater 서명의 엄격한
      형식·검증·변조 거부, updater 앱·DMG 앱의 디렉터리 여부·버전·Developer ID·공증·stapler·같은 CDHash, DMG 컨테이너의
      Developer ID 서명과 볼륨 구성, updater 아카이브 항목, setup.exe 버전 리소스와 Authenticode 없음(§3.2), 릴리스 자산의
-     digest를 확인한다.
+     digest와 대상 commit을 확인한다.
 7. 릴리스 노트에 Windows 설치 안내(§3.2)를 넣는다
    (`gh release edit hanpage-desktop-v<버전> --repo paldyn/HanPage --notes-file <파일>`). REST API로 초안을 직접 고칠 때는
    `tag_name`을 함께 보낸다. 빠뜨리면 초안의 태그가 `untagged-…`로 풀리고, 그대로 공개하면 잘못된 태그가 생겨
@@ -165,6 +199,63 @@ updater 서명(§2)으로 위변조를 검증하므로 이 결정과 무관하�
    감지한다. 공개한 뒤에는 태그 workflow를 다시 실행하지 않는다. tauri-action이 공개 자산을 지우고 다시 올리기 때문이다.
    다시 실행해도 두 job 모두 tauri-action 전에 `공개 릴리스` 오류로 멈추고(초안은 `releases/tags`로 조회되지 않아 이 확인을
    지난다), macOS 검증 단계도 릴리스가 초안이 아니면 `초안 자산` 오류를 낸다.
+
+### 4.1 태그 경로 리허설
+
+공개 릴리스 확인, 초안 여부·digest 대조처럼 태그 빌드에서만 도는 단계는 수동 실행으로 시험할 수 없고, 태그는 옮기지 않으므로 여기서
+결함이 나면 그 버전을 버려야 한다. 이 단계, tauri-action, 서명 인증서를 바꿨다면 실제 태그 전에 리허설 태그로 확인한다. 초안만 만들어지고
+공개 릴리스와 `latest` 주소는 바뀌지 않는다. 이 초안은 공개하지 않는다. 태그와 초안을 지워도 commit과 run 기록은 공개 저장소에 남으므로
+비밀을 넣지 않는다.
+
+태그의 `<버전>`은 그 commit의 `tauri.conf.json` 버전이다. 병합할 PR head에 바로 붙이면 병합할 워크플로가 그대로 돈다.
+
+```bash
+git tag -a hanpage-desktop-v<버전>-rehearsal.<N> <commit> -m "rehearsal"
+git push origin hanpage-desktop-v<버전>-rehearsal.<N>
+```
+
+run이 끝나면 macOS job만 다시 실행한다. 초안이 이미 있을 때의 공개 릴리스 확인과 `latest.json` 합치기를 지나고, 성공한 job을 다시 돌리므로 같은
+이름의 자산 교체까지 지난다. 실패 job을 다시 실행해 복구할 때의 경로를 포함한다. 재실행 뒤에는 `runs/<ID>/jobs`와 `gh run view --job`이 마지막
+시도를 보여 주므로, 첫 실행의 단계 결론과 로그를 먼저 저장한다(나중에는 `gh run view <run ID> --attempt 1 --log`).
+
+```bash
+gh run rerun <run ID> --job <macOS job ID> --repo paldyn/HanPage
+gh run watch <run ID> --exit-status --repo paldyn/HanPage
+```
+
+재실행이 끝나면 초안을 감사한다. 버전 인자는 숫자 그대로 두고 `--rehearsal`로 태그를 정한다.
+
+```bash
+git fetch --tags origin
+gh release view hanpage-desktop-v<버전>-rehearsal.<N> --repo paldyn/HanPage --json databaseId --jq .databaseId   # 릴리스 ID
+gh release download hanpage-desktop-v<버전>-rehearsal.<N> --repo paldyn/HanPage --dir <빈 폴더>
+node HanPage-Desktop/scripts/release-audit.mjs <빈 폴더> <버전> --release <릴리스 ID> --rehearsal <N> > rehearsal-audit.json
+```
+
+재시도는 태그 없이 본다. 일회용 브랜치의 tauri-action 단계 바로 앞에 아래 단계를 넣고 그 브랜치를 수동 실행한다(§4의 2단계). 대역은 첫 호출에서
+자신을 지우고 실패하므로 첫 `tauri build`가 `bundle_dmg.sh` 중간(볼륨 마운트 뒤)에서 멈춘다. 재시도 여유가 남아야 하므로 태그 리허설에는 넣지
+않는다. tauri-action 단계 로그에 `Attempt 1 failed, retrying...`이 한 번 있고 job이 성공하면 재시도가 돈 것이다(`forced SetFile failure`는
+대역을 만드는 단계의 원문으로도 찍혀 job 전체 grep으로는 판정하지 못한다). 이 시험은 재시도 배선과 이미지가 붙은 채 남은 상태에 대한 내성만 입증한다. 대역이 없는 두 번째
+시도가 실제 DMG 오류로 실패하면 재시도 결함이 아니므로, 그 출력을 남기고 다시 실행한다.
+
+```yaml
+- name: Rehearsal only - fail the first DMG attempt
+  if: runner.os == 'macOS'
+  shell: bash
+  run: |
+    mkdir -p "$RUNNER_TEMP/shim"
+    printf '#!/bin/bash\nrm -f "$0"\necho "rehearsal: forced SetFile failure" >&2\nexit 1\n' > "$RUNNER_TEMP/shim/SetFile"
+    chmod +x "$RUNNER_TEMP/shim/SetFile"
+    echo "$RUNNER_TEMP/shim" >> "$GITHUB_PATH"
+```
+
+리허설은 워크플로와 감사만 확인한다. 공개 릴리스를 막는 분기와 설치된 앱이 받는 경로는 지나지 않는다. 결과(run URL, commit, 감사 JSON)를 기록에
+남긴 뒤 초안과 태그를 지운다. 초안이 없으면 둘째 줄 대신 `git push origin --delete <태그>`를 쓴다.
+
+```bash
+git tag -d hanpage-desktop-v<버전>-rehearsal.<N>
+gh release delete hanpage-desktop-v<버전>-rehearsal.<N> --repo paldyn/HanPage --cleanup-tag
+```
 
 ## 5. latest.json 형식 (tauri-action 자동 생성, 참고)
 
@@ -203,6 +294,18 @@ Authenticode 서명이 updater 서명보다 먼저 끝나야 한다. 릴리스 �
 - **부트스트랩**: updater가 없던 기존 버전(예: v0.7.13)은 자동 감지 불가. **첫 updater 포함 버전은 사용자가 수동 1회 설치**해야 이후 자동화된다. 릴리스 노트에 안내 권장.
 - **macOS 배포**: `.app`은 코드 서명·Apple 공증·stapler와 Gatekeeper 검증을 마친 것을, DMG는 그 `.app`을 담고 Developer ID로 서명한 것을 게시한다(DMG 자체는 공증하지 않는다, §3.1). 0.8.7 실제 배포 검증은 [PR 114 기록](../pr/archives/pr_114_review.md)을 참고한다.
 - **Windows 배포**: 미서명 설치 파일로 배포한다(§3.2). 릴리스 노트에 "Windows의 PC 보호 → 추가 정보 → 실행" 안내를 넣는다.
+- **tauri-action 1.x**: 0.6.2에 머문다(PR #137). 1.0.0은 `latest.json`의 다운로드 주소를 `github.com/.../releases/download/...`가 아니라
+  `api.github.com/.../releases/assets/<id>`로 쓰고 이를 고르는 입력이 없다. 업데이터가 `Accept: application/octet-stream`을 보내 받을 수는
+  있지만, 로그인 없는 API는 IP당 시간당 60회이고 다운로드 시도마다 1회를 쓴다. 같은 IP의 다른 API 사용과 한도를 나누고, 받은 파일은 메모리에만
+  있어 적용을 미룬 PC는 실행할 때마다 다시 쓴다. 한도를 넘기면 자동 재시도 없이 업데이트 실패로 표시된다(앱 사용은 막히지 않는다). 지금 규모로
+  HanPage만으로는 닿기 어렵지만, 공개된 앱의 업데이트 경로를 바꾸는 일이다. 1.0.0의 이득(공개 자산을 지우지 않음, `untagged-` 함정 해소,
+  `latest.json` 처리 전체 재시도)은 가드와 절차로 막고 있거나 작다. 0.x로 고칠 수 없는 결함이 나오거나 upstream이 주소를 고르게 해 주면 다시
+  판단한다. Dependabot의 1.x 업데이트는 `@dependabot ignore this major version`으로 막아 뒀다. 올릴 때는 아래를 함께 다룬다.
+  - `.app.tar.gz` 이름에 버전이 붙어 검증 단계의 digest 대조와 감사 스크립트가 실패한다. 이 대조는 태그에서만 돌아 PR CI와 수동 실행에는 보이지
+    않으므로 같은 PR에서 고치고 §4.1로 확인한다. 감사의 URL 검사도 주소 형식 때문에 바꿔야 한다.
+  - 지금 주소를 유지하려면 `uploadUpdaterJson: false`로 생성을 끄고 별도 job으로 `latest.json`을 만든다.
+  - 주소가 자산 id에 묶이므로 공개 뒤 자산을 교체하면 그 주소가 무효가 된다. 교체하면 `latest.json`도 다시 만든다.
+  - §4.1은 설치본 경로를 지나지 않는다. 다운로드·서명 검증·설치는 공개 자산을 바라보는 시험 빌드로 따로 확인한다.
 - **게시 게이트**: 필수 번들·업데이트 서명·매니페스트·코드 서명·공증 검증이 실패하면 공개 게시를 완료하지 않는다. UI 로컬 검증은 실제 업데이트 설치와 공개 릴리스 검증을 대신하지 않는다.
 
 ## 8. 트러블슈팅
@@ -213,7 +316,12 @@ Authenticode 서명이 updater 서명보다 먼저 끝나야 한다. 릴리스 �
 | "signature 검증 실패" | config `pubkey` ↔ 서명 개인키 불일치(키 교체 후 pubkey 미반영) |
 | CI 빌드가 "A public key has been found, but no private key"로 실패 | updater 시크릿 2개 미설정. config에 공개키가 있으면 개인키 없이 빌드할 수 없다 |
 | macOS 공증 HTTP 403 | Apple Developer Program 약관 미동의(§3.1). 계정 소유자 동의 후 실패 job 재실행 |
-| macOS job이 공증 `Accepted` 뒤 `bundle_dmg.sh` 실패로 끝남 | 러너의 일시 실패다(0.8.12 태그 빌드 첫 시도 11초, #170 첫 수동 실행 6초 만에 실패하고 자산은 올리지 않음 — 같은 source의 다른 실행은 통과). tauri-action이 `TAURI_BUNDLER_DMG_IGNORE_CI=true`를 기본으로 둬 CI에서도 Finder AppleScript로 DMG 창 배치를 만드는데, 화면 없는 러너에서 이 단계와 `hdiutil`이 불안정하다. tauri-action 단계는 같은 job 안에서 한 번 더 시도하고(`Build & bundle (retry)`), macOS 번들은 `--verbose`로 돌아 `bundle_dmg.sh` 출력이 로그에 남는다. 두 번 다 실패하면 그 출력으로 원인을 확인한 뒤 같은 run의 실패 job만 다시 실행한다(§4). 계속 실패하면 env에 `TAURI_BUNDLER_DMG_IGNORE_CI: false`를 주어 창 배치 단계를 건너뛸 수 있지만, DMG를 열었을 때 아이콘 배치가 사라진다 |
+| macOS job이 공증 `Accepted` 뒤 `bundle_dmg.sh` 실패로 끝남 | 어느 단계인지 아직 모른다. 세 번 있었고(run 40627099903 6초, 0.8.12 태그 빌드 첫 시도 11초, #170 첫 수동 실행 6초) 모두 `--verbose` 전이라 스크립트 출력이 없다. 0.8.12는 같은 commit, #170은 앱 source가 같은 다음 실행, run 40627099903은 두 commit 뒤 실행에서 통과했고, 복구는 모두 새 러너에서였다. 실패 시각은 Finder AppleScript(CI에서도 돈다) 전일 수 있고 job 끝에 `diskimages-help` 고아 프로세스가 남아, `hdiutil`도 후보다. tauri-action이 `tauri build`를 한 번 더 시도하고(`retryAttempts: 1`), macOS 번들은 `--verbose`로 돌아 출력이 로그에 남는다. 두 번 다 실패하면 그 출력을 기록하고 같은 run의 실패 job만 다시 실행한다(§4). `TAURI_BUNDLER_DMG_IGNORE_CI: false`는 창 배치 단계를 건너뛰어 DMG를 열었을 때 아이콘 배치가 사라지고 commit이 바뀌므로, 출력으로 AppleScript 실패를 확인한 뒤 다음 버전에서만 쓴다 |
+| tauri-action 단계가 릴리스 조회·자산 목록·`latest.json` 처리에서 GitHub API 오류로 실패 | `retryAttempts`는 `tauri build`와 자산 업로드만 다시 시도한다. 그 밖의 일시 오류는 job 실패로 끝나므로 실패 job을 다시 실행한다(§4). `latest.json`은 지운 뒤 다시 올리므로 그 업로드가 실패하면 파일이 사라진다. 감사에서 플랫폼이 빠지면 빠진 플랫폼의 job도 다시 실행한다(`gh run rerun <run ID> --job <job ID> --repo paldyn/HanPage`) |
+| tauri-action 단계가 자산 업로드에서 `already_exists`로 실패 | 앞선 업로드가 남긴 자산일 수 있다. 재시도는 자산을 지우지 않고 다시 올린다. 실패 job을 다시 실행하면 목록을 새로 읽어 같은 이름을 지운다 |
+| 같은 태그의 초안이 둘이다 | 두 job이 찾기와 만들기를 같은 순간에 했다(tauri-action에 잠금이 없다). 자산이 갈려 감사의 자산 6개 검사가 실패한다. 공개하지 말고 초안을 모두 지운 뒤 run을 다시 실행한다 |
+| 검증 단계의 `macOS 공증`이나 감사의 `stapled notarization ticket`이 `Error 68`로 실패 | `stapler validate`는 Apple 서버(`api.apple-cloudkit.com`)의 티켓과 비교하므로 연결이 끊기면 티켓이 있어도 실패한다(검증 단계 출력에 `The network connection was lost`). 둘 다 다섯 번까지 시도한다. 그래도 실패하면 실패 job을 다시 실행하거나 감사를 다시 돌린다. 2026-11-04에 처음 관측했다: 러너 3대씩 두 번 잰 결과 `validate` 270회 중 39회, `staple` 120회 중 14회가 끊겼고(러너별 0~24%), 실제 job에서는 7회 중 3회였다. 같은 이미지가 전날 6회, `macos-14`가 18회 모두 통과했고, 로컬 Mac은 드물다(24회 성공, 같은 날 감사 1회 실패). 원인은 러너·경로·Apple 어느 쪽인지 모른다 |
+| 검증 단계의 `macOS 공증`이나 감사의 `stapled notarization ticket`이 `does not have a ticket stapled to it`로 실패 | 빌드 안의 `stapler staple`이 다섯 번 모두 실패했을 수 있다(검증 단계 로그의 `stapler staple try <N>: exit <코드>`를 본다. 네트워크 실패는 68이다). tauri가 종료 코드를 보지 않아 빌드는 성공으로 끝나고 `retryAttempts`도 돌지 않으며, 티켓 없는 `.app`의 아카이브·DMG가 이미 초안에 올라가 있다. 공개하지 말고 macOS job을 다시 실행해 자산을 교체한다(약 31분). 감사를 다시 돌려도 통과하지 않는다 |
 | `Refuse to overwrite a published release`의 `공개 릴리스`·`공개 릴리스 확인` 오류 | 그 태그의 릴리스가 이미 공개돼 있다(공개 뒤 태그 workflow 재실행). 번들 전에 멈췄으므로 공개 자산은 그대로다. 다시 실행하지 않는다 / 릴리스 조회를 세 번 시도해 모두 실패했다. 일시 오류면 실패 job만 다시 실행한다 |
 | 검증 단계의 `macOS 미서명` 오류(태그 빌드)·경고(수동 실행) | `APPLE_SIGNING_IDENTITY`가 비어 있다. 태그 빌드는 실패하고, 수동 실행은 서명·공증 검증 없이 성공으로 끝나므로 §4의 2단계로 확인한다 |
 | 검증 단계의 `macOS Team ID` 오류 | `APPLE_SIGNING_IDENTITY` 괄호 안 Team ID가 없거나 배포 Team ID와 다르다(§3.1 표의 형식). 인증서를 바꿨다면 Team ID도 함께 확인한다 |
