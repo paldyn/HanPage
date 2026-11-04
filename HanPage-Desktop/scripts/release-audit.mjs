@@ -216,7 +216,13 @@ function inspectApp(label, app) {
   const gate = run('spctl', ['--assess', '--type', 'execute', '--verbose=4', app]);
   check(`${label}: Gatekeeper accepts as Notarized Developer ID`, gate.ok && gate.text.includes('source=Notarized Developer ID'),
     gate.text.split('\n').find((l) => l.startsWith('source=')) ?? gate.text);
-  const staple = run('xcrun', ['stapler', 'validate', app]);
+  // stapler 는 Apple 서버의 티켓과 비교하므로 연결이 끊기면(Error 68) 티켓이 있어도 실패한다. 티켓이 없다는 답이 아니면 다섯 번까지 시도한다.
+  let staple = run('xcrun', ['stapler', 'validate', app]);
+  for (let n = 1; n < 5 && !staple.ok && !staple.text.includes('does not have a ticket stapled') && !interrupted; n++) {
+    run('sleep', [String(n * 5)]);
+    if (interrupted) break;
+    staple = run('xcrun', ['stapler', 'validate', app]);
+  }
   check(`${label}: stapled notarization ticket`, staple.ok, staple.text.split('\n').at(-1));
   return info.match(/^CDHash=([0-9a-f]+)$/m)?.[1] ?? null;
 }

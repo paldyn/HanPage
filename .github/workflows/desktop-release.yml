@@ -152,6 +152,30 @@ jobs:
           echo "::error title=공개 릴리스 확인::릴리스 조회를 세 번 시도해 모두 실패했습니다: ${out}"
           exit 1
 
+      # tauri 는 빌드 안의 stapler staple 종료 코드를 보지 않고 출력도 버린다. Apple 서버 연결이 끊기면(운영 가이드 §8) 티켓 없는 앱이
+      # 만들어져 빌드가 통째로 버려지므로, xcrun 앞에 대역을 두어 이 호출만 다섯 번까지 시도한다. 다른 xcrun 호출은 그대로 넘긴다.
+      - name: Retry stapler staple (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/xcrun-shim"
+          cat > "$RUNNER_TEMP/xcrun-shim/xcrun" <<'EOF'
+          #!/bin/bash
+          if [ "${1:-}" = stapler ] && [ "${2:-}" = staple ]; then
+            for n in 1 2 3 4 5; do
+              rc=0
+              /usr/bin/xcrun "$@" || rc=$?
+              echo "stapler staple try $n: exit $rc" >> "$RUNNER_TEMP/stapler-staple.log"
+              [ "$rc" = 0 ] && exit 0
+              [ "$n" = 5 ] || sleep $((n * 10))
+            done
+            exit 1
+          fi
+          exec /usr/bin/xcrun "$@"
+          EOF
+          chmod +x "$RUNNER_TEMP/xcrun-shim/xcrun"
+          echo "$RUNNER_TEMP/xcrun-shim" >> "$GITHUB_PATH"
+
       # --- Tauri 번들 (beforeBuildCommand = build:frontend = copy-wasm + studio build:desktop) ---
       # macOS 러너에서 DMG 를 만드는 bundle_dmg.sh 가 가끔 실패한다. 어느 단계인지는 아직 모른다(운영 가이드 §8).
       # retryAttempts 는 tauri build 와 자산 업로드만 한 번 더 시도한다. 그 밖의 GitHub API 오류는 실패 job 재실행으로 복구한다.
@@ -220,10 +244,25 @@ jobs:
             exit 0
           fi
           [ -n "$dmg" ] || fail "DMG" "bundle/dmg 에 DMG 가 없습니다."
+          # tauri 가 버리는 빌드 때의 staple 결과다(위 xcrun 대역이 남긴다).
+          cat "$RUNNER_TEMP/stapler-staple.log" 2>/dev/null || true
           team=$(sed -nE 's/.*\(([A-Z0-9]{10})\)$/\1/p' <<<"$APPLE_SIGNING_IDENTITY")
           if [ "$team" != "$EXPECTED_TEAM_ID" ]; then
             fail "macOS Team ID" "APPLE_SIGNING_IDENTITY 의 Team ID(${team:-없음})가 배포 Team ID($EXPECTED_TEAM_ID)와 다릅니다."
           fi
+          # stapler 는 Apple 서버의 티켓과 비교하므로 연결이 끊기면(Error 68, 운영 가이드 §8) 티켓이 있어도 실패한다. 티켓이 없다는 답이
+          # 아니면 다섯 번까지 시도한다.
+          staple_ok() {
+            local n
+            for n in 1 2 3 4 5; do
+              xcrun stapler validate "$1" 2>&1 | tee "$RUNNER_TEMP/stapler.txt" && return 0
+              if grep -q 'does not have a ticket stapled' "$RUNNER_TEMP/stapler.txt"; then
+                fail "macOS 공증" "$1 에 공증 티켓이 없습니다. 빌드의 stapler staple 이 실패했을 수 있습니다(운영 가이드 §8)."
+              fi
+              [ "$n" = 5 ] || sleep $((n * 10))
+            done
+            return 1
+          }
           check_app() {
             { [ -d "$1" ] && [ ! -L "$1" ]; } || fail "macOS 서명" "$1 이 디렉터리가 아닙니다."
             codesign --verify --deep --strict --verbose=2 "$1" || fail "macOS 서명" "$1 의 codesign 검증이 실패했습니다."
@@ -232,7 +271,7 @@ jobs:
             grep -q '^Authority=Developer ID Application:' <<<"$info" || fail "macOS 서명" "$1 이 Developer ID Application 으로 서명되지 않았습니다."
             spctl --assess --type execute --verbose=4 "$1" 2>&1 | tee "$RUNNER_TEMP/spctl.txt" || fail "macOS 공증" "$1 을 Gatekeeper 가 거부했습니다."
             grep -q 'source=Notarized Developer ID' "$RUNNER_TEMP/spctl.txt" || fail "macOS 공증" "$1 이 Notarized Developer ID 가 아닙니다."
-            xcrun stapler validate "$1" || fail "macOS 공증" "$1 에 공증 티켓이 스테이플되지 않았습니다."
+            staple_ok "$1" || fail "macOS 공증" "$1 의 공증 티켓을 Apple 서버와 비교하지 못했습니다(다섯 번 시도). 위 stapler 출력을 보세요."
             cdhash=$(sed -n 's/^CDHash=//p' <<<"$info")
           }
           check_app "$app"

@@ -43,7 +43,7 @@ job 이 실패하고 리허설의 주목적인 검증 단계가 돌지 않는다
    - `dmg-probe` job(러너 4개, 각 5회). 시크릿 없이 공개된 앱으로 `bundle_dmg` 만 되풀이해, 실패하면 단계를 남기고 180초 뒤 같은 러너에서 다시 돌린다. 복구가
      모두 새 러너에서였고 실패 3건은 모두 러너의 첫 DMG 였으므로 그 조건을 몇 개 모은다. 빌드 뒤 실행이 아니므로 재현돼도 재현되지 않아도 참고로만 쓴다.
 
-리허설 뒤 PR head 의 워크플로나 감사 스크립트가 바뀌면 `rehearsal.2` 로 다시 돌린다. 문서만 바뀌면 다시 돌리지 않는다.
+리허설 뒤 PR head 의 워크플로나 감사 스크립트가 바뀌면 `rehearsal.2` 로 다시 돌린다. 문서만 바뀌면 다시 돌리지 않는다. 1회차 결과와 그에 따른 변경은 7절에 있다.
 
 **감사 스크립트**: `--rehearsal <N>` 으로 태그 `hanpage-desktop-v<버전>-rehearsal.<N>` 의 초안을 감사한다. 태그 문자열을 직접 받지 않는 것은 URL 검사와
 릴리스 태그 대조가 태그와 자산 버전이 같다는 것까지 입증하기 때문이다. 공개키는 `refs/tags/<태그>` 에서만 읽고, `--release` 는 릴리스 대상 commit 이
@@ -88,14 +88,14 @@ Dependabot 이 읽는 `main` 에 가야 효과가 있어 쓰지 않는다. 운�
 | 실행 event | `hanpage-desktop-v*` 태그 push 와 workflow_dispatch 의 두 job |
 | 새 실패 조건 | 빌드 뒤 GitHub API 일시 오류가 같은 job 안에서 자동 복구되지 않는다(2절). 인증서 확인은 경고만 낸다 |
 | 바뀌는 동작 | 재시도가 성공하면 전처럼 실패 단계가 남지 않고 로그의 `Attempt 1 failed, retrying...` 한 줄로만 보인다. 업로드 재시도는 대기 없이 바로 다시 보낸다 |
-| 리허설의 바깥 영향 | 태그 하나, 초안 하나, 일회용 브랜치 하나가 시험 동안 보인다. 공개 릴리스·`latest.json`·기존 앱에는 영향이 없다. tauri-action 은 `tag_name` 정확 일치로만 릴리스를 찾고, 이 태그 패턴은 `desktop-release.yml` 만 실행한다 |
+| 리허설의 바깥 영향 | 회차마다 태그 하나와 초안 하나, 일회용 브랜치 하나가 시험 동안 보인다. 공개 릴리스·`latest.json`·기존 앱에는 영향이 없다. tauri-action 은 `tag_name` 정확 일치로만 릴리스를 찾고, 이 태그 패턴은 `desktop-release.yml` 만 실행한다 |
 | 신뢰 경계 | 새 secret 없음. 일회용 브랜치의 commit 과 run 기록은 지워도 공개 저장소에 남으므로 비밀을 넣지 않는다. `dmg-probe` job 은 시크릿을 쓰지 않는다 |
 | required check | `devel` 보호 규칙 없음 |
 | rollback | 이 PR 을 되돌리면 복제 재시도 단계로 돌아간다. 리허설 초안·태그는 삭제로 끝난다 |
 
 ## 4. 원격 변경과 승인
 
-순서대로 실행한다. 태그 push 전과 5번 뒤에 스냅샷을 저장해 비교한다: `gh api repos/paldyn/HanPage/releases/latest --jq .id`,
+순서대로 실행한다. 회차마다 태그 push 전과 5번 뒤에 스냅샷을 저장해 비교한다: `gh api repos/paldyn/HanPage/releases/latest --jq .id`,
 `curl -sL https://github.com/paldyn/HanPage/releases/latest/download/latest.json | shasum -a 256`, 릴리스 432269742·401464978 의 자산 id·`updated_at`, 태그 목록.
 tauri-action 은 같은 이름 자산을 지우고 다시 올리므로 공개 릴리스를 건드렸다면 자산 id 가 달라진다.
 
@@ -109,9 +109,9 @@ tauri-action 은 같은 이름 자산을 지우고 다시 올리므로 공개 �
 | 6 | `gh pr comment 137 --repo paldyn/HanPage --body-file <파일>`, `gh pr comment 137 --repo paldyn/HanPage --body "@dependabot ignore this major version"` | PR #137 | Claude | `gh pr reopen 137 --repo paldyn/HanPage` |
 | 7 | CI·리허설 통과 뒤 `gh pr merge <PR> --repo paldyn/HanPage --squash`, 기록 commit 을 `origin/devel` 에 push | `devel` | Claude | `git revert` |
 | 8 | `git push origin --delete claude/desktop-release-rehearsal claude/desktop-release-retry-shim` | 브랜치 두 개 | Claude | commit 에서 다시 만든다 |
-| 9 | `gh release delete hanpage-desktop-v0.8.12-rehearsal.1 --repo paldyn/HanPage --cleanup-tag`. 초안이 없으면 `git push origin --delete hanpage-desktop-v0.8.12-rehearsal.1` | 리허설 초안·태그 | 작업지시자 | 없음. 기록을 먼저 남긴다 |
+| 9 | 리허설 태그마다 `gh release delete <태그> --repo paldyn/HanPage --cleanup-tag`. 초안이 없으면 `git push origin --delete <태그>` | 리허설 초안·태그 | 작업지시자 | 없음. 기록을 먼저 남긴다 |
 | 10 | `gh release delete hanpage-desktop-v0.8.6 --repo paldyn/HanPage` | v0.8.6 초안(태그는 남김) | 작업지시자 | 없음. 노트를 먼저 옮긴다 |
-| 11 | `git tag -d hanpage-desktop-v0.8.12-rehearsal.1`, 재조회 뒤 `gh issue close 172 --repo paldyn/HanPage` | 로컬 태그, 이 작업 | Claude | `gh issue reopen 172 --repo paldyn/HanPage` |
+| 11 | 리허설 태그마다 `git tag -d <태그>`, 재조회 뒤 `gh issue close 172 --repo paldyn/HanPage` | 로컬 태그, 이 작업 | Claude | `gh issue reopen 172 --repo paldyn/HanPage` |
 
 PR 은 `Refs #172` 로 둔다. 병합으로 이슈가 닫히면 9·10번이 추적에서 사라지기 때문이다. `close-issues-on-devel-push.yml` 은 PR 제목·본문과 commit 메시지를
 읽으므로 그곳에 closing 키워드를 쓰지 않는다. 11번은 10번 뒤에 한다.
@@ -119,8 +119,9 @@ PR 은 `Refs #172` 로 둔다. 병합으로 이슈가 닫히면 9·10번이 추�
 ## 5. 검증 계획
 
 - YAML 파싱, 검증 단계 `bash -n`, 저장소 워크플로 정책 테스트 29개, 문서 링크.
-- 검증 단계 스크립트를 YAML 에서 그대로 꺼내 공개된 0.8.12 자산으로 재현한 22가지(#170 의 20가지와 만료일을 못 읽는 2가지). 인증서 경고·요약 줄·대조 줄 확인.
-- 감사 스크립트: 공개된 0.8.12·0.8.11 양성, 음성 28가지(#170 의 26가지와 `--rehearsal` 2가지), 양성 대조 3가지, 인자 오류 10가지.
+- 검증 단계 스크립트를 YAML 에서 그대로 꺼내 공개된 0.8.12 자산으로 재현한 25가지(#170 의 20가지, 만료일을 못 읽는 2가지, stapler 3가지). 인증서 경고·요약 줄·대조 줄 확인.
+- `xcrun` 대역 단계를 YAML 에서 꺼내 실행하고 가짜 `xcrun` 으로 시험(통과, 두 번 실패 뒤 통과, 계속 실패, `validate`·다른 명령은 그대로 넘김), 실제 `stapler staple` 로 티켓이 다시 붙는지 확인.
+- 감사 스크립트: 공개된 0.8.12·0.8.11 양성, 음성 30가지(#170 의 26가지, `--rehearsal` 2가지, stapler 2가지), 양성 대조 4가지, 인자 오류 10가지.
 - 독립 반박 검토.
 - PR CI.
 - 실제 실행. 증적은 `mydocs/pr/assets/desktop_rehearsal_20261104/` 에 모은다(태그 commit, run URL, 스냅샷, 감사 JSON, `latest.json`, 로그 발췌). PR head 를
@@ -134,18 +135,55 @@ PR 은 `Refs #172` 로 둔다. 병합으로 이슈가 닫히면 9·10번이 추�
   | 재시도 | 일회용 브랜치 수동 실행 | tauri-action 단계 출력에서 `Attempt 1 failed, retrying...` 1회, 그 앞에 `Copying volume icon file` 과 `rehearsal: forced SetFile failure`(대역을 만드는 단계의 원문은 제외), `Notarizing Finished with status Accepted` 2회, job 성공 |
   | 검증 단계 | 태그 run 과 재실행 | 단계 success, 단계 머리의 `REQUIRE_SIGNED: true` 와 숫자 `RELEASE_ID`, 로그에 `초안 자산 대조 통과: HanPage_` 2줄, `The validate action worked!` 3회, annotation 제목에 `Developer ID 인증서` 있음·`macOS 미서명` 없음. 요약 줄은 로그인한 브라우저에서만 보여 판정에 쓰지 않는다 |
   | 자산 교체 | 재실행 전후의 자산 id | macOS 자산 3개와 `latest.json` 은 바뀌고 Windows 자산 2개는 그대로 |
-  | 초안 | 재실행이 끝난 뒤 | 같은 태그의 릴리스 1개, 자산 6개, `latest.json` 플랫폼 4개, 감사 `--release --rehearsal 1` 통과 |
-  | 바깥 영향 | 4절 스냅샷 전후 | 릴리스 id·`latest.json` 해시·자산 id·`updated_at` 은 같고, 태그 목록은 리허설 태그 하나만 늘어난다 |
+  | 초안 | 마지막 회차의 재실행이 끝난 뒤 | 같은 태그의 릴리스 1개, 자산 6개, `latest.json` 플랫폼 4개, 감사 `--release <릴리스 ID> --rehearsal <N>` 통과 |
+  | 바깥 영향 | 회차마다 4절 스냅샷 전후 | 릴리스 id·`latest.json` 해시·자산 id·`updated_at` 은 같고, 태그 목록은 그 회차의 리허설 태그 하나만 늘어난다 |
+  | `stapler` 재시도(참고) | 태그 run 과 재실행 | 검증 단계 로그의 `stapler staple try <N>: exit <코드>` 가 빌드마다 있다(대역이 쓰였다는 증거). `The validate action failed!` 뒤 `worked` 가 이어지면 재시도가 돈 것이다. 끊김은 확률적이어서 재시도 발생은 합격 조건이 아니고 횟수만 기록한다 |
   | 재시도로 만든 DMG | 일회용 브랜치의 artifact | `.DS_Store`, 아이콘 좌표 180,170·480,170, `.VolumeIcon.icns`(0.8.12 와 같음) |
   | DMG 실패 단계(참고) | `dmg-probe` job | 시도·실패·같은 러너 재시도 결과 기록 |
 
-  판독 규칙: 실제 DMG 오류로 job 이 실패하면 재시도 결함이 아니다. 그 `--verbose` 출력은 실패 단계의 첫 증거이므로 저장하고 다시 실행한다.
+  판독 규칙: 실제 DMG 오류로 job 이 실패하면 재시도 결함이 아니다. 그 `--verbose` 출력은 실패 단계의 첫 증거이므로 저장하고 다시 실행한다. `stapler` 가 다섯 번 모두 실패하면
+  (`Error 68`) 끊김이 길어진 것이므로 기록하고 다시 실행한다.
 
 ## 6. 리허설 뒤에도 남는 미검증
 
 - 공개 릴리스를 막는 분기(`exit 1`)의 실제 실행. 로컬 재현과 job 토큰 조회로만 본다.
 - 검증 단계의 digest 두 분기 중 돌지 않은 쪽(대조 줄로 어느 쪽인지 남는다)과 `초안 아님` 실패 분기(로컬 재현).
 - 자산 업로드 재시도, Windows 의 `tauri build` 재시도.
-- 실제 일시 실패가 같은 러너에서 복구되는지. `dmg-probe` 는 빌드 뒤 실행이 아니어서 재현돼도 실제 조건과 다르다. 다음 실제 실패의 `--verbose` 출력이 첫 증거다.
+- 실제 DMG 일시 실패가 같은 러너에서 복구되는지. `dmg-probe` 는 빌드 뒤 실행이 아니어서 재현돼도 실제 조건과 다르다. 다음 실제 실패의 `--verbose` 출력이 첫 증거다.
+- Apple 서버 연결이 끊기는 원인과 앞으로의 빈도. 다섯 번 시도로 충분한지는 측정 구간의 값으로만 판단했다.
+- `stapler` 재시도가 실제 끊김에서 복구하는지는 그 회차에 끊김이 나와야 입증된다.
 - 설치된 앱의 경로. 리허설은 공개하지 않으므로 지나지 않는다.
 - G2 인증서로 서명한 자산의 태그 경로와 감사. 교체 뒤의 리허설에서 본다.
+
+## 7. 리허설 1회차에서 바뀐 것
+
+1회차(`0f93f796ab`)에서 태그 run 의 macOS job 이 첫 실행과 재실행 모두 검증 단계의 `xcrun stapler validate` 에서 실패했다. 일회용 브랜치 수동 실행도 같았다.
+출력은 `api.apple-cloudkit.com` 요청의 `NSURLErrorDomain Code=-1005 "The network connection was lost."`, `Error 68` 이다. `stapler validate` 는 Apple 서버의 최신
+티켓과 비교하므로 연결이 끊기면 티켓이 있어도 실패한다(`man stapler`). 이 오류는 리허설 전 로컬 감사에서 한 번 나와 일시 오류로 적어 둔 것이다. job 을 실패시킨다는 것과
+빈도는 리허설로 처음 알았다.
+
+러너 3대씩 두 번 쟀다(공개된 0.8.12 앱, 시크릿 없음).
+
+| 측정 | `stapler validate` | `stapler staple` |
+|---|---|---|
+| 04:29 UTC, run 41773521203 | 150회 중 20회 실패(러너별 0·12·8회/50회) | 재지 않음 |
+| 05:21 UTC, run 41778733001 | 120회 중 19회 실패(러너별 7·4·8회/40회) | 120회 중 14회 실패(러너별 2·3·9회/40회), 티켓 없이 끝남 |
+
+종료 코드는 네트워크 실패 68, 티켓 없음 65 다. 이 빈도와 호출 독립을 가정하면 재시도가 없을 때 호출이 3번인 검증 단계는 3번에 1번꼴로 실패한다. 같은 날 실제 검증 단계 3번은
+모두 실패했고, #124 이후 그 전 11번(호출 24번, `macos-14` 18번·`macos-15` 6번)은 모두 통과했다. 언제부터 왜 그런지는 모른다. 러너·경로·Apple 어느 쪽인지도 모른다.
+같은 시각 `codesign` 타임스탬프와 `notarytool` 은 실패하지 않았다.
+
+- `stapler validate`: 검증 단계와 감사 스크립트가 티켓이 없다는 답이 아니면 다섯 번까지 시도한다. 티켓이 없다는 답(`does not have a ticket stapled`)은 바로 실패로 끝낸다. 서버와 비교하는
+  검사는 빼지 않는다. `codesign` 의 `Notarization Ticket=stapled` 는 파일이 있는지만 보고 `spctl` 은 티켓을 지운 사본도 받아들여 대신할 수 없다.
+- `stapler staple`: tauri 가 빌드 안에서 부르는데 종료 코드를 보지 않고 출력도 버린다(`tauri-macos-sign` `staple_app`). 끊기면 티켓 없는 앱으로 빌드가 성공해 `retryAttempts` 도 돌지
+  않고, 검증 단계에서 실패해 약 31분의 재실행이 필요하다. 측정값으로는 빌드 8번에 1번꼴이다. tauri-action 앞에 `xcrun` 대역을 두어 이 호출만 다섯 번까지 시도하고 결과를 파일로
+  남겨 검증 단계 로그에 찍는다. 다른 `xcrun` 호출은 그대로 넘긴다.
+
+이 변경으로 PR head 가 바뀌어 다음을 다시 한다. 태그 push 전에 4절의 스냅샷을 새로 뜬다. 작업지시자 승인(2026-11-04, 2회차 네 가지).
+
+| 명령 | 대상 |
+|---|---|
+| `git push origin claude/desktop-release-rehearsal` | 이 수정 |
+| `git tag -a hanpage-desktop-v0.8.12-rehearsal.2 <PR head> -m "rehearsal"`, `git push origin hanpage-desktop-v0.8.12-rehearsal.2` | 새 PR head 의 태그 리허설 |
+| `gh run rerun <태그 run ID> --job <macOS job ID> --repo paldyn/HanPage` | 초안이 있는 경로와 자산 교체 뒤의 검증 단계 |
+| 일회용 브랜치를 새 PR head 위로 다시 만들어 `git push --force-with-lease origin claude/desktop-release-retry-shim`, `gh workflow run desktop-release.yml --repo paldyn/HanPage --ref claude/desktop-release-retry-shim` | 재시도로 만든 DMG 의 artifact(1회차는 검증 단계 실패로 macOS artifact 가 올라가지 않았다) |

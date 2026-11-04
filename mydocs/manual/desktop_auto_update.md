@@ -64,6 +64,8 @@ Windows는 updater 서명만 한다.
   아직 초안인지, updater 아카이브·DMG의 digest가 검증한 파일과 같은지 대조한다(API 일시 오류에 대비해 세 번까지 시도,
   #170). 실패하면 원인별 `::error`를 남기고(§8), 태그 빌드에서 Apple 서명 설정이 없으면 실패한다. macOS job은
   `macos-15` 러너에서 돈다(macOS 14 이미지는 2026-11-02에 은퇴했다).
+- tauri는 빌드 안의 `stapler staple` 종료 코드를 보지 않고 출력도 버린다. macOS job은 `xcrun` 앞에 대역을 두어 이 호출만 다섯 번까지
+  시도하고, 시도 결과를 검증 단계 로그에 남긴다(`stapler staple try <N>: exit <코드>`, §8).
 - 지금 쓰는 Developer ID Application 인증서는 2027-02-01에 만료된다(갱신하면 이 날짜를 고친다). 검증 단계와 감사 스크립트(§4)가
   만료 90일 전부터 경고한다. 갱신 절차는 §3.1.1을 따른다.
 - DMG 컨테이너는 Developer ID로 서명만 하고 공증·스테이플하지 않는다. 공증·스테이플 대상은 안의 `.app`이다(0.8.x 전체 동일).
@@ -318,7 +320,8 @@ Authenticode 서명이 updater 서명보다 먼저 끝나야 한다. 릴리스 �
 | tauri-action 단계가 릴리스 조회·자산 목록·`latest.json` 처리에서 GitHub API 오류로 실패 | `retryAttempts`는 `tauri build`와 자산 업로드만 다시 시도한다. 그 밖의 일시 오류는 job 실패로 끝나므로 실패 job을 다시 실행한다(§4). `latest.json`은 지운 뒤 다시 올리므로 그 업로드가 실패하면 파일이 사라진다. 감사에서 플랫폼이 빠지면 빠진 플랫폼의 job도 다시 실행한다(`gh run rerun <run ID> --job <job ID> --repo paldyn/HanPage`) |
 | tauri-action 단계가 자산 업로드에서 `already_exists`로 실패 | 앞선 업로드가 남긴 자산일 수 있다. 재시도는 자산을 지우지 않고 다시 올린다. 실패 job을 다시 실행하면 목록을 새로 읽어 같은 이름을 지운다 |
 | 같은 태그의 초안이 둘이다 | 두 job이 찾기와 만들기를 같은 순간에 했다(tauri-action에 잠금이 없다). 자산이 갈려 감사의 자산 6개 검사가 실패한다. 공개하지 말고 초안을 모두 지운 뒤 run을 다시 실행한다 |
-| 감사의 `stapled notarization ticket`이 `Error 68`로 실패 | 일시 오류로 보인다(2026-11-04 같은 자산이 바로 다음 실행에서 통과). 다시 감사한다. 계속 실패하면 네트워크와 티켓을 확인한다 |
+| 검증 단계의 `macOS 공증`이나 감사의 `stapled notarization ticket`이 `Error 68`로 실패 | `stapler validate`는 Apple 서버(`api.apple-cloudkit.com`)의 티켓과 비교하므로 연결이 끊기면 티켓이 있어도 실패한다(검증 단계 출력에 `The network connection was lost`). 둘 다 다섯 번까지 시도한다. 그래도 실패하면 실패 job을 다시 실행하거나 감사를 다시 돌린다. 2026-11-04에 처음 관측했다: 러너 3대씩 두 번 잰 결과 `validate` 270회 중 39회, `staple` 120회 중 14회가 끊겼고(러너별 0~24%), 실제 job에서는 7회 중 3회였다. 같은 이미지가 전날 6회, `macos-14`가 18회 모두 통과했고, 로컬 Mac은 드물다(24회 성공, 같은 날 감사 1회 실패). 원인은 러너·경로·Apple 어느 쪽인지 모른다 |
+| 검증 단계의 `macOS 공증`이나 감사의 `stapled notarization ticket`이 `does not have a ticket stapled to it`로 실패 | 빌드 안의 `stapler staple`이 다섯 번 모두 실패했을 수 있다(검증 단계 로그의 `stapler staple try <N>: exit <코드>`를 본다. 네트워크 실패는 68이다). tauri가 종료 코드를 보지 않아 빌드는 성공으로 끝나고 `retryAttempts`도 돌지 않으며, 티켓 없는 `.app`의 아카이브·DMG가 이미 초안에 올라가 있다. 공개하지 말고 macOS job을 다시 실행해 자산을 교체한다(약 31분). 감사를 다시 돌려도 통과하지 않는다 |
 | `Refuse to overwrite a published release`의 `공개 릴리스`·`공개 릴리스 확인` 오류 | 그 태그의 릴리스가 이미 공개돼 있다(공개 뒤 태그 workflow 재실행). 번들 전에 멈췄으므로 공개 자산은 그대로다. 다시 실행하지 않는다 / 릴리스 조회를 세 번 시도해 모두 실패했다. 일시 오류면 실패 job만 다시 실행한다 |
 | 검증 단계의 `macOS 미서명` 오류(태그 빌드)·경고(수동 실행) | `APPLE_SIGNING_IDENTITY`가 비어 있다. 태그 빌드는 실패하고, 수동 실행은 서명·공증 검증 없이 성공으로 끝나므로 §4의 2단계로 확인한다 |
 | 검증 단계의 `macOS Team ID` 오류 | `APPLE_SIGNING_IDENTITY` 괄호 안 Team ID가 없거나 배포 Team ID와 다르다(§3.1 표의 형식). 인증서를 바꿨다면 Team ID도 함께 확인한다 |
