@@ -38,7 +38,7 @@ Issue: #170 · 계획: [task_m100_hp170.md](../plans/task_m100_hp170.md) · 워�
 - 변경 파일: `.github/workflows/desktop-release.yml`, `.github/workflows/desktop-check.yml`, `HanPage-Desktop/scripts/release-audit.mjs`
   (새 파일), `mydocs/manual/desktop_auto_update.md`, `HanPage-Desktop/README.md`, `mydocs/README.md`, 계획서·이 보고서
 - 로컬 검증: 3절
-- 적용 승인: 작업지시자 승인 "응"(2026-11-03) — 이슈 생성, 브랜치 푸시·PR 생성, PR 브랜치의 workflow_dispatch. 병합은 별도 승인
+- 적용 승인: 작업지시자 승인 "응"(2026-11-03) — 이슈 생성, 브랜치 푸시·PR 생성, PR 브랜치의 workflow_dispatch. 병합은 별도 승인 "응"(2026-11-04)으로 squash(`b04f1bf9b`)
 - 적용 결과와 run URL: 4절
 - 관찰 창과 완료 조건: 이 PR 의 workflow_dispatch 실행(`macos-15`)에서 새 검사가 실행·통과한다(확인). 태그 경로(공개 릴리스 확인,
   초안 여부·digest 대조)와 재시도 경로는 다음 태그 빌드(0.8.13)가 첫 실제 실행이다
@@ -94,7 +94,8 @@ Issue: #170 · 계획: [task_m100_hp170.md](../plans/task_m100_hp170.md) · 워�
 |---|---|---|
 | desktop-release 수동 실행 [41600452028](https://github.com/paldyn/HanPage/actions/runs/41600452028) | `55bb75695e` | Windows 성공. macOS(`macos-15-arm64` 20261028.0489.1)는 공증 `Accepted` 뒤 `bundle_dmg.sh` 가 6초 만에 실패해 검증 단계에 닿지 못함 |
 | desktop-release 수동 실행 [41605141433](https://github.com/paldyn/HanPage/actions/runs/41605141433) | `a159d19950`(재시도·`--verbose` 추가) | 양 플랫폼 성공. tauri-action 첫 시도 통과(재시도 생략), `bundle_dmg.sh` 28초. 검증 단계(`macos-15`) 통과 — 번들·아카이브·DMG `.app` 모두 `valid on disk`·`Notarized Developer ID`, `The validate action worked!` 3회, DMG 컨테이너 서명·체크섬 VALID. annotation 은 Node 20·러너 용량 안내뿐(`macOS 미서명` 없음). 산출 DMG: LSMinimumSystemVersion 10.13, minos 11.0, SDK 15.5, Team `8L78W6D8XF`, 볼륨 `HanPage.app`·`Applications` |
-| PR CI(`a159d19950`) | | 32 통과·실패 0(나머지 진행 중). `Desktop check (macOS)` 가 `macos-15` 에서 통과 |
+| desktop-release 수동 실행 [41609738093](https://github.com/paldyn/HanPage/actions/runs/41609738093) | `a42c1589ba`(최종 head) | 양 플랫폼 성공. 공개 릴리스 확인은 태그 빌드 전용이라 건너뜀, tauri-action 첫 시도 통과(재시도 생략). 검증 단계(`macos-15`) 통과 — `The validate action worked!` 3회, `Notarized Developer ID` 3회, DMG 체크섬 VALID, annotation 은 Node 20·러너 용량 안내뿐 |
+| PR CI(`a42c1589ba`) | | 33 성공·5 건너뜀(경로 조건), 실패 0. `Desktop check (macOS)` 가 `macos-15` 에서 통과. MERGEABLE·CLEAN |
 
 verbose 로그로 tauri-action 이 `TAURI_BUNDLER_DMG_IGNORE_CI=true` 를 기본으로 둬 CI 에서도 Finder AppleScript(창 배치)를 실행함을
 확인했다(`--skip-jenkins` 없음). 같은 source 가 실패했다가 통과해 일시 실패로 보고, 창 배치를 유지한 채 재시도를 둔다.
@@ -105,7 +106,7 @@ verbose 로그로 tauri-action 이 `TAURI_BUNDLER_DMG_IGNORE_CI=true` 를 기본
 
 - 1차(에이전트 11): 확인 4건 — 감사 스크립트가 DMG 컨테이너 서명·볼륨 내용을 보지 않아 서명 없는 재포장 DMG 가 통과(high),
   서명 문자열을 updater 보다 관대하게 디코딩(medium), 문서의 `gh` 명령에 `--repo` 누락(medium), 태그 전 시험 순서가 실제 절차보다
-  약함(medium). low 7건(arch 이름, CI 의 아카이브 구조 검사 누락, API 재시도·annotation, 출력 잘림, 키 ID 표기, 문서 앞뒤 불일치 등).
+  약함(medium). low 8건(arch 이름, CI 의 아카이브 구조 검사 누락, API 재시도·annotation, 출력 잘림, 키 ID 표기, 문서 앞뒤 불일치 등).
   모두 반영했다.
 - 2차(에이전트 9): 1차 수정이 의도대로 동작하고 우회 경로가 없음을 확인. 확인 3건 — `macos-14` 러너 은퇴(변경 전부터 있던 문제,
   medium), 문서에 공개본과 감사본 대조·대조군·공개 승인이 빠짐(medium), 원본 DMG 가 이미 마운트돼 있으면 정상 릴리스가 이유 없이
