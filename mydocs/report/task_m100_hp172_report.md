@@ -35,7 +35,7 @@ DMG 일시 실패의 원인은 확정하지 못했다. #170 때 Finder AppleScri
 - 변경 파일: `.github/workflows/desktop-release.yml`, `HanPage-Desktop/scripts/release-audit.mjs`, `mydocs/manual/desktop_auto_update.md`, `mydocs/README.md`,
   `mydocs/pr/assets/desktop_v086_release/draft-release-notes.md`, 계획서·이 보고서
 - 로컬 검증: 3절
-- 적용 승인·결과·run URL: 4절
+- 적용 승인·결과·run URL: 4절. 승인은 작업지시자 "6가지 전부 진행"(2026-11-04, 이슈·PR·리허설 태그·일회용 브랜치·재실행·#137), "4가지 전부 진행"(2026-11-04, 2회차), "응 알아서해줘"(2026-11-10, 병합·기록·브랜치 정리)
 - 관찰 창과 완료 조건: 계획서 4·5절. 리허설의 판정 항목이 모두 통과하고, 초안 삭제를 재조회로 확인하면 끝난다
 - rollback 조건과 명령: 재시도나 인증서 확인이 정상 빌드를 막으면 병합 commit 을 `git revert` 한다. 복제 재시도 단계로 돌아간다. 리허설 초안·태그는 삭제로 끝난다
 
@@ -90,9 +90,26 @@ DMG 일시 실패의 원인은 확정하지 못했다. #170 때 Finder AppleScri
 검증 단계·감사 스크립트의 `validate` 는 티켓이 없다는 답이 아니면 다섯 번까지 시도하고, `staple` 은 `xcrun` 대역으로 다섯 번까지 시도하도록 고쳤다. 초안 digest 대조는 그 앞의 실패 때문에
 1회차에서는 돌지 않았다.
 
-### 리허설 2회차
+### 리허설 2회차 (`28d9db73ce`, 태그 `hanpage-desktop-v0.8.12-rehearsal.2`)
 
-병합 뒤 기록 commit 에서 채운다(PR head 를 움직이면 CI 가 다시 돌고 리허설한 commit 과 달라진다). 항목은 계획서 5절의 표다.
+| 실행 | 결과 |
+|---|---|
+| 태그 run [41781157824](https://github.com/paldyn/HanPage/actions/runs/41781157824) 첫 실행 | 두 job 성공. 공개 릴리스 확인 통과(릴리스 없음), 초안 433572957 하나에 자산 6개, 대상 commit `28d9db73ce`. 검증 단계 머리 `REQUIRE_SIGNED: true`·`RELEASE_ID: 433572957`, `stapler staple try 1: exit 0`(대역이 쓰였다), `The validate action worked!` 3회, `초안 자산 대조 통과` 2줄(GitHub digest), annotation `Developer ID 인증서` 경고, `macOS 미서명` 없음 |
+| 같은 run 의 macOS job 재실행 | 성공. 공개 릴리스 확인 통과(초안 있음), `Found draft release`, `Deleting existing` 3회, 검증 단계의 대조 통과. 자산 id 는 macOS 3개와 `latest.json` 만 바뀌고 Windows 2개는 그대로 |
+| 초안 감사 `--release 433572957 --rehearsal 2` | 62/62 통과([`rehearsal-audit.json`](../pr/assets/desktop_rehearsal_20261104/rehearsal-audit.json)). 같은 태그의 릴리스 1개, `latest.json` 플랫폼 4개와 리허설 태그 URL, 대상 commit 이 로컬 태그와 같음. 89일 인증서 경고 |
+| 일회용 브랜치 수동 실행 [41781166794](https://github.com/paldyn/HanPage/actions/runs/41781166794) | 성공. 첫 시도가 `Copying volume icon file`, `rehearsal: forced SetFile failure` 뒤 실패, `Attempt 1 failed, retrying...`, 공증 `Accepted` 2회, 두 번째 시도의 AppleScript·`Disk image done`, `stapler staple try 1: exit 0` 2회(빌드마다). job 토큰 조회 `v0.8.12` 200, `v0.8.6` 404, 없는 태그 404 |
+| 재시도로 만든 DMG(위 run 의 artifact) | 볼륨에 `HanPage.app`·`/Applications` 링크·`.VolumeIcon.icns`·`.DS_Store`. `.DS_Store` 는 #170 의 `macos-15` 수동 실행 DMG 와 같은 `706ae760…`, 아이콘 좌표 180,170·480,170, 볼륨 속성 C, Developer ID 서명, 안의 `.app` 은 공증 티켓 확인 |
+| 바깥 영향 | 회차마다 태그 push 전과 재실행 뒤의 스냅샷([before-1](../pr/assets/desktop_rehearsal_20261104/snapshot-before-1.txt), [before-2](../pr/assets/desktop_rehearsal_20261104/snapshot-before-2.txt), [after-2](../pr/assets/desktop_rehearsal_20261104/snapshot-after-2.txt)): 공개 릴리스 432269742 의 자산 id·`updated_at`·digest, `latest.json` 해시, `releases/latest` 그대로. 태그는 리허설 태그만 늘었다 |
+
+2회차 실행(06:11~06:37 UTC)에서는 Apple 서버 연결이 끊기지 않아 `stapler` 재시도가 실제 끊김에서 복구하는 것은 보지 못했다. 로그 발췌는
+[`log-excerpts.txt`](../pr/assets/desktop_rehearsal_20261104/log-excerpts.txt)에 있다.
+
+### PR CI
+
+head `28d9db73ce` 에서 31 성공·2 실패·5 건너뜀. 실패는 `test-archive-b-shard-1` 의 `issue_6612_sample14_wmf_pictures_reach_pdf`(기대 21, 실제 101)와 그 집계 `Build & Test` 다. 이 PR 은
+엔진을 바꾸지 않았고 같은 테스트가 직전 head `0f93f796ab` 에서 통과했다. 통과한 job 은 `ubuntu-26.04` 20261025.179.1, 실패한 job 은 20261101.186.1 이미지였고 실패한 쪽에만
+`svg2pdf SubsetError` 와 `embed_text=false` 재시도 경고가 나온다. 같은 이미지에서 11-07 의 다른 PR 7개도 같은 이유로 실패한다. 작업지시자 결정("응 알아서해줘", 2026-11-10)으로 이
+사유를 남기고 병합했다(`80465772f2`). 테스트 실패는 별도로 고친다.
 
 ## 5. 독립 검토
 
@@ -119,4 +136,11 @@ DMG 일시 실패의 원인은 확정하지 못했다. #170 때 Finder AppleScri
 
 ## 6. 남은 확인
 
-계획서 6절과 같다. 리허설 뒤에 실제 결과를 반영해 다시 적는다.
+- 공개 릴리스를 막는 분기(`exit 1`)의 실제 실행. job 토큰 조회로 전제(공개 200, 초안 404)만 확인했다.
+- 검증 단계의 digest 없음 다운로드 분기와 `초안 아님` 실패 분기(로컬 재현). 두 회차 모두 GitHub digest 로 대조했다.
+- 자산 업로드 재시도, Windows 의 `tauri build` 재시도.
+- `stapler` 재시도가 실제 끊김에서 복구하는 것(2회차에는 끊김이 없었다). Apple 서버 연결이 끊기는 원인과 앞으로의 빈도.
+- 실제 DMG 일시 실패의 단계와 같은 러너 복구. `dmg-probe` 는 빈 러너에서 재현하지 못했다. 다음 실제 실패의 `--verbose` 출력이 첫 증거다.
+- 설치된 앱의 업데이트 경로. 리허설은 공개하지 않으므로 지나지 않는다.
+- G2 인증서로 서명한 자산의 태그 경로와 감사. 인증서를 바꾼 뒤의 리허설에서 본다(#173).
+- 리허설 초안 2개·태그와 v0.8.6 초안 삭제. 되돌릴 수 없어 작업지시자가 실행하고, 재조회로 확인한 뒤 #172 를 닫는다.

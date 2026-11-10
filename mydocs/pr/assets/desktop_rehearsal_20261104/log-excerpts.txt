@@ -1,0 +1,121 @@
+# 2026-11-04 리허설 로그 발췌 (시각은 UTC)
+
+## 1회차 태그 run 41766786305 첫 실행, macOS job 126366904047 (0f93f796ab)
+03:54:05 Notarizing Finished with status Accepted for id f2201b52-ca01-4b1c-a0f9-b23ac7953087 (Processing complete)
+03:54:12 Copying volume icon file '/Users/runner/work/HanPage/HanPage/HanPage-Desktop/src-tauri/target/release/bundle/dmg/icon.icns'...
+03:54:30 Disk image done
+03:54:33 Found draft release with tag hanpage-desktop-v0.8.12-rehearsal.1 on the release list.
+03:54:43   REQUIRE_SIGNED: true
+03:54:43   RELEASE_ID: 433493223
+03:54:44 The validate action worked!
+03:54:45 The validate action worked!
+03:54:57 error is Error Domain=NSURLErrorDomain Code=-1005 "The network connection was lost." UserInfo={_kCFStreamErrorCodeKey=-4, NSUnderlyingError=0x600000774510 {Error Domain=kCFErrorDoma
+03:54:57 ), NSLocalizedDescription=The network connection was lost., NSErrorFailingURLStringKey=https://api.apple-cloudkit.com/database/1/com.apple.gk.ticket-delivery/production/public/recor
+03:54:57 The validate action failed! Error 68.
+03:54:57 ##[error]/Users/runner/work/_temp/dmg-mount/HanPage.app 에 공증 티켓이 스테이플되지 않았습니다.
+03:54:57 ##[error]Process completed with exit code 1.
+
+## 1회차 태그 run 재실행, macOS job 126377689325
+04:26:09 Notarizing Finished with status Accepted for id 63f61918-4dbd-449e-96b3-8ebfd80cb3e2 (Processing complete)
+04:26:28 Copying volume icon file '/Users/runner/work/HanPage/HanPage/HanPage-Desktop/src-tauri/target/release/bundle/dmg/icon.icns'...
+04:26:48 Disk image done
+04:26:51 Found draft release with tag hanpage-desktop-v0.8.12-rehearsal.1 on the release list.
+04:26:51 Deleting existing HanPage_0.8.12_aarch64.dmg...
+04:26:54 Deleting existing HanPage_aarch64.app.tar.gz...
+04:26:58 Deleting existing HanPage_aarch64.app.tar.gz.sig...
+04:27:01   REQUIRE_SIGNED: true
+04:27:01   RELEASE_ID: 433493223
+04:27:08 error is Error Domain=NSURLErrorDomain Code=-1005 "The network connection was lost." UserInfo={_kCFStreamErrorCodeKey=-4, NSUnderlyingError=0x6000010b2130 {Error Domain=kCFErrorDoma
+04:27:08 ), NSLocalizedDescription=The network connection was lost., NSErrorFailingURLStringKey=https://api.apple-cloudkit.com/database/1/com.apple.gk.ticket-delivery/production/public/recor
+04:27:08 The validate action failed! Error 68.
+04:27:08 ##[error]HanPage-Desktop/src-tauri/target/release/bundle/macos/HanPage.app 에 공증 티켓이 스테이플되지 않았습니다.
+04:27:08 ##[error]Process completed with exit code 1.
+
+## 1회차 일회용 브랜치 run 41766893337, macOS job 126367243423
+03:49:43 lookup hanpage-desktop-v0.8.12: HTTP/2.0 200 OK
+03:49:44 lookup hanpage-desktop-v0.8.6: HTTP/2.0 404 Not Found
+03:49:44 lookup hanpage-desktop-v0.0.0: HTTP/2.0 404 Not Found
+03:54:40 Notarizing Finished with status Accepted for id 18f7217a-7459-4425-941d-f0ab51301758 (Processing complete)
+03:54:48 Copying volume icon file '/Users/runner/work/HanPage/HanPage/HanPage-Desktop/src-tauri/target/release/bundle/dmg/icon.icns'...
+03:54:48 rehearsal: forced SetFile failure
+03:54:48 Attempt 1 failed, retrying...
+03:56:35 Notarizing Finished with status Accepted for id 2391dc7a-d2cb-4397-9fce-fa1a9d8c243f (Processing complete)
+03:56:40 Copying volume icon file '/Users/runner/work/HanPage/HanPage/HanPage-Desktop/src-tauri/target/release/bundle/dmg/icon.icns'...
+03:56:59 Disk image done
+03:57:01   REQUIRE_SIGNED: false
+03:57:01   RELEASE_ID: 
+03:57:02 The validate action worked!
+03:57:03 The validate action worked!
+03:57:15 error is Error Domain=NSURLErrorDomain Code=-1005 "The network connection was lost." UserInfo={_kCFStreamErrorCodeKey=-4, NSUnderlyingError=0x600002b71440 {Error Domain=kCFErrorDoma
+03:57:15 ), NSLocalizedDescription=The network connection was lost., NSErrorFailingURLStringKey=https://api.apple-cloudkit.com/database/1/com.apple.gk.ticket-delivery/production/public/recor
+03:57:15 The validate action failed! Error 68.
+03:57:15 ##[error]/Users/runner/work/_temp/dmg-mount/HanPage.app 에 공증 티켓이 스테이플되지 않았습니다.
+03:57:15 ##[error]Process completed with exit code 1.
+
+## 2회차 태그 run 41781157824 첫 실행, macOS job 126412774541 (28d9db73ce)
+06:13:14 Notarizing Finished with status Accepted for id 4bad5412-67a3-49f2-b741-2aa1eec92db5 (Processing complete)
+06:13:20 Copying volume icon file '/Users/runner/work/HanPage/HanPage/HanPage-Desktop/src-tauri/target/release/bundle/dmg/icon.icns'...
+06:13:37 Disk image done
+06:13:50   REQUIRE_SIGNED: true
+06:13:50   RELEASE_ID: 433572957
+06:13:50 stapler staple try 1: exit 0
+06:13:51 The validate action worked!
+06:13:52 The validate action worked!
+06:13:59 The validate action worked!
+06:14:00 초안 자산 대조 통과: HanPage_aarch64.app.tar.gz (GitHub digest)
+06:14:00 초안 자산 대조 통과: HanPage_0.8.12_aarch64.dmg (GitHub digest)
+
+## 2회차 태그 run 재실행, macOS job 126424898741
+06:36:17 Notarizing Finished with status Accepted for id 64bb604d-083a-4297-9b54-b956ff5f9218 (Processing complete)
+06:36:24 Copying volume icon file '/Users/runner/work/HanPage/HanPage/HanPage-Desktop/src-tauri/target/release/bundle/dmg/icon.icns'...
+06:36:42 Disk image done
+06:36:44 Found draft release with tag hanpage-desktop-v0.8.12-rehearsal.2 on the release list.
+06:36:44 Deleting existing HanPage_0.8.12_aarch64.dmg...
+06:36:48 Deleting existing HanPage_aarch64.app.tar.gz...
+06:36:52 Deleting existing HanPage_aarch64.app.tar.gz.sig...
+06:36:55   REQUIRE_SIGNED: true
+06:36:55   RELEASE_ID: 433572957
+06:36:55 stapler staple try 1: exit 0
+06:36:56 The validate action worked!
+06:36:57 The validate action worked!
+06:37:02 The validate action worked!
+06:37:03 초안 자산 대조 통과: HanPage_aarch64.app.tar.gz (GitHub digest)
+06:37:03 초안 자산 대조 통과: HanPage_0.8.12_aarch64.dmg (GitHub digest)
+
+## 2회차 일회용 브랜치 run 41781166794, macOS job 126412805518
+06:11:33 lookup hanpage-desktop-v0.8.12: HTTP/2.0 200 OK
+06:11:33 lookup hanpage-desktop-v0.8.6: HTTP/2.0 404 Not Found
+06:11:33 lookup hanpage-desktop-v0.0.0: HTTP/2.0 404 Not Found
+06:17:21 Notarizing Finished with status Accepted for id 53b5c271-3037-4c6c-b66a-01533d0da8c9 (Processing complete)
+06:17:29 Copying volume icon file '/Users/runner/work/HanPage/HanPage/HanPage-Desktop/src-tauri/target/release/bundle/dmg/icon.icns'...
+06:17:29 rehearsal: forced SetFile failure
+06:17:29 Attempt 1 failed, retrying...
+06:19:10 Notarizing Finished with status Accepted for id 64e0371a-addb-46c8-8f12-e2c1d0e15a86 (Processing complete)
+06:19:15 Copying volume icon file '/Users/runner/work/HanPage/HanPage/HanPage-Desktop/src-tauri/target/release/bundle/dmg/icon.icns'...
+06:19:33 Disk image done
+06:19:35   REQUIRE_SIGNED: false
+06:19:35   RELEASE_ID: 
+06:19:35 stapler staple try 1: exit 0
+06:19:35 stapler staple try 1: exit 0
+06:19:36 The validate action worked!
+06:19:37 The validate action worked!
+06:19:40 The validate action worked!
+
+## dmg-probe (run 41766893337, 러너 4대)
+ DMG probe: 5 runs, 0 failed, 0 recovered on the same runner
+ DMG probe: 5 runs, 0 failed, 0 recovered on the same runner
+ DMG probe: 5 runs, 0 failed, 0 recovered on the same runner
+ DMG probe: 5 runs, 0 failed, 0 recovered on the same runner
+
+## stapler validate 측정 (run 41773521203, 04:29 UTC)
+ Stapler probe: 50 ok, 0 failed
+ Stapler probe: 38 ok, 12 failed
+ Stapler probe: 42 ok, 8 failed
+
+## stapler staple·validate 측정 (run 41778733001, 05:21 UTC)
+ no ticket: exit 65 | HanPage.app does not have a ticket stapled to it.
+ Stapler probe: staple 38 ok 2 failed, validate 33 ok 7 failed
+ no ticket: exit 65 | HanPage.app does not have a ticket stapled to it.
+ Stapler probe: staple 37 ok 3 failed, validate 36 ok 4 failed
+ no ticket: exit 65 | HanPage.app does not have a ticket stapled to it.
+ Stapler probe: staple 31 ok 9 failed, validate 32 ok 8 failed

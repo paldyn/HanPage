@@ -1,0 +1,369 @@
+{
+  "version": "0.8.12",
+  "tag": "hanpage-desktop-v0.8.12-rehearsal.2",
+  "release": {
+    "id": 433572957,
+    "tag": "hanpage-desktop-v0.8.12-rehearsal.2",
+    "draft": true,
+    "target": "28d9db73ce0d9fcad0a3ae87e66084d5245e5c49"
+  },
+  "signingCertNotAfter": "Feb  1 22:12:15 2027 GMT",
+  "warnings": [
+    "Developer ID certificate expires on Feb  1 22:12:15 2027 GMT (89 days left)"
+  ],
+  "checks": [
+    {
+      "name": "assets: exactly the 6 expected regular files",
+      "ok": true,
+      "detail": "HanPage_0.8.12_aarch64.dmg, HanPage_0.8.12_x64-setup.exe, HanPage_0.8.12_x64-setup.exe.sig, HanPage_aarch64.app.tar.gz, HanPage_aarch64.app.tar.gz.sig, latest.json"
+    },
+    {
+      "name": "latest.json: top-level keys are notes, platforms, pub_date, version",
+      "ok": true,
+      "detail": "notes, platforms, pub_date, version"
+    },
+    {
+      "name": "latest.json: pub_date is a valid ISO 8601 UTC timestamp",
+      "ok": true,
+      "detail": "\"2026-11-04T06:36:53.519Z\""
+    },
+    {
+      "name": "latest.json: version",
+      "ok": true,
+      "detail": "0.8.12"
+    },
+    {
+      "name": "latest.json: notes empty (release notes live on the GitHub release)",
+      "ok": true,
+      "detail": "\"\""
+    },
+    {
+      "name": "latest.json: 4 platform keys",
+      "ok": true,
+      "detail": "darwin-aarch64, darwin-aarch64-app, windows-x86_64, windows-x86_64-nsis"
+    },
+    {
+      "name": "latest.json: darwin-aarch64 entry has only signature and url",
+      "ok": true,
+      "detail": "signature, url"
+    },
+    {
+      "name": "latest.json: darwin-aarch64 url",
+      "ok": true,
+      "detail": "https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v0.8.12-rehearsal.2/HanPage_aarch64.app.tar.gz"
+    },
+    {
+      "name": "latest.json: darwin-aarch64 signature is byte-identical to HanPage_aarch64.app.tar.gz.sig",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "latest.json: darwin-aarch64-app entry has only signature and url",
+      "ok": true,
+      "detail": "signature, url"
+    },
+    {
+      "name": "latest.json: darwin-aarch64-app url",
+      "ok": true,
+      "detail": "https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v0.8.12-rehearsal.2/HanPage_aarch64.app.tar.gz"
+    },
+    {
+      "name": "latest.json: darwin-aarch64-app signature is byte-identical to HanPage_aarch64.app.tar.gz.sig",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "latest.json: windows-x86_64 entry has only signature and url",
+      "ok": true,
+      "detail": "signature, url"
+    },
+    {
+      "name": "latest.json: windows-x86_64 url",
+      "ok": true,
+      "detail": "https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v0.8.12-rehearsal.2/HanPage_0.8.12_x64-setup.exe"
+    },
+    {
+      "name": "latest.json: windows-x86_64 signature is byte-identical to HanPage_0.8.12_x64-setup.exe.sig",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "latest.json: windows-x86_64-nsis entry has only signature and url",
+      "ok": true,
+      "detail": "signature, url"
+    },
+    {
+      "name": "latest.json: windows-x86_64-nsis url",
+      "ok": true,
+      "detail": "https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v0.8.12-rehearsal.2/HanPage_0.8.12_x64-setup.exe"
+    },
+    {
+      "name": "latest.json: windows-x86_64-nsis signature is byte-identical to HanPage_0.8.12_x64-setup.exe.sig",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "updater pubkey unchanged since hanpage-desktop-v0.8.11",
+      "ok": true,
+      "detail": "key AA33E131386B5D83"
+    },
+    {
+      "name": "minisign: HanPage_aarch64.app.tar.gz key id matches updater pubkey",
+      "ok": true,
+      "detail": "AA33E131386B5D83"
+    },
+    {
+      "name": "minisign: HanPage_aarch64.app.tar.gz payload signature",
+      "ok": true,
+      "detail": "ED"
+    },
+    {
+      "name": "minisign: HanPage_aarch64.app.tar.gz global signature over trusted comment",
+      "ok": true,
+      "detail": "timestamp:1793774203\tfile:HanPage.app.tar.gz\tversion:0.8.12"
+    },
+    {
+      "name": "minisign: HanPage_aarch64.app.tar.gz rejects 1-byte tamper at start/middle/end",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "minisign: HanPage_aarch64.app.tar.gz rejects altered trusted comment",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "minisign: HanPage_0.8.12_x64-setup.exe key id matches updater pubkey",
+      "ok": true,
+      "detail": "AA33E131386B5D83"
+    },
+    {
+      "name": "minisign: HanPage_0.8.12_x64-setup.exe payload signature",
+      "ok": true,
+      "detail": "ED"
+    },
+    {
+      "name": "minisign: HanPage_0.8.12_x64-setup.exe global signature over trusted comment",
+      "ok": true,
+      "detail": "timestamp:1793772947\tfile:HanPage_0.8.12_x64-setup.exe\tversion:0.8.12"
+    },
+    {
+      "name": "minisign: HanPage_0.8.12_x64-setup.exe rejects 1-byte tamper at start/middle/end",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "minisign: HanPage_0.8.12_x64-setup.exe rejects altered trusted comment",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "release: tag matches",
+      "ok": true,
+      "detail": "hanpage-desktop-v0.8.12-rehearsal.2"
+    },
+    {
+      "name": "release: target is the local tag commit",
+      "ok": true,
+      "detail": "28d9db73ce0d9fcad0a3ae87e66084d5245e5c49 / 28d9db73ce0d9fcad0a3ae87e66084d5245e5c49"
+    },
+    {
+      "name": "release: holds exactly the 6 expected assets",
+      "ok": true,
+      "detail": "HanPage_0.8.12_aarch64.dmg, HanPage_0.8.12_x64-setup.exe, HanPage_0.8.12_x64-setup.exe.sig, HanPage_aarch64.app.tar.gz, HanPage_aarch64.app.tar.gz.sig, latest.json"
+    },
+    {
+      "name": "release: HanPage_0.8.12_aarch64.dmg digest equals the audited file",
+      "ok": true,
+      "detail": "sha256:9ef17d2bf0b2a3b074455c2688a589049037c4ee0ec7eee3e26e07b929c9288a"
+    },
+    {
+      "name": "release: HanPage_0.8.12_x64-setup.exe digest equals the audited file",
+      "ok": true,
+      "detail": "sha256:69bfab37847f11afa71fe816002ba102e9d5ef5509a3863e75c5cbab9309d3e3"
+    },
+    {
+      "name": "release: HanPage_0.8.12_x64-setup.exe.sig digest equals the audited file",
+      "ok": true,
+      "detail": "sha256:4daafa09f256c1e31eeaff60b879813f361a78700da6fd4d3deab5fc640671f3"
+    },
+    {
+      "name": "release: HanPage_aarch64.app.tar.gz digest equals the audited file",
+      "ok": true,
+      "detail": "sha256:d7fd874f370e3f28bbee3544bda00039e5ee6654cd1ea720d184f83bee2098dd"
+    },
+    {
+      "name": "release: HanPage_aarch64.app.tar.gz.sig digest equals the audited file",
+      "ok": true,
+      "detail": "sha256:cfd8d290918bcd0ef271f11713cbf02f0df5d28de6b89b12a36fa909ae964dec"
+    },
+    {
+      "name": "release: latest.json digest equals the audited file",
+      "ok": true,
+      "detail": "sha256:2f51b8d81e86606f6e1da694d3d350b6ca4d645e7895544d86fbadfbdb23f428"
+    },
+    {
+      "name": "updater archive: only HanPage.app/ entries",
+      "ok": true,
+      "detail": "10 entries"
+    },
+    {
+      "name": "updater .app: HanPage.app is a directory (not a link)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "updater .app: CFBundleShortVersionString",
+      "ok": true,
+      "detail": "0.8.12"
+    },
+    {
+      "name": "updater .app: CFBundleIdentifier",
+      "ok": true,
+      "detail": "com.paldyn.hanpage"
+    },
+    {
+      "name": "updater .app: arm64 executable",
+      "ok": true,
+      "detail": "arm64"
+    },
+    {
+      "name": "updater .app: codesign --verify --deep --strict",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "updater .app: TeamIdentifier 8L78W6D8XF and Developer ID Application",
+      "ok": true,
+      "detail": "Developer ID Application: Wonmo Lee (8L78W6D8XF)"
+    },
+    {
+      "name": "updater .app: Gatekeeper accepts as Notarized Developer ID",
+      "ok": true,
+      "detail": "source=Notarized Developer ID"
+    },
+    {
+      "name": "updater .app: stapled notarization ticket",
+      "ok": true,
+      "detail": "The validate action worked!"
+    },
+    {
+      "name": "DMG: hdiutil verify",
+      "ok": true,
+      "detail": "hdiutil: verify: checksum of \"HanPage_0.8.12_aarch64.dmg\" is VALID"
+    },
+    {
+      "name": "DMG: container signed by Developer ID Application (8L78W6D8XF)",
+      "ok": true,
+      "detail": "Developer ID Application: Wonmo Lee (8L78W6D8XF)"
+    },
+    {
+      "name": "DMG: volume holds only HanPage.app and the /Applications link",
+      "ok": true,
+      "detail": "Applications@, HanPage.app/"
+    },
+    {
+      "name": "DMG .app: HanPage.app is a directory (not a link)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "DMG .app: CFBundleShortVersionString",
+      "ok": true,
+      "detail": "0.8.12"
+    },
+    {
+      "name": "DMG .app: CFBundleIdentifier",
+      "ok": true,
+      "detail": "com.paldyn.hanpage"
+    },
+    {
+      "name": "DMG .app: arm64 executable",
+      "ok": true,
+      "detail": "arm64"
+    },
+    {
+      "name": "DMG .app: codesign --verify --deep --strict",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "DMG .app: TeamIdentifier 8L78W6D8XF and Developer ID Application",
+      "ok": true,
+      "detail": "Developer ID Application: Wonmo Lee (8L78W6D8XF)"
+    },
+    {
+      "name": "DMG .app: Gatekeeper accepts as Notarized Developer ID",
+      "ok": true,
+      "detail": "source=Notarized Developer ID"
+    },
+    {
+      "name": "DMG .app: stapled notarization ticket",
+      "ok": true,
+      "detail": "The validate action worked!"
+    },
+    {
+      "name": "updater .app and DMG .app are the same build (CDHash)",
+      "ok": true,
+      "detail": "c442e0ed567db5731bb30c87eb3f9046850b642a / c442e0ed567db5731bb30c87eb3f9046850b642a"
+    },
+    {
+      "name": "setup.exe: VS_FIXEDFILEINFO file version",
+      "ok": true,
+      "detail": "0.8.12.0"
+    },
+    {
+      "name": "setup.exe: StringFileInfo FileVersion/ProductVersion",
+      "ok": true,
+      "detail": "0.8.12 / 0.8.12"
+    },
+    {
+      "name": "setup.exe: no Authenticode signature (unsigned by decision #122)",
+      "ok": true,
+      "detail": "security dir size 0"
+    }
+  ],
+  "assets": {
+    "HanPage_0.8.12_aarch64.dmg": {
+      "bytes": 51978085,
+      "sha256": "9ef17d2bf0b2a3b074455c2688a589049037c4ee0ec7eee3e26e07b929c9288a"
+    },
+    "HanPage_0.8.12_x64-setup.exe": {
+      "bytes": 48410634,
+      "sha256": "69bfab37847f11afa71fe816002ba102e9d5ef5509a3863e75c5cbab9309d3e3"
+    },
+    "HanPage_0.8.12_x64-setup.exe.sig": {
+      "bytes": 440,
+      "sha256": "4daafa09f256c1e31eeaff60b879813f361a78700da6fd4d3deab5fc640671f3"
+    },
+    "HanPage_aarch64.app.tar.gz": {
+      "bytes": 51206903,
+      "sha256": "d7fd874f370e3f28bbee3544bda00039e5ee6654cd1ea720d184f83bee2098dd"
+    },
+    "HanPage_aarch64.app.tar.gz.sig": {
+      "bytes": 424,
+      "sha256": "cfd8d290918bcd0ef271f11713cbf02f0df5d28de6b89b12a36fa909ae964dec"
+    },
+    "latest.json": {
+      "bytes": 2580,
+      "sha256": "2f51b8d81e86606f6e1da694d3d350b6ca4d645e7895544d86fbadfbdb23f428"
+    }
+  },
+  "conf": {
+    "source": "refs/tags/hanpage-desktop-v0.8.12-rehearsal.2:HanPage-Desktop/src-tauri/tauri.conf.json",
+    "blob": "9cf13d336712689b3a6dc15eecad358b39ae84a2",
+    "sha256": "34dc41cc37f05ec6f18e81a4813e5d7fe72c7525174393f8baedfaad460d3b1d"
+  },
+  "keyId": "835d6b3831e133aa",
+  "keyIdMinisign": "AA33E131386B5D83",
+  "previous": {
+    "source": "refs/tags/hanpage-desktop-v0.8.11:HanPage-Desktop/src-tauri/tauri.conf.json",
+    "blob": "4a1016454bb20a9a89965325528bfefb75c99fe5",
+    "sha256": "3d84f20473a0f7c72b03d73de453dde76a8db4c566c621f9dfd31e2a73aec412"
+  },
+  "cdhash": {
+    "updater": "c442e0ed567db5731bb30c87eb3f9046850b642a",
+    "dmg": "c442e0ed567db5731bb30c87eb3f9046850b642a"
+  },
+  "pass": true
+}

@@ -1,0 +1,24 @@
+time: 2026-11-04T05:45:00Z
+releases/latest id: 432269742
+latest.json sha256: 0fbc10be393d98262a17b562fc8e9546bcaf05427bf01ca384e243ff37a8e6b4
+latest.json url sample: https://github.com/paldyn/HanPage/releases/download/hanpage-desktop-v0.8.12/HanPage_aarch64.app.tar.gz
+release 432269742:
+  tag=hanpage-desktop-v0.8.12 draft=false updated_at=2026-11-03T05:32:53Z
+  704323694 HanPage_0.8.12_aarch64.dmg 2026-11-03T04:45:34Z sha256:40a88348da63bc67e569e79af0c3f26661ebeb18f05013bfaa74ae9aafcdbca3
+  704239232 HanPage_0.8.12_x64-setup.exe 2026-11-03T04:12:34Z sha256:8710704c3c323eca0e626cd088e3d6022070e012dbeb85120a1dbc7938a610db
+  704239369 HanPage_0.8.12_x64-setup.exe.sig 2026-11-03T04:12:35Z sha256:0a3132f978f7b797cb26496a3b3e78d45adc9bdda734118eee8ca0313ca44804
+  704323862 HanPage_aarch64.app.tar.gz 2026-11-03T04:45:37Z sha256:30407a6c37ef1086f6f4528b6c310ba13cc7ce871191bb81de36e3a3ae03a5eb
+  704323992 HanPage_aarch64.app.tar.gz.sig 2026-11-03T04:45:37Z sha256:6f22e99fcf6eb3868e288ffee403404939b0de7354681ec8eafd20999a31d2f6
+  704324119 latest.json 2026-11-03T04:45:40Z sha256:0fbc10be393d98262a17b562fc8e9546bcaf05427bf01ca384e243ff37a8e6b4
+release 401464978:
+  tag=hanpage-desktop-v0.8.6 draft=true updated_at=2026-10-02T01:01:51Z
+tags:
+  refs/tags/hanpage-desktop-v0.8.10 a7a5c45a36fd83b81c15c5b1de9670ad0a31f9dc
+  refs/tags/hanpage-desktop-v0.8.11 d271d7afc3b824fce1a92999f6ce60cbe74857de
+  refs/tags/hanpage-desktop-v0.8.12 242cb0caab16751bf7b48a50841a886f8457723f
+  refs/tags/hanpage-desktop-v0.8.12-rehearsal.1 68a7fc5ea0de2671ffb1e17f30d2935f35359e00
+  refs/tags/hanpage-desktop-v0.8.3 8a69fec108ebe70e37e071fade2650b99fcbbeed
+  refs/tags/hanpage-desktop-v0.8.6 cfead6732cf960ddb964ba788deb8b535db839b2
+  refs/tags/hanpage-desktop-v0.8.7 4d35ba869860add4d1889cf7e1cbe6917e4caacb
+  refs/tags/hanpage-desktop-v0.8.8 f8f10dcbec4c5bac35ae00ed6390a10c58ed9cc6
+  refs/tags/hanpage-desktop-v0.8.9 d9dd880ff5cb8b7b777c196666378624984fec85
